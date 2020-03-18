@@ -1,7 +1,7 @@
 `ifndef MY_STRUCT_S
 `define MY_STRUCT_S
 `define SIM //Should comment this during synthesis
-//`define NO_PCIE //Should comment this during synthesis
+`define NO_PCIE //Should comment this during synthesis
 
 //packet buffer
 //STORE 1024 pkts, each pkts takes 32 * 512 bits = 2 KB.
@@ -49,14 +49,9 @@ parameter PKT_PCIE=2; //send to PCIE
 parameter STAT_AWIDTH = 5;
 parameter BASE_REG = 5'b10_000; //(5'b10000);
 parameter TOP_REG = 5'b10_001;
-parameter FT_REG = 5'b10_010;//(5'b10010);
-parameter RULEID = 5'b10_011;
 parameter LATENCY_HIST = 5'b10_100; // (5'b10100);
 parameter PCIE = 5'b10_101;
-parameter DRAM = 5'b10_110;
-parameter TEST2 = 5'b10_111;
 parameter TX_TRACK = 5'b11_000; //(5'b11000);
-parameter FT_TABLE = 5'b11_100; //(5'b11100);
 
 typedef struct packed
 {
