@@ -42,4 +42,4 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 ### Note:
 1. \*.ini, \*.pcap, \*.pkt are ingored in .gitignore. You should change your local .ini file and you can add new pcap/pkt in your local copy. But please do not upload to this repo.
 2. In input_gen, you can change the run.sh to capture different number of pkts from the pcap. Usually start with small number.
-3. run_vsim_afs.sh allow you choose GUI mode, CMD mode, and optimized CMD mode. GUI mode is great for debugging using waveform. CMD mode is good for getting the results quickly. Optimized CMD applied internal optimizations which may affect the results.
+3. run_vsim_afs.sh allow you choose GUI mode, CLI mode, and optimized CMD mode. GUI mode is great for debugging using waveform. CLI mode is good for getting the results quickly. Optimized CLI applied internal optimizations which may affect the results.
