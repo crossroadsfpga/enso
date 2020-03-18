@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pinplan
+ variation_name="esram_0"
+ megafunction_name="ESRAM"
+ intended_family="Stratix 10"
+ specifies="all_ports">
+ <global>
+  <pin name="c0_q_0[71..0]" direction="output" scope="external" />
+  <pin name="c1_q_0[71..0]" direction="output" scope="external" />
+  <pin name="c2_q_0[71..0]" direction="output" scope="external" />
+  <pin name="c3_q_0[71..0]" direction="output" scope="external" />
+  <pin name="c4_q_0[71..0]" direction="output" scope="external" />
+  <pin name="c5_q_0[71..0]" direction="output" scope="external" />
+  <pin name="c6_q_0[71..0]" direction="output" scope="external" />
+  <pin name="c7_q_0[71..0]" direction="output" scope="external" />
+  <pin name="esram2f_clk" direction="output" scope="external" />
+  <pin name="iopll_lock2core" direction="output" scope="external" />
+  <pin name="c0_data_0[71..0]" direction="input" scope="external" />
+  <pin name="c0_rdaddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c0_rden_n_0" direction="input" scope="external" />
+  <pin name="c0_sd_n_0" direction="input" scope="external" />
+  <pin name="c0_wraddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c0_wren_n_0" direction="input" scope="external" />
+  <pin name="c1_data_0[71..0]" direction="input" scope="external" />
+  <pin name="c1_rdaddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c1_rden_n_0" direction="input" scope="external" />
+  <pin name="c1_sd_n_0" direction="input" scope="external" />
+  <pin name="c1_wraddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c1_wren_n_0" direction="input" scope="external" />
+  <pin name="c2_data_0[71..0]" direction="input" scope="external" />
+  <pin name="c2_rdaddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c2_rden_n_0" direction="input" scope="external" />
+  <pin name="c2_sd_n_0" direction="input" scope="external" />
+  <pin name="c2_wraddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c2_wren_n_0" direction="input" scope="external" />
+  <pin name="c3_data_0[71..0]" direction="input" scope="external" />
+  <pin name="c3_rdaddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c3_rden_n_0" direction="input" scope="external" />
+  <pin name="c3_sd_n_0" direction="input" scope="external" />
+  <pin name="c3_wraddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c3_wren_n_0" direction="input" scope="external" />
+  <pin name="c4_data_0[71..0]" direction="input" scope="external" />
+  <pin name="c4_rdaddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c4_rden_n_0" direction="input" scope="external" />
+  <pin name="c4_sd_n_0" direction="input" scope="external" />
+  <pin name="c4_wraddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c4_wren_n_0" direction="input" scope="external" />
+  <pin name="c5_data_0[71..0]" direction="input" scope="external" />
+  <pin name="c5_rdaddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c5_rden_n_0" direction="input" scope="external" />
+  <pin name="c5_sd_n_0" direction="input" scope="external" />
+  <pin name="c5_wraddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c5_wren_n_0" direction="input" scope="external" />
+  <pin name="c6_data_0[71..0]" direction="input" scope="external" />
+  <pin name="c6_rdaddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c6_rden_n_0" direction="input" scope="external" />
+  <pin name="c6_sd_n_0" direction="input" scope="external" />
+  <pin name="c6_wraddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c6_wren_n_0" direction="input" scope="external" />
+  <pin name="c7_data_0[71..0]" direction="input" scope="external" />
+  <pin name="c7_rdaddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c7_rden_n_0" direction="input" scope="external" />
+  <pin name="c7_sd_n_0" direction="input" scope="external" />
+  <pin name="c7_wraddress_0[10..0]" direction="input" scope="external" />
+  <pin name="c7_wren_n_0" direction="input" scope="external" />
+  <pin name="refclk" direction="input" scope="external" />
+ </global>
+</pinplan>
