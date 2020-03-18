@@ -273,7 +273,11 @@ always@(posedge clk)begin
 
         if (pkt_buffer_readvalid) begin
             //send check_pkt to data_fifo
+            `ifdef SIM
+            if(pkt_flags_r2 == PKT_PCIE) begin
+            `else
             if(pkt_flags_r13 == PKT_PCIE) begin
+            `endif
                 pcie_pkt_sop <= pkt_buffer_readdata.sop;
                 pcie_pkt_eop <= pkt_buffer_readdata.eop;
                 pcie_pkt_valid <= 1;

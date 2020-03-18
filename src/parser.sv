@@ -159,7 +159,12 @@ assign metadata.prot = support ? ((ip_prot == PROT_TCP) ? S_TCP : S_UDP) : NS;
 assign metadata.pktID = in_meta_data.pktID;
 assign metadata.flits = in_meta_data.flits;
 assign metadata.tcp_flags = {tcp_ns,tcp_cwr,tcp_ece,tcp_urg,tcp_fack,tcp_psh,tcp_rst,tcp_syn,tcp_fin};
+
+`ifdef NO_PCIE
 assign metadata.pkt_flags = PKT_ETH;
+`else
+assign metadata.pkt_flags = PKT_PCIE;
+`endif
 
 assign in_pkt_ready = out_meta_ready;
 assign in_meta_ready = out_meta_ready;

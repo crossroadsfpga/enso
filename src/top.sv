@@ -182,7 +182,6 @@ logic [31:0]   dm_eth_pkt_in_csr_readdata;
 logic          pcie_pkt_valid;                        
 logic  [511:0] pcie_pkt_data;                         
 logic          pcie_pkt_ready;                        
-logic          pcie_pkt_almost_full;                        
 logic          pcie_pkt_sop;                
 logic          pcie_pkt_eop;                  
 logic  [5:0]   pcie_pkt_empty;                  
