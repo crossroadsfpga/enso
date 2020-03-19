@@ -1,4 +1,4 @@
-# front_door_rtl
+# RTL Simulation
 
 ### File description:
 - input_gen: convert .pcap file to .pkt, which is the input for RTL simulation.
@@ -43,3 +43,79 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 1. \*.ini, \*.pcap, \*.pkt are ingored in .gitignore. You should change your local .ini file and you can add new pcap/pkt in your local copy. But please do not upload to this repo.
 2. In input_gen, you can change the run.sh to capture different number of pkts from the pcap. Usually start with small number.
 3. run_vsim_afs.sh allow you choose GUI mode, CLI mode, and optimized CLI mode. GUI mode is great for debugging using waveform. CLI mode is good for getting the results quickly. Optimized CLI applied internal optimizations which may affect the results.
+
+# On-board test
+### Synthesize Quartus Project
+1. Download the exmaple project from google drive. Open the quartus project under `your_path/front_door_consumer/hardware_test_design/alt_ehipc2_hw.qpf`
+2. Add new flow_director_wrapper.sv (keep the interface the same.) You can add sub modules for flow_director_wrapper.sv as well.
+3. Open the Compilation Dashboard. Click Compile Design. It may take 1-2 hours. This involves multiple stages. In the end, the Assembler will generate bitstream. 
+
+### Load bitstream
+1. Go to `your_path/front_door_consumer/hardware_test_design/outputfile/load.cdf`. Change the path.
+2. Change the path in `load_bitstream.sh` as well
+3. Run `./load_bitstream.sh` to load the bitstream. Note that the JTAG system console should be closed when loading the bitstream. 
+
+### Test Steps with PCIe
+1. Reboot the machine after loading the bitstream if you need PCIe. 
+2. Update the path in path.tcl. (only once for a new test)
+3. Run JTAG system console by running `./run_console`, the first time may return some error. Exit it using Ctrl-C. Then redo it. It would work.
+4. Load PCIe user application file. Look for "Commit for Front Door" in Snort3-pigasus Repo. That is the commit for front door. 
+```
+./install.sh
+```
+5. In the tcl console, you will need to type some tcl commands.
+```
+##find the main.tcl under your_path/front_door_consumer/hardware_test_design/hwtest
+source path.tcl 
+##return the counters under top.sv. Most of them should be 0, except the in_emptylist_cnt is 2688, the number of pkts we can buffer.
+get_top_stats 
+##return the PCIe stats
+read_pcie
+```
+6. Then connect to pkt-gen machine. Send pkt
+```
+cp example.pcap /dev/shm/test.pcap
+cd dpdk/pktgen-dpdk/
+./run_pktgen.sh
+```
+Remember to set the number of pkt of the pcap. Otherwise the pktgen would send the pcap repeated. All the repeated pkts will be dropped at FPGA side. 
+```
+set 0 count X
+str
+```
+7. Recheck the counters on FPGA
+```
+## recheck the top counters, you should expect to see X in many of the counters; eth related counters should be 0
+get_top_stats 
+```
+
+### Test Steps without PCIe
+1. Without PCIe, the pkts will be forwarded to Ethernet output. After loading the bitstream. No need to reboot the machine.
+2. Update the path in path.tcl. (only once for a new test)
+3. Run JTAG system console by running `./run_console`, the first time may return some error. Exit it using Ctrl-C. Then redo it. It would work.
+4. In the tcl console, you will need to type some tcl commands.
+```
+##find the main.tcl under your_path/front_door_consumer/hardware_test_design/hwtest
+source path.tcl 
+##return the counters under top.sv. Most of them should be 0, except the in_emptylist_cnt is 2688, the number of pkts we can buffer.
+get_top_stats 
+##disable pcie
+disable_pcie
+```
+5. Then connect to pkt-gen machine. Send pkt
+```
+cp example.pcap /dev/shm/test.pcap
+cd dpdk/pktgen-dpdk/
+./run_pktgen.sh
+```
+Remember to set the number of pkt of the pcap. Otherwise the pktgen would send the pcap repeated. All the repeated pkts will be dropped at FPGA side. 
+```
+set 0 count X
+str
+```
+7. Recheck the counters on FPGA
+```
+## recheck the top counters, you should expect to see X in many of the counters; PCIe related counters should be 0.
+get_top_stats 
+```
+
