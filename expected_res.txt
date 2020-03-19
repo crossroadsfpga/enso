@@ -1,41 +1,49 @@
 
 NO_PCIE
 # ---- PRINT STATS ------
-# IN_PKT:       100
-# OUT_PKT:       100
-# INCOMP_OUT_PKT:       100
-# PARSER_OUT_PKT:       100
-# MAX_PARSER_FIFO:         1
-# FD_IN_PKT:       100
-# FD_OUT_PKT:       100
-# MAX_FD_OUT_PKT:         1
-# DM_IN_PKT:       100
-# IN_EMPTYLIST_PKT:      2788
-# OUT_EMPTYLIST_PKT:       100
-# PKT_ETH:       100
-# PKT_DROP:         0
-# PKT_PCIE:         0
-# MAX_DM2PCIE_FIFO:         0
-# PCIE_PKT:         0
-# PCIE_META:         0
+# IN_PKT:              100
+# OUT_PKT:             100
+# INCOMP_OUT_PKT:              100
+# PARSER_OUT_PKT:              100
+# MAX_PARSER_FIFO:               1
+# FD_IN_PKT:           100
+# FD_OUT_PKT:          100
+# MAX_FD_OUT_PKT:                1
+# DM_IN_PKT:           100
+# IN_EMPTYLIST_PKT:           2788
+# OUT_EMPTYLIST_PKT:           100
+# PKT_ETH:             100
+# PKT_DROP:              0
+# PKT_PCIE:              0
+# MAX_DM2PCIE_FIFO:              0
+# PCIE_PKT:              0
+# PCIE_META:             0
+# DM_PCIE_PKT:           0
+# DM_PCIE_META:          0
+# DM_ETH_PKT:          100
 
 
 With PCIE
 # ---- PRINT STATS ------
-# IN_PKT:       100
-# OUT_PKT:         0
-# INCOMP_OUT_PKT:       100
-# PARSER_OUT_PKT:       100
-# MAX_PARSER_FIFO:         1
-# FD_IN_PKT:       100
-# FD_OUT_PKT:       100
-# MAX_FD_OUT_PKT:         1
-# DM_IN_PKT:       100
-# IN_EMPTYLIST_PKT:      2788
-# OUT_EMPTYLIST_PKT:       100
-# PKT_ETH:         0
-# PKT_DROP:         0
-# PKT_PCIE:       100
-# MAX_DM2PCIE_FIFO:        11
-# PCIE_PKT:       100
-# PCIE_META:       100
+# IN_PKT:              100
+# OUT_PKT:               0
+# INCOMP_OUT_PKT:              100
+# PARSER_OUT_PKT:              100
+# MAX_PARSER_FIFO:               1
+# FD_IN_PKT:           100
+# FD_OUT_PKT:          100
+# MAX_FD_OUT_PKT:                1
+# DM_IN_PKT:           100
+# IN_EMPTYLIST_PKT:           2788
+# OUT_EMPTYLIST_PKT:           100
+# PKT_ETH:               0
+# PKT_DROP:              0
+# PKT_PCIE:            100
+# MAX_DM2PCIE_FIFO:             11
+# PCIE_PKT:            100
+# PCIE_META:           100
+# DM_PCIE_PKT:         100
+# DM_PCIE_META:        100
+# DM_ETH_PKT:            0
+
+

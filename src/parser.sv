@@ -2,6 +2,7 @@
 /* parse the ethnet frame to data for kernel. Convert Big endian to little
 * endian */
 module parser(clk,rst,
+    disable_pcie,
     in_pkt_data,
     in_pkt_valid,
     in_pkt_ready,
@@ -24,6 +25,7 @@ module parser(clk,rst,
 //TODO: IP header/ TCP header bigger than 5 * 32 bits
 input clk;
 input rst;
+input disable_pcie;
 input [511:0] in_pkt_data;
 input in_pkt_valid;
 output logic in_pkt_ready;
@@ -160,11 +162,7 @@ assign metadata.pktID = in_meta_data.pktID;
 assign metadata.flits = in_meta_data.flits;
 assign metadata.tcp_flags = {tcp_ns,tcp_cwr,tcp_ece,tcp_urg,tcp_fack,tcp_psh,tcp_rst,tcp_syn,tcp_fin};
 
-`ifdef NO_PCIE
-assign metadata.pkt_flags = PKT_ETH;
-`else
-assign metadata.pkt_flags = PKT_PCIE;
-`endif
+assign metadata.pkt_flags = disable_pcie ? PKT_ETH : PKT_PCIE;
 
 assign in_pkt_ready = out_meta_ready;
 assign in_meta_ready = out_meta_ready;

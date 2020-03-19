@@ -69,6 +69,9 @@ logic [31:0] pkt_pcie_status;
 logic [31:0] max_dm2pcie_fifo_status;
 logic [31:0] pcie_pkt_cnt_status;
 logic [31:0] pcie_meta_cnt_status;
+logic [31:0] dm_pcie_pkt_cnt_status;
+logic [31:0] dm_pcie_meta_cnt_status;
+logic [31:0] dm_eth_pkt_cnt_status;
 
 //Register I/O
 logic  [511:0]  out_data;
@@ -95,6 +98,8 @@ logic [11:0]    reg_pcie_rb_wr_base_addr;
 logic           reg_pcie_rb_almost_full;          
 logic           reg_disable_pcie;
 
+logic           dm_disable_pcie_r1;
+logic           dm_disable_pcie;
 
 logic           esram_pkt_buf_wren;
 logic [16:0]    esram_pkt_buf_wraddress;
@@ -249,6 +254,15 @@ logic [31:0] pcie_pkt_cnt_r2;
 logic [31:0] pcie_meta_cnt;
 logic [31:0] pcie_meta_cnt_r1;
 logic [31:0] pcie_meta_cnt_r2;
+logic [31:0] dm_pcie_pkt_cnt;
+logic [31:0] dm_pcie_pkt_cnt_r1;
+logic [31:0] dm_pcie_pkt_cnt_r2;
+logic [31:0] dm_pcie_meta_cnt;
+logic [31:0] dm_pcie_meta_cnt_r1;
+logic [31:0] dm_pcie_meta_cnt_r2;
+logic [31:0] dm_eth_pkt_cnt;
+logic [31:0] dm_eth_pkt_cnt_r1;
+logic [31:0] dm_eth_pkt_cnt_r2;
 
 ///////////////////////////
 //Read and Write registers
@@ -294,6 +308,9 @@ always @(posedge clk_datamover) begin
         pkt_drop <= 0;
         pkt_pcie <= 0;
         max_dm2pcie_fifo <= 0;
+        dm_pcie_pkt_cnt <= 0;
+        dm_pcie_meta_cnt <= 0;
+        dm_eth_pkt_cnt <= 0;
     end else begin
         if(input_comp_eth_valid & input_comp_eth_eop)begin
             in_pkt_cnt <= in_pkt_cnt + 1;
@@ -333,6 +350,18 @@ always @(posedge clk_datamover) begin
 
         if(max_dm2pcie_fifo < dm_pcie_pkt_in_csr_readdata)begin
             max_dm2pcie_fifo <= dm_pcie_pkt_in_csr_readdata;
+        end
+
+        if(dm_pcie_pkt_valid & dm_pcie_pkt_ready & dm_pcie_pkt_eop)begin
+            dm_pcie_pkt_cnt <= dm_pcie_pkt_cnt + 1;
+        end
+
+        if(dm_pcie_meta_valid & dm_pcie_meta_ready)begin
+            dm_pcie_meta_cnt <= dm_pcie_meta_cnt + 1;
+        end
+
+        if(dm_eth_pkt_valid & dm_eth_pkt_ready & dm_eth_pkt_eop)begin
+            dm_eth_pkt_cnt <= dm_eth_pkt_cnt + 1;
         end
     end
 end
@@ -406,6 +435,15 @@ always @(posedge clk_status) begin
     pcie_meta_cnt_r1                <= pcie_meta_cnt;
     pcie_meta_cnt_r2                <= pcie_meta_cnt_r1;
     pcie_meta_cnt_status            <= pcie_meta_cnt_r2;
+    dm_pcie_pkt_cnt_r1              <= dm_pcie_pkt_cnt;
+    dm_pcie_pkt_cnt_r2              <= dm_pcie_pkt_cnt_r1;
+    dm_pcie_pkt_cnt_status          <= dm_pcie_pkt_cnt_r2;
+    dm_pcie_meta_cnt_r1             <= dm_pcie_meta_cnt;
+    dm_pcie_meta_cnt_r2             <= dm_pcie_meta_cnt_r1;
+    dm_pcie_meta_cnt_status         <= dm_pcie_meta_cnt_r2;
+    dm_eth_pkt_cnt_r1               <= dm_eth_pkt_cnt;
+    dm_eth_pkt_cnt_r2               <= dm_eth_pkt_cnt_r1;
+    dm_eth_pkt_cnt_status           <= dm_eth_pkt_cnt_r2;
 end
 
 //registers
@@ -439,6 +477,9 @@ always @(posedge clk_status) begin
                 8'd14 : status_readdata_top <= max_dm2pcie_fifo_status;
                 8'd15 : status_readdata_top <= pcie_pkt_cnt_status;
                 8'd16 : status_readdata_top <= pcie_meta_cnt_status;
+                8'd17 : status_readdata_top <= dm_pcie_pkt_cnt_status;
+                8'd18 : status_readdata_top <= dm_pcie_meta_cnt_status;
+                8'd19 : status_readdata_top <= dm_eth_pkt_cnt_status;
 
                 default : status_readdata_top <= 32'h345;
             endcase
@@ -468,6 +509,11 @@ assign input_comp_eth_empty = reg_in_empty;
 
 assign out_valid_int = out_valid & !reg_out_almost_full;
 
+//sync disable_pcie to clk_datamover domain
+always @(posedge clk_datamover) begin
+    dm_disable_pcie_r1 <= reg_disable_pcie;
+    dm_disable_pcie <= dm_disable_pcie_r1;
+end
 //////////////////// Instantiation //////////////////////////////////
 hyper_pipe_root reg_io_inst (
     //clk & rst
@@ -563,6 +609,7 @@ input_comp input_comp_0 (
 parser parser_0 (
 	.clk            (clk_datamover),                  
 	.rst            (rst_datamover),        
+    .disable_pcie   (dm_disable_pcie),
 	.in_pkt_data    (input_comp_pkt_data),              
 	.in_pkt_valid   (input_comp_pkt_valid),             
 	.in_pkt_ready   (input_comp_pkt_ready),             
@@ -668,7 +715,7 @@ basic_data_mover data_mover_0 (
     .emptylist_in_data      (emptylist_in_data),
     .emptylist_in_valid     (emptylist_in_valid),
     .emptylist_in_ready     (emptylist_in_ready),
-    .disable_pcie           (reg_disable_pcie),
+    .disable_pcie           (dm_disable_pcie),
 	.pcie_pkt_sop           (dm_pcie_pkt_sop),     
 	.pcie_pkt_eop           (dm_pcie_pkt_eop),       
 	.pcie_pkt_valid         (dm_pcie_pkt_valid),             
@@ -690,8 +737,8 @@ basic_data_mover data_mover_0 (
 
 //////////////////// Datamover To PCIe FIFO //////////////////////////////////
 dc_fifo_wrapper_infill  #(
-    .SYMBOLS_PER_BEAT(8),
-    .BITS_PER_SYMBOL(64),
+    .SYMBOLS_PER_BEAT(64),
+    .BITS_PER_SYMBOL(8),
     .FIFO_DEPTH(512),
     .USE_PACKETS(1)
 )

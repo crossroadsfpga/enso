@@ -169,7 +169,10 @@ typedef enum{
     PKT_PCIE,
     MAX_DM2PCIE_FIFO,
     PCIE_PKT,
-    PCIE_META
+    PCIE_META,
+    DM_PCIE_PKT,
+    DM_PCIE_META,
+    DM_ETH_PKT
 } c_state_t;
 
 c_state_t conf_state;
@@ -311,7 +314,7 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("---- PRINT STATS ------");
-                    $display("IN_PKT:%d",top_readdata);
+                    $display("IN_PKT:\t%d",top_readdata);
                     conf_state <= OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0001;
@@ -320,7 +323,7 @@ always @(posedge clk_status) begin
             OUT_PKT:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("OUT_PKT:%d",top_readdata);
+                    $display("OUT_PKT:\t%d",top_readdata);
                     conf_state <= INCOMP_OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0002;
@@ -329,7 +332,7 @@ always @(posedge clk_status) begin
             INCOMP_OUT_PKT:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("INCOMP_OUT_PKT:%d",top_readdata);
+                    $display("INCOMP_OUT_PKT:\t%d",top_readdata);
                     conf_state <= PARSER_OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0003;
@@ -338,7 +341,7 @@ always @(posedge clk_status) begin
             PARSER_OUT_PKT:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PARSER_OUT_PKT:%d",top_readdata);
+                    $display("PARSER_OUT_PKT:\t%d",top_readdata);
                     conf_state <= MAX_PARSER_FIFO;
                     s_read <= 1;
                     s_addr <= 30'h2200_0004;
@@ -347,7 +350,7 @@ always @(posedge clk_status) begin
             MAX_PARSER_FIFO:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("MAX_PARSER_FIFO:%d",top_readdata);
+                    $display("MAX_PARSER_FIFO:\t%d",top_readdata);
                     conf_state <= FD_IN_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0005;
@@ -356,7 +359,7 @@ always @(posedge clk_status) begin
             FD_IN_PKT:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("FD_IN_PKT:%d",top_readdata);
+                    $display("FD_IN_PKT:\t%d",top_readdata);
                     conf_state <= FD_OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0006;
@@ -365,7 +368,7 @@ always @(posedge clk_status) begin
             FD_OUT_PKT:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("FD_OUT_PKT:%d",top_readdata);
+                    $display("FD_OUT_PKT:\t%d",top_readdata);
                     conf_state <= MAX_FD_OUT_FIFO;
                     s_read <= 1;
                     s_addr <= 30'h2200_0007;
@@ -374,7 +377,7 @@ always @(posedge clk_status) begin
             MAX_FD_OUT_FIFO:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("MAX_FD_OUT_PKT:%d",top_readdata);
+                    $display("MAX_FD_OUT_PKT:\t%d",top_readdata);
                     conf_state <= DM_IN_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0008;
@@ -383,7 +386,7 @@ always @(posedge clk_status) begin
             DM_IN_PKT:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DM_IN_PKT:%d",top_readdata);
+                    $display("DM_IN_PKT:\t%d",top_readdata);
                     conf_state <= IN_EMPTYLIST_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0009;
@@ -393,7 +396,7 @@ always @(posedge clk_status) begin
             IN_EMPTYLIST_PKT:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("IN_EMPTYLIST_PKT:%d",top_readdata);
+                    $display("IN_EMPTYLIST_PKT:\t%d",top_readdata);
                     conf_state <= OUT_EMPTYLIST_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_000A;
@@ -402,7 +405,7 @@ always @(posedge clk_status) begin
             OUT_EMPTYLIST_PKT:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("OUT_EMPTYLIST_PKT:%d",top_readdata);
+                    $display("OUT_EMPTYLIST_PKT:\t%d",top_readdata);
                     conf_state <= PKT_ETH;
                     s_read <= 1;
                     s_addr <= 30'h2200_000B;
@@ -411,7 +414,7 @@ always @(posedge clk_status) begin
             PKT_ETH:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PKT_ETH:%d",top_readdata);
+                    $display("PKT_ETH:\t%d",top_readdata);
                     conf_state <= PKT_DROP;
                     s_read <= 1;
                     s_addr <= 30'h2200_000C;
@@ -420,7 +423,7 @@ always @(posedge clk_status) begin
             PKT_DROP:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PKT_DROP:%d",top_readdata);
+                    $display("PKT_DROP:\t%d",top_readdata);
                     conf_state <= PKT_PCIE;
                     s_read <= 1;
                     s_addr <= 30'h2200_000D;
@@ -429,7 +432,7 @@ always @(posedge clk_status) begin
             PKT_PCIE:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PKT_PCIE:%d",top_readdata);
+                    $display("PKT_PCIE:\t%d",top_readdata);
                     conf_state <= MAX_DM2PCIE_FIFO;
                     s_read <= 1;
                     s_addr <= 30'h2200_000E;
@@ -438,7 +441,7 @@ always @(posedge clk_status) begin
             MAX_DM2PCIE_FIFO:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("MAX_DM2PCIE_FIFO:%d",top_readdata);
+                    $display("MAX_DM2PCIE_FIFO:\t%d",top_readdata);
                     conf_state <= PCIE_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_000F;
@@ -447,7 +450,7 @@ always @(posedge clk_status) begin
             PCIE_PKT:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PCIE_PKT:%d",top_readdata);
+                    $display("PCIE_PKT:\t%d",top_readdata);
                     conf_state <= PCIE_META;
                     s_read <= 1;
                     s_addr <= 30'h2200_0010;
@@ -456,7 +459,34 @@ always @(posedge clk_status) begin
             PCIE_META:begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PCIE_META:%d",top_readdata);
+                    $display("PCIE_META:\t%d",top_readdata);
+                    conf_state <= DM_PCIE_PKT;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0011;
+                end
+            end
+            DM_PCIE_PKT:begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("DM_PCIE_PKT:\t%d",top_readdata);
+                    conf_state <= DM_PCIE_META;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0012;
+                end
+            end
+            DM_PCIE_META:begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("DM_PCIE_META:\t%d",top_readdata);
+                    conf_state <= DM_ETH_PKT;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0013;
+                end
+            end
+            DM_ETH_PKT:begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("DM_ETH_PKT:\t%d",top_readdata);
                     $display("done");
                     $finish;
                 end
