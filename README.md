@@ -33,7 +33,7 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
     - flow_director_wrapper.sv: Wrapper file for flow_director. Currently directly forward the metadata
     - basic_data_mover.sv: Take the metadata from Flow Director and then fetch pkt from Global Pkt Buffer, then (1) forward the pkt to Ethernet output, or (2) drop pkt, or (3) send to PCIe, depending on the pkt_flag field.
     - pdu_gen.sv: Take the metadata from basic_data_mover and pkts data to form a block for PCIe transmission. 
-  - esram_wrapper.sv: Global Pkt Buffer. In simulation, it is a BRAM to speed up simulation. During Synthesis, it is mapped to eSRAM. The `define SIM` should be commented during Synthesis. 
+  - esram_wrapper.sv: Global Pkt Buffer. In simulation, it is a BRAM to speed up simulation. During Synthesis, it is mapped to eSRAM.   
   - pcie_top.sv : PCIe top-level. Dummy module when `SIM` is defined. 
     - fpga2cpu_pcie.sv : Handle the FPGA->CPU transfer. FPGA side pushes data to ring buffer. The other side of the ring buffer will fetch data in batch and starts DMA to CPU.
       - ring_buffer.sv: The ring_buffer at FPGA side. 
@@ -43,6 +43,7 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 1. \*.ini, \*.pcap, \*.pkt are ingored in .gitignore. You should change your local .ini file and you can add new pcap/pkt in your local copy. But please do not upload to this repo.
 2. In input_gen, you can change the run.sh to capture different number of pkts from the pcap. Usually start with small number.
 3. run_vsim_afs.sh allow you choose GUI mode, CLI mode, and optimized CLI mode. GUI mode is great for debugging using waveform. CLI mode is good for getting the results quickly. Optimized CLI applied internal optimizations which may affect the results.
+4. The `define SIM` and `define NO_PCIE` hould be commented during Synthesis. In simulation, you can toggle `define NO_PCIE` to disable/enable pcie. In Synthesis, you will need to write a tcl command in JTAG system console.
 
 # On-board test
 ### Synthesize Quartus Project

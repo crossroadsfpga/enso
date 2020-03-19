@@ -113,6 +113,7 @@ always@(posedge clk)begin
                         pdu_data_r <= in_data;
                         pdu_size <= pdu_size + (64 - in_empty);
                         pdu_addr_r <= pdu_addr_r + 1;
+                        pdu_eop_r <= 1; //set the eop here since we don't have rule anymore.
 
                         state <= WRITE_HEAD;
                     end
