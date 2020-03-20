@@ -51,7 +51,7 @@ assign in_ready = (state == WRITE);
 
 assign pdu_hdr.tuple = in_meta_data.tuple;
 assign pdu_hdr.prot = in_meta_data.prot;
-assign pdu_hdr.pdu_id = 0;
+assign pdu_hdr.pdu_id = pdu_id;
 assign pdu_hdr.num_ruleID = 0;
 assign pdu_hdr.pdu_size = pdu_size;
 assign pdu_hdr.pdu_flit = pdu_flit;
@@ -73,6 +73,7 @@ always@(posedge clk)begin
         pcie_rb_update_valid <= 0;
         pcie_rb_update_size <= 0;
         pdu_flit <= 0;
+        pdu_id <= 0;
     end else begin
         case(state)
             START:begin
@@ -94,13 +95,13 @@ always@(posedge clk)begin
                 pdu_wren_r <= 0;
                 pdu_sop_r <= 0;
                 pdu_eop_r <= 0;
+                pdu_data_r <= in_data;
                 if(in_valid)begin
+                    pdu_wren_r <= 1;
                     swap <= 1;
                     pdu_flit <= pdu_flit + 1;
                     //regular flit
                     if(!in_eop)begin
-                        pdu_wren_r <= 1;
-                        pdu_data_r <= in_data;
                         if(in_sop)begin
                             pdu_addr_r <= pcie_rb_wr_base_addr + 1;
                             pdu_size <= 64;
@@ -109,10 +110,13 @@ always@(posedge clk)begin
                             pdu_size <= pdu_size + 64;
                         end
                     end else begin
-                        pdu_wren_r <= 1;
-                        pdu_data_r <= in_data;
+                        //only one flit
+                        if(in_sop)begin
+                            pdu_addr_r <= pcie_rb_wr_base_addr + 1;
+                        end else begin
+                            pdu_addr_r <= pdu_addr_r + 1;
+                        end
                         pdu_size <= pdu_size + (64 - in_empty);
-                        pdu_addr_r <= pdu_addr_r + 1;
                         pdu_eop_r <= 1; //set the eop here since we don't have rule anymore.
 
                         state <= WRITE_HEAD;
@@ -128,9 +132,12 @@ always@(posedge clk)begin
                 pdu_eop_r <= 0;
                 in_meta_ready <= 1;
                 pcie_rb_update_valid <= 1;
-                pcie_rb_update_size <= pdu_flit;
+                pcie_rb_update_size <= pdu_flit + 1; //one more flit for head
 
                 state <= START;
+
+                //Just incremental id
+                pdu_id <= pdu_id + 1;
             end
         endcase
     end
