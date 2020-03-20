@@ -54,7 +54,7 @@ assign pdu_hdr.prot = in_meta_data.prot;
 assign pdu_hdr.pdu_id = pdu_id;
 assign pdu_hdr.num_ruleID = 0;
 assign pdu_hdr.pdu_size = pdu_size;
-assign pdu_hdr.pdu_flit = pdu_flit;
+assign pdu_hdr.pdu_flit = pdu_flit + 1;//one more flit for head
 assign pdu_hdr.action  = ACTION_CHECK;
 assign pdu_hdr.padding = 0;
 

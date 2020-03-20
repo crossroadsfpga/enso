@@ -455,6 +455,7 @@ proc get_top_stats {} {
     global DM_PCIE_PKT
     global DM_PCIE_META
     global DM_ETH_PKT
+    global DMA_PKT
 
     set fp [open "top_stats.txt" w+]
     read_top_reg IN_PKT            $IN_PKT            $fp
