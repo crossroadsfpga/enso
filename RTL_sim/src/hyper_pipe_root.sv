@@ -26,24 +26,11 @@ module hyper_pipe_root (
     input  logic [11:0]             pcie_rb_wr_addr,//[PDU_AWIDTH-1:0]          
     input  logic                    pcie_rb_wr_en,  
     input  logic [11:0]             pcie_rb_wr_base_addr, //[PDU_AWIDTH-1:0]                 
+    input  logic                    pcie_rb_wr_base_addr_valid,
     input  logic                    pcie_rb_almost_full,          
     input  logic                    pcie_rb_update_valid,
     input  logic [11:0]             pcie_rb_update_size,//[PDU_AWIDTH-1:0]
     input  logic                    disable_pcie,
-    input  logic [27:0]             pdumeta_cpu_data,//pdu_metadata_t
-    input  logic                    pdumeta_cpu_valid,
-    input  logic [9:0]              pdumeta_cnt,
-    
-    //DRAM
-    input  logic [538:0]            ddr_wr_req_data,
-    input  logic                    ddr_wr_req_valid,
-    input  logic                    ddr_wr_req_almost_full,
-    input  logic [26:0]             ddr_rd_req_data,
-    input  logic                    ddr_rd_req_valid,
-    input  logic                    ddr_rd_req_almost_full,
-    input  logic [511:0]            ddr_rd_resp_data,
-    input  logic                    ddr_rd_resp_valid,
-    input  logic                    ddr_rd_resp_almost_full,
 
     //eSRAM
     input  logic                    esram_pkt_buf_wren,
@@ -69,22 +56,11 @@ module hyper_pipe_root (
     output  logic [11:0]            reg_pcie_rb_wr_addr,//[PDU_AWIDTH-1:0]          
     output  logic                   reg_pcie_rb_wr_en,  
     output  logic [11:0]            reg_pcie_rb_wr_base_addr, //[PDU_AWIDTH-1:0]                 
+    output  logic                   reg_pcie_rb_wr_base_addr_valid,
     output  logic                   reg_pcie_rb_almost_full,          
     output  logic                   reg_pcie_rb_update_valid,
     output  logic [11:0]            reg_pcie_rb_update_size,//[PDU_AWIDTH-1:0]
     output  logic                   reg_disable_pcie,
-    output  logic [27:0]            reg_pdumeta_cpu_data,//pdu_metadata_t
-    output  logic                   reg_pdumeta_cpu_valid,
-    output  logic [9:0]             reg_pdumeta_cnt,
-    output  logic [538:0]           reg_ddr_wr_req_data,
-    output  logic                   reg_ddr_wr_req_valid,
-    output  logic                   reg_ddr_wr_req_almost_full,
-    output  logic [26:0]            reg_ddr_rd_req_data,
-    output  logic                   reg_ddr_rd_req_valid,
-    output  logic                   reg_ddr_rd_req_almost_full,
-    output  logic [511:0]           reg_ddr_rd_resp_data,
-    output  logic                   reg_ddr_rd_resp_valid,
-    output  logic                   reg_ddr_rd_resp_almost_full,
     output  logic                   reg_esram_pkt_buf_wren,
     output  logic [16:0]            reg_esram_pkt_buf_wraddress,
     output  logic [519:0]           reg_esram_pkt_buf_wrdata,
@@ -225,6 +201,15 @@ hyper_pipe #(
 hyper_pipe_rst #(
     .WIDTH (1),
     .NUM_PIPES(NUM_PIPES)
+) hp_pcie_rb_wr_base_addr_valid (
+    .clk(clk_pcie),
+    .rst(rst_pcie),
+    .din     (pcie_rb_wr_base_addr_valid),
+    .dout(reg_pcie_rb_wr_base_addr_valid)
+);
+hyper_pipe_rst #(
+    .WIDTH (1),
+    .NUM_PIPES(NUM_PIPES)
 ) hp_pcie_rb_almost_full (
     .clk(clk_pcie),
     .rst(rst_pcie),
@@ -255,111 +240,6 @@ hyper_pipe #(
     .clk(clk_pcie),
     .din     (disable_pcie),
     .dout(reg_disable_pcie)
-);
-hyper_pipe #(
-    .WIDTH (28),
-    .NUM_PIPES(NUM_PIPES)
-) hp_pdumeta_cpu_data (
-    .clk(clk_pcie),
-    .din     (pdumeta_cpu_data),
-    .dout(reg_pdumeta_cpu_data)
-);
-hyper_pipe_rst #(
-    .WIDTH (1),
-    .NUM_PIPES(NUM_PIPES)
-) hp_pdumeta_cpu_valid (
-    .clk(clk_pcie),
-    .rst(rst_pcie),
-    .din     (pdumeta_cpu_valid),
-    .dout(reg_pdumeta_cpu_valid)
-);
-hyper_pipe #(
-    .WIDTH (10),
-    .NUM_PIPES(NUM_PIPES)
-) hp_pdumeta_cnt (
-    .clk(clk_pcie),
-    .din     (pdumeta_cnt),
-    .dout(reg_pdumeta_cnt)
-);
-
-//DRAM
-hyper_pipe #(
-    .WIDTH (539),
-    .NUM_PIPES(NUM_PIPES)
-) hp_ddr_wr_req_data (
-    .clk(clk_pcie),
-    .din     (ddr_wr_req_data),
-    .dout(reg_ddr_wr_req_data)
-);
-hyper_pipe_rst #(
-    .WIDTH (1),
-    .NUM_PIPES(NUM_PIPES)
-) hp_ddr_wr_req_valid (
-    .clk(clk_pcie),
-    .rst(rst_pcie),
-    .din     (ddr_wr_req_valid),
-    .dout(reg_ddr_wr_req_valid)
-);
-hyper_pipe_rst #(
-    .WIDTH (1),
-    .NUM_PIPES(NUM_PIPES)
-) hp_ddr_wr_req_almost_full (
-    .clk(clk_pcie),
-    .rst(rst_pcie),
-    .din     (ddr_wr_req_almost_full),
-    .dout(reg_ddr_wr_req_almost_full)
-);
-hyper_pipe #(
-    .WIDTH (27),
-    .NUM_PIPES(NUM_PIPES)
-) hp_ddr_rd_req_data (
-    .clk(clk_pcie),
-    .din     (ddr_rd_req_data),
-    .dout(reg_ddr_rd_req_data)
-);
-hyper_pipe_rst #(
-    .WIDTH (1),
-    .NUM_PIPES(NUM_PIPES)
-) hp_ddr_rd_req_valid (
-    .clk(clk_pcie),
-    .rst(rst_pcie),
-    .din     (ddr_rd_req_valid),
-    .dout(reg_ddr_rd_req_valid)
-);
-hyper_pipe_rst #(
-    .WIDTH (1),
-    .NUM_PIPES(NUM_PIPES)
-) hp_ddr_rd_req_almost_full (
-    .clk(clk_pcie),
-    .rst(rst_pcie),
-    .din     (ddr_rd_req_almost_full),
-    .dout(reg_ddr_rd_req_almost_full)
-);
-hyper_pipe #(
-    .WIDTH (512),
-    .NUM_PIPES(NUM_PIPES)
-) hp_ddr_rd_resp_data (
-    .clk(clk_pcie),
-    .din     (ddr_rd_resp_data),
-    .dout(reg_ddr_rd_resp_data)
-);
-hyper_pipe_rst #(
-    .WIDTH (1),
-    .NUM_PIPES(NUM_PIPES)
-) hp_ddr_rd_resp_valid (
-    .clk(clk_pcie),
-    .rst(rst_pcie),
-    .din     (ddr_rd_resp_valid),
-    .dout(reg_ddr_rd_resp_valid)
-);
-hyper_pipe_rst #(
-    .WIDTH (1),
-    .NUM_PIPES(NUM_PIPES)
-) hp_ddr_rd_resp_almost_full (
-    .clk(clk_pcie),
-    .rst(rst_pcie),
-    .din     (ddr_rd_resp_almost_full),
-    .dout(reg_ddr_rd_resp_almost_full)
 );
 
 //esram

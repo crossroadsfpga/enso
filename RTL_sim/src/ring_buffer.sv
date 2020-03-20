@@ -6,6 +6,7 @@ wr_data,
 wr_addr,          
 wr_en,  
 wr_base_addr,  
+wr_base_addr_valid,
 almost_full,          
 update_valid,
 update_size,
@@ -35,6 +36,7 @@ input  flit_lite_t wr_data;
 input  logic [PDU_AWIDTH-1:0]  wr_addr;          
 input  logic         wr_en;  
 output logic [PDU_AWIDTH-1:0]  wr_base_addr;          
+output logic         wr_base_addr_valid;
 output logic         almost_full;          
 input  logic         update_valid;
 input  logic [PDU_AWIDTH-1:0]  update_size;
@@ -85,6 +87,7 @@ always@(posedge clk)begin
         tail <= 0;
         almost_full <= 0;
         last_tail <= 0;
+        wr_base_addr_valid <= 0;
     end else begin
         if(update_valid)begin
             if(tail + update_size < MAX_SLOT)begin
@@ -94,6 +97,7 @@ always@(posedge clk)begin
                 last_tail <= tail + update_size;
             end
         end
+        wr_base_addr_valid <= update_valid;
 
         if(free_slot >= 2*THRESHOLD)begin
             almost_full <= 0;

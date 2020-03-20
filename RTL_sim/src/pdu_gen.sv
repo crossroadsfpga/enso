@@ -16,6 +16,7 @@ module pdu_gen(
         output  logic [PDU_AWIDTH-1:0]   pcie_rb_wr_addr,          
         output  logic                    pcie_rb_wr_en,  
         input   logic [PDU_AWIDTH-1:0]   pcie_rb_wr_base_addr,          
+        input   logic                    pcie_rb_wr_base_addr_valid,          
         input   logic                    pcie_rb_almost_full,          
         output  logic                    pcie_rb_update_valid,
         output  logic [PDU_AWIDTH-1:0]   pcie_rb_update_size
@@ -25,7 +26,8 @@ typedef enum
 {
     START,
     WRITE,
-    WRITE_HEAD
+    WRITE_HEAD,
+    WAIT
 } state_t;
 
 state_t state;
@@ -68,7 +70,6 @@ always@(posedge clk)begin
         pdu_sop_r <= 0;
         pdu_eop_r <= 0;
         pdu_addr_r <= 0;
-        rule_cnt <= 0;
         swap <= 0;
         pcie_rb_update_valid <= 0;
         pcie_rb_update_size <= 0;
@@ -76,13 +77,13 @@ always@(posedge clk)begin
         pdu_id <= 0;
     end else begin
         case(state)
+            //only be called once.
             START:begin
                 in_meta_ready <= 0;
                 pdu_wren_r <= 0;
                 pdu_sop_r <= 0;
                 pdu_eop_r <= 0;
                 pdu_addr_r <= 0;
-                rule_cnt <= 0;
                 swap <= 0;
                 pcie_rb_update_valid <= 0;
                 pcie_rb_update_size <= 0;
@@ -134,10 +135,25 @@ always@(posedge clk)begin
                 pcie_rb_update_valid <= 1;
                 pcie_rb_update_size <= pdu_flit + 1; //one more flit for head
 
-                state <= START;
+                state <= WAIT;
 
                 //Just incremental id
                 pdu_id <= pdu_id + 1;
+            end
+            WAIT:begin
+                in_meta_ready <= 0;
+                pdu_wren_r <= 0;
+                pdu_sop_r <= 0;
+                pdu_eop_r <= 0;
+                pdu_addr_r <= 0;
+                swap <= 0;
+                pcie_rb_update_valid <= 0;
+                pcie_rb_update_size <= 0;
+                pdu_flit <= 0;
+                //wait until the new base_addr is ready.
+                if(in_meta_valid & !in_meta_ready & !pcie_rb_almost_full & pcie_rb_wr_base_addr_valid)begin
+                    state <= WRITE;
+                end
             end
         endcase
     end

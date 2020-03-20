@@ -172,8 +172,7 @@ typedef enum{
     PCIE_META,
     DM_PCIE_PKT,
     DM_PCIE_META,
-    DM_ETH_PKT,
-    DMA_PKT
+    DM_ETH_PKT
 } c_state_t;
 
 c_state_t conf_state;
@@ -488,15 +487,6 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("DM_ETH_PKT:\t%d",top_readdata);
-                    conf_state <= DMA_PKT;
-                    s_read <= 1;
-                    s_addr <= 30'h2200_0014;
-                end
-            end
-            DMA_PKT:begin
-                s_read <= 0;
-                if(top_readdata_valid)begin
-                    $display("DMA_PKT:\t%d",top_readdata);
                     $display("done");
                     $finish;
                 end
