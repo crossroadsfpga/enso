@@ -45,13 +45,27 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 3. run_vsim_afs.sh allow you choose GUI mode, CLI mode, and optimized CLI mode. GUI mode is great for debugging using waveform. CLI mode is good for getting the results quickly. Optimized CLI applied internal optimizations which may affect the results.
 4. The `define SIM` and `define NO_PCIE` should be commented during Synthesis. In simulation, you can toggle `define NO_PCIE` to disable/enable pcie. In Synthesis, you will need to write a tcl command in JTAG system console.
 
-# On-board test
+# Hardware test
+### Resotre the Quartus project
+1. Download the exmaple project (front_door_consumer.qar) from google drive. 
+2. Open Quartus prime pro 19.3. Under "Project" Tab, select Restor Archived Project. Restore it to desired path. Assuming the top-level folder after resotre is called `front_door_consumer`.
+3. Copy `hwtest` folder to `your_path/front_door_consumer/hardware_test_design/`
+4. Download other scripts under `hardware_test` to desired path. Place them in same directory.
+5. Replace `your_path` in load.cdf and path.tcl with correct path.
+
+### Quartus Project file description (Just introduce most related files)
+- front_door_consumer (top-level folder)
+  - ex_100G: folders that contains the 100Gbps Ethernet Core logic.
+  - ex_100G.ip: the ip file for Ethernet Core
+  - hardware_test_design (folder that we care most)
+    - src: the src RTL code from RTL_sim. 
+
 ### Synthesize Quartus Project
-1. Download the exmaple project from google drive. Open the quartus project under `your_path/front_door_consumer/hardware_test_design/alt_ehipc2_hw.qpf`
+1. Open the quartus project under `your_path/front_door_consumer/hardware_test_design/alt_ehipc2_hw.qpf`
 2. Add new flow_director_wrapper.sv (keep the interface the same.) You can add sub modules for flow_director_wrapper.sv as well.
 3. Open the Compilation Dashboard. Click Compile Design. It may take 1-2 hours. This involves multiple stages. In the end, the Assembler will generate bitstream. 
 
-### Load bitstream
+### Load bitstream 
 1. Go to `your_path/front_door_consumer/hardware_test_design/outputfile/load.cdf`. Change the path.
 2. Change the path in `load_bitstream.sh` as well
 3. Run `./load_bitstream.sh` to load the bitstream. Note that the JTAG system console should be closed when loading the bitstream. 
