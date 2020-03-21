@@ -92,6 +92,7 @@ logic [513:0]   pcie_rb_wr_data;
 logic [11:0]    pcie_rb_wr_addr;          
 logic           pcie_rb_wr_en;  
 logic [11:0]    pcie_rb_wr_base_addr;          
+logic           pcie_rb_wr_base_addr_valid;
 logic           pcie_rb_almost_full;          
 logic           pcie_rb_update_valid;
 logic [11:0]    pcie_rb_update_size;
@@ -101,6 +102,7 @@ logic [513:0]   reg_pcie_rb_wr_data;
 logic [11:0]    reg_pcie_rb_wr_addr;          
 logic           reg_pcie_rb_wr_en;  
 logic [11:0]    reg_pcie_rb_wr_base_addr;          
+logic           reg_pcie_rb_wr_base_addr_valid;
 logic           reg_pcie_rb_almost_full;          
 logic           reg_pcie_rb_update_valid;
 logic [11:0]    reg_pcie_rb_update_size;
@@ -540,6 +542,7 @@ top top_inst (
     .reg_pcie_rb_wr_addr          (pcie_rb_wr_addr),          
     .reg_pcie_rb_wr_en            (pcie_rb_wr_en),  
     .pcie_rb_wr_base_addr         (reg_pcie_rb_wr_base_addr),  
+    .pcie_rb_wr_base_addr_valid   (reg_pcie_rb_wr_base_addr_valid),
     .pcie_rb_almost_full          (reg_pcie_rb_almost_full),          
     .reg_pcie_rb_update_valid     (pcie_rb_update_valid),
     .reg_pcie_rb_update_size      (pcie_rb_update_size),
@@ -587,6 +590,7 @@ hyper_pipe_root reg_io_inst (
     .pcie_rb_wr_addr        (pcie_rb_wr_addr),          
     .pcie_rb_wr_en          (pcie_rb_wr_en),  
     .pcie_rb_wr_base_addr   (pcie_rb_wr_base_addr),  
+    .pcie_rb_wr_base_addr_valid(pcie_rb_wr_base_addr_valid),
     .pcie_rb_almost_full    (pcie_rb_almost_full),          
     .pcie_rb_update_valid   (pcie_rb_update_valid),
     .pcie_rb_update_size    (pcie_rb_update_size),
@@ -615,6 +619,7 @@ hyper_pipe_root reg_io_inst (
     .reg_pcie_rb_wr_addr        (reg_pcie_rb_wr_addr),          
     .reg_pcie_rb_wr_en          (reg_pcie_rb_wr_en),  
     .reg_pcie_rb_wr_base_addr   (reg_pcie_rb_wr_base_addr),  
+    .reg_pcie_rb_wr_base_addr_valid(reg_pcie_rb_wr_base_addr_valid),
     .reg_pcie_rb_almost_full    (reg_pcie_rb_almost_full),          
     .reg_pcie_rb_update_valid   (reg_pcie_rb_update_valid),
     .reg_pcie_rb_update_size    (reg_pcie_rb_update_size),
@@ -743,6 +748,7 @@ pcie_top pcie (
     .pcie_rb_wr_addr        (reg_pcie_rb_wr_addr),          
     .pcie_rb_wr_en          (reg_pcie_rb_wr_en),  
     .pcie_rb_wr_base_addr   (pcie_rb_wr_base_addr),  
+    .pcie_rb_wr_base_addr_valid(pcie_rb_wr_base_addr_valid),
     .pcie_rb_almost_full    (pcie_rb_almost_full),          
     .pcie_rb_update_valid   (reg_pcie_rb_update_valid),
     .pcie_rb_update_size    (reg_pcie_rb_update_size),

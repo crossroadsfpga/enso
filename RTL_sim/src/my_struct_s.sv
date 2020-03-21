@@ -1,7 +1,7 @@
 `ifndef MY_STRUCT_S
 `define MY_STRUCT_S
-//`define SIM //Should comment this during synthesis
-//`define NO_PCIE //Should comment this during synthesis
+`define SIM //Should comment this during synthesis
+`define NO_PCIE //Should comment this during synthesis
 
 //packet buffer
 //STORE 1024 pkts, each pkts takes 32 * 512 bits = 2 KB.

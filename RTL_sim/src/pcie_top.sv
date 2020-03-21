@@ -820,6 +820,9 @@ end
 `ifdef SIM
     assign pcie_rb_wr_base_addr = 0;
     assign pcie_rb_almost_full  = 0;
+    always@(posedge pcie_clk)begin
+        pcie_rb_wr_base_addr_valid <= pcie_rb_update_valid;
+    end
 `else
 
 fpga2cpu_pcie f2c_inst (
