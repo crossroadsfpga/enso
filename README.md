@@ -50,9 +50,6 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 ### Resotre the Quartus project
 1. Scp the exmaple project from scotchbuild00 /home/zzhao1/front_door_consumer.qar.
 2. Open Quartus prime pro 19.3. Under "Project" Tab, select Restor Archived Project. Restore it to desired path. Assuming the top-level folder after resotre is called `front_door_consumer`.
-3. Copy `hwtest` folder to `your_path/front_door_consumer/hardware_test_design/`
-4. Download other scripts under `hardware_test` to desired path. Place them in same directory (I put them in my home directory).
-5. Replace `your_path` in load.cdf and path.tcl with correct path.
 
 ### Quartus Project file description (Just introduce most related files)
 - front_door_consumer (top-level folder)
@@ -66,8 +63,10 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 2. Add new flow_director.sv (keep the interface the same.) You can add sub modules for flow_director.sv as well.
 3. Open the Compilation Dashboard. Click Compile Design. It may take 20 minutes if you don't change anything. This involves multiple stages. In the end, the Assembler will generate bitstream. 
 
-### Load bitstream 
-1. Run `./load_bitstream.sh` to load the bitstream. Note that the JTAG system console should be closed when loading the bitstream. Check the printout the path to .sof is correct (`your_path/front_door_consumer/hardware_test_design/output_files/alt_ehipc2_hw.sof`).
+### Load bitstream and setup System console
+1. Download `hardware_test` folder to scotchbuild00 `your_scotchbuild_path`
+2. Copy the generated sof file from you compile machine (`your_path/front_door_consumer/hardware_test_design/output_files/alt_ehipc2_hw.sof`) to scotchbuild00 `your_scotchbuild_path/hardware_test/`. 
+3. Run `./load_bitstream.sh` to load the bitstream. Note that the JTAG system console should be closed when loading the bitstream.
 
 ### Test Steps with PCIe
 1. Reboot the machine after loading the bitstream if you need PCIe. 
