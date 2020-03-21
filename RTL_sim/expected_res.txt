@@ -21,6 +21,7 @@ NO_PCIE
 # DM_PCIE_PKT:           0
 # DM_PCIE_META:          0
 # DM_ETH_PKT:          100
+# DMA_PKT:               0
 
 
 With PCIE
@@ -39,11 +40,11 @@ With PCIE
 # PKT_ETH:               0
 # PKT_DROP:              0
 # PKT_PCIE:            100
-# MAX_DM2PCIE_FIFO:             11
+# MAX_DM2PCIE_FIFO:            109
 # PCIE_PKT:            100
 # PCIE_META:           100
 # DM_PCIE_PKT:         100
 # DM_PCIE_META:        100
 # DM_ETH_PKT:            0
-
+# DMA_PKT:             100
 

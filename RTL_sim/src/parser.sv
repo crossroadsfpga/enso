@@ -163,6 +163,7 @@ assign metadata.flits = in_meta_data.flits;
 assign metadata.tcp_flags = {tcp_ns,tcp_cwr,tcp_ece,tcp_urg,tcp_fack,tcp_psh,tcp_rst,tcp_syn,tcp_fin};
 
 assign metadata.pkt_flags = disable_pcie ? PKT_ETH : PKT_PCIE;
+assign metadata.padding = 0;
 
 assign in_pkt_ready = out_meta_ready;
 assign in_meta_ready = out_meta_ready;

@@ -101,8 +101,9 @@ typedef struct packed
     logic [31:0] f2c_tail; //tail pointer, CPU read only
 } pcie_block_t;
 
-//8 + 96 + 32+ 16+12+6+5+9+9+3+2 + 56 = 254
-parameter META_WIDTH=(8+TUPLE_DWIDTH+16+PKT_AWIDTH+5+9+3);
+parameter META_WIDTH=256; //Change this will affect hyper_reg_fd
+parameter INT_META_WIDTH=(8+TUPLE_DWIDTH+16+PKT_AWIDTH+5+9+3);
+parameter PADDING_WIDTH = (META_WIDTH - INT_META_WIDTH);
 typedef struct packed
 {
     logic [7:0] prot;
@@ -112,6 +113,7 @@ typedef struct packed
     logic [4:0] flits; //total number of flits
     logic [8:0] tcp_flags;
     logic [2:0] pkt_flags;
+    logic [PADDING_WIDTH-1:0] padding;
 } metadata_t; //Metadata
 
 
