@@ -31,7 +31,7 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
     - input_comp.sv: Store input pkt to Global Pkt Buffer, update emptylist, extract header to Parser
     - parser.sv: Take the header flit, fill in the metadata fields, pass the metadata to Flow Director
     - flow_director_wrapper.sv: Wrapper file for flow_director. Add FIFOs and Register I/O layer for Design Partition.
-      - flow_director.sv: Dummy flow director that directly pass the signals. 
+      - flow_director.sv: Dummy flow director that directly passes the signals. **This is the file you need to modify first**. 
     - basic_data_mover.sv: Take the metadata from Flow Director and then fetch pkt from Global Pkt Buffer, then (1) forward the pkt to Ethernet output, or (2) drop pkt, or (3) send to PCIe, depending on the pkt_flag field.
     - pdu_gen.sv: Take the metadata from basic_data_mover and pkts data to form a block for PCIe transmission. 
   - esram_wrapper.sv: Global Pkt Buffer. In simulation, it is a BRAM to speed up simulation. During Synthesis, it is mapped to eSRAM.   
@@ -48,24 +48,26 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 
 # Hardware test
 ### Resotre the Quartus project
-1. Scp the exmaple project from scotchbuild00 /home/zzhao1/front_door_consumer.qar.
-2. Open Quartus prime pro 19.3. Under "Project" Tab, select Restor Archived Project. Restore it to desired path. Assuming the top-level folder after resotre is called `front_door_consumer`.
+1. Scp the exmaple project from scotchbuild00 /home/zzhao1/front_door_consumer.qar to your compile machine. 
+2. Open Quartus prime pro 19.3. Under "Project" Tab, select Restore Archived Project. Restore it to desired path. Assuming the top-level folder after resotre is called `front_door_consumer`.
 
 ### Quartus Project file description (Just introduce most related files)
 - front_door_consumer (top-level folder)
   - ex_100G: folders that contains the 100Gbps Ethernet Core logic.
   - ex_100G.ip: the ip file for Ethernet Core
   - hardware_test_design (folder that we care most)
-    - src: the src RTL code from RTL_sim. But the `define SIM` and `define NO_PCIE` should be commented in my_struct_s.sv. 
+    - src: the src RTL code from RTL_sim. Note again the `define SIM` and `define NO_PCIE` should be commented in my_struct_s.sv. 
+    - output_files: the bitstream file `alt_ehipc2_hw.sof` and some reports which can be viewed in Quartus.  
 
-### Synthesize Quartus Project
+### Synthesize Quartus Project (you can skip this the first time)
 1. Open the quartus project under `your_path/front_door_consumer/hardware_test_design/alt_ehipc2_hw.qpf`
 2. Add new flow_director.sv (keep the interface the same.) You can add sub modules for flow_director.sv as well.
 3. Open the Compilation Dashboard. Click Compile Design. It may take 20 minutes if you don't change anything. This involves multiple stages. In the end, the Assembler will generate bitstream. 
 
 ### Load bitstream and setup System console
 1. Download `hardware_test` folder to scotchbuild00 `your_scotchbuild_path`
-2. Copy the generated sof file from you compile machine (`your_path/front_door_consumer/hardware_test_design/output_files/alt_ehipc2_hw.sof`) to scotchbuild00 `your_scotchbuild_path/hardware_test/`. 
+2. Copy the sof file from you compile machine (`your_path/front_door_consumer/hardware_test_design/output_files/alt_ehipc2_hw.sof`) to scotchbuild00 `your_scotchbuild_path/hardware_test/`. 
+3. Change `your_path` in load.cdf and path.tcl to match `your_soctchbuild_path`.
 3. Run `./load_bitstream.sh` to load the bitstream. Note that the JTAG system console should be closed when loading the bitstream.
 
 ### Test Steps with PCIe
