@@ -151,8 +151,8 @@ always@(posedge clk)begin
                 pcie_rb_update_size <= 0;
                 pdu_flit <= 0;
                 //wait until the new base_addr is ready.
-                if(in_meta_valid & !in_meta_ready & !pcie_rb_almost_full & pcie_rb_wr_base_addr_valid)begin
-                    state <= WRITE;
+                if(pcie_rb_wr_base_addr_valid)begin
+                    state <= START;
                 end
             end
         endcase
