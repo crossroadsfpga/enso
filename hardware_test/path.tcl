@@ -1,2 +1,2 @@
-cd your_path/front_door_consumer/hardware_test_design/hwtest/
+cd /your_path/hardware_test/hwtest/
 source main.tcl

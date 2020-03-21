@@ -4,7 +4,7 @@ JedecChain;
 	DefaultMfr(6E);
 
 	P ActionCode(Cfg)
-		Device PartName(1SM21BHU2F53S1) Path("your_place/front_door_consumer/hardware_test_design/output_files/") File("alt_ehipc2_hw.sof") MfrSpec(OpMask(1));
+		Device PartName(1SM21BHU2F53S1) Path("/your_path/hardware_test/") File("alt_ehipc2_hw.sof") MfrSpec(OpMask(1));
 	P ActionCode(Ign)
 		Device PartName(VTAP10) MfrSpec(OpMask(0));
 

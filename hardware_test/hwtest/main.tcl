@@ -12,7 +12,6 @@
 
 #Zhipeng Start
 source [file join [file dirname [info script]] "my_stats.tcl"]
-source [file join [file dirname [info script]] "pcie.tcl"]
 #Zhipeng End
 
 source [file join [file dirname [info script]] "altera/sval_top/main.tcl"]
