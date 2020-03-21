@@ -30,7 +30,8 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
   - top.sv is the top level module of core logic. Various counters are used to monitor the correctness of the datapath.
     - input_comp.sv: Store input pkt to Global Pkt Buffer, update emptylist, extract header to Parser
     - parser.sv: Take the header flit, fill in the metadata fields, pass the metadata to Flow Director
-    - flow_director_wrapper.sv: Wrapper file for flow_director. Currently directly forward the metadata
+    - flow_director_wrapper.sv: Wrapper file for flow_director. Add FIFOs and Register I/O layer for Design Partition.
+      - flow_director.sv: Dummy flow director that directly pass the signals. 
     - basic_data_mover.sv: Take the metadata from Flow Director and then fetch pkt from Global Pkt Buffer, then (1) forward the pkt to Ethernet output, or (2) drop pkt, or (3) send to PCIe, depending on the pkt_flag field.
     - pdu_gen.sv: Take the metadata from basic_data_mover and pkts data to form a block for PCIe transmission. 
   - esram_wrapper.sv: Global Pkt Buffer. In simulation, it is a BRAM to speed up simulation. During Synthesis, it is mapped to eSRAM.   
@@ -47,10 +48,10 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 
 # Hardware test
 ### Resotre the Quartus project
-1. Download the exmaple project (front_door_consumer.qar) from google drive. 
+1. Scp the exmaple project from scotchbuild00 /home/zzhao1/front_door_consumer.qar.
 2. Open Quartus prime pro 19.3. Under "Project" Tab, select Restor Archived Project. Restore it to desired path. Assuming the top-level folder after resotre is called `front_door_consumer`.
 3. Copy `hwtest` folder to `your_path/front_door_consumer/hardware_test_design/`
-4. Download other scripts under `hardware_test` to desired path. Place them in same directory.
+4. Download other scripts under `hardware_test` to desired path. Place them in same directory (I put them in my home directory).
 5. Replace `your_path` in load.cdf and path.tcl with correct path.
 
 ### Quartus Project file description (Just introduce most related files)
@@ -58,27 +59,23 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
   - ex_100G: folders that contains the 100Gbps Ethernet Core logic.
   - ex_100G.ip: the ip file for Ethernet Core
   - hardware_test_design (folder that we care most)
-    - src: the src RTL code from RTL_sim. 
+    - src: the src RTL code from RTL_sim. But the `define SIM` and `define NO_PCIE` should be commented in my_struct_s.sv. 
 
 ### Synthesize Quartus Project
 1. Open the quartus project under `your_path/front_door_consumer/hardware_test_design/alt_ehipc2_hw.qpf`
-2. Add new flow_director_wrapper.sv (keep the interface the same.) You can add sub modules for flow_director_wrapper.sv as well.
-3. Open the Compilation Dashboard. Click Compile Design. It may take 1-2 hours. This involves multiple stages. In the end, the Assembler will generate bitstream. 
+2. Add new flow_director.sv (keep the interface the same.) You can add sub modules for flow_director.sv as well.
+3. Open the Compilation Dashboard. Click Compile Design. It may take 20 minutes if you don't change anything. This involves multiple stages. In the end, the Assembler will generate bitstream. 
 
 ### Load bitstream 
-1. Go to `your_path/front_door_consumer/hardware_test_design/outputfile/load.cdf`. Change the path.
-2. Change the path in `load_bitstream.sh` as well
-3. Run `./load_bitstream.sh` to load the bitstream. Note that the JTAG system console should be closed when loading the bitstream. 
+1. Run `./load_bitstream.sh` to load the bitstream. Note that the JTAG system console should be closed when loading the bitstream. Check the printout the path to .sof is correct (`your_path/front_door_consumer/hardware_test_design/output_files/alt_ehipc2_hw.sof`).
 
 ### Test Steps with PCIe
 1. Reboot the machine after loading the bitstream if you need PCIe. 
-2. Update the path in path.tcl. (only once for a new test)
-3. Run JTAG system console by running `./run_console`, the first time may return some error. Exit it using Ctrl-C. Then redo it. It would work.
-4. Load PCIe user application file. Look for "Commit for Front Door" in Snort3-pigasus Repo. That is the commit for front door. 
-```
-./install.sh
-```
-5. In the tcl console, you will need to type some tcl commands.
+2. Run JTAG system console by running `./run_console`, it may return some error the first time. Exit it using Ctrl-C. Then redo it. It would work the second time.
+3. Load PCIe user application file. Look for "Commit for Front Door" in Snort3-pigasus Repo. That is the commit for front door. Eventually, it makes sense to remove all the Snort part for Front Door project.
+4. Install the driver.
+5. Start the user application. 
+6. In the tcl console, you will need to type some tcl commands.
 ```
 ##find the main.tcl under your_path/front_door_consumer/hardware_test_design/hwtest
 source path.tcl 
@@ -87,7 +84,7 @@ get_top_stats
 ##return the PCIe stats
 read_pcie
 ```
-6. Then connect to pkt-gen machine. Send pkt
+7. Then connect to pkt-gen machine (192.168.1.3). Send pkt
 ```
 cp example.pcap /dev/shm/test.pcap
 cd dpdk/pktgen-dpdk/
@@ -98,39 +95,39 @@ Remember to set the number of pkt of the pcap. Otherwise the pktgen would send t
 set 0 count X
 str
 ```
-7. Recheck the counters on FPGA
+8. Recheck the counters on FPGA
 ```
 ## recheck the top counters, you should expect to see X in many of the counters; eth related counters should be 0
 get_top_stats 
 ```
+9. Exit PCIe user application. You should expect to see the rx_pkt is X. 
 
 ### Test Steps without PCIe
 1. Without PCIe, the pkts will be forwarded to Ethernet output. After loading the bitstream. No need to reboot the machine.
-2. Update the path in path.tcl. (only once for a new test)
-3. Run JTAG system console by running `./run_console`, the first time may return some error. Exit it using Ctrl-C. Then redo it. It would work.
-4. In the tcl console, you will need to type some tcl commands.
+2. Run JTAG system console by running `./run_console`, it may return some error the first time. Exit it using Ctrl-C. Then redo it. It would work the second time.
+3. In the tcl console, you will need to type some tcl commands.
 ```
 ##find the main.tcl under your_path/front_door_consumer/hardware_test_design/hwtest
 source path.tcl 
 ##return the counters under top.sv. Most of them should be 0, except the in_emptylist_cnt is 2688, the number of pkts we can buffer.
 get_top_stats 
-##disable pcie
+##disable_pcie
 disable_pcie
 ```
-5. Then connect to pkt-gen machine. Send pkt
+4. Then connect to pkt-gen machine (192.168.1.3). Send pkt
 ```
 cp example.pcap /dev/shm/test.pcap
 cd dpdk/pktgen-dpdk/
 ./run_pktgen.sh
 ```
-Remember to set the number of pkt of the pcap. Otherwise the pktgen would send the pcap repeatedly. 
+Remember to set the number of pkt of the pcap. Otherwise the pktgen would send the pcap repeatedly.
 ```
 set 0 count X
 str
 ```
-7. Recheck the counters on FPGA
+5. Recheck the counters on FPGA
 ```
-## recheck the top counters, you should expect to see X in many of the counters; PCIe related counters should be 0.
+## recheck the top counters, you should expect to see X in many of the counters; PCIe related counters should be 0
 get_top_stats 
 ```
 
