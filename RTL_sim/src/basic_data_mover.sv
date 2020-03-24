@@ -32,24 +32,19 @@ module basic_data_mover (
         input  logic         eth_pkt_almost_full
 	);
 
+`ifdef SIM
+localparam NUM_PIPES = (2+2+2+1);
+`else
+//On-chip memory read latency is 12 cycles for eSRAM
+localparam NUM_PIPES = (2+2+12+1);
+`endif
+
 logic [PKT_AWIDTH-1:0] pktID;    
 logic [4:0] flits;
 
 logic [4:0] flits_cnt;
 logic [2:0] pkt_flags;
-logic [2:0] pkt_flags_r1;
-logic [2:0] pkt_flags_r2;
-logic [2:0] pkt_flags_r3;
-logic [2:0] pkt_flags_r4;
-logic [2:0] pkt_flags_r5;
-logic [2:0] pkt_flags_r6;
-logic [2:0] pkt_flags_r7;
-logic [2:0] pkt_flags_r8;
-logic [2:0] pkt_flags_r9;
-logic [2:0] pkt_flags_r10;
-logic [2:0] pkt_flags_r11;
-logic [2:0] pkt_flags_r12;
-logic [2:0] pkt_flags_r13;
+logic [2:0] pkt_flags_r;
 
 
 logic first_ready;
@@ -219,38 +214,6 @@ always@(posedge clk)begin
     end
 end
 
-//On-chip memory read latency is 12 cycles.
-always@(posedge clk)begin
-    if(rst)begin
-        pkt_flags_r1  <= 0;
-        pkt_flags_r2  <= 0;
-        pkt_flags_r3  <= 0;
-        pkt_flags_r4  <= 0;
-        pkt_flags_r5  <= 0;
-        pkt_flags_r6  <= 0;
-        pkt_flags_r7  <= 0;
-        pkt_flags_r8  <= 0;
-        pkt_flags_r9  <= 0;
-        pkt_flags_r10 <= 0;
-        pkt_flags_r11 <= 0;
-        pkt_flags_r12 <= 0;
-        pkt_flags_r13 <= 0;
-    end else begin
-        pkt_flags_r1  <= pkt_flags;
-        pkt_flags_r2  <= pkt_flags_r1;
-        pkt_flags_r3  <= pkt_flags_r2;
-        pkt_flags_r4  <= pkt_flags_r3;
-        pkt_flags_r5  <= pkt_flags_r4;
-        pkt_flags_r6  <= pkt_flags_r5;
-        pkt_flags_r7  <= pkt_flags_r6;
-        pkt_flags_r8  <= pkt_flags_r7;
-        pkt_flags_r9  <= pkt_flags_r8;
-        pkt_flags_r10 <= pkt_flags_r9;
-        pkt_flags_r11 <= pkt_flags_r10;
-        pkt_flags_r12 <= pkt_flags_r11;
-        pkt_flags_r13 <= pkt_flags_r12;
-    end
-end
 
 //Write logic
 //No backpressure yet
@@ -273,11 +236,7 @@ always@(posedge clk)begin
 
         if (pkt_buffer_readvalid) begin
             //send check_pkt to data_fifo
-            `ifdef SIM
-            if(pkt_flags_r2 == PKT_PCIE) begin
-            `else
-            if(pkt_flags_r13 == PKT_PCIE) begin
-            `endif
+            if(pkt_flags_r == PKT_PCIE) begin
                 pcie_pkt_sop <= pkt_buffer_readdata.sop;
                 pcie_pkt_eop <= pkt_buffer_readdata.eop;
                 pcie_pkt_valid <= 1;
@@ -291,5 +250,14 @@ always@(posedge clk)begin
         end
     end
 end
+
+hyper_pipe #(
+    .WIDTH (3),
+    .NUM_PIPES(NUM_PIPES)
+) hp_flags (
+    .clk(clk),
+    .din(pkt_flags),
+    .dout(pkt_flags_r)
+);
 
 endmodule
