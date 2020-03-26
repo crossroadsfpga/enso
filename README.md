@@ -78,7 +78,7 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 5. Start the user application. 
 6. In the tcl console, you will need to type some tcl commands.
 ```
-##find the main.tcl under your_path/front_door_consumer/hardware_test_design/hwtest
+##find the main.tcl under your_path/hardware_test/hwtest
 source path.tcl 
 ##return the counters under top.sv. Most of them should be 0, except the in_emptylist_cnt is 2688, the number of pkts we can buffer.
 get_top_stats 
@@ -108,7 +108,7 @@ get_top_stats
 2. Run JTAG system console by running `./run_console`, it may return some error the first time. Exit it using Ctrl-C. Then redo it. It would work the second time.
 3. In the tcl console, you will need to type some tcl commands.
 ```
-##find the main.tcl under your_path/front_door_consumer/hardware_test_design/hwtest
+##find the main.tcl under your_path/hardware_test/hwtest
 source path.tcl 
 ##return the counters under top.sv. Most of them should be 0, except the in_emptylist_cnt is 2688, the number of pkts we can buffer.
 get_top_stats 
