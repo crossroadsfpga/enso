@@ -132,3 +132,13 @@ str
 get_top_stats 
 ```
 
+### Quartus Project Version Control
+Assuming the top-level folder after resotre is called `front_door_consumer`. To test a new quartus project, I do the version control manually. 
+1. Copy `front_door_consumer` and then rename it, assuming `front_door_consumer_new`. 
+2. Then replace the front_door_consumer_new/hardware_test_design/src with the new src code. 
+3. Open quartus project in `front_door_consumer_new`. Redo the synthesis. 
+4. If you are satisfied with `front_door_consumer_new`, zip it and then upload to Google Drive or other places you choose to back up. 
+5. I have a separate README to keep track of each zipped quartus project is doing. The benefit of doing this instead of keeping editing one quartus project is that, you can easily go back and check the report and load the bitstream of a specific checkpoint. 
+
+
+
