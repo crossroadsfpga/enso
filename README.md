@@ -140,5 +140,12 @@ Assuming the top-level folder after resotre is called `front_door_consumer`. To 
 4. If you are satisfied with `front_door_consumer_new`, zip it and then upload to Google Drive or other places you choose to back up. 
 5. I have a separate README to keep track of each zipped quartus project is doing. The benefit of doing this instead of keeping editing one quartus project is that, you can easily go back and check the report and load the bitstream of a specific checkpoint. 
 
-
+# Extend dummy design
+All the related code are put under `useful_code_from_pigasus`. 
+### Use Flow table:
+Check out `flow_table_wrapper` and `para_Q`. Ignore the status and reassembly part. To start with (assuming no eviction), the input for para_Q should be connected to CPU. 
+### Use CPU-FPGA path:
+Check out the `pcie_top` and `cpu2fpga_pcie`. You can directly forward the `c2f_write` and `c2f_writedata` in `cpu2fpga_pcie` to flow director through `pcie_top`. Basically, replace the `pdumeta_cpu_data`. Then you should define what does this 512 bit mean and follow the contract in both hardware and software side. 
+Note that all PCIe part will be ignored during RTL simulation. 
+The PCIe user side application code needs uncomment the `cpu2fpga path`.
 
