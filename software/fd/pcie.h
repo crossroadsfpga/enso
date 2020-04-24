@@ -27,6 +27,9 @@
 #define ACTION_NO_MATCH 1
 #define ACTION_MATCH 2
 
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
+
 typedef struct pcie_block {
     uint32_t tail;
     uint32_t head;
@@ -61,10 +64,15 @@ typedef struct block {
     uint16_t *rule_id; // after the pdu_payload, 512bit aligned
 } block_s;
 
-typedef void (proc_packet_f)(block_s*);
+typedef struct {
+    intel_fpga_pcie_dev* dev;
+    uint32_t* kdata;
+    pcie_block_t* uio_data_bar2;
+} socket_internal;
 
-void dma_run(intel_fpga_pcie_dev* dev, proc_packet_f* proc_pkt,
-             volatile int* keep_running);
+int dma_init(socket_internal* socket_entry);
+int dma_run(socket_internal* socket_entry, void** buf, size_t len);
+int dma_finish(socket_internal* socket_entry);
 void print_pcie_block(pcie_block_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
 void print_fpga_reg(intel_fpga_pcie_dev *dev);

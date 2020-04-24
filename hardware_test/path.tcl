@@ -1,2 +1,2 @@
-cd /your_path/hardware_test/hwtest/
+cd /home/sadok/frontdoor/front_door_rtl/hardware_test/hwtest/
 source main.tcl

@@ -131,11 +131,11 @@ typedef struct packed
     logic [223:0] padding;
     logic [31:0] action;
     logic [31:0] pdu_flit;
-    logic [31:0] pdu_size; 
-    logic [31:0] num_ruleID; 
-    logic [31:0] prot; 
-    tuple_t tuple; 
-    logic [31:0] pdu_id; 
+    logic [31:0] pdu_size;
+    logic [31:0] num_ruleID;
+    logic [31:0] prot;
+    tuple_t tuple;
+    logic [31:0] pdu_id;
 } pdu_hdr_t;
 
 //Ring buffer 

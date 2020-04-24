@@ -3,7 +3,7 @@ LD = g++
 CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O2 -fPIC
 LDFLAGS = -O2
 
-SRCS = pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp
+SRCS = fd.cpp pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
 LIB_STATIC = libfd.a
 LIB_SHARED = libfd.so

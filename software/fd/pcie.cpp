@@ -34,143 +34,171 @@
 // #include "intel_fpga_pcie_link_test.hpp"
 #include "pcie.h"
 
-using namespace std;
+// Add one more page for rounding pkts
+static const unsigned int allocated_size = 
+    (BUFFER_SIZE + 1 + C2F_BUFFER_SIZE) * 16 * 4 + 4096;
 
-void dma_run(intel_fpga_pcie_dev* dev, proc_packet_f* proc_pkt, 
-             volatile int* keep_running)
+static inline uint32_t get_block_payload(uint32_t *addr, void** payload_ptr,
+    uint32_t* pdu_flit)
+{
+    uint32_t len = addr[6];
+    // *pdu_flit = addr[7];
+    *pdu_flit = 25; //quick fix
+
+    *payload_ptr = (void*) &addr[16];
+    return len;
+}
+
+int dma_init(socket_internal* socket_entry)
 {
     int result;
     void *mmap_addr, *uio_mmap_bar2_addr;
-    uint32_t *kdata; //, *cpu_head_reg;
-    pcie_block_t *uio_data_bar2;
     int core_id;
-
-    unsigned int cpu_head = 0; // head ptr
-    unsigned int cpu_tail;
-    int free_slot; // number of free slots in ring buffer
-    unsigned int allocated_size;
-    unsigned int copy_size;
-
-    unsigned int c2f_cpu_head; // head ptr
-    unsigned int c2f_cpu_tail = 0;
-
-    block_s pdu; //current PDU block
-    pcie_block_t *global_block; // The global 512-bit register array.
-
-    allocated_size = (BUFFER_SIZE+1+C2F_BUFFER_SIZE)*16*4 + 4096; //Add one more page for rounding pkts. 
+    intel_fpga_pcie_dev *dev = socket_entry->dev;
 
     // Obtain kernel memory.
     result = dev->set_kmem_size(allocated_size);
     if (result != 1) {
-        cout << "Could not get kernel memory!" << endl;
-        return;
+        std::cerr << "Could not get kernel memory!" << std::endl;
+        return -1;
     }
     mmap_addr = dev->kmem_mmap(allocated_size, 0);
     if (mmap_addr == MAP_FAILED) {
-        cout << "Could not get mmap kernel memory!" << endl;
-        return;
+        std::cerr << "Could not get mmap kernel memory!" << std::endl;
+        return -1;
     }
-    kdata = reinterpret_cast<uint32_t *>(mmap_addr);
+    socket_entry->kdata = reinterpret_cast<uint32_t *>(mmap_addr);
 
     uio_mmap_bar2_addr = dev->uio_mmap(sizeof(pcie_block), 2);
     if (uio_mmap_bar2_addr == MAP_FAILED) {
-        cout << "Could not get mmap uio memory!" << endl;
-        return;
+        std::cerr << "Could not get mmap uio memory!" << std::endl;
+        return -1;
     }
-    uio_data_bar2 = reinterpret_cast<pcie_block_t *>(uio_mmap_bar2_addr);
+    socket_entry->uio_data_bar2 = reinterpret_cast<pcie_block_t *>(uio_mmap_bar2_addr);
     
     //get cpu_id
     core_id = sched_getcpu();
     if (core_id < 0) {
-        cout << "Could not get cpu id!" << endl;
-        return;
+        std::cerr << "Could not get cpu id!" << std::endl;
+        return -1;
     }
 
-    // cpu_head_reg = &(uio_data_bar2->head) + (core_id - 1) * 16/4; // start from core 0
-    // *cpu_head_reg = core_id;
-
-    // Global registers is the first slot of the ring buffer.
-    global_block = (pcie_block_t *) kdata;
-
-    // print the first slot, start 0, range 1
     print_fpga_reg(dev);
 
-    unsigned long long rx_pkts = 0;
-    unsigned long long num_rules = 0;
+    return 0;
+}
 
-    // Main Loop
-    while (*keep_running) {
-        cpu_tail = global_block->tail; // only read it once.
-        if (cpu_tail == cpu_head) { // if empty, wait
-            continue;
-        }
+int dma_run(socket_internal* socket_entry, void** buf, size_t len)
+{
+    unsigned int cpu_head = socket_entry->uio_data_bar2->head;
+    unsigned int cpu_tail;
+    int free_slot; // number of free slots in ring buffer
+    unsigned int copy_size;
+    uint32_t* kdata = socket_entry->kdata;
+    uint32_t pdu_flit;
 
-        // calculate free_slot
-        if (cpu_tail <= cpu_head) {
-            free_slot = cpu_head - cpu_tail;
-        } else {
-            free_slot = BUFFER_SIZE - cpu_tail + cpu_head;
-        }
+    pcie_block_t *global_block; // The global 512-bit register array.
+    global_block = (pcie_block_t *) socket_entry->kdata;
 
-        //printf("CPU head = %d; CPU tail = %d; free_slot = %d \n", 
-        //         cpu_head,cpu_tail,free_slot);
-        if (free_slot < 1) {
-            printf("FPGA breaks free_slot assumption! \n");
-            exit(1);
-        }
+    // block_s pdu; //current PDU block
 
-        // fill in the pdu hdr
-        fill_block(&kdata[(cpu_head+1)*16],&pdu);
-
-        // check transfer_flit
-        if (pdu.pdu_flit == 0) {
-            printf("transfer_flit has to be bigger than 0 ! \n");
-            exit(1);
-        }
-
-        // We need to copy the begining of the ring buffer to the last page
-        if ((cpu_head + pdu.pdu_flit) > BUFFER_SIZE) {
-            //printf("memcpy, cpu.head = %d, pdu.pdu_flit = %d \n", cpu_head,pdu.pdu_flit);
-            if ((cpu_head + pdu.pdu_flit) != BUFFER_SIZE) {
-                copy_size = cpu_head + pdu.pdu_flit - BUFFER_SIZE;
-                memcpy(&kdata[(BUFFER_SIZE+1)*16], &kdata[1*16], copy_size*16*4);
-            }
-        }
-
-        proc_pkt(&pdu);
-
-        // update cpu_head
-        if ((cpu_head + pdu.pdu_flit) < BUFFER_SIZE) {
-            cpu_head = cpu_head + pdu.pdu_flit;
-        } else {
-            cpu_head = cpu_head + pdu.pdu_flit - BUFFER_SIZE;
-        }
-
-        // method using syscall
-        // dev->write32(2, reinterpret_cast<void *>(HEAD_OFFSET), cpu_head);
-
-        // method using UIO
-        asm volatile ("" : : : "memory"); // compiler memory barrier
-        uio_data_bar2->head = cpu_head;
-
-        ++rx_pkts;
-        num_rules += pdu.num_rule_id;
+    cpu_tail = global_block->tail;
+    if (unlikely(cpu_tail == cpu_head)) {
+        printf("Empty buffer\n");
+        return 0;
     }
-    c2f_cpu_head = global_block->c2f_head;
 
-    cout << dec;
-    cout << "rx pkts: " << rx_pkts << endl;
-    cout << "num rules: " << num_rules << endl;
-    cout << "cpu_head: " << cpu_head << endl;
-    cout << "cpu_tail: " << cpu_tail << endl;
-    cout << "c2f_cpu_head: " << c2f_cpu_head << endl;
-    cout << "c2f_cpu_tail: " << c2f_cpu_tail << endl;
+    // calculate free_slot
+    if (cpu_tail <= cpu_head) {
+        free_slot = cpu_head - cpu_tail;
+    } else {
+        free_slot = BUFFER_SIZE - cpu_tail + cpu_head;
+    }
 
-    result = dev->kmem_munmap(mmap_addr, allocated_size);
+    // printf("CPU head = %d; CPU tail = %d; free_slot = %d \n", 
+    //         cpu_head, cpu_tail, free_slot);
+    if (unlikely(free_slot < 1)) {
+        printf("FPGA breaks free_slot assumption!\n");
+        return -1;
+    }
+
+    block_s pdu; //current PDU block
+    fill_block(&kdata[(cpu_head+1)*16],&pdu);
+    // print_block(&pdu);
+
+    // fill in the pdu hdr
+    // fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
+    uint32_t payload_size = get_block_payload(&kdata[(cpu_head + 1) * 16], buf,
+        &pdu_flit);
+    std::cout << "payload_size: " << payload_size << std::endl;
+    if (unlikely(payload_size > len)) {
+        std::cerr << "Buffer is too short to fit a packet (" << payload_size << ")" << std::endl;
+        return 0;
+    }
+
+    // check transfer_flit
+    if (unlikely(pdu_flit == 0)) {
+        printf("transfer_flit has to be bigger than 0!\n");
+        return -1;
+    }
+
+    // TODO(sadok) this may be a performance problem
+    // We need to copy the begining of the ring buffer to the last page
+    if ((cpu_head + pdu_flit) > BUFFER_SIZE) {
+        // printf("memcpy, cpu.head = %d, pdu_flit = %d \n",
+        //     cpu_head,pdu_flit);
+        if ((cpu_head + pdu_flit) != BUFFER_SIZE) {
+            copy_size = cpu_head + pdu_flit - BUFFER_SIZE;
+            memcpy(&kdata[(BUFFER_SIZE + 1) * 16], &kdata[1 * 16],
+                    copy_size * 16 * 4);
+        }
+    }
+
+    // proc_pkt(&pdu);
+
+    // update cpu_head
+    if ((cpu_head + pdu_flit) < BUFFER_SIZE) {
+        cpu_head = cpu_head + pdu_flit;
+    } else {
+        cpu_head = cpu_head + pdu_flit - BUFFER_SIZE;
+    }
+
+    // method using syscall
+    // dev->write32(2, reinterpret_cast<void *>(HEAD_OFFSET), cpu_head);
+
+    // method using UIO
+    asm volatile ("" : : : "memory"); // compiler memory barrier
+    socket_entry->uio_data_bar2->head = cpu_head;
+
+    // ++rx_pkts;
+
+    return payload_size;
+}
+
+int dma_finish(socket_internal* socket_entry) 
+{
+    uint32_t* kdata = socket_entry->kdata;
+
+    // pcie_block_t *global_block; // The global 512-bit register array.
+    // global_block = (pcie_block_t *) kdata;
+    // unsigned int c2f_cpu_head = global_block->c2f_head;
+    // std::cout << std::dec;
+    // std::cout << "rx pkts: " << rx_pkts << std::endl;
+    // std::cout << "cpu_head: " << cpu_head << std::endl;
+    // std::cout << "cpu_tail: " << cpu_tail << std::endl;
+    // std::cout << "c2f_cpu_head: " << c2f_cpu_head << std::endl;
+    // std::cout << "c2f_cpu_tail: " << c2f_cpu_tail << std::endl;
+
+    int result = socket_entry->dev->kmem_munmap(
+        reinterpret_cast<void*>(kdata),
+        allocated_size
+    );
     if (result != 1) {
-        cout << "Could not unmap kernel memory!" << endl;
-        return;
+        std::cerr << "Could not unmap kernel memory!" << std::endl;
+        return -1;
     }
+
+    return 0;
 }
 
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range)
@@ -188,7 +216,7 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev)
     uint32_t temp_r;
     for (unsigned int i = 0; i < 16; ++i) {
         dev->read32(2, reinterpret_cast<void*>(0 + i*4), &temp_r);
-        printf("fpga_reg[%d] = 0x%08x \n",i, temp_r);
+        printf("fpga_reg[%d] = 0x%08x \n", i, temp_r);
     }
 } 
 
@@ -204,6 +232,7 @@ void fill_block(uint32_t *addr, block_s *block) {
     int reminder;
     int offset;
 
+    // TODO(sadok) remove stuff we don't need from the block
     block->pdu_id = addr[0];
     block->dst_port = addr[1] & 0xFFFF;
     block->src_port = (addr[1] >> 16) & 0xFFFF;
