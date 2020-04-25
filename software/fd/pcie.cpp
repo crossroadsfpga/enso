@@ -214,8 +214,8 @@ void fill_block(uint32_t *addr, block_s *block) {
     block->num_rule_id = addr[5];
 
     block->pdu_size = addr[6];
-    //block->pdu_flit = addr[7];
-    block->pdu_flit = 25; //quick fix
+    block->pdu_flit = addr[7];
+    // block->pdu_flit = 25; //quick fix
     block->pdu_payload = (uint8_t*) &addr[16];
 
     // Calculate the offset of the rule_id
@@ -243,22 +243,22 @@ void print_block(block_s *block) {
     printf("pdu_size    : 0x%08x \n", block->pdu_size);
     printf("pdu_flit    : 0x%08x \n", block->pdu_flit);
     printf("----PDU payload------\n");
-    for (i = 0; i < block->pdu_size; i++) {
-        printf("%02x ", block->pdu_payload[i]);
-        if ((i + 1) % 8 == 0) {
-            printf(" ");
-        }
-        if ((i + 1) % 16 == 0) {
-            printf("\n");
-        }
-    }
-    printf("\n----Rule IDs------\n");
-    //512-bit aligned. 32 16-bit rule ID per line.
-    for(i=0;i<block->num_rule_id*32;i++){
-        if(block->rule_id[i]!=0){
-            printf("ruleID[%d] = 0x%04x \n",i, block->rule_id[i]);
-        }
-    }
+    // for (i = 0; i < block->pdu_size; i++) {
+    //     printf("%02x ", block->pdu_payload[i]);
+    //     if ((i + 1) % 8 == 0) {
+    //         printf(" ");
+    //     }
+    //     if ((i + 1) % 16 == 0) {
+    //         printf("\n");
+    //     }
+    // }
+    // printf("\n----Rule IDs------\n");
+    // //512-bit aligned. 32 16-bit rule ID per line.
+    // for(i=0;i<block->num_rule_id*32;i++){
+    //     if(block->rule_id[i]!=0){
+    //         printf("ruleID[%d] = 0x%04x \n",i, block->rule_id[i]);
+    //     }
+    // }
 }
 
 uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
