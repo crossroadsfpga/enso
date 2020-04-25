@@ -32,6 +32,7 @@ void int_handler(int signal __attribute__((unused)))
 int main(int argc, const char* argv[])
 {
     int result;
+    uint64_t goodput = 0;
 
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " core"
@@ -39,7 +40,7 @@ int main(int argc, const char* argv[])
         return 1;
     }
     
-    std::thread socket_thread = std::thread([] {
+    std::thread socket_thread = std::thread([&goodput] {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
@@ -66,23 +67,12 @@ int main(int argc, const char* argv[])
         unsigned char buf[BUF_LEN];
 
         while (keep_running) {
-            auto now = std::chrono::steady_clock::now();
-            uint64_t total_bytes = 0;
-            while ((std::chrono::steady_clock::now() - now) 
-                    < std::chrono::seconds(1))
-            {
-                // this is equivalent to read()
-                int recv_len = recv(socket_fd, buf, BUF_LEN, 0);
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                if (unlikely(recv_len < 0)) {
-                    std::cerr << "Error receiving" << std::endl;
-                    exit(4);
-                }
-                total_bytes += recv_len;
-                // do something with the buffer? XOR?
+            int recv_len = recv(socket_fd, buf, BUF_LEN, 0);
+            if (unlikely(recv_len < 0)) {
+                std::cerr << "Error receiving" << std::endl;
+                exit(4);
             }
-            print_reg(socket_fd);
-            std::cout << "Goodput: " << total_bytes * 8 << " bps" << std::endl;
+            goodput += recv_len;
         }
         // TODO(sadok) it is also common to use the close() syscall to close a
         // UDP socket
@@ -97,6 +87,13 @@ int main(int argc, const char* argv[])
     if (result < 0) {
         std::cerr << "Error setting CPU affinity" << std::endl;
         return 6;
+    }
+
+    while (keep_running) {
+        goodput = 0;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::cout << std::dec << "Goodput: " << ((double) goodput) * 8. /1e6
+                  << " Mbps" << std::endl;
     }
 
     socket_thread.join();
