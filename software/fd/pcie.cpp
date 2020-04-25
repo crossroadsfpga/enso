@@ -42,8 +42,7 @@ static inline uint32_t get_block_payload(uint32_t *addr, void** payload_ptr,
     uint32_t* pdu_flit)
 {
     uint32_t len = addr[6];
-    // *pdu_flit = addr[7];
-    *pdu_flit = 25; //quick fix
+    *pdu_flit = addr[7];
 
     *payload_ptr = (void*) &addr[16];
     return len;
@@ -83,8 +82,6 @@ int dma_init(socket_internal* socket_entry)
         return -1;
     }
 
-    print_fpga_reg(dev);
-
     return 0;
 }
 
@@ -104,7 +101,6 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 
     cpu_tail = global_block->tail;
     if (unlikely(cpu_tail == cpu_head)) {
-        printf("Empty buffer\n");
         return 0;
     }
 
@@ -130,7 +126,6 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     // fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
     uint32_t payload_size = get_block_payload(&kdata[(cpu_head + 1) * 16], buf,
         &pdu_flit);
-    std::cout << "payload_size: " << payload_size << std::endl;
     if (unlikely(payload_size > len)) {
         std::cerr << "Buffer is too short to fit a packet (" << payload_size << ")" << std::endl;
         return 0;
@@ -260,7 +255,7 @@ void fill_block(uint32_t *addr, block_s *block) {
 }
 
 void print_block(block_s *block) {
-    uint32_t i;
+    // uint32_t i;
     printf("=============PRINT BLOCK=========\n");
     printf("pdu_id      : 0x%08x \n", block->pdu_id);
     printf("dst_port    : 0x%04x \n", block->dst_port);
