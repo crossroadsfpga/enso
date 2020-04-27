@@ -47,9 +47,7 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
         return -1;
     }
 
-    ++nb_open_sockets;
-
-    return 0;
+    return nb_open_sockets++;
 }
 
 int bind(
@@ -74,7 +72,7 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)
         return bytes_received;
     }
 
-    // memcpy(buf, ring_buf, bytes_received);
+    memcpy(buf, ring_buf, bytes_received);
 
     advance_ring_buffer(socket);
 
