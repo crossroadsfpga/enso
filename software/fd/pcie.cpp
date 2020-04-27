@@ -149,9 +149,15 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
         }
     }
 
-    // proc_pkt(&pdu);
+    socket_entry->last_flits = pdu_flit;
 
-    // update cpu_head
+    return payload_size;
+}
+
+void advance_ring_buffer(socket_internal* socket_entry)
+{
+    uint32_t pdu_flit = socket_entry->last_flits;
+    unsigned int cpu_head = socket_entry->uio_data_bar2->head;
     if ((cpu_head + pdu_flit) < BUFFER_SIZE) {
         cpu_head = cpu_head + pdu_flit;
     } else {
@@ -164,10 +170,6 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     // method using UIO
     asm volatile ("" : : : "memory"); // compiler memory barrier
     socket_entry->uio_data_bar2->head = cpu_head;
-
-    // ++rx_pkts;
-
-    return payload_size;
 }
 
 int dma_finish(socket_internal* socket_entry) 

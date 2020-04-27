@@ -1,7 +1,7 @@
 CXX = g++
 LD = g++
-CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O2 -fPIC
-LDFLAGS = -O2
+CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O3 -fPIC
+LDFLAGS = -O3
 
 SRCS = fd.cpp pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))

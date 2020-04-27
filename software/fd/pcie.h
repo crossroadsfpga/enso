@@ -68,10 +68,12 @@ typedef struct {
     intel_fpga_pcie_dev* dev;
     uint32_t* kdata;
     pcie_block_t* uio_data_bar2;
+    uint32_t last_flits;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry);
 int dma_run(socket_internal* socket_entry, void** buf, size_t len);
+void advance_ring_buffer(socket_internal* socket_entry);
 int dma_finish(socket_internal* socket_entry);
 void print_pcie_block(pcie_block_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);

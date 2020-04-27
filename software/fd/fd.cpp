@@ -66,14 +66,17 @@ int bind(
 ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)))
 {
     void* ring_buf;
+    socket_internal* socket = &open_sockets[sockfd];
     
-    ssize_t bytes_received = dma_run(&open_sockets[sockfd], &ring_buf, len);
+    ssize_t bytes_received = dma_run(socket, &ring_buf, len);
 
     if (unlikely(bytes_received <= 0)) {
         return bytes_received;
     }
 
-    memcpy(buf, ring_buf, bytes_received);
+    // memcpy(buf, ring_buf, bytes_received);
+
+    advance_ring_buffer(socket);
 
     return bytes_received;
 }
