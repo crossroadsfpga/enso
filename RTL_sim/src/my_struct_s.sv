@@ -15,6 +15,11 @@ parameter PKTBUF_DEPTH = (32 * PKT_NUM);
 //PKT_ID width, which is the index to the 32-entries block
 parameter PKT_AWIDTH = ($clog2(PKT_NUM));
 
+//Flow table
+parameter FT_SUBTABLE = 4;
+parameter FT_SIZE = 8192;
+parameter FT_DEPTH = (FT_SIZE/FT_SUBTABLE);
+parameter FT_AWIDTH= ($clog2(FT_DEPTH));
 
 //packet parameter
 parameter ETH_HDR_LEN=14;
@@ -101,8 +106,17 @@ typedef struct packed
     logic [31:0] f2c_tail; //tail pointer, CPU read only
 } pcie_block_t;
 
+//1 + 96 + 64 = 195
+parameter FT_DWIDTH = (1+TUPLE_DWIDTH+64);
+typedef struct packed
+{
+    logic valid;
+    tuple_t tuple;
+    logic [63:0] pcie_address;
+} fce_t; //Flow context entry
+
 parameter META_WIDTH=256; //Change this will affect hyper_reg_fd
-parameter INT_META_WIDTH=(8+TUPLE_DWIDTH+16+PKT_AWIDTH+5+9+3);
+parameter INT_META_WIDTH=(8+TUPLE_DWIDTH+16+PKT_AWIDTH+5+9+3+64);
 parameter PADDING_WIDTH = (META_WIDTH - INT_META_WIDTH);
 typedef struct packed
 {
@@ -113,10 +127,9 @@ typedef struct packed
     logic [4:0] flits; //total number of flits
     logic [8:0] tcp_flags;
     logic [2:0] pkt_flags;
+    logic [63:0] pcie_address;
     logic [PADDING_WIDTH-1:0] padding;
 } metadata_t; //Metadata
-
-
 
 //PDU_DEPTH is number of 512 bits for fpga side f2c ring buffer 
 parameter PDU_DEPTH = 4096;
