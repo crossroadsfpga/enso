@@ -157,6 +157,13 @@ logic          parser_out_fifo_out_valid;
 metadata_t     parser_out_fifo_out_data;                               
 logic          parser_out_fifo_out_ready;
 
+metadata_t     flow_table_wrapper_out_meta_data;
+logic          flow_table_wrapper_out_meta_valid;
+logic          flow_table_wrapper_out_control_done;
+fce_t          flow_table_wrapper_in_control_data; // Temporary
+logic          flow_table_wrapper_in_control_valid; // Temporary
+logic          flow_table_wrapper_in_control_ready; // Temporary
+
 logic          fdw_in_meta_valid;                              
 metadata_t     fdw_in_meta_data;                               
 logic          fdw_in_meta_ready;                              
@@ -533,11 +540,9 @@ assign input_comp_eth_sop   = reg_in_sop;
 assign input_comp_eth_eop   = reg_in_eop;
 assign input_comp_eth_empty = reg_in_empty;
 
-//adjust the interface between parser_out fifo with flow director wrapper
-assign fdw_in_meta_data = parser_out_fifo_out_data;
-assign fdw_in_meta_valid = parser_out_fifo_out_valid & parser_out_fifo_out_ready;
-assign parser_out_fifo_out_ready = !reg_fdw_in_meta_almost_full;
-
+// TODO(natre): Fix.
+assign flow_table_wrapper_in_control_data = 0;
+assign flow_table_wrapper_in_control_valid = 1'b0;
 
 assign out_valid_int = out_valid & !reg_out_almost_full;
 
@@ -695,12 +700,25 @@ parser_out_fifo (
 	.out_empty         ()          
 );
 
+flow_table_wrapper flow_table_wrapper_0 (
+    .clk               (clk),
+    .rst               (rst),
+    .in_meta_data      (parser_out_fifo_out_data),
+    .in_meta_valid     (parser_out_fifo_out_valid),
+    .in_meta_ready     (parser_out_fifo_out_ready),
+    .out_meta_data     (flow_table_wrapper_out_meta_data),
+    .out_meta_valid    (flow_table_wrapper_out_meta_valid),
+    .in_control_data   (flow_table_wrapper_in_control_data),
+    .in_control_valid  (flow_table_wrapper_in_control_valid),
+    .in_control_ready  (flow_table_wrapper_in_control_ready),
+    .out_control_done  (flow_table_wrapper_out_control_done)
+);
 
 hyper_pipe_fd fd_reg_io(
     .clk                     (clk),  
     .rst                     (rst),    
-    .in_meta_data            (fdw_in_meta_data),                    
-    .in_meta_valid           (fdw_in_meta_valid), 
+    .in_meta_data            (flow_table_wrapper_out_meta_data),
+    .in_meta_valid           (flow_table_wrapper_out_meta_valid),
     .in_meta_almost_full     (fdw_in_meta_almost_full),
     .out_meta_data           (fdw_out_meta_data),                    
     .out_meta_valid          (fdw_out_meta_valid), 
