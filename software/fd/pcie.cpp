@@ -74,6 +74,7 @@ int dma_init(socket_internal* socket_entry)
         return -1;
     }
     socket_entry->uio_data_bar2 = reinterpret_cast<pcie_block_t *>(uio_mmap_bar2_addr);
+    socket_entry->cpu_head = socket_entry->uio_data_bar2->head;
     
     //get cpu_id
     core_id = sched_getcpu();
@@ -87,7 +88,7 @@ int dma_init(socket_internal* socket_entry)
 
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
-    unsigned int cpu_head = socket_entry->uio_data_bar2->head;
+    unsigned int cpu_head = socket_entry->cpu_head;
     unsigned int cpu_tail;
     int free_slot; // number of free slots in ring buffer
     unsigned int copy_size;
@@ -157,7 +158,7 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 void advance_ring_buffer(socket_internal* socket_entry)
 {
     uint32_t pdu_flit = socket_entry->last_flits;
-    unsigned int cpu_head = socket_entry->uio_data_bar2->head;
+    unsigned int cpu_head = socket_entry->cpu_head;
     if ((cpu_head + pdu_flit) < BUFFER_SIZE) {
         cpu_head = cpu_head + pdu_flit;
     } else {
@@ -170,6 +171,8 @@ void advance_ring_buffer(socket_internal* socket_entry)
     // method using UIO
     asm volatile ("" : : : "memory"); // compiler memory barrier
     socket_entry->uio_data_bar2->head = cpu_head;
+
+    socket_entry->cpu_head = cpu_head;
 }
 
 int dma_finish(socket_internal* socket_entry) 

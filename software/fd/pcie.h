@@ -69,6 +69,7 @@ typedef struct {
     uint32_t* kdata;
     pcie_block_t* uio_data_bar2;
     uint32_t last_flits;
+    unsigned int cpu_head;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry);
