@@ -155,7 +155,8 @@ logic                   sim_pdumeta_cpu_valid;
 logic                   sim_pdumeta_cpu_ready;
 
 typedef enum{
-    PDUMETA_IDLE,
+    PDUMETA_INSERT,
+    PDUMETA_UPDATE,
     PDUMETA_DONE
 } pdumeta_state_t;
 
@@ -304,19 +305,31 @@ always @(posedge clk_pcie) begin
     if (rst) begin
         sim_pdumeta_cpu_valid <= 0;
         sim_pdumeta_cpu_data <= 0;
-        pdumeta_state <= PDUMETA_IDLE;
+        pdumeta_state <= PDUMETA_INSERT;
     end else begin
         case (pdumeta_state)
-            PDUMETA_IDLE: begin
+            PDUMETA_INSERT: begin
                 if (cnt < 8000) begin
                     sim_pdumeta_cpu_data <= 0;
                     sim_pdumeta_cpu_valid <= 0;
-                    pdumeta_state <= PDUMETA_IDLE;
+                    pdumeta_state <= PDUMETA_INSERT;
+                end
+                else begin
+                    pdumeta_state <= PDUMETA_UPDATE;
+                    sim_pdumeta_cpu_valid <= 1'b1;
+                    sim_pdumeta_cpu_data.pcie_address <= 64'hdeadbeef;
+                    sim_pdumeta_cpu_data.tuple <= 96'h0a000001c0a8010204010400;
+                end
+            end
+            PDUMETA_UPDATE: begin
+                if (cnt < 9000) begin
+                    sim_pdumeta_cpu_valid <= 1'b0;
+                    pdumeta_state <= PDUMETA_UPDATE;
                 end
                 else begin
                     pdumeta_state <= PDUMETA_DONE;
                     sim_pdumeta_cpu_valid <= 1'b1;
-                    sim_pdumeta_cpu_data.pcie_address <= 64'hdeadbeef;
+                    sim_pdumeta_cpu_data.pcie_address <= 64'habcdef123456;
                     sim_pdumeta_cpu_data.tuple <= 96'h0a000001c0a8010204010400;
                 end
             end
