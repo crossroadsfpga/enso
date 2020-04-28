@@ -96,6 +96,9 @@ logic           pcie_rb_wr_base_addr_valid;
 logic           pcie_rb_almost_full;          
 logic           pcie_rb_update_valid;
 logic [11:0]    pcie_rb_update_size;
+logic [159:0]   pdumeta_cpu_data;
+logic           pdumeta_cpu_valid;
+logic [9:0]     pdumeta_cnt;
 
 logic           reg_disable_pcie;
 logic [513:0]   reg_pcie_rb_wr_data;
@@ -106,6 +109,9 @@ logic           reg_pcie_rb_wr_base_addr_valid;
 logic           reg_pcie_rb_almost_full;          
 logic           reg_pcie_rb_update_valid;
 logic [11:0]    reg_pcie_rb_update_size;
+logic [159:0]   reg_pdumeta_cpu_data;
+logic           reg_pdumeta_cpu_valid;
+logic [9:0]     reg_pdumeta_cnt;
 
 //eSRAM signals
 logic esram_pll_lock; 
@@ -144,7 +150,18 @@ logic [31:0] pktID;
 logic [31:0] ft_pkt;
 
 logic [3:0] rate_cnt;
+pdu_metadata_t          sim_pdumeta_cpu_data;
+logic                   sim_pdumeta_cpu_valid;
+logic                   sim_pdumeta_cpu_ready;
 
+typedef enum{
+    PDUMETA_IDLE,
+    PDUMETA_DONE
+} pdumeta_state_t;
+
+pdumeta_state_t pdumeta_state;
+
+logic [7:0]             pdumeta_wait_cnt;
 typedef enum{
     READ,
     WAIT
@@ -280,6 +297,35 @@ begin
     if (cnt == stop) begin
         $display("STOP READING!");
 	end
+end
+
+//FAKE pdumeta_cpu
+always @(posedge clk_pcie) begin
+    if (rst) begin
+        sim_pdumeta_cpu_valid <= 0;
+        sim_pdumeta_cpu_data <= 0;
+        pdumeta_state <= PDUMETA_IDLE;
+    end else begin
+        case (pdumeta_state)
+            PDUMETA_IDLE: begin
+                if (cnt < 8000) begin
+                    sim_pdumeta_cpu_data <= 0;
+                    sim_pdumeta_cpu_valid <= 0;
+                    pdumeta_state <= PDUMETA_IDLE;
+                end
+                else begin
+                    pdumeta_state <= PDUMETA_DONE;
+                    sim_pdumeta_cpu_valid <= 1'b1;
+                    sim_pdumeta_cpu_data.pcie_address <= 64'hdeadbeef;
+                    sim_pdumeta_cpu_data.tuple <= 96'h0a000001c0a8010204010400;
+                end
+            end
+            PDUMETA_DONE: begin
+                sim_pdumeta_cpu_valid <= 1'b0;
+                pdumeta_state <= PDUMETA_DONE;
+            end
+        endcase
+    end
 end
 
 
@@ -557,6 +603,9 @@ top top_inst (
     .reg_pcie_rb_update_valid     (pcie_rb_update_valid),
     .reg_pcie_rb_update_size      (pcie_rb_update_size),
     .disable_pcie                 (reg_disable_pcie),
+    .pdumeta_cpu_data             (reg_pdumeta_cpu_data),
+    .pdumeta_cpu_valid            (reg_pdumeta_cpu_valid),
+    .reg_pdumeta_cnt              (pdumeta_cnt),
     //eSRAM
     .reg_esram_pkt_buf_wren       (esram_pkt_buf_wren),
     .reg_esram_pkt_buf_wraddress  (esram_pkt_buf_wraddress),
@@ -605,6 +654,14 @@ hyper_pipe_root reg_io_inst (
     .pcie_rb_update_valid   (pcie_rb_update_valid),
     .pcie_rb_update_size    (pcie_rb_update_size),
     .disable_pcie           (disable_pcie),
+    `ifdef SIM
+    .pdumeta_cpu_data       (sim_pdumeta_cpu_data),
+    .pdumeta_cpu_valid      (sim_pdumeta_cpu_valid),
+`else
+    .pdumeta_cpu_data       (pdumeta_cpu_data),
+    .pdumeta_cpu_valid      (pdumeta_cpu_valid),
+`endif
+    .pdumeta_cnt            (pdumeta_cnt),
     //eSRAM
     .esram_pkt_buf_wren     (esram_pkt_buf_wren),
     .esram_pkt_buf_wraddress(esram_pkt_buf_wraddress),
@@ -634,6 +691,9 @@ hyper_pipe_root reg_io_inst (
     .reg_pcie_rb_update_valid   (reg_pcie_rb_update_valid),
     .reg_pcie_rb_update_size    (reg_pcie_rb_update_size),
     .reg_disable_pcie           (reg_disable_pcie),
+    .reg_pdumeta_cpu_data       (reg_pdumeta_cpu_data),
+    .reg_pdumeta_cpu_valid      (reg_pdumeta_cpu_valid),
+    .reg_pdumeta_cnt            (reg_pdumeta_cnt),
     .reg_esram_pkt_buf_wren     (reg_esram_pkt_buf_wren),
     .reg_esram_pkt_buf_wraddress(reg_esram_pkt_buf_wraddress),
     .reg_esram_pkt_buf_wrdata   (reg_esram_pkt_buf_wrdata),
@@ -763,6 +823,9 @@ pcie_top pcie (
     .pcie_rb_update_valid   (reg_pcie_rb_update_valid),
     .pcie_rb_update_size    (reg_pcie_rb_update_size),
     .disable_pcie           (disable_pcie),
+    .pdumeta_cpu_data       (pdumeta_cpu_data),
+    .pdumeta_cpu_valid      (pdumeta_cpu_valid),
+    .pdumeta_cnt            (reg_pdumeta_cnt),
     .clk_status             (clk_status),
     .status_addr            (s_addr),
     .status_read            (s_read),

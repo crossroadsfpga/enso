@@ -51,14 +51,9 @@ logic [PDUID_WIDTH-1:0] pdu_id;
 
 assign in_ready = (state == WRITE);
 
-assign pdu_hdr.tuple = in_meta_data.tuple;
-assign pdu_hdr.prot = in_meta_data.prot;
-assign pdu_hdr.pdu_id = pdu_id;
-assign pdu_hdr.num_ruleID = 0;
-assign pdu_hdr.pdu_size = pdu_size;
-assign pdu_hdr.pdu_flit = pdu_flit + 1;//one more flit for head
-assign pdu_hdr.action  = ACTION_CHECK;
 assign pdu_hdr.padding = 0;
+assign pdu_hdr.tuple = in_meta_data.tuple;
+assign pdu_hdr.pcie_address = in_meta_data.pcie_address;
 
 assign pdu_data_swap = {pdu_data_r[7:0],pdu_data_r[15:8],pdu_data_r[23:16],pdu_data_r[31:24],pdu_data_r[39:32],pdu_data_r[47:40],pdu_data_r[55:48],pdu_data_r[63:56],pdu_data_r[71:64],pdu_data_r[79:72],pdu_data_r[87:80],pdu_data_r[95:88],pdu_data_r[103:96],pdu_data_r[111:104],pdu_data_r[119:112],pdu_data_r[127:120],pdu_data_r[135:128],pdu_data_r[143:136],pdu_data_r[151:144],pdu_data_r[159:152],pdu_data_r[167:160],pdu_data_r[175:168],pdu_data_r[183:176],pdu_data_r[191:184],pdu_data_r[199:192],pdu_data_r[207:200],pdu_data_r[215:208],pdu_data_r[223:216],pdu_data_r[231:224],pdu_data_r[239:232],pdu_data_r[247:240],pdu_data_r[255:248],pdu_data_r[263:256],pdu_data_r[271:264],pdu_data_r[279:272],pdu_data_r[287:280],pdu_data_r[295:288],pdu_data_r[303:296],pdu_data_r[311:304],pdu_data_r[319:312],pdu_data_r[327:320],pdu_data_r[335:328],pdu_data_r[343:336],pdu_data_r[351:344],pdu_data_r[359:352],pdu_data_r[367:360],pdu_data_r[375:368],pdu_data_r[383:376],pdu_data_r[391:384],pdu_data_r[399:392],pdu_data_r[407:400],pdu_data_r[415:408],pdu_data_r[423:416],pdu_data_r[431:424],pdu_data_r[439:432],pdu_data_r[447:440],pdu_data_r[455:448],pdu_data_r[463:456],pdu_data_r[471:464],pdu_data_r[479:472],pdu_data_r[487:480],pdu_data_r[495:488],pdu_data_r[503:496],pdu_data_r[511:504]};
 

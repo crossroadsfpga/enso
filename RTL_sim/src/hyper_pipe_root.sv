@@ -31,6 +31,9 @@ module hyper_pipe_root (
     input  logic                    pcie_rb_update_valid,
     input  logic [11:0]             pcie_rb_update_size,//[PDU_AWIDTH-1:0]
     input  logic                    disable_pcie,
+    input  logic [159:0]            pdumeta_cpu_data,//pdu_metadata_t
+    input  logic                    pdumeta_cpu_valid,
+    input  logic [9:0]              pdumeta_cnt,
 
     //eSRAM
     input  logic                    esram_pkt_buf_wren,
@@ -61,6 +64,9 @@ module hyper_pipe_root (
     output  logic                   reg_pcie_rb_update_valid,
     output  logic [11:0]            reg_pcie_rb_update_size,//[PDU_AWIDTH-1:0]
     output  logic                   reg_disable_pcie,
+    output  logic [159:0]           reg_pdumeta_cpu_data,//pdu_metadata_t
+    output  logic                   reg_pdumeta_cpu_valid,
+    output  logic [9:0]             reg_pdumeta_cnt,
     output  logic                   reg_esram_pkt_buf_wren,
     output  logic [16:0]            reg_esram_pkt_buf_wraddress,
     output  logic [519:0]           reg_esram_pkt_buf_wrdata,
@@ -240,6 +246,31 @@ hyper_pipe #(
     .clk(clk_pcie),
     .din     (disable_pcie),
     .dout(reg_disable_pcie)
+);
+hyper_pipe #(
+    .WIDTH (160),
+    .NUM_PIPES(NUM_PIPES)
+) hp_pdumeta_cpu_data (
+    .clk(clk_pcie),
+    .din     (pdumeta_cpu_data),
+    .dout(reg_pdumeta_cpu_data)
+);
+hyper_pipe_rst #(
+    .WIDTH (1),
+    .NUM_PIPES(NUM_PIPES)
+) hp_pdumeta_cpu_valid (
+    .clk(clk_pcie),
+    .rst(rst_pcie),
+    .din     (pdumeta_cpu_valid),
+    .dout(reg_pdumeta_cpu_valid)
+);
+hyper_pipe #(
+    .WIDTH (10),
+    .NUM_PIPES(NUM_PIPES)
+) hp_pdumeta_cnt (
+    .clk(clk_pcie),
+    .din     (pdumeta_cnt),
+    .dout(reg_pdumeta_cnt)
 );
 
 //esram

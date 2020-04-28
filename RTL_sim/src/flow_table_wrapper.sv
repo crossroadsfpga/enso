@@ -9,7 +9,7 @@ module flow_table_wrapper(
     output  metadata_t      out_meta_data,
     output  logic           out_meta_valid,
     // Control data
-    input   fce_t           in_control_data,
+    input   pdu_metadata_t  in_control_data,
     input   logic           in_control_valid,
     output  logic           in_control_ready,
     output  logic           out_control_done
@@ -123,14 +123,14 @@ metadata_t s_meta_r;
 tuple_t s_lookup_tuple;
 
 // Pipeline stages for P hashing
-fce_t p_c0;
-fce_t p_c1;
-fce_t p_c2;
-fce_t p_c3;
-fce_t p_c4;
-fce_t p_c5;
-fce_t p_c6;
-fce_t p_c7;
+pdu_metadata_t p_c0;
+pdu_metadata_t p_c1;
+pdu_metadata_t p_c2;
+pdu_metadata_t p_c3;
+pdu_metadata_t p_c4;
+pdu_metadata_t p_c5;
+pdu_metadata_t p_c6;
+pdu_metadata_t p_c7;
 fce_t p_insert_fce_r;
 tuple_t p_lookup_tuple;
 
@@ -294,9 +294,10 @@ always@(posedge clk) begin
 
                     p_busy <= 1'b1;
                     p_state <= P_LOOKUP;
-                    p_insert_fce_r <= p_c7;
-                    p_insert_fce_r.valid <= 1'b1;
                     p_lookup_tuple <= p_c7.tuple;
+                    p_insert_fce_r.valid <= 1'b1;
+                    p_insert_fce_r.tuple <= p_c7.tuple;
+                    p_insert_fce_r.pcie_address <= p_c7.pcie_address;
                 end
             end
 
@@ -341,6 +342,10 @@ always@(posedge clk) begin
                     ft3_data_b <= p_insert_fce_r;
                 end
 
+                // Debug
+                $display("Flow Table: Updated FTE with Flow ID=0x%h, PCIe Address=0x%h",
+                         p_insert_fce_r.tuple, p_insert_fce_r.pcie_address);
+
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
                 out_control_done <= 1'b1;
@@ -364,6 +369,10 @@ always@(posedge clk) begin
                     ft3_data_b <= p_insert_fce_r;
                 end
 
+                // Debug
+                $display("Flow Table: Inserted FTE with Flow ID=0x%h, PCIe Address=0x%h",
+                         p_insert_fce_r.tuple, p_insert_fce_r.pcie_address);
+
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
                 out_control_done <= 1'b1;
@@ -371,8 +380,8 @@ always@(posedge clk) begin
 
             P_INSERT_EVIC: begin
                 // Unimplemented!
-                $display("Evict!");
                 p_state <= P_INSERT_EVIC;
+                $display("Flow Table: Eviction!");
             end
         endcase
     end
@@ -451,6 +460,19 @@ hash_func s_hash3(
     .hashed         (s_h3_hashed),
     .hashed_valid   (s_h3_hashed_valid)
 );
+
+always@(posedge clk)begin
+    if (!p_busy) begin
+        p_c0 <= in_control_data;
+        p_c1 <= p_c0;
+        p_c2 <= p_c1;
+        p_c3 <= p_c2;
+        p_c4 <= p_c3;
+        p_c5 <= p_c4;
+        p_c6 <= p_c5;
+        p_c7 <= p_c6;
+    end
+end
 
 assign p_h0_tuple_in = in_control_data.tuple;
 assign p_h1_tuple_in = in_control_data.tuple;

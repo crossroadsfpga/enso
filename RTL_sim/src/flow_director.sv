@@ -27,6 +27,11 @@ input  out_meta_ready;
     end else begin
         out_meta_data.pkt_flags = PKT_DROP;
     end
+
+    if (in_meta_valid) begin
+      $display("Flow Director: Flow ID=0x%h, PCIe Address=0x%h",
+               in_meta_data.tuple, in_meta_data.pcie_address);
+    end
   end
 
 /*dummy*/
