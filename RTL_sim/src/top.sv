@@ -61,6 +61,9 @@ logic [31:0] out_pkt_cnt_status;
 logic [31:0] out_pkt_cnt_incomp_status;
 logic [31:0] out_pkt_cnt_parser_status;
 logic [31:0] max_parser_fifo_status;
+logic [31:0] ft_in_control_cnt_status;
+logic [31:0] ft_done_control_cnt_status;
+pdu_metadata_t ft_done_control_data_status;
 logic [31:0] fd_in_pkt_cnt_status;
 logic [31:0] fd_out_pkt_cnt_status;
 logic [31:0] max_fd_out_fifo_status;
@@ -165,6 +168,7 @@ logic          parser_out_fifo_out_ready;
 
 logic          flow_table_wrapper_out_meta_valid;
 metadata_t     flow_table_wrapper_out_meta_data;
+pdu_metadata_t flow_table_wrapper_out_control_data;
 logic          flow_table_wrapper_out_control_done;
 
 logic          fdw_in_meta_valid;                              
@@ -250,6 +254,15 @@ logic [31:0] out_pkt_cnt_parser_r2;
 logic [31:0] max_parser_fifo;
 logic [31:0] max_parser_fifo_r1;
 logic [31:0] max_parser_fifo_r2;
+logic [31:0] ft_in_control_cnt;
+logic [31:0] ft_in_control_cnt_r1;
+logic [31:0] ft_in_control_cnt_r2;
+logic [31:0] ft_done_control_cnt;
+logic [31:0] ft_done_control_cnt_r1;
+logic [31:0] ft_done_control_cnt_r2;
+pdu_metadata_t ft_done_control_data;
+pdu_metadata_t ft_done_control_data_r1;
+pdu_metadata_t ft_done_control_data_r2;
 logic [31:0] fd_in_pkt_cnt;
 logic [31:0] fd_in_pkt_cnt_r1;
 logic [31:0] fd_in_pkt_cnt_r2;
@@ -310,6 +323,9 @@ begin
         max_fd_out_fifo <= 0;
         out_pkt_cnt <= 0;
         //in_check_mux_pkt <= 0;
+        ft_in_control_cnt <= 0;
+        ft_done_control_cnt <= 0;
+        ft_done_control_data <= 0;
     end else begin
         if(parser_out_fifo_out_valid & parser_out_fifo_out_ready)begin
             fd_in_pkt_cnt <= fd_in_pkt_cnt + 1;
@@ -326,6 +342,14 @@ begin
             out_pkt_cnt <= out_pkt_cnt + 1;
         end
 
+        if(pdumeta_cpu_out_valid & pdumeta_cpu_out_ready)begin
+            ft_in_control_cnt <= ft_in_control_cnt + 1;
+        end
+
+        if(flow_table_wrapper_out_control_done & ft_done_control_cnt < 1000)begin
+            ft_done_control_cnt <= ft_done_control_cnt + 1;
+            ft_done_control_data <= flow_table_wrapper_out_control_data;
+        end
     end
 end
 
@@ -438,6 +462,15 @@ always @(posedge clk_status) begin
     max_parser_fifo_r1              <= max_parser_fifo;
     max_parser_fifo_r2              <= max_parser_fifo_r1;
     max_parser_fifo_status          <= max_parser_fifo_r2;
+    ft_in_control_cnt_r1            <= ft_in_control_cnt;
+    ft_in_control_cnt_r2            <= ft_in_control_cnt_r1;
+    ft_in_control_cnt_status        <= ft_in_control_cnt_r2;
+    ft_done_control_cnt_r1          <= ft_done_control_cnt;
+    ft_done_control_cnt_r2          <= ft_done_control_cnt_r1;
+    ft_done_control_cnt_status      <= ft_done_control_cnt_r2;
+    ft_done_control_data_r1         <= ft_done_control_data;
+    ft_done_control_data_r2         <= ft_done_control_data_r1;
+    ft_done_control_data_status     <= ft_done_control_data_r2;
     fd_in_pkt_cnt_r1                <= fd_in_pkt_cnt;
     fd_in_pkt_cnt_r2                <= fd_in_pkt_cnt_r1;
     fd_in_pkt_cnt_status            <= fd_in_pkt_cnt_r2;
@@ -524,6 +557,15 @@ always @(posedge clk_status) begin
                 8'd19 : status_readdata_top <= dm_eth_pkt_cnt_status;
                 8'd20 : status_readdata_top <= dma_pkt_cnt_status;
 
+                // Flow table debugging
+                8'd21 : status_readdata_top <= ft_in_control_cnt_status;
+                8'd22 : status_readdata_top <= ft_done_control_cnt_status;
+                8'd23 : status_readdata_top <= ft_done_control_data_status.tuple.sIP[31:0];
+                8'd24 : status_readdata_top <= ft_done_control_data_status.tuple.dIP[31:0];
+                8'd25 : status_readdata_top <= {ft_done_control_data_status.tuple.sPort[15:0],
+                                                ft_done_control_data_status.tuple.dPort[15:0]};
+                8'd26 : status_readdata_top <= ft_done_control_data_status.pcie_address[31:0];
+                8'd27 : status_readdata_top <= ft_done_control_data_status.pcie_address[63:32];
                 default : status_readdata_top <= 32'h345;
             endcase
         end
@@ -723,6 +765,7 @@ flow_table_wrapper flow_table_wrapper_0 (
     .in_control_data   (pdumeta_cpu_out_data),
     .in_control_valid  (pdumeta_cpu_out_valid),
     .in_control_ready  (pdumeta_cpu_out_ready),
+    .out_control_data  (flow_table_wrapper_out_control_data),
     .out_control_done  (flow_table_wrapper_out_control_done)
 );
 

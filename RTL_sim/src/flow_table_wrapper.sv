@@ -12,6 +12,7 @@ module flow_table_wrapper(
     input   pdu_metadata_t  in_control_data,
     input   logic           in_control_valid,
     output  logic           in_control_ready,
+    output  pdu_metadata_t  out_control_data,
     output  logic           out_control_done
 );
 
@@ -266,6 +267,7 @@ end
 always@(posedge clk) begin
     if (rst) begin
         p_state <= P_IDLE;
+        out_control_data <= 0;
         out_control_done <= 1'b0;
     end
     else begin
@@ -349,6 +351,8 @@ always@(posedge clk) begin
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
                 out_control_done <= 1'b1;
+                out_control_data.tuple <= p_insert_fce_r.tuple;
+                out_control_data.pcie_address <= p_insert_fce_r.pcie_address;
             end
 
             P_INSERT_NO_EVIC: begin
@@ -376,12 +380,18 @@ always@(posedge clk) begin
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
                 out_control_done <= 1'b1;
+                out_control_data.tuple <= p_insert_fce_r.tuple;
+                out_control_data.pcie_address <= p_insert_fce_r.pcie_address;
             end
 
             P_INSERT_EVIC: begin
                 // Unimplemented!
                 p_state <= P_INSERT_EVIC;
                 $display("Flow Table: Eviction!");
+
+                out_control_done <= 1'b1;
+                out_control_data.pcie_address <= 64'hffffffffffffffff;
+                out_control_data.tuple <= 96'hffffffffffffffffffffffff;
             end
         endcase
     end
