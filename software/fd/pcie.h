@@ -31,18 +31,18 @@
 #define unlikely(x)     __builtin_expect((x),0)
 
 typedef struct pcie_block {
-    uint32_t tail;
-    uint32_t head;
-    uint32_t kmem_low;
-    uint32_t kmem_high;
+    uint32_t tail1;
+    uint32_t head1;
+    uint32_t kmem_low1;
+    uint32_t kmem_high1;
     uint32_t c2f_tail;
     uint32_t c2f_head;
     uint32_t c2f_kmem_low;
     uint32_t c2f_kmem_high;
-    uint32_t padding0;
-    uint32_t padding1;
-    uint32_t padding2;
-    uint32_t padding3;
+    uint32_t tail2;
+    uint32_t head2;
+    uint32_t kmem_low2;
+    uint32_t kmem_high2;
     uint32_t padding4;
     uint32_t padding5;
     uint32_t padding6;
@@ -70,6 +70,8 @@ typedef struct {
     pcie_block_t* uio_data_bar2;
     uint32_t last_flits;
     unsigned int cpu_head;
+    uint32_t* tail_ptr;
+    uint32_t* head_ptr;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry);

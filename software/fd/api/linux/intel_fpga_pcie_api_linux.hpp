@@ -64,6 +64,12 @@ struct intel_fpga_pcie_arg {
 } __attribute__ ((packed));
 
 
+struct intel_fpga_pcie_size_app_id {
+    uint32_t size;
+    uint32_t app_id;
+} __attribute__ ((packed));
+
+
 #include <linux/ioctl.h>
 #include <linux/types.h>
 #include <sys/ioctl.h>

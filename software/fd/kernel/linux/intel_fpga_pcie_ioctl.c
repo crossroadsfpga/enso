@@ -51,6 +51,7 @@
 //In bytes
 #define FPGA2CPU_OFFSET 8
 #define CPU2FPGA_OFFSET 24
+#define FPGA2CPU_OFFSET_2 40
 #define C2F_BUFFER_OFFSET (8192*16*4+4096)
 //
 //Zhipeng End
@@ -64,7 +65,7 @@ static long sel_bar(struct chr_dev_bookkeep *dev_bk, unsigned long new_bar);
 static long get_bar(struct chr_dev_bookkeep *chr_dev_bk,
                     unsigned int __user *user_addr);
 static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg);
-static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long size);
+static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg);
 static long get_ktimer(struct dev_bookkeep *dev_bk,
                        unsigned int __user *user_addr);
 
@@ -473,16 +474,17 @@ static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg)
  *
  * Return: 0 if successful, negative error code otherwise.
  */
-static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long size)
+static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
 {
     long retval = 0;
     struct kmem_info old_info;
     //Zhipeng Start
-    uint32_t kmem_addr_l,kmem_addr_h;
+    uint32_t kmem_addr_l, kmem_addr_h, size, app_id;
     void *__iomem ep_addr;
     //Zhipeng End
-    unsigned long local_size;
-    uint32_t cpu2fpga;
+    // unsigned long local_size;
+    // uint32_t cpu2fpga;
+    struct intel_fpga_pcie_size_app_id karg;
 
     //Zhipeng Start
     //Using the bit[31] to indicate this is a allocation for cpu2fpga ringbuffer
@@ -490,8 +492,21 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long size)
     //cpu2fpga = (size >> 31) & 1;
     //Zhipeng End
 
+    if (copy_from_user(&karg, (void __user *)uarg, sizeof(karg))) {
+        INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
+        return -EFAULT;
+    }
+
+    size = karg.size;
+    app_id = karg.app_id;  
+
     if (unlikely(size > (1*1024*1024))) {
         INTEL_FPGA_PCIE_VERBOSE_DEBUG("requested size is too large.");
+        return -EINVAL;
+    }
+
+    if (unlikely(app_id > 1)) {
+        INTEL_FPGA_PCIE_VERBOSE_DEBUG("only supports app_id 0 and 1");
         return -EINVAL;
     }
 
@@ -544,16 +559,20 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long size)
     kmem_addr_h = (dev_bk->kmem_info.bus_addr >> 32) & 0xFFFFFFFF;
     ep_addr = dev_bk->bar[2].base_addr;
 
-    //if(cpu2fpga == 0){
-    iowrite32(kmem_addr_l,ep_addr+FPGA2CPU_OFFSET);
-    iowrite32(kmem_addr_h,ep_addr+FPGA2CPU_OFFSET+4);
-    //} else {
-    iowrite32(kmem_addr_l+C2F_BUFFER_OFFSET,ep_addr+CPU2FPGA_OFFSET);
-    iowrite32(kmem_addr_h,ep_addr+CPU2FPGA_OFFSET+4);
+    // TODO(sadok): support more apps
+    if (app_id == 0) { // we only set the C2F path for app_id 0
+        iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET);
+        iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4);
+        iowrite32(kmem_addr_l + C2F_BUFFER_OFFSET, ep_addr + CPU2FPGA_OFFSET);
+        iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4);
+    } else { // app_id == 1
+        iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET_2);
+        iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET_2 + 4);
+    }
     //}
     //printk("[Zhipeng] ep_addr = 0x%llx \n", ep_addr);
-    printk("[Zhipeng] kmem_addr_l = 0x%llx; kmem_addr_h = 0x%llx \n", 
-            kmem_addr_l, kmem_addr_h);
+    // printk("[Zhipeng] kmem_addr_l = 0x%llx; kmem_addr_h = 0x%llx \n", 
+    //         kmem_addr_l, kmem_addr_h);
 
     //dt_fetch_queue_addr = dev_bk->bar[2].base_addr;
     //iowrite32(0xdeadbeef, dt_fetch_queue_addr);

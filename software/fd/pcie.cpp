@@ -52,11 +52,22 @@ int dma_init(socket_internal* socket_entry)
 {
     int result;
     void *mmap_addr, *uio_mmap_bar2_addr;
-    int core_id;
+    int app_id;
     intel_fpga_pcie_dev *dev = socket_entry->dev;
 
+    app_id = sched_getcpu();
+    if (app_id < 0) {
+        std::cerr << "Could not get cpu id" << std::endl;
+        return -1;
+    }
+
+    if (app_id > 1) {
+        std::cerr << "run in core 0 or 1" << std::endl;
+        return -1;
+    }
+
     // Obtain kernel memory.
-    result = dev->set_kmem_size(allocated_size);
+    result = dev->set_kmem_size(allocated_size, app_id);
     if (result != 1) {
         std::cerr << "Could not get kernel memory!" << std::endl;
         return -1;
@@ -68,20 +79,25 @@ int dma_init(socket_internal* socket_entry)
     }
     socket_entry->kdata = reinterpret_cast<uint32_t *>(mmap_addr);
 
+    pcie_block_t *global_block; // The global 512-bit register array.
+    global_block = (pcie_block_t *) socket_entry->kdata;
+
     uio_mmap_bar2_addr = dev->uio_mmap(sizeof(pcie_block), 2);
     if (uio_mmap_bar2_addr == MAP_FAILED) {
         std::cerr << "Could not get mmap uio memory!" << std::endl;
         return -1;
     }
     socket_entry->uio_data_bar2 = reinterpret_cast<pcie_block_t *>(uio_mmap_bar2_addr);
-    socket_entry->cpu_head = socket_entry->uio_data_bar2->head;
-    
-    //get cpu_id
-    core_id = sched_getcpu();
-    if (core_id < 0) {
-        std::cerr << "Could not get cpu id!" << std::endl;
-        return -1;
+
+    if (app_id == 0) {
+        socket_entry->head_ptr = &socket_entry->uio_data_bar2->head1;
+        socket_entry->tail_ptr = &global_block->tail1;
+    } else {
+        socket_entry->head_ptr = &socket_entry->uio_data_bar2->head2;
+        socket_entry->tail_ptr = &global_block->tail2;
     }
+
+    socket_entry->cpu_head = *(socket_entry->head_ptr);
 
     return 0;
 }
@@ -95,12 +111,7 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     uint32_t* kdata = socket_entry->kdata;
     uint32_t pdu_flit;
 
-    pcie_block_t *global_block; // The global 512-bit register array.
-    global_block = (pcie_block_t *) socket_entry->kdata;
-
-    // block_s pdu; //current PDU block
-
-    cpu_tail = global_block->tail;
+    cpu_tail = *(socket_entry->tail_ptr);
     if (unlikely(cpu_tail == cpu_head)) {
         return 0;
     }
@@ -170,7 +181,7 @@ void advance_ring_buffer(socket_internal* socket_entry)
 
     // method using UIO
     asm volatile ("" : : : "memory"); // compiler memory barrier
-    socket_entry->uio_data_bar2->head = cpu_head;
+    *(socket_entry->head_ptr) = cpu_head;
 
     socket_entry->cpu_head = cpu_head;
 }
@@ -222,10 +233,14 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev)
 
 void print_pcie_block(pcie_block_t * pb)
 {
-    printf("pb->tail = %d \n", pb->tail);
-    printf("pb->head = %d \n", pb->head);
-    printf("pb->kmem_low = 0x%08x \n", pb->kmem_low);
-    printf("pb->kmem_high = 0x%08x \n", pb->kmem_high);
+    printf("pb->tail1 = %d \n", pb->tail1);
+    printf("pb->head1 = %d \n", pb->head1);
+    printf("pb->kmem_low1 = 0x%08x \n", pb->kmem_low1);
+    printf("pb->kmem_high1 = 0x%08x \n", pb->kmem_high1);
+    printf("pb->tail2 = %d \n", pb->tail2);
+    printf("pb->head2 = %d \n", pb->head2);
+    printf("pb->kmem_low2 = 0x%08x \n", pb->kmem_low2);
+    printf("pb->kmem_high2 = 0x%08x \n", pb->kmem_high2);
 }
 
 void fill_block(uint32_t *addr, block_s *block) {

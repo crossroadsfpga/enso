@@ -257,7 +257,7 @@ public:
      *             the kernel memory.
      * @return 1 on success; 0 otherwise
      */
-    int set_kmem_size(unsigned int size);
+    int set_kmem_size(unsigned int size, unsigned int app_id);
 
     /**
      * Map device's kernel memory into user-space

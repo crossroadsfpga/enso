@@ -69,6 +69,12 @@ struct intel_fpga_pcie_arg {
     bool     is_read;
 } __attribute__ ((packed));
 
+struct intel_fpga_pcie_size_app_id {
+    uint32_t size;
+    uint32_t app_id;
+} __attribute__ ((packed));
+
+
 
 #define INTEL_FPGA_PCIE_IOCTL_MAGIC         0x70
 #define INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV   _IOW (INTEL_FPGA_PCIE_IOCTL_MAGIC, \

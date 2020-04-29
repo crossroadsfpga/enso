@@ -355,17 +355,21 @@ int intel_fpga_pcie_dev::set_sriov_numvfs(unsigned int num_vfs)
     return result == 0;
 }
 
-int intel_fpga_pcie_dev::set_kmem_size(unsigned int size)
+int intel_fpga_pcie_dev::set_kmem_size(unsigned int size, unsigned app_id)
 {
     int result;
     unsigned int page_size = sysconf(_SC_PAGESIZE);
 
+    struct intel_fpga_pcie_size_app_id arg;
+
+    arg.size = size;
+    arg.app_id = app_id;
+
     // Ensure that at kmem size is at least a page
-    if (size >= page_size) {
-        result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SET_KMEM_SIZE, size);
-    } else {
-        result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SET_KMEM_SIZE, page_size);
+    if (size < page_size) {
+        arg.size = page_size;
     }
+    result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SET_KMEM_SIZE, &arg);
     
     if (result == 0) {
         m_kmem_size = size;
