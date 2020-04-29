@@ -52,6 +52,11 @@ module pcie_top (
         input  logic [PDU_AWIDTH-1:0]   pcie_rb_update_size,
         output logic                    disable_pcie,
 
+        //pdumeta fifo out signals
+        output pdu_metadata_t           pdumeta_cpu_data,
+        output logic                    pdumeta_cpu_valid,
+        input  logic   [9:0]            pdumeta_cnt,
+
         // status register bus
         input  logic           clk_status,
         input  logic   [29:0]  status_addr,
@@ -642,6 +647,11 @@ logic                    frb_readvalid;
 logic [PDU_AWIDTH-1:0]   frb_address;              
 logic                    frb_read;                 
 
+logic [C2F_RB_AWIDTH-1:0]   c2f_head;
+logic [C2F_RB_AWIDTH-1:0]   c2f_tail;
+logic [63:0]                c2f_kmem_addr;
+logic [63:0]                c2f_head_addr;
+
 //JTAG
 always@(posedge clk_status)begin
     status_addr_r       <= status_addr;
@@ -758,10 +768,10 @@ assign pcie_reg0_pcie  = f2c_tail;
 assign pcie_reg1_pcie  = pio_write_data[63:32];  //f2c_head
 assign pcie_reg2_pcie  = pio_write_data[95:64];  //f2c_kmem_low
 assign pcie_reg3_pcie  = pio_write_data[127:96]; //f2c_kmem_high
-assign pcie_reg4_pcie  = pio_write_data[159:128];
-assign pcie_reg5_pcie  = pio_write_data[191:160];
-assign pcie_reg6_pcie  = pio_write_data[223:192];
-assign pcie_reg7_pcie  = pio_write_data[255:224];
+assign pcie_reg4_pcie  = pio_write_data[159:128];//c2f_tail
+assign pcie_reg5_pcie  = c2f_head;               //c2f_head
+assign pcie_reg6_pcie  = pio_write_data[223:192];//c2f_kmem_low
+assign pcie_reg7_pcie  = pio_write_data[255:224];//c2f_kmem_high
 assign pcie_reg8_pcie  = pio_write_data[287:256];
 assign pcie_reg9_pcie  = pio_write_data[319:288];
 assign pcie_reg10_pcie = pio_write_data[351:320];
@@ -780,18 +790,22 @@ assign pcie_block.f2c_kmem_low  = pcie_reg2_pcie;
 assign pcie_block.f2c_kmem_high = pcie_reg3_pcie;
 
 //Write from CPU side
-assign pcie_block.c2f_tail      = 0;
+assign pcie_block.c2f_tail      = pcie_reg4_pcie;
 //Write from FPGA side
-assign pcie_block.c2f_head      = 0;
+assign pcie_block.c2f_head      = c2f_head;
 //Write from CPU side
-assign pcie_block.c2f_kmem_low  = 0;
-assign pcie_block.c2f_kmem_high = 0;
+assign pcie_block.c2f_kmem_low  = pcie_reg6_pcie;
+assign pcie_block.c2f_kmem_high = pcie_reg7_pcie;
 
 assign pcie_block.padding = 0;
 
 assign f2c_head = pcie_block.f2c_head[RB_AWIDTH-1:0];
 assign f2c_kmem_addr = {pcie_block.f2c_kmem_high,pcie_block.f2c_kmem_low};
+assign c2f_tail = pcie_block.c2f_tail[C2F_RB_AWIDTH-1:0];
+assign c2f_kmem_addr = {pcie_block.c2f_kmem_high,pcie_block.c2f_kmem_low};
 //the first slot in f2c_kmem_addr is used as the "global reg" includes the
+//C2F_head
+assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
 
 //PDU_BUFFER
 //CPU side read MUX, first 512 bit is registers, the rest is BRAM.
@@ -820,6 +834,7 @@ end
 `ifdef SIM
     assign pcie_rb_wr_base_addr = 0;
     assign pcie_rb_almost_full  = 0;
+	assign pdumeta_cpu_valid    = 0;
     always@(posedge pcie_clk)begin
         pcie_rb_wr_base_addr_valid <= pcie_rb_update_valid;
     end
@@ -848,9 +863,26 @@ fpga2cpu_pcie f2c_inst (
     .frb_read       (frb_read)
 );
 
-assign wrdm_prio_valid = 0;
-assign rddm_desc_valid = 0;
-assign rddm_prio_valid = 0;
+cpu2fpga_pcie c2f_inst (
+    .clk                    (pcie_clk),
+    .rst                    (!pcie_reset_n),
+    .pdumeta_cpu_data       (pdumeta_cpu_data),
+    .pdumeta_cpu_valid      (pdumeta_cpu_valid),
+    .pdumeta_cnt            (pdumeta_cnt),
+    .head                   (c2f_head),
+    .tail                   (c2f_tail),
+    .kmem_addr              (c2f_kmem_addr),
+    .cpu_c2f_head_addr      (c2f_head_addr),
+    .wrdm_prio_ready        (wrdm_prio_ready),
+    .wrdm_prio_valid        (wrdm_prio_valid),
+    .wrdm_prio_data         (wrdm_prio_data),
+    .rddm_desc_ready        (rddm_desc_ready),
+    .rddm_desc_valid        (rddm_desc_valid),
+    .rddm_desc_data         (rddm_desc_data),
+    .c2f_writedata          (writedata_1),
+    .c2f_write              (write_1),
+    .c2f_address            (address_1[14:6])
+);
 
 	pcie_example_design pcie (
 		.refclk_clk                              (refclk_clk),                              //   input,    width = 1,         refclk.clk

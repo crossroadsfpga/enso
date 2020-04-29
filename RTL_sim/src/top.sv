@@ -32,6 +32,9 @@ module top (
     output  logic                    reg_pcie_rb_update_valid,
     output  logic [11:0]             reg_pcie_rb_update_size,//[PDU_AWIDTH-1:0]
     input   logic                    disable_pcie,
+    input   logic [159:0]            pdumeta_cpu_data,//pdu_metadata_t
+    input   logic                    pdumeta_cpu_valid,
+    output  logic [9:0]              reg_pdumeta_cnt,
 
     //eSRAM
     output  logic                    reg_esram_pkt_buf_wren,
@@ -95,11 +98,14 @@ logic [11:0]    pcie_rb_wr_addr;
 logic           pcie_rb_wr_en;  
 logic           pcie_rb_update_valid;
 logic [11:0]    pcie_rb_update_size;
+logic [9:0]     pdumeta_cnt;
 
 logic [11:0]    reg_pcie_rb_wr_base_addr;          
 logic           reg_pcie_rb_wr_base_addr_valid;          
 logic           reg_pcie_rb_almost_full;          
 logic           reg_disable_pcie;
+logic [159:0]   reg_pdumeta_cpu_data;
+logic           reg_pdumeta_cpu_valid;
 
 logic           dm_disable_pcie_r1;
 logic           dm_disable_pcie;
@@ -157,12 +163,9 @@ logic          parser_out_fifo_out_valid;
 metadata_t     parser_out_fifo_out_data;                               
 logic          parser_out_fifo_out_ready;
 
-metadata_t     flow_table_wrapper_out_meta_data;
 logic          flow_table_wrapper_out_meta_valid;
+metadata_t     flow_table_wrapper_out_meta_data;
 logic          flow_table_wrapper_out_control_done;
-fce_t          flow_table_wrapper_in_control_data; // Temporary
-logic          flow_table_wrapper_in_control_valid; // Temporary
-logic          flow_table_wrapper_in_control_ready; // Temporary
 
 logic          fdw_in_meta_valid;                              
 metadata_t     fdw_in_meta_data;                               
@@ -218,6 +221,11 @@ logic          pcie_meta_valid;
 metadata_t     pcie_meta_data;                               
 logic          pcie_meta_ready;                              
 
+pdu_metadata_t pdumeta_cpu_out_data;
+logic          pdumeta_cpu_out_valid;
+logic          pdumeta_cpu_out_ready;
+logic          pdumeta_cpu_ready;
+logic [31:0]   pdumeta_cpu_csr_readdata;
 logic [7:0] status_addr_r;
 logic [STAT_AWIDTH-1:0]  status_addr_sel_r;
 logic status_write_r;
@@ -540,11 +548,9 @@ assign input_comp_eth_sop   = reg_in_sop;
 assign input_comp_eth_eop   = reg_in_eop;
 assign input_comp_eth_empty = reg_in_empty;
 
-// TODO(natre): Fix.
-assign flow_table_wrapper_in_control_data = 0;
-assign flow_table_wrapper_in_control_valid = 1'b0;
-
 assign out_valid_int = out_valid & !reg_out_almost_full;
+//pdumeta occupancy cnt
+assign pdumeta_cnt = pdumeta_cpu_csr_readdata[9:0];
 
 //sync disable_pcie to clk_datamover domain
 always @(posedge clk_datamover) begin
@@ -582,6 +588,9 @@ hyper_pipe_root reg_io_inst (
     .pcie_rb_update_valid   (pcie_rb_update_valid),
     .pcie_rb_update_size    (pcie_rb_update_size),
     .disable_pcie           (disable_pcie),
+    .pdumeta_cpu_data       (pdumeta_cpu_data),
+    .pdumeta_cpu_valid      (pdumeta_cpu_valid),
+    .pdumeta_cnt            (pdumeta_cnt),
     //eSRAM
     .esram_pkt_buf_wren     (esram_pkt_buf_wren),
     .esram_pkt_buf_wraddress(esram_pkt_buf_wraddress),
@@ -611,6 +620,9 @@ hyper_pipe_root reg_io_inst (
     .reg_pcie_rb_update_valid   (reg_pcie_rb_update_valid),
     .reg_pcie_rb_update_size    (reg_pcie_rb_update_size),
     .reg_disable_pcie           (reg_disable_pcie),
+    .reg_pdumeta_cpu_data       (reg_pdumeta_cpu_data),
+    .reg_pdumeta_cpu_valid      (reg_pdumeta_cpu_valid),
+    .reg_pdumeta_cnt            (reg_pdumeta_cnt),
     .reg_esram_pkt_buf_wren     (reg_esram_pkt_buf_wren),
     .reg_esram_pkt_buf_wraddress(reg_esram_pkt_buf_wraddress),
     .reg_esram_pkt_buf_wrdata   (reg_esram_pkt_buf_wrdata),
@@ -708,9 +720,9 @@ flow_table_wrapper flow_table_wrapper_0 (
     .in_meta_ready     (parser_out_fifo_out_ready),
     .out_meta_data     (flow_table_wrapper_out_meta_data),
     .out_meta_valid    (flow_table_wrapper_out_meta_valid),
-    .in_control_data   (flow_table_wrapper_in_control_data),
-    .in_control_valid  (flow_table_wrapper_in_control_valid),
-    .in_control_ready  (flow_table_wrapper_in_control_ready),
+    .in_control_data   (pdumeta_cpu_out_data),
+    .in_control_valid  (pdumeta_cpu_out_valid),
+    .in_control_ready  (pdumeta_cpu_out_ready),
     .out_control_done  (flow_table_wrapper_out_control_done)
 );
 
@@ -847,6 +859,35 @@ dm2pcie_fifo (
 	.out_startofpacket (pcie_pkt_sop), 
 	.out_endofpacket   (pcie_pkt_eop),   
 	.out_empty         (pcie_pkt_empty)          
+);
+
+dc_fifo_wrapper_infill #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL(PDU_META_WIDTH),
+    .FIFO_DEPTH(512),
+    .USE_PACKETS(0)
+) pdumeta_cpu_fifo (
+    .in_clk            (clk_pcie),
+    .in_reset_n        (!rst_pcie),
+    .out_clk           (clk),
+    .out_reset_n       (!rst),
+    .in_csr_address    (0),
+    .in_csr_read       (1'b1),
+    .in_csr_write      (1'b0),
+    .in_csr_readdata   (pdumeta_cpu_csr_readdata),
+    .in_csr_writedata  (32'b0),
+    .in_data           (reg_pdumeta_cpu_data),
+    .in_valid          (reg_pdumeta_cpu_valid),
+    .in_ready          (pdumeta_cpu_ready),
+    .in_startofpacket  (1'b0),
+    .in_endofpacket    (1'b0),
+    .in_empty          (6'b0),
+    .out_data          (pdumeta_cpu_out_data),
+    .out_valid         (pdumeta_cpu_out_valid),
+    .out_ready         (pdumeta_cpu_out_ready),
+    .out_startofpacket (),
+    .out_endofpacket   (),
+    .out_empty         ()
 );
 
 dc_back_pressure #(

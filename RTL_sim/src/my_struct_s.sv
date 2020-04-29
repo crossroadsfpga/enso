@@ -141,14 +141,9 @@ parameter PDUBUF_DEPTH = (32 * PDU_NUM);
 parameter PDUID_WIDTH = ($clog2(PDU_NUM));
 typedef struct packed
 {
-    logic [223:0] padding;
-    logic [31:0] action;
-    logic [31:0] pdu_flit;
-    logic [31:0] pdu_size;
-    logic [31:0] num_ruleID;
-    logic [31:0] prot;
+    logic [351:0] padding;
     tuple_t tuple;
-    logic [31:0] pdu_id;
+    logic [63:0] pcie_address;
 } pdu_hdr_t;
 
 //Ring buffer 
@@ -163,12 +158,11 @@ parameter RB_AWIDTH = ($clog2(RB_DEPTH));
 parameter C2F_RB_DEPTH = 512; //in 512 bits.
 parameter C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
 
+parameter PDU_META_WIDTH=(TUPLE_DWIDTH+64);
+typedef struct packed
+{
+    tuple_t tuple;
+    logic [63:0] pcie_address;
+} pdu_metadata_t; //Metadata
 
-//Actions
-parameter ACTION_NOCHECK = 0;
-parameter ACTION_NOMATCH = 1;
-parameter ACTION_MATCH   = 2;
-parameter ACTION_CHECK   = 3;
-
-parameter ACTION_WIDTH = 4;
 `endif
