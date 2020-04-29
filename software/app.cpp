@@ -1,4 +1,5 @@
 
+#include <cerrno>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
@@ -14,6 +15,7 @@
 #include "fd/fd.h"
 // #include <sys/socket.h>
 // #include <netinet/in.h>
+// #include <arpa/inet.h> 
 
 #include "app.h"
 
@@ -34,13 +36,15 @@ int main(int argc, const char* argv[])
     int result;
     uint64_t goodput = 0;
 
-    if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " core"
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " core port"
                   << std::endl;
         return 1;
     }
+
+    int port = atoi(argv[2]);
     
-    std::thread socket_thread = std::thread([&goodput] {
+    std::thread socket_thread = std::thread([&goodput, port] {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
@@ -48,7 +52,7 @@ int main(int argc, const char* argv[])
         int socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
 
         if (socket_fd == -1) {
-            std::cerr << "Problem creating socket" << std::endl;
+            std::cerr << "Problem creating socket (" << errno << "): " << strerror(errno) << std::endl;
             exit(2);
         }
 
@@ -56,11 +60,11 @@ int main(int argc, const char* argv[])
         memset(&addr, 0, sizeof(addr));
 
         addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        addr.sin_port = htons(8080);
+        addr.sin_addr.s_addr = inet_addr("10.0.0.2"); // htonl(INADDR_ANY);
+        addr.sin_port = htons(port);
 
         if (bind(socket_fd, (struct sockaddr*) &addr, sizeof(addr))) {
-            std::cerr << "Problem binding socket" << std::endl;
+            std::cerr << "Problem binding socket (" << errno << "): " << strerror(errno) <<  std::endl;
             exit(3);
         }
 
