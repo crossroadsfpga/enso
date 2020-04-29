@@ -41,9 +41,8 @@ static const unsigned int allocated_size =
 static inline uint32_t get_block_payload(uint32_t *addr, void** payload_ptr,
     uint32_t* pdu_flit)
 {
-    uint32_t len = addr[6];
-    *pdu_flit = addr[7];
-
+    uint32_t len = addr[PDU_SIZE_OFFSET];
+    *pdu_flit = addr[PDU_FLIT_OFFSET];
     *payload_ptr = (void*) &addr[16];
     return len;
 }
@@ -229,34 +228,19 @@ void print_pcie_block(pcie_block_t * pb)
 }
 
 void fill_block(uint32_t *addr, block_s *block) {
-    int reminder;
-    int offset;
-
-    // TODO(sadok) remove stuff we don't need from the block
+    // Header
     block->pdu_id = addr[0];
     block->dst_port = addr[1] & 0xFFFF;
     block->src_port = (addr[1] >> 16) & 0xFFFF;
     block->dst_ip = addr[2];
     block->src_ip = addr[3];
     block->protocol = addr[4];
+    block->pdu_size = addr[5];
+    block->pdu_flit = addr[6];
+    block->pcie_address = (((uint64_t) addr[7]) << 32) | addr[8];
 
-    block->num_rule_id = addr[5];
-
-    block->pdu_size = addr[6];
-    block->pdu_flit = addr[7];
-    // block->pdu_flit = 25; //quick fix
+    // Payload
     block->pdu_payload = (uint8_t*) &addr[16];
-
-    // Calculate the offset of the rule_id
-    reminder = block->pdu_size & 0x3F;
-    offset = block->pdu_size >> 6;
-    if (reminder > 0){
-        offset += 1;
-    }
-    // include the hdr entry
-    offset = (offset + 1) * 16; // 16 * 32 bit = 512 bit
-
-    block->rule_id = (uint16_t *)&addr[offset];
 }
 
 void print_block(block_s *block) {
@@ -268,9 +252,9 @@ void print_block(block_s *block) {
     printf("dst_ip      : 0x%08x \n", block->dst_ip);
     printf("src_ip      : 0x%08x \n", block->src_ip);
     printf("protocol    : 0x%08x \n", block->protocol);
-    printf("num_rule_id : 0x%08x \n", block->num_rule_id);
     printf("pdu_size    : 0x%08x \n", block->pdu_size);
     printf("pdu_flit    : 0x%08x \n", block->pdu_flit);
+    printf("pcie addr   : 0x%16lx \n", block->pcie_address);
     printf("----PDU payload------\n");
     // for (i = 0; i < block->pdu_size; i++) {
     //     printf("%02x ", block->pdu_payload[i]);
@@ -329,9 +313,10 @@ uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
     //PDU_SIZE
     kdata[base_addr + PDU_SIZE_OFFSET] = block->pdu_size;
     //exclude the rule flits and header flit
-    kdata[base_addr + PDU_FLIT_OFFSET] = block->pdu_flit - block->num_rule_id - 1;
+    kdata[base_addr + PDU_FLIT_OFFSET] = block->pdu_flit - 1;
     kdata[base_addr + ACTION_OFFSET] = ACTION_NO_MATCH;
-    //kdata[base_addr + ACTION_OFFSET] = ACTION_MATCH;
+    kdata[base_addr + PCIE_ADDRESS_LO_OFFSET] = block->pcie_address & 0xFFFFFFFF;
+    kdata[base_addr + PCIE_ADDRESS_HI_OFFSET] = (block->pcie_address >> 32) & 0xFFFFFFFF;
     
     //print_slot(kdata,base_addr/16, 1);
 
