@@ -43,9 +43,25 @@ static const unsigned int allocated_size =
 static inline uint32_t get_block_payload(uint32_t *addr, void** payload_ptr,
     uint32_t* pdu_flit)
 {
-    uint32_t len = addr[PDU_SIZE_OFFSET];
+    // uint32_t len = addr[PDU_SIZE_OFFSET];
     *pdu_flit = addr[PDU_FLIT_OFFSET];
-    *payload_ptr = (void*) &addr[16];
+    *payload_ptr = (void*) (((uint8_t*) &addr[16]) + 14 + 20 + 8);
+    // use IPv4 total length and decrement the IPv4 and UDP header sizes
+    uint32_t len = ntohs(*((uint16_t*) (((uint8_t*) &addr[16]) + 14 + 2)));
+    // for (uint32_t i = 0; i < 42; i++) {
+    //     printf("%02x ", ((uint8_t*) &addr[16])[i]);
+    //     if ((i + 1) % 8 == 0) {
+    //         printf(" ");
+    //     }
+    //     if ((i + 1) % 16 == 0) {
+    //         printf("\n");
+    //     }
+    // }
+    if (unlikely(len < 28 || len > 1500)) {
+        std::cerr << "IPv4 length is weird: " << len << std::endl;
+        exit(1);
+    }
+    len -= 28; // decrement the IPv4 and UDP headers
     return len;
 }
 
@@ -135,7 +151,7 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 
     block_s pdu; //current PDU block
     fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
-    print_block(&pdu);
+    // print_block(&pdu);
 
     // fill in the pdu hdr
     // fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
@@ -221,7 +237,7 @@ int send_control_message(socket_internal* socket_entry)
     return 0;
 }
 
-int dma_finish(socket_internal* socket_entry) 
+int dma_finish(socket_internal* socket_entry)
 {
     uint32_t* kdata = socket_entry->kdata;
 
@@ -307,15 +323,16 @@ void print_block(block_s *block) {
     printf("pdu_flit    : 0x%08x \n", block->pdu_flit);
     printf("pcie addr   : 0x%016lx \n", block->pcie_address);
     printf("----PDU payload------\n");
-    // for (i = 0; i < block->pdu_size; i++) {
-    //     printf("%02x ", block->pdu_payload[i]);
-    //     if ((i + 1) % 8 == 0) {
-    //         printf(" ");
-    //     }
-    //     if ((i + 1) % 16 == 0) {
-    //         printf("\n");
-    //     }
-    // }
+    for (uint32_t i = 0; i < block->pdu_size; i++) {
+        printf("%02x ", block->pdu_payload[i]);
+        if ((i + 1) % 8 == 0) {
+            printf(" ");
+        }
+        if ((i + 1) % 16 == 0) {
+            printf("\n");
+        }
+    }
+    printf("\n");
     // printf("\n----Rule IDs------\n");
     // //512-bit aligned. 32 16-bit rule ID per line.
     // for(i=0;i<block->num_rule_id*32;i++){
