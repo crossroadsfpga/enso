@@ -56,7 +56,8 @@ int bind(
     socklen_t addrlen __attribute__((unused))
 )
 {
-    // TODO(sadok) add entry to the NIC flow table
+    socket_internal* socket = &open_sockets[sockfd];
+    send_control_message(socket);
 
     return 0;
 }

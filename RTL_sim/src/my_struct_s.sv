@@ -141,9 +141,14 @@ parameter PDUBUF_DEPTH = (32 * PDU_NUM);
 parameter PDUID_WIDTH = ($clog2(PDU_NUM));
 typedef struct packed
 {
-    logic [351:0] padding;
-    tuple_t tuple;
+    logic [191:0] padding;
     logic [63:0] pcie_address;
+    logic [31:0] action;
+    logic [31:0] pdu_flit;
+    logic [31:0] pdu_size;
+    logic [31:0] prot;
+    tuple_t tuple;
+    logic [31:0] pdu_id;
 } pdu_hdr_t;
 
 //Ring buffer 

@@ -20,9 +20,15 @@
 #define C2F_TAIL_OFFSET 16
 
 #define PDU_ID_OFFSET 0
-#define PDU_SIZE_OFFSET 6
-#define PDU_FLIT_OFFSET 7
-#define ACTION_OFFSET 8
+#define PDU_PORTS_OFFSET 1
+#define PDU_DST_IP_OFFSET 2
+#define PDU_SRC_IP_OFFSET 3
+#define PDU_PROTOCOL_OFFSET 4
+#define PDU_SIZE_OFFSET 5
+#define PDU_FLIT_OFFSET 6
+#define ACTION_OFFSET 7
+#define PCIE_ADDRESS_LO_OFFSET 8
+#define PCIE_ADDRESS_HI_OFFSET 9
 
 #define ACTION_NO_MATCH 1
 #define ACTION_MATCH 2
@@ -56,12 +62,11 @@ typedef struct block {
     uint32_t dst_ip;
     uint32_t src_ip;
     uint32_t protocol;
-    uint32_t num_rule_id; // number of 512-bit lines in the rule_id block
     uint32_t pdu_size; // in bytes
     uint32_t pdu_flit;
     uint32_t action;
+    uint64_t pcie_address;
     uint8_t *pdu_payload; // immediately after pdu_hdr
-    uint16_t *rule_id; // after the pdu_payload, 512bit aligned
 } block_s;
 
 typedef struct {
@@ -69,14 +74,16 @@ typedef struct {
     uint32_t* kdata;
     pcie_block_t* uio_data_bar2;
     uint32_t last_flits;
-    unsigned int cpu_head;
     uint32_t* tail_ptr;
     uint32_t* head_ptr;
+    uint32_t cpu_head;
+    uint32_t c2f_cpu_tail;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry);
 int dma_run(socket_internal* socket_entry, void** buf, size_t len);
 void advance_ring_buffer(socket_internal* socket_entry);
+void send_control_message(socket_internal* socket_entry);
 int dma_finish(socket_internal* socket_entry);
 void print_pcie_block(pcie_block_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
