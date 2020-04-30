@@ -29,6 +29,8 @@
 #include <string.h>
 
 #include <sched.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "api/intel_fpga_pcie_api.hpp"
 // #include "intel_fpga_pcie_link_test.hpp"
@@ -74,7 +76,8 @@ int dma_init(socket_internal* socket_entry)
     }
     socket_entry->uio_data_bar2 = reinterpret_cast<pcie_block_t *>(uio_mmap_bar2_addr);
     socket_entry->cpu_head = socket_entry->uio_data_bar2->head;
-    
+    socket_entry->c2f_cpu_tail = 0;
+
     //get cpu_id
     core_id = sched_getcpu();
     if (core_id < 0) {
@@ -119,8 +122,8 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     }
 
     block_s pdu; //current PDU block
-    fill_block(&kdata[(cpu_head+1)*16],&pdu);
-    // print_block(&pdu);
+    fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
+    print_block(&pdu);
 
     // fill in the pdu hdr
     // fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
@@ -172,6 +175,31 @@ void advance_ring_buffer(socket_internal* socket_entry)
     socket_entry->uio_data_bar2->head = cpu_head;
 
     socket_entry->cpu_head = cpu_head;
+}
+
+void send_control_message(socket_internal* socket_entry)
+{
+    pcie_block_t *global_block = (pcie_block_t *) socket_entry->kdata;
+
+    block_s block;
+
+    block.pdu_id = 0;
+    block.dst_port = 80;
+    block.src_port = 8080;
+    block.dst_ip = 0xc0a80101; // inet_addr("192.168.1.1");
+    block.src_ip = 0xc0a80001; // inet_addr("192.168.0.1");
+    block.protocol = 0x11;
+    block.pdu_size = 0x0;
+    block.pdu_flit = 0x0;
+    block.pcie_address = (((uint64_t) (socket_entry->uio_data_bar2->kmem_high)) << 32) 
+                         | (socket_entry->uio_data_bar2->kmem_low);
+
+    print_block(&block);
+
+    socket_entry->c2f_cpu_tail = c2f_copy_head(socket_entry->c2f_cpu_tail,
+        global_block, &block, socket_entry->kdata);
+    asm volatile ("" : : : "memory"); // compiler memory barrier
+    socket_entry->uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
 }
 
 int dma_finish(socket_internal* socket_entry) 
@@ -254,7 +282,7 @@ void print_block(block_s *block) {
     printf("protocol    : 0x%08x \n", block->protocol);
     printf("pdu_size    : 0x%08x \n", block->pdu_size);
     printf("pdu_flit    : 0x%08x \n", block->pdu_flit);
-    printf("pcie addr   : 0x%16lx \n", block->pcie_address);
+    printf("pcie addr   : 0x%016lx \n", block->pcie_address);
     printf("----PDU payload------\n");
     // for (i = 0; i < block->pdu_size; i++) {
     //     printf("%02x ", block->pdu_payload[i]);
@@ -304,13 +332,17 @@ uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
     	    free_slot = C2F_BUFFER_SIZE - c2f_tail + c2f_head - 1;
     	}
     }
-    base_addr = C2F_BUFFER_OFFSET+c2f_tail*16;
+    base_addr = C2F_BUFFER_OFFSET + c2f_tail * 16;
 
     //memcpy(&kdata[base_addr], src_addr, 16*4); //each flit is 512 bit
 
     //Fake match
     kdata[base_addr + PDU_ID_OFFSET] = block->pdu_id;
     //PDU_SIZE
+    kdata[base_addr + PDU_PORTS_OFFSET] = (((uint32_t) block->src_port) << 16) | ((uint32_t) block->dst_port);
+    kdata[base_addr + PDU_DST_IP_OFFSET] = block->dst_ip;
+    kdata[base_addr + PDU_SRC_IP_OFFSET] = block->src_ip;
+    kdata[base_addr + PDU_PROTOCOL_OFFSET] = block->protocol;
     kdata[base_addr + PDU_SIZE_OFFSET] = block->pdu_size;
     //exclude the rule flits and header flit
     kdata[base_addr + PDU_FLIT_OFFSET] = block->pdu_flit - 1;

@@ -20,6 +20,10 @@
 #define C2F_TAIL_OFFSET 16
 
 #define PDU_ID_OFFSET 0
+#define PDU_PORTS_OFFSET 1
+#define PDU_DST_IP_OFFSET 2
+#define PDU_SRC_IP_OFFSET 3
+#define PDU_PROTOCOL_OFFSET 4
 #define PDU_SIZE_OFFSET 5
 #define PDU_FLIT_OFFSET 6
 #define ACTION_OFFSET 7
@@ -70,12 +74,14 @@ typedef struct {
     uint32_t* kdata;
     pcie_block_t* uio_data_bar2;
     uint32_t last_flits;
-    unsigned int cpu_head;
+    uint32_t cpu_head;
+    uint32_t c2f_cpu_tail;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry);
 int dma_run(socket_internal* socket_entry, void** buf, size_t len);
 void advance_ring_buffer(socket_internal* socket_entry);
+void send_control_message(socket_internal* socket_entry);
 int dma_finish(socket_internal* socket_entry);
 void print_pcie_block(pcie_block_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
