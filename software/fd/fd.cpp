@@ -57,7 +57,16 @@ int bind(
 )
 {
     socket_internal* socket = &open_sockets[sockfd];
-    send_control_message(socket);
+
+    // FIXME(sadok) we currently only bind sockets on app 0
+    if (socket->app_id != 0) {
+        return 0;
+    }
+
+    if (send_control_message(socket)) {
+        std::cerr << "Could not send control message" << std::endl;
+        return -1;
+    }
 
     return 0;
 }

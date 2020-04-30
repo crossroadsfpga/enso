@@ -97,8 +97,9 @@ int dma_init(socket_internal* socket_entry)
         socket_entry->head_ptr = &socket_entry->uio_data_bar2->head2;
         socket_entry->tail_ptr = &global_block->tail2;
     }
-    socket_entry->c2f_cpu_tail = 0;
 
+    socket_entry->app_id = app_id;
+    socket_entry->c2f_cpu_tail = 0;
     socket_entry->cpu_head = *(socket_entry->head_ptr);
 
     return 0;
@@ -188,11 +189,16 @@ void advance_ring_buffer(socket_internal* socket_entry)
     socket_entry->cpu_head = cpu_head;
 }
 
-void send_control_message(socket_internal* socket_entry)
+int send_control_message(socket_internal* socket_entry)
 {
-    pcie_block_t *global_block = (pcie_block_t *) socket_entry->kdata;
-
     block_s block;
+    pcie_block_t* global_block = (pcie_block_t *) socket_entry->kdata;
+    pcie_block_t* uio_data_bar2 = socket_entry->uio_data_bar2;
+
+    if (socket_entry->app_id != 0) {
+        std::cerr << "Can only send control messages from app 0" << std::endl;
+        return -1;
+    }
 
     block.pdu_id = 0;
     block.dst_port = 80;
@@ -202,15 +208,17 @@ void send_control_message(socket_internal* socket_entry)
     block.protocol = 0x11;
     block.pdu_size = 0x0;
     block.pdu_flit = 0x0;
-    block.pcie_address = (((uint64_t) (socket_entry->uio_data_bar2->kmem_high)) << 32) 
-                         | (socket_entry->uio_data_bar2->kmem_low);
+    block.pcie_address = (((uint64_t) (uio_data_bar2->kmem_high1)) << 32) 
+                         | (uio_data_bar2->kmem_low1);
 
     print_block(&block);
 
     socket_entry->c2f_cpu_tail = c2f_copy_head(socket_entry->c2f_cpu_tail,
         global_block, &block, socket_entry->kdata);
     asm volatile ("" : : : "memory"); // compiler memory barrier
-    socket_entry->uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
+    uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
+
+    return 0;
 }
 
 int dma_finish(socket_internal* socket_entry) 
