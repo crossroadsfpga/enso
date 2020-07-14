@@ -43,25 +43,26 @@ static const unsigned int allocated_size =
 static inline uint32_t get_block_payload(uint32_t *addr, void** payload_ptr,
     uint32_t* pdu_flit)
 {
-    // uint32_t len = addr[PDU_SIZE_OFFSET];
+    uint32_t len = addr[PDU_SIZE_OFFSET];
     *pdu_flit = addr[PDU_FLIT_OFFSET];
-    *payload_ptr = (void*) (((uint8_t*) &addr[16]) + 14 + 20 + 8);
-    // use IPv4 total length and decrement the IPv4 and UDP header sizes
-    uint32_t len = ntohs(*((uint16_t*) (((uint8_t*) &addr[16]) + 14 + 2)));
-    // for (uint32_t i = 0; i < 42; i++) {
-    //     printf("%02x ", ((uint8_t*) &addr[16])[i]);
-    //     if ((i + 1) % 8 == 0) {
-    //         printf(" ");
-    //     }
-    //     if ((i + 1) % 16 == 0) {
-    //         printf("\n");
-    //     }
+    *payload_ptr = (void*) &addr[16];
+    // *payload_ptr = (void*) (((uint8_t*) &addr[16]) + 14 + 20 + 8);
+    // // use IPv4 total length and decrement the IPv4 and UDP header sizes
+    // uint32_t len = ntohs(*((uint16_t*) (((uint8_t*) &addr[16]) + 14 + 2)));
+    // // for (uint32_t i = 0; i < 42; i++) {
+    // //     printf("%02x ", ((uint8_t*) &addr[16])[i]);
+    // //     if ((i + 1) % 8 == 0) {
+    // //         printf(" ");
+    // //     }
+    // //     if ((i + 1) % 16 == 0) {
+    // //         printf("\n");
+    // //     }
+    // // }
+    // if (unlikely(len < 28 || len > 1500)) {
+    //     std::cerr << "IPv4 length is weird: " << len << std::endl;
+    //     exit(1);
     // }
-    if (unlikely(len < 28 || len > 1500)) {
-        std::cerr << "IPv4 length is weird: " << len << std::endl;
-        exit(1);
-    }
-    len -= 28; // decrement the IPv4 and UDP headers
+    // len -= 28; // decrement the IPv4 and UDP headers
     return len;
 }
 
@@ -205,7 +206,7 @@ void advance_ring_buffer(socket_internal* socket_entry)
     socket_entry->cpu_head = cpu_head;
 }
 
-int send_control_message(socket_internal* socket_entry)
+int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
 {
     block_s block;
     pcie_block_t* global_block = (pcie_block_t *) socket_entry->kdata;
@@ -216,23 +217,25 @@ int send_control_message(socket_internal* socket_entry)
         return -1;
     }
 
-    block.pdu_id = 0;
-    block.dst_port = 80;
-    block.src_port = 8080;
-    block.dst_ip = 0xc0a80101; // inet_addr("192.168.1.1");
-    block.src_ip = 0xc0a80001; // inet_addr("192.168.0.1");
-    block.protocol = 0x11;
-    block.pdu_size = 0x0;
-    block.pdu_flit = 0x0;
-    block.pcie_address = (((uint64_t) (uio_data_bar2->kmem_high1)) << 32) 
-                         | (uio_data_bar2->kmem_low1);
+    for (unsigned i = 0; i < nb_rules; ++i) {
+        block.pdu_id = 0;
+        block.dst_port = 80;
+        block.src_port = 8080;
+        block.dst_ip = 0xc0a80101; // inet_addr("192.168.1.1");
+        block.src_ip = 0xc0a80001 + i; // inet_addr("192.168.0.1");
+        block.protocol = 0x11;
+        block.pdu_size = 0x0;
+        block.pdu_flit = 0x0;
+        block.pcie_address = (((uint64_t) (uio_data_bar2->kmem_high1)) << 32) 
+                            | (uio_data_bar2->kmem_low1);
 
-    print_block(&block);
+        // print_block(&block);
 
-    socket_entry->c2f_cpu_tail = c2f_copy_head(socket_entry->c2f_cpu_tail,
-        global_block, &block, socket_entry->kdata);
-    asm volatile ("" : : : "memory"); // compiler memory barrier
-    uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
+        socket_entry->c2f_cpu_tail = c2f_copy_head(socket_entry->c2f_cpu_tail,
+            global_block, &block, socket_entry->kdata);
+        asm volatile ("" : : : "memory"); // compiler memory barrier
+        uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
+    }
 
     return 0;
 }
