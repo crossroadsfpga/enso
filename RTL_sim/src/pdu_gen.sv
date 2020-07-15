@@ -113,11 +113,12 @@ always@(posedge clk)begin
                     end else begin
                         //only one flit
                         if(in_sop)begin
+                            pdu_size <= 64 - in_empty;
                             pdu_addr_r <= pcie_rb_wr_base_addr + 1;
                         end else begin
+                            pdu_size <= pdu_size + (64 - in_empty);
                             pdu_addr_r <= pdu_addr_r + 1;
                         end
-                        pdu_size <= pdu_size + (64 - in_empty);
                         pdu_eop_r <= 1; //set the eop here since we don't have rule anymore.
 
                         state <= WRITE_HEAD;
