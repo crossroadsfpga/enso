@@ -46,15 +46,10 @@
 #include "intel_fpga_pcie_ioctl.h"
 #include "intel_fpga_pcie_setup.h"
 
-
-//Zhipeng Start
 //In bytes
 #define FPGA2CPU_OFFSET 8
 #define CPU2FPGA_OFFSET 24
-#define FPGA2CPU_OFFSET_2 40
-#define C2F_BUFFER_OFFSET (8192*16*4+4096)
-//
-//Zhipeng End
+
 /******************************************************************************
  * Static function prototypes
  *****************************************************************************/
@@ -459,8 +454,7 @@ static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg)
  *              is accessed to retrieve information about existing kernel
  *              memories allocated for the same purpose, and allocated
  *              memory is accessed through this structure.
- * @size:       The number of bytes to allocate, up to 1 MiB. Passing in
- *              a size of 0 will free the currently allocated memory.
+ *  @uarg:       Pointer to intel_fpga_pcie_ksize structure
  *
  * Obtains DMA-capable kernel memory for use as a bounce buffer or for
  * scratch memory. This memory is accessible through dev_bk structure.
@@ -478,37 +472,22 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
 {
     long retval = 0;
     struct kmem_info old_info;
-    //Zhipeng Start
-    uint32_t kmem_addr_l, kmem_addr_h, size, app_id;
+    uint32_t kmem_addr_l, kmem_addr_h;
     void *__iomem ep_addr;
-    //Zhipeng End
-    // unsigned long local_size;
-    // uint32_t cpu2fpga;
-    struct intel_fpga_pcie_size_app_id karg;
+    unsigned long local_size;
+    uint32_t cpu2fpga;
+    int core_id;
+    unsigned int size;
 
-    //Zhipeng Start
-    //Using the bit[31] to indicate this is a allocation for cpu2fpga ringbuffer
-    //local_size = size & 0x7FFFFFFF;
-    //cpu2fpga = (size >> 31) & 1;
-    //Zhipeng End
+    struct intel_fpga_pcie_ksize karg;
 
-    if (copy_from_user(&karg, (void __user *)uarg, sizeof(karg))) {
+    if (copy_from_user(&karg, (void __user *) uarg, sizeof(karg))) {
         INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
         return -EFAULT;
     }
 
+    core_id = karg.core_id;
     size = karg.size;
-    app_id = karg.app_id;  
-
-    if (unlikely(size > (1*1024*1024))) {
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("requested size is too large.");
-        return -EINVAL;
-    }
-
-    if (unlikely(app_id > 1)) {
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("only supports app_id 0 and 1");
-        return -EINVAL;
-    }
 
     if (unlikely(down_interruptible(&dev_bk->sem))) {
         INTEL_FPGA_PCIE_DEBUG("interrupted while attempting to obtain "
@@ -520,8 +499,14 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
     old_info.virt_addr  = dev_bk->kmem_info.virt_addr;
     old_info.bus_addr   = dev_bk->kmem_info.bus_addr;
 
+    // TODO(sadok) Are we deallocating this somewhere?
     // Get new memory region first if requested.
     if (size > 0) {
+        retval = dma_set_mask_and_coherent(&dev_bk->dev->dev, DMA_BIT_MASK(64));
+        if (retval) {
+            printk(KERN_INFO "dma_set_mask returned: %d\n",  retval);
+            return -EIO;
+        }
         dev_bk->kmem_info.virt_addr =
             dma_zalloc_coherent(&dev_bk->dev->dev, size,
                                 &dev_bk->kmem_info.bus_addr, GFP_KERNEL);
@@ -538,45 +523,29 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
         dev_bk->kmem_info.size = 0;
         dev_bk->kmem_info.virt_addr = NULL;
         dev_bk->kmem_info.bus_addr = 0;
-    }
 
-    // If getting the new memory region was successful and
-    // there was another allocated region, deallocate the previous
-    // memory region.
-    if ((retval == 0) && ((old_info.size > 0) || (size == 0))) {
         INTEL_FPGA_PCIE_VERBOSE_DEBUG("freeing previously allocated memory.");
-        dma_free_coherent(&dev_bk->dev->dev, old_info.size,
-                          old_info.virt_addr,
+        dma_free_coherent(&dev_bk->dev->dev, old_info.size, old_info.virt_addr,
                           old_info.bus_addr);
     }
 
     up(&dev_bk->sem);
 
-    //Zhipeng Start
-    //printk("cpu2fpga = %d \n",cpu2fpga);
-    //printk("[Zhipeng] set_kmem bus_addr = 0x%llx \n", dev_bk->kmem_info.bus_addr);
     kmem_addr_l = dev_bk->kmem_info.bus_addr & 0xFFFFFFFF;
     kmem_addr_h = (dev_bk->kmem_info.bus_addr >> 32) & 0xFFFFFFFF;
     ep_addr = dev_bk->bar[2].base_addr;
 
-    // TODO(sadok): support more apps
-    if (app_id == 0) { // we only set the C2F path for app_id 0
-        iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET);
-        iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4);
-        iowrite32(kmem_addr_l + C2F_BUFFER_OFFSET, ep_addr + CPU2FPGA_OFFSET);
-        iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4);
-    } else { // app_id == 1
-        iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET_2);
-        iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET_2 + 4);
-    }
-    //}
-    //printk("[Zhipeng] ep_addr = 0x%llx \n", ep_addr);
-    // printk("[Zhipeng] kmem_addr_l = 0x%llx; kmem_addr_h = 0x%llx \n", 
-    //         kmem_addr_l, kmem_addr_h);
+    iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET + core_id * 32);
+    iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4 + core_id * 32);
 
-    //dt_fetch_queue_addr = dev_bk->bar[2].base_addr;
-    //iowrite32(0xdeadbeef, dt_fetch_queue_addr);
-    //Zhipeng End
+    iowrite32(kmem_addr_l + C2F_BUFFER_OFFSET, ep_addr + CPU2FPGA_OFFSET + 
+              core_id * 32);
+    iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4 + core_id * 32);
+
+    printk("[Zhipeng] kmem_addr_l = 0x%llx; kmem_addr_h = 0x%llx \n", 
+           kmem_addr_l, kmem_addr_h);
+
+    printk("retval %i\n", retval);
     return retval;
 }
 

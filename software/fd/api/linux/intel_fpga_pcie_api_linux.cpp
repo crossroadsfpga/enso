@@ -19,6 +19,7 @@
 #include "../intel_fpga_pcie_api.hpp"
 #include <stdexcept>
 #include <unistd.h>
+#include <sched.h>
 
 /******************************************************************************
  * Templated access functions.
@@ -360,15 +361,23 @@ int intel_fpga_pcie_dev::set_kmem_size(unsigned int size, unsigned app_id)
     int result;
     unsigned int page_size = sysconf(_SC_PAGESIZE);
 
-    struct intel_fpga_pcie_size_app_id arg;
-
-    arg.size = size;
-    arg.app_id = app_id;
+    struct intel_fpga_pcie_ksize arg;
 
     // Ensure that at kmem size is at least a page
     if (size < page_size) {
-        arg.size = page_size;
+        size = page_size;
     }
+
+    arg.size = size;
+    arg.core_id = sched_getcpu(); // FIXME(sadok) this only works if the
+                                  // process is pinned to a core. Also, this
+                                  // only makes sense for a single app. When we
+                                  // have multiple processes, we need another
+                                  // way of identifying different threads
+    if (arg.core_id < 0) {
+        return 1;
+    }
+
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SET_KMEM_SIZE, &arg);
     
     if (result == 0) {

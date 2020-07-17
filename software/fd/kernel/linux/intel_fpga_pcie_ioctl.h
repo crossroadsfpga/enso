@@ -74,6 +74,17 @@ struct intel_fpga_pcie_size_app_id {
     uint32_t app_id;
 } __attribute__ ((packed));
 
+/**
+ * struct intel_fpga_pcie_ksize - Structure used by SET_KMEM_SIZE call
+ */
+struct intel_fpga_pcie_ksize {
+    /** @size: size of the allocated memory region. Passing in a size of 0 will
+     * free the currently allocated memory. */
+    unsigned int size;
+
+    /** @core_id: core id of the user process. */
+    int core_id;
+} __attribute__ ((packed));
 
 
 #define INTEL_FPGA_PCIE_IOCTL_MAGIC         0x70
