@@ -10,15 +10,18 @@ module fpga2cpu_pcie (
     input  logic [PDU_AWIDTH-1:0]   wr_addr,         
     input  logic                    wr_en,  
     output logic [PDU_AWIDTH-1:0]   wr_base_addr,    
-    output logic                    wr_base_addr_valid,
+    output logic                    wr_base_addr_valid, // TODO(sadok) check if we need this
     output logic                    almost_full,          
     input  logic                    update_valid,
     input  logic [PDU_AWIDTH-1:0]   update_size,
 
     //CPU ring buffer signals
     input  logic [RB_AWIDTH-1:0]    head,
-    output logic [RB_AWIDTH-1:0]    tail,
+    input  logic [RB_AWIDTH-1:0]    tail,
     input  logic [63:0]             kmem_addr,
+    output logic [RB_AWIDTH-1:0]    out_tail,
+    output logic                    dma_done, 
+    input  logic [30:0]             rb_size,
 
     //Write to Write data mover
     input  logic                    wrdm_desc_ready,           
@@ -71,13 +74,13 @@ state_t state;
 logic                   dma_start;
 logic [PDU_AWIDTH-1:0]  dma_size;
 logic [PDU_AWIDTH-1:0]  dma_base_addr;
-logic                   dma_done;
+// logic                   dma_done;
 
 //CPU side addr
 assign cpu_data_addr = kmem_addr + 64*tail + 64; //the global reg
 
-//The base addr of fpga side ring buffer. 
-assign data_base_addr = EP_BASE_ADDR + (1+dma_base_addr) << 6;
+//The base addr of fpga side ring buffer. BRAM starts with an offset
+assign data_base_addr = EP_BASE_ADDR + (RB_BRAM_OFFSET + dma_base_addr) << 6;
 
 
 assign desc_padding = 0;
@@ -96,8 +99,8 @@ assign data_desc = {14'h0,desc_padding,dma_size_r,4'b0,cpu_data_addr,32'h0,data_
 assign done_desc = {14'h0,DONE_ID,3'b0,1'b0,1'b0,1'b1,18'd1,kmem_addr,32'h0,tail_padding,new_tail};
 
 //Rounding case
-assign dma_size_r_low = RB_DEPTH - tail;
-assign dma_size_r_high = dma_size_r - RB_DEPTH + tail;//dma_size_r - dma_size_r_low
+assign dma_size_r_low = rb_size - tail;
+assign dma_size_r_high = dma_size_r - rb_size + tail; //dma_size_r - dma_size_r_low
 assign cpu_data_addr_low = cpu_data_addr;
 assign cpu_data_addr_high = kmem_addr + (1 <<6); //always starts from the beginning
 assign ep_data_addr_high = data_base_addr + {dma_size_r_low,6'b0};
@@ -107,12 +110,12 @@ assign data_desc_high = {14'h0,desc_padding,dma_size_r_high,4'b0,cpu_data_addr_h
 
 
 //Always have at least one slot not occupied.
-//assign free_slot = (tail >= head) ? (RB_DEPTH - tail + head -1) : (head - tail -1);
+assign free_slot = (tail >= head) ? (rb_size - tail + head -1) : (head - tail -1);
 
 //We need two transfter. if it is =, we only need one transfer and round the fpga_tail.
-assign wrap = tail + dma_size_r > RB_DEPTH;
+assign wrap = tail + dma_size_r > rb_size;
 
-assign new_tail = (tail+dma_size_r >= RB_DEPTH) ? (tail+dma_size_r-RB_DEPTH) : (tail+dma_size_r);
+assign new_tail = (tail+dma_size_r >= rb_size) ? (tail+dma_size_r-rb_size) : (tail+dma_size_r);
 
 //two cycle delay
 always@(posedge clk)begin
@@ -125,9 +128,9 @@ always@(posedge clk)begin
     if(rst)begin
         state <= IDLE;
         wrdm_desc_valid <= 0;
-        tail <= 0;
+        out_tail <= 0;
         dma_done <= 0;
-        free_slot <= 0;
+        //free_slot <= 0;
     end else begin
         case(state)
             IDLE:begin
@@ -137,11 +140,11 @@ always@(posedge clk)begin
                     state <= DESC;
                     dma_size_r <= dma_size;
                     //use register instead of comb
-                    if(tail >= head)begin
-                        free_slot <= RB_DEPTH - tail + head -1;
-                    end else begin
-                        free_slot <= head - tail -1;
-                    end 
+                    //if(tail >= head)begin
+                    //    free_slot <= rb_size - tail + head -1;
+                    //end else begin
+                    //    free_slot <= head - tail -1;
+                    //end 
                 end                
             end
             DESC:begin
@@ -174,9 +177,9 @@ always@(posedge clk)begin
                     state <= WAIT;
                  
                     //update tail
-                    tail <= new_tail;
-                    //if(tail+dma_size_r >= RB_DEPTH)begin
-                    //    tail <= tail+dma_size_r-RB_DEPTH;
+                    out_tail <= new_tail;
+                    //if(tail+dma_size_r >= rb_size)begin
+                    //    tail <= tail+dma_size_r-rb_size;
                     //end else begin
                     //    tail <= tail + dma_size_r;
                     //end

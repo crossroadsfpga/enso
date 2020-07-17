@@ -1,7 +1,7 @@
 `ifndef MY_STRUCT_S
 `define MY_STRUCT_S
-`define SIM //Should comment this during synthesis
-`define NO_PCIE //Should comment this during synthesis
+// `define SIM //Should comment this during synthesis
+// `define NO_PCIE //Should comment this during synthesis
 
 //packet buffer
 //STORE 1024 pkts, each pkts takes 32 * 512 bits = 2 KB.
@@ -162,6 +162,9 @@ parameter RB_AWIDTH = ($clog2(RB_DEPTH));
 
 parameter C2F_RB_DEPTH = 512; //in 512 bits.
 parameter C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
+
+parameter RB_BRAM_OFFSET = 4; // We have 64 32bit registers. Which corresponds
+                              // to 4*512 bits
 
 parameter PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 typedef struct packed
