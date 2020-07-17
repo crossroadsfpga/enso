@@ -62,7 +62,8 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 ### Synthesize Quartus Project (you can skip this the first time)
 1. Open the quartus project under `your_path/front_door_consumer/hardware_test_design/alt_ehipc2_hw.qpf`
 2. Add new flow_director.sv (keep the interface the same.) You can add sub modules for flow_director.sv as well.
-3. Open the Compilation Dashboard. Click Compile Design. It may take 20 minutes if you don't change anything. This involves multiple stages. In the end, the Assembler will generate bitstream. 
+3. Copy the `alt_ehipc2_hw.sv` (system top level systemverilog code), `alt_ehipc2_hw.sdc`(timing constraints) and `alt_ehipc2_hw.qsf`(quartus project setting, like including which files, compile strategies) to the `your_path/front_door_consumer/hardware_test_design/`. 
+4. Open the Compilation Dashboard. Click Compile Design. It may take 20 minutes if you don't change anything. This involves multiple stages. In the end, the Assembler will generate bitstream. 
 
 ### Load bitstream and setup System console
 1. Download `hardware_test` folder to scotchbuild00 `your_scotchbuild_path`
