@@ -36,15 +36,18 @@ int main(int argc, const char* argv[])
     int result;
     uint64_t goodput = 0;
 
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " core port"
+    if (argc != 4) {
+        std::cerr << "Usage: " << argv[0] << " core port nb_rules"
                   << std::endl;
         return 1;
     }
 
     int port = atoi(argv[2]);
+    unsigned nb_rules = atoi(argv[3]);
+
+    std::cout << "running test with " << nb_rules << " rules" << std::endl;
     
-    std::thread socket_thread = std::thread([&goodput, port] {
+    std::thread socket_thread = std::thread([&goodput, port, nb_rules] {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
@@ -63,7 +66,7 @@ int main(int argc, const char* argv[])
         addr.sin_addr.s_addr = inet_addr("10.0.0.2"); // htonl(INADDR_ANY);
         addr.sin_port = htons(port);
 
-        if (bind(socket_fd, (struct sockaddr*) &addr, sizeof(addr))) {
+        if (bind(socket_fd, (struct sockaddr*) &addr, nb_rules)) {
             std::cerr << "Problem binding socket (" << errno << "): " << strerror(errno) <<  std::endl;
             exit(3);
         }

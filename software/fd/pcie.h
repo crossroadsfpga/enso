@@ -84,7 +84,7 @@ typedef struct {
 int dma_init(socket_internal* socket_entry);
 int dma_run(socket_internal* socket_entry, void** buf, size_t len);
 void advance_ring_buffer(socket_internal* socket_entry);
-int send_control_message(socket_internal* socket_entry);
+int send_control_message(socket_internal* socket_entry, unsigned int nb_rules);
 int dma_finish(socket_internal* socket_entry);
 void print_pcie_block(pcie_block_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
