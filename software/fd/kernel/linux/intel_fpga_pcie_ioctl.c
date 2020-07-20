@@ -48,7 +48,7 @@
 
 //In bytes
 #define FPGA2CPU_OFFSET 8
-#define CPU2FPGA_OFFSET 24
+// #define CPU2FPGA_OFFSET 24
 
 /******************************************************************************
  * Static function prototypes
@@ -474,8 +474,8 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
     struct kmem_info old_info;
     uint32_t kmem_addr_l, kmem_addr_h;
     void *__iomem ep_addr;
-    unsigned long local_size;
-    uint32_t cpu2fpga;
+    // unsigned long local_size;
+    // uint32_t cpu2fpga;
     int core_id;
     unsigned int size;
 
@@ -535,12 +535,12 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
     kmem_addr_h = (dev_bk->kmem_info.bus_addr >> 32) & 0xFFFFFFFF;
     ep_addr = dev_bk->bar[2].base_addr;
 
-    iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET + core_id * 32);
-    iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4 + core_id * 32);
+    iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET + core_id * 16);
+    iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4 + core_id * 16);
 
-    iowrite32(kmem_addr_l + C2F_BUFFER_OFFSET, ep_addr + CPU2FPGA_OFFSET + 
-              core_id * 32);
-    iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4 + core_id * 32);
+    // iowrite32(kmem_addr_l + C2F_BUFFER_OFFSET, ep_addr + CPU2FPGA_OFFSET + 
+    //           core_id * 32);
+    // iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4 + core_id * 32);
 
     printk("[Zhipeng] kmem_addr_l = 0x%llx; kmem_addr_h = 0x%llx \n", 
            kmem_addr_l, kmem_addr_h);
