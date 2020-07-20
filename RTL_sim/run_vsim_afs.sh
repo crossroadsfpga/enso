@@ -3,10 +3,10 @@ rm -r work
 rm vsim.wlf
 
 vlib work
-vlog ./src/*.sv -sv 
+vlog +define+NO_PCIE +define+SIM ./src/*.sv -sv 
 #vlog *.v
-vlog ./src/common/*.sv -sv
-vlog ./src/common/*.v
+vlog +define+NO_PCIE +define+SIM ./src/common/*.sv -sv
+vlog +define+NO_PCIE +define+SIM ./src/common/*.v
 #vlog ./src/common/esram/synth/esram.v  
 #vlog ./src/common/esram/esram_1913/synth/iopll.v  
 #vlog ./src/common/esram/esram_1913/synth/esram_esram_1913_a3ainji.sv -sv
