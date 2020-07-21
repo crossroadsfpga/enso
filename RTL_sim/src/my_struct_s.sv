@@ -2,11 +2,15 @@
 `define MY_STRUCT_S
 // `define SIM //Should comment this during synthesis
 // `define NO_PCIE //Should comment this during synthesis
-
+`define USE_BRAM //Replace the esram with BRAM.
 //packet buffer
 //STORE 1024 pkts, each pkts takes 32 * 512 bits = 2 KB.
 //32 * 1024 = 32768 entries.
+`ifdef USE_BRAM
+parameter PKT_NUM = 1024;
+`else
 parameter PKT_NUM = 2688;
+`endif
 
 //15 = 10(2^10=1024) + 5 (32=2^5)
 parameter PKTBUF_AWIDTH = ($clog2(PKT_NUM)+5);

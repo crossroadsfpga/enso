@@ -3,7 +3,7 @@
 module esram_wrapper(
     input  logic clk_esram_ref, //100 MHz
     output logic esram_pll_lock, 
-`ifdef SIM
+`ifdef USE_BRAM
     input logic clk_esram, //200 MHz
 `else
     output logic clk_esram, //200 MHz
@@ -17,8 +17,9 @@ module esram_wrapper(
     output logic [519:0] rddata
 );
 //In simulation, we just use a big BRAM to accelerate simulation speed.
-`ifdef SIM
-
+`ifdef USE_BRAM
+localparam DEPTH = (PKT_NUM*32);
+localparam AWIDTH = ($clog2(DEPTH));
 logic rden_r;
 assign esram_pll_lock = 1;
 
@@ -29,9 +30,9 @@ always@(posedge clk_esram)begin
 end
 
 bram_simple2port #(
-    .AWIDTH(17),
+    .AWIDTH(AWIDTH),
     .DWIDTH(520),
-    .DEPTH(131072)
+    .DEPTH(DEPTH)
 )
 esrm_sim (
     .clock     (clk_esram),
