@@ -32,7 +32,7 @@ module basic_data_mover (
         input  logic         eth_pkt_almost_full
 	);
 
-`ifdef SIM
+`ifdef USE_BRAM
 localparam NUM_PIPES = (2+2+2+1);
 `else
 //On-chip memory read latency is 12 cycles for eSRAM

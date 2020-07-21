@@ -15,12 +15,14 @@
 `timescale 1 ps / 1 ps
 //`define DISABLE_PCIE
 //`define DISABLE_DRAM
+`define USE_BRAM
 module alt_ehipc2_hw (
  
     input clk50,
     input in_clk100,
+`ifndef USE_BRAM
     input clk_esram_ref,
-
+`endif
 
     input cpu_resetn,
 
@@ -281,18 +283,26 @@ wire [1:0]   tx_pll_locked;
     logic         clk_datamover;
     logic         rst_datamover;
     logic         esram_pkt_buf_wren;
+`ifdef USE_BRAM
+    logic [14:0]  esram_pkt_buf_rdaddress;
+    logic [14:0]  esram_pkt_buf_wraddress;
+    logic [14:0]  reg_esram_pkt_buf_wraddress;
+    logic [14:0]  reg_esram_pkt_buf_rdaddress;
+`else
+    logic [16:0]  esram_pkt_buf_rdaddress;
     logic [16:0]  esram_pkt_buf_wraddress;
+    logic [16:0]  reg_esram_pkt_buf_wraddress;
+    logic [16:0]  reg_esram_pkt_buf_rdaddress;
+`endif
+
     logic [519:0] esram_pkt_buf_wrdata;
     logic         esram_pkt_buf_rden;
-    logic [16:0]  esram_pkt_buf_rdaddress;
     logic         esram_pkt_buf_rd_valid;
     logic [519:0] esram_pkt_buf_rddata;
 
     logic         reg_esram_pkt_buf_wren;
-    logic [16:0]  reg_esram_pkt_buf_wraddress;
     logic [519:0] reg_esram_pkt_buf_wrdata;
     logic         reg_esram_pkt_buf_rden;
-    logic [16:0]  reg_esram_pkt_buf_rdaddress;
     logic         reg_esram_pkt_buf_rd_valid;
     logic [519:0] reg_esram_pkt_buf_rddata;
 //Zhipeng End
@@ -1030,6 +1040,23 @@ assign i_eth_reconfig_write = eth_write;
 	);
 `endif
 
+
+`ifdef USE_BRAM
+    assign clk_datamover = user_clk;
+esram_wrapper esram_pkt_buffer(
+    .clk_esram_ref  (1'b0), //100 MHz
+    .esram_pll_lock (esram_pll_lock), 
+    .clk_esram      (clk_datamover), //200 MHz
+    .wren           (reg_esram_pkt_buf_wren),
+    .wraddress      (reg_esram_pkt_buf_wraddress),
+    .wrdata         (reg_esram_pkt_buf_wrdata),
+    .rden           (reg_esram_pkt_buf_rden),
+    .rdaddress      (reg_esram_pkt_buf_rdaddress),
+    .rd_valid       (esram_pkt_buf_rd_valid),
+    .rddata         (esram_pkt_buf_rddata)
+);
+`else
+
 esram_wrapper esram_pkt_buffer(
     .clk_esram_ref  (clk_esram_ref), //100 MHz
     .esram_pll_lock (esram_pll_lock), 
@@ -1042,6 +1069,7 @@ esram_wrapper esram_pkt_buffer(
     .rd_valid       (esram_pkt_buf_rd_valid),
     .rddata         (esram_pkt_buf_rddata)
 );
+`endif
 
 //Zhipeng End
 endmodule
