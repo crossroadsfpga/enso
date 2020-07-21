@@ -54,6 +54,8 @@ set DM_PCIE_META        18
 set DM_ETH_PKT          19
 set DMA_PKT             20
 
+#PCIE reg
+set PCIE_CTRL_REG       64
 
 set log 0
 #clock period
@@ -611,7 +613,7 @@ proc read_pcie {} {
     global PCIE_BASE
 
 
-    for { set a 0 } { $a < 16 } {incr a} {
+    for { set a 0 } { $a < 65 } {incr a} {
         set rdata [reg_read $PCIE_BASE $a]
         puts "$a : $rdata"
     }
@@ -624,3 +626,34 @@ proc disable_pcie {} {
     set_up
 }
 
+proc set_core_num {core_num} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+    global rdata
+    global wdata
+
+    set rdata [reg_read $PCIE_BASE $PCIE_CTRL_REG]
+    set enable_pcie [expr $rdata & 1]
+    set buf_size [expr $rdata & 0xFFFFFFE]
+    set wdata [expr (($core_num << 27) | $buf_size | $enable_pcie)]
+
+    reg_write $PCIE_BASE $PCIE_CTRL_REG $wdata
+
+    set_clear
+    set_up
+}
+proc set_buf_size {buf_size} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+    global rdata
+    global wdata
+
+    set rdata [reg_read $PCIE_BASE $PCIE_CTRL_REG]
+    set enable_pcie [expr $rdata & 1]
+    set wdata [expr ($buf_size << 1) | $enable_pcie]
+
+    reg_write $PCIE_BASE $PCIE_CTRL_REG $wdata
+
+    set_clear
+    set_up
+}
