@@ -109,11 +109,12 @@ int dma_init(socket_internal* socket_entry)
 
     if (app_id == 0) {
         socket_entry->head_ptr = &socket_entry->uio_data_bar2->head1;
-        socket_entry->tail_ptr = &global_block->tail1;
     } else {
         socket_entry->head_ptr = &socket_entry->uio_data_bar2->head2;
-        socket_entry->tail_ptr = &global_block->tail2;
     }
+    // the global block is unique per buffer so we use the first tail
+    // regardless of the core id
+    socket_entry->tail_ptr = &global_block->tail1;
 
     socket_entry->app_id = app_id;
     socket_entry->c2f_cpu_tail = 0;
@@ -206,6 +207,7 @@ void advance_ring_buffer(socket_internal* socket_entry)
     socket_entry->cpu_head = cpu_head;
 }
 
+// FIXME(sadok) This should be in the kernel
 int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
 {
     block_s block;
@@ -217,6 +219,7 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
         return -1;
     }
 
+#ifdef CONTROL_MSG
     for (unsigned i = 0; i < nb_rules; ++i) {
         block.pdu_id = 0;
         block.dst_port = 80;
@@ -236,6 +239,7 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
         asm volatile ("" : : : "memory"); // compiler memory barrier
         uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
     }
+#endif // CONTROL_MSG
 
     return 0;
 }
@@ -347,6 +351,7 @@ void print_block(block_s *block) {
 
 uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
         block_s *block, uint32_t *kdata) {
+#ifdef CONTROL_MSG
     // uint32_t pdu_flit;
     // uint32_t copy_flit;
     uint32_t free_slot;
@@ -402,4 +407,7 @@ uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
         c2f_tail += 1;
     }
     return c2f_tail;
+#else
+    return 0;
+#endif // CONTROL_MSG
 }

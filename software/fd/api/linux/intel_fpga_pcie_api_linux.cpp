@@ -369,14 +369,9 @@ int intel_fpga_pcie_dev::set_kmem_size(unsigned int size, unsigned app_id)
     }
 
     arg.size = size;
-    arg.core_id = sched_getcpu(); // FIXME(sadok) this only works if the
-                                  // process is pinned to a core. Also, this
-                                  // only makes sense for a single app. When we
-                                  // have multiple processes, we need another
-                                  // way of identifying different threads
-    if (arg.core_id < 0) {
-        return 1;
-    }
+    // FIXME(sadok) must also change arg.core_id to arg.app_id
+    // FIXME(sadok) how to check if the application should have access here?
+    arg.core_id = app_id;
 
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SET_KMEM_SIZE, &arg);
     

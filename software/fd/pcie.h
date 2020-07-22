@@ -36,6 +36,7 @@
 #define likely(x)       __builtin_expect((x),1)
 #define unlikely(x)     __builtin_expect((x),0)
 
+#ifdef CONTROL_MSG
 typedef struct pcie_block {
     uint32_t tail1;
     uint32_t head1;
@@ -54,6 +55,29 @@ typedef struct pcie_block {
     uint32_t padding6;
     uint32_t padding7;
 } pcie_block_t;
+
+#else
+
+typedef struct pcie_block {
+    uint32_t tail1;
+    uint32_t head1;
+    uint32_t kmem_low1;
+    uint32_t kmem_high1;
+    uint32_t tail2;
+    uint32_t head2;
+    uint32_t kmem_low2;
+    uint32_t kmem_high2;
+    uint32_t padding0;
+    uint32_t padding1;
+    uint32_t padding2;
+    uint32_t padding3;
+    uint32_t padding4;
+    uint32_t padding5;
+    uint32_t padding6;
+    uint32_t padding7;
+} pcie_block_t;
+
+#endif // CONTROL_MSG
 
 typedef struct block {
     uint32_t pdu_id;
