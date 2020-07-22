@@ -73,14 +73,10 @@ int dma_init(socket_internal* socket_entry)
     int app_id;
     intel_fpga_pcie_dev *dev = socket_entry->dev;
 
+    // FIXME(sadok) should find a better identifier than core id
     app_id = sched_getcpu();
     if (app_id < 0) {
         std::cerr << "Could not get cpu id" << std::endl;
-        return -1;
-    }
-
-    if (app_id > 1) {
-        std::cerr << "run in core 0 or 1" << std::endl;
         return -1;
     }
 
@@ -107,14 +103,12 @@ int dma_init(socket_internal* socket_entry)
     }
     socket_entry->uio_data_bar2 = reinterpret_cast<pcie_block_t *>(uio_mmap_bar2_addr);
 
-    if (app_id == 0) {
-        socket_entry->head_ptr = &socket_entry->uio_data_bar2->head1;
-    } else {
-        socket_entry->head_ptr = &socket_entry->uio_data_bar2->head2;
-    }
+    socket_entry->head_ptr = &socket_entry->uio_data_bar2->head + 
+                             app_id * REGISTERS_PER_APP;
+
     // the global block is unique per buffer so we use the first tail
     // regardless of the core id
-    socket_entry->tail_ptr = &global_block->tail1;
+    socket_entry->tail_ptr = &global_block->tail;
 
     socket_entry->app_id = app_id;
     socket_entry->c2f_cpu_tail = 0;
@@ -229,8 +223,8 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
         block.protocol = 0x11;
         block.pdu_size = 0x0;
         block.pdu_flit = 0x0;
-        block.pcie_address = (((uint64_t) (uio_data_bar2->kmem_high1)) << 32) 
-                            | (uio_data_bar2->kmem_low1);
+        block.pcie_address = (((uint64_t) (uio_data_bar2->kmem_high)) << 32) 
+                            | (uio_data_bar2->kmem_low);
 
         // print_block(&block);
 
@@ -291,14 +285,10 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev)
 
 void print_pcie_block(pcie_block_t * pb)
 {
-    printf("pb->tail1 = %d \n", pb->tail1);
-    printf("pb->head1 = %d \n", pb->head1);
-    printf("pb->kmem_low1 = 0x%08x \n", pb->kmem_low1);
-    printf("pb->kmem_high1 = 0x%08x \n", pb->kmem_high1);
-    printf("pb->tail2 = %d \n", pb->tail2);
-    printf("pb->head2 = %d \n", pb->head2);
-    printf("pb->kmem_low2 = 0x%08x \n", pb->kmem_low2);
-    printf("pb->kmem_high2 = 0x%08x \n", pb->kmem_high2);
+    printf("pb->tail = %d \n", pb->tail);
+    printf("pb->head = %d \n", pb->head);
+    printf("pb->kmem_low = 0x%08x \n", pb->kmem_low);
+    printf("pb->kmem_high = 0x%08x \n", pb->kmem_high);
 }
 
 void fill_block(uint32_t *addr, block_s *block) {
