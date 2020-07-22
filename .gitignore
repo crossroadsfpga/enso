@@ -5,3 +5,4 @@ transcript
 *.wlf
 libraries/
 work/
+*.sof
