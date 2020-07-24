@@ -36,41 +36,41 @@ module alt_ehipc2_hw (
     output wire [3:0] o_tx_serial,
 
     //PCIe
-	input  wire         refclk_clk,         
-	//input  wire         pcie_rstn_npor,   
-	input  wire         pcie_rstn_pin_perst,
+    input  wire         refclk_clk,         
+    //input  wire         pcie_rstn_npor,   
+    input  wire         pcie_rstn_pin_perst,
     input  wire         xcvr_rx_in0,        
-	input  wire         xcvr_rx_in1,        
-	input  wire         xcvr_rx_in2,        
-	input  wire         xcvr_rx_in3,        
-	input  wire         xcvr_rx_in4,        
-	input  wire         xcvr_rx_in5,        
-	input  wire         xcvr_rx_in6,        
-	input  wire         xcvr_rx_in7,        
-	input  wire         xcvr_rx_in8,        
-	input  wire         xcvr_rx_in9,        
-	input  wire         xcvr_rx_in10,       
-	input  wire         xcvr_rx_in11,       
-	input  wire         xcvr_rx_in12,       
-	input  wire         xcvr_rx_in13,       
-	input  wire         xcvr_rx_in14,       
-	input  wire         xcvr_rx_in15,       
-	output wire         xcvr_tx_out0,       
-	output wire         xcvr_tx_out1,       
-	output wire         xcvr_tx_out2,       
-	output wire         xcvr_tx_out3,       
-	output wire         xcvr_tx_out4,       
-	output wire         xcvr_tx_out5,       
-	output wire         xcvr_tx_out6,       
-	output wire         xcvr_tx_out7,       
-	output wire         xcvr_tx_out8,       
-	output wire         xcvr_tx_out9,       
-	output wire         xcvr_tx_out10,      
-	output wire         xcvr_tx_out11,      
-	output wire         xcvr_tx_out12,      
-	output wire         xcvr_tx_out13,      
-	output wire         xcvr_tx_out14,      
-	output wire         xcvr_tx_out15
+    input  wire         xcvr_rx_in1,        
+    input  wire         xcvr_rx_in2,        
+    input  wire         xcvr_rx_in3,        
+    input  wire         xcvr_rx_in4,        
+    input  wire         xcvr_rx_in5,        
+    input  wire         xcvr_rx_in6,        
+    input  wire         xcvr_rx_in7,        
+    input  wire         xcvr_rx_in8,        
+    input  wire         xcvr_rx_in9,        
+    input  wire         xcvr_rx_in10,       
+    input  wire         xcvr_rx_in11,       
+    input  wire         xcvr_rx_in12,       
+    input  wire         xcvr_rx_in13,       
+    input  wire         xcvr_rx_in14,       
+    input  wire         xcvr_rx_in15,       
+    output wire         xcvr_tx_out0,       
+    output wire         xcvr_tx_out1,       
+    output wire         xcvr_tx_out2,       
+    output wire         xcvr_tx_out3,       
+    output wire         xcvr_tx_out4,       
+    output wire         xcvr_tx_out5,       
+    output wire         xcvr_tx_out6,       
+    output wire         xcvr_tx_out7,       
+    output wire         xcvr_tx_out8,       
+    output wire         xcvr_tx_out9,       
+    output wire         xcvr_tx_out10,      
+    output wire         xcvr_tx_out11,      
+    output wire         xcvr_tx_out12,      
+    output wire         xcvr_tx_out13,      
+    output wire         xcvr_tx_out14,      
+    output wire         xcvr_tx_out15
 );
 
 
@@ -100,17 +100,17 @@ module alt_ehipc2_hw (
 /*
       wire ninit_done ;
       reset_ip reset (
-	.ninit_done (ninit_done)
-	  );
+    .ninit_done (ninit_done)
+      );
 */
     //Zhipeng Start
     wire user_clk, user_clk_high, user_pll_locked;
     wire         esram_pll_lock; 
     //Zhipeng End
 
-	  
-	  
-// ARST conditional upon ninit_done from S10 IP reset. Ninit_done is active low. ninit_done=0 => s10 is good to go	  
+      
+      
+// ARST conditional upon ninit_done from S10 IP reset. Ninit_done is active low. ninit_done=0 => s10 is good to go      
     //Zhipeng Start
     //assign arst = ~user_mode_sync | ~cpu_resetn | ~iopll_locked | source_reset | ninit_done ;
     //assign arst = ~user_mode_sync | ~cpu_resetn | ~iopll_locked | source_reset | ninit_done | ~user_pll_locked;
@@ -244,41 +244,33 @@ wire [1:0]   tx_pll_locked;
     logic [31:0]    out_fifo0_in_csr_writedata;
 
     //PCIe signal
-    logic          pcie_clk;
-    logic          pcie_reset_n;
-    logic [513:0]  pcie_rb_wr_data;
-    logic [11:0]   pcie_rb_wr_addr;          
-    logic          pcie_rb_wr_en;  
-    logic [11:0]   pcie_rb_wr_base_addr;          
-    logic          pcie_rb_wr_base_addr_valid;
-    logic          pcie_rb_almost_full;          
-    logic          pcie_rb_update_valid;
-    logic [11:0]   pcie_rb_update_size;
-    logic          disable_pcie;
-    logic [159:0]  pdumeta_cpu_data;
-    logic          pdumeta_cpu_valid;
-    logic [9:0]    pdumeta_cnt;
-    logic           reg_disable_pcie;
-    logic [513:0]   reg_pcie_rb_wr_data;
-    logic [11:0]    reg_pcie_rb_wr_addr;          
-    logic           reg_pcie_rb_wr_en;  
-    logic [11:0]    reg_pcie_rb_wr_base_addr;          
-    logic           reg_pcie_rb_wr_base_addr_valid;
-    logic           reg_pcie_rb_almost_full;          
-    logic           reg_pcie_rb_update_valid;
-    logic [11:0]    reg_pcie_rb_update_size;
+    logic         pcie_rstn_npor;
+    logic         pcie_clk;
+    logic         pcie_reset_n;
 
-
-    logic [29:0] pcie_status_addr;
-    logic pcie_status_read;
-    logic pcie_status_write;
-    logic [31:0] pcie_status_writedata;
-    logic [31:0] pcie_status_readdata;
-    logic pcie_status_readdata_valid;
-	logic pcie_rstn_npor;
-
-    //esram signals
-
+    logic         pcie_rddm_desc_ready;
+    logic         pcie_rddm_desc_valid;
+    logic [173:0] pcie_rddm_desc_data;
+    logic         pcie_wrdm_desc_ready;
+    logic         pcie_wrdm_desc_valid;
+    logic [173:0] pcie_wrdm_desc_data;
+    logic         pcie_wrdm_prio_ready;
+    logic         pcie_wrdm_prio_valid;
+    logic [173:0] pcie_wrdm_prio_data;
+    logic [17:0]  pcie_address_0;      
+    logic         pcie_write_0;        
+    logic         pcie_read_0;         
+    logic         pcie_readdatavalid_0;
+    logic [511:0] pcie_readdata_0;     
+    logic [511:0] pcie_writedata_0;    
+    logic [63:0]  pcie_byteenable_0;   
+    logic [17:0]  pcie_address_1;      
+    logic         pcie_write_1;        
+    logic         pcie_read_1;         
+    logic         pcie_readdatavalid_1;
+    logic [511:0] pcie_readdata_1;     
+    logic [511:0] pcie_writedata_1;    
+    logic [63:0]  pcie_byteenable_1;   
     //eSRAM signals
     logic         clk_datamover;
     logic         rst_datamover;
@@ -583,7 +575,7 @@ assign i_eth_reconfig_write = eth_write;
 //    );
     alt_aeuex_avalon_mm_read_combine #(
         .TIMEOUT             (11), // for long ehip response
-        .NUM_CLIENTS         (4)
+        .NUM_CLIENTS         (3)
     ) arc (
         .clk            (i_reconfig_clk),
         .arst           (arst),
@@ -593,8 +585,8 @@ assign i_eth_reconfig_write = eth_write;
         .host_waitrequest    (status_waitrequest),
 
 
-        .client_readdata_valid    ({o_eth_reconfig_readdata_valid, s_readdata_valid, top_readdata_valid, pcie_status_readdata_valid}),
-        .client_readdata    ({o_eth_reconfig_readdata,s_readdata, top_readdata, pcie_status_readdata})
+        .client_readdata_valid    ({o_eth_reconfig_readdata_valid, s_readdata_valid, top_readdata_valid}),
+        .client_readdata    ({o_eth_reconfig_readdata,s_readdata, top_readdata})
 
     );
 //Zhipeng End
@@ -736,13 +728,13 @@ assign i_eth_reconfig_write = eth_write;
 */
     // Zhipeng Start
     //Add my own pll to create user_clk 300MHz currently. 
-	my_pll user_pll (
-		.rst      (~cpu_resetn),      //   input,  width = 1,   reset.reset
-		.refclk   (in_clk100),   //   input,  width = 1,  refclk.clk
-		.locked   (user_pll_locked),   //  output,  width = 1,  locked.export
-		.outclk_0 (user_clk),  //  output,  width = 1, outclk0.clk
-		.outclk_1 (user_clk_high)  //  output,  width = 1, outclk0.clk
-	);
+    my_pll user_pll (
+        .rst      (~cpu_resetn),      //   input,  width = 1,   reset.reset
+        .refclk   (in_clk100),   //   input,  width = 1,  refclk.clk
+        .locked   (user_pll_locked),   //  output,  width = 1,  locked.export
+        .outclk_0 (user_clk),  //  output,  width = 1, outclk0.clk
+        .outclk_1 (user_clk_high)  //  output,  width = 1, outclk0.clk
+    );
 
     //Zhipeng End
 
@@ -754,13 +746,8 @@ assign i_eth_reconfig_write = eth_write;
     assign s_write = status_write;
     assign s_writedata = status_writedata;
 
-    assign pcie_status_addr = av_addr[31:2];
-    assign pcie_status_read = status_read;
-    assign pcie_status_write = status_write;
-    assign pcie_status_writedata = status_writedata;
-	assign pcie_rstn_npor = cpu_resetn;
-    
     assign rst_datamover = arst | !esram_pll_lock;
+    assign pcie_rstn_npor = cpu_resetn;
 
     my_stats stats(
         .arst(arst),
@@ -797,57 +784,68 @@ assign i_eth_reconfig_write = eth_write;
     );
 
     dc_fifo_wrapper input_fifo (
-		.in_clk            (clk_dout),    
-		.in_reset_n        (!arst),      
-		.out_clk           (clk_datamover),    
-		.out_reset_n       (!rst_datamover),      
-		.in_data           (stats_rx_data),           
-		.in_valid          (stats_rx_valid),          
-		.in_ready          (stats_rx_ready),           
-		.in_startofpacket  (stats_rx_startofpacket),  
-		.in_endofpacket    (stats_rx_endofpacket),
-		.in_empty          (stats_rx_empty), 
-		.out_data          (top_in_data),          
-		.out_valid         (top_in_valid),         
-		.out_ready         (1'b1),         
-		.out_startofpacket (top_in_startofpacket), 
-		.out_endofpacket   (top_in_endofpacket),   
-		.out_empty         (top_in_empty)          
-	);
+        .in_clk            (clk_dout),    
+        .in_reset_n        (!arst),      
+        .out_clk           (clk_datamover),    
+        .out_reset_n       (!rst_datamover),      
+        .in_data           (stats_rx_data),           
+        .in_valid          (stats_rx_valid),          
+        .in_ready          (stats_rx_ready),           
+        .in_startofpacket  (stats_rx_startofpacket),  
+        .in_endofpacket    (stats_rx_endofpacket),
+        .in_empty          (stats_rx_empty), 
+        .out_data          (top_in_data),          
+        .out_valid         (top_in_valid),         
+        .out_ready         (1'b1),         
+        .out_startofpacket (top_in_startofpacket), 
+        .out_endofpacket   (top_in_endofpacket),   
+        .out_empty         (top_in_empty)          
+    );
 
     top top_inst (
         //CLK & Rst
-		.clk               (user_clk),            
-		.rst               (arst),       
-	    .clk_datamover     (clk_datamover),            
-	    .rst_datamover     (rst_datamover),       
-	    .clk_pcie          (pcie_clk),            
-	    .rst_pcie          (!pcie_reset_n),       
+        .clk               (user_clk),            
+        .rst               (arst),       
+        .clk_datamover     (clk_datamover),            
+        .rst_datamover     (rst_datamover),       
+        .clk_pcie          (pcie_clk),            
+        .rst_pcie          (!pcie_reset_n),       
         //Ethernet in & out data      
-	    .in_data                      (reg_top_in_data),           
-	    .in_valid                     (reg_top_in_valid),          
-	    .in_sop                       (reg_top_in_startofpacket),  
-	    .in_eop                       (reg_top_in_endofpacket),
-	    .in_empty                     (reg_top_in_empty),  
-	    .reg_out_data                 (top_out_data),          
-	    .reg_out_valid                (top_out_valid),         
-	    .out_almost_full              (reg_top_out_almost_full),         
-	    .reg_out_sop                  (top_out_startofpacket), 
-	    .reg_out_eop                  (top_out_endofpacket),   
-	    .reg_out_empty                (top_out_empty), 
+        .in_data                      (reg_top_in_data),           
+        .in_valid                     (reg_top_in_valid),          
+        .in_sop                       (reg_top_in_startofpacket),  
+        .in_eop                       (reg_top_in_endofpacket),
+        .in_empty                     (reg_top_in_empty),  
+        .reg_out_data                 (top_out_data),          
+        .reg_out_valid                (top_out_valid),         
+        .out_almost_full              (reg_top_out_almost_full),         
+        .reg_out_sop                  (top_out_startofpacket), 
+        .reg_out_eop                  (top_out_endofpacket),   
+        .reg_out_empty                (top_out_empty), 
         //PCIe    
-        .reg_pcie_rb_wr_data          (pcie_rb_wr_data),           
-        .reg_pcie_rb_wr_addr          (pcie_rb_wr_addr),          
-        .reg_pcie_rb_wr_en            (pcie_rb_wr_en),  
-        .pcie_rb_wr_base_addr         (reg_pcie_rb_wr_base_addr),  
-        .pcie_rb_wr_base_addr_valid   (reg_pcie_rb_wr_base_addr_valid),
-        .pcie_rb_almost_full          (reg_pcie_rb_almost_full),          
-        .reg_pcie_rb_update_valid     (pcie_rb_update_valid),
-        .reg_pcie_rb_update_size      (pcie_rb_update_size),
-        .disable_pcie                 (reg_disable_pcie),
-        .pdumeta_cpu_data             (pdumeta_cpu_data),
-        .pdumeta_cpu_valid            (pdumeta_cpu_valid),
-        .reg_pdumeta_cnt              (reg_pdumeta_cnt),
+        .pcie_rddm_desc_ready         (pcie_rddm_desc_ready),
+        .pcie_rddm_desc_valid         (pcie_rddm_desc_valid),
+        .pcie_rddm_desc_data          (pcie_rddm_desc_data),
+        .pcie_wrdm_desc_ready         (pcie_wrdm_desc_ready),
+        .pcie_wrdm_desc_valid         (pcie_wrdm_desc_valid),
+        .pcie_wrdm_desc_data          (pcie_wrdm_desc_data),
+        .pcie_wrdm_prio_ready         (pcie_wrdm_prio_ready),
+        .pcie_wrdm_prio_valid         (pcie_wrdm_prio_valid),
+        .pcie_wrdm_prio_data          (pcie_wrdm_prio_data),
+        .pcie_address_0               (pcie_address_0), 
+        .pcie_write_0                 (pcie_write_0), 
+        .pcie_read_0                  (pcie_read_0), 
+        .pcie_readdatavalid_0         (pcie_readdatavalid_0), 
+        .pcie_readdata_0              (pcie_readdata_0), 
+        .pcie_writedata_0             (pcie_writedata_0), 
+        .pcie_byteenable_0            (pcie_byteenable_0), 
+        .pcie_address_1               (pcie_address_1), 
+        .pcie_write_1                 (pcie_write_1), 
+        .pcie_read_1                  (pcie_read_1), 
+        .pcie_readdatavalid_1         (pcie_readdatavalid_1), 
+        .pcie_readdata_1              (pcie_readdata_1), 
+        .pcie_writedata_1             (pcie_writedata_1), 
+        .pcie_byteenable_1            (pcie_byteenable_1),  
         //eSRAM
         .reg_esram_pkt_buf_wren       (esram_pkt_buf_wren),
         .reg_esram_pkt_buf_wraddress  (esram_pkt_buf_wraddress),
@@ -864,38 +862,26 @@ assign i_eth_reconfig_write = eth_write;
         .status_writedata  (s_writedata),
         .status_readdata   (top_readdata),
         .status_readdata_valid  (top_readdata_valid)
-	);
+    );
 
     hyper_pipe_root reg_io_inst (
         //clk & rst
-    	.clk                    (user_clk),            
-    	.rst                    (arst),            
-    	.clk_datamover          (clk_datamover),            
-    	.rst_datamover          (rst_datamover),            
-    	.clk_pcie               (pcie_clk),            
-    	.rst_pcie               (!pcie_reset_n),            
+        .clk                    (user_clk),            
+        .rst                    (arst),            
+        .clk_datamover          (clk_datamover),            
+        .rst_datamover          (rst_datamover),            
         //Ethernet in & out data
-    	.in_data                (top_in_data),           
-    	.in_valid               (top_in_valid),          
-    	.in_sop                 (top_in_startofpacket),  
-    	.in_eop                 (top_in_endofpacket),
-    	.in_empty               (top_in_empty),  
-    	.out_data               (top_out_data),          
-    	.out_valid              (top_out_valid),         
-    	.out_almost_full        (top_out_almost_full),         
-    	.out_sop                (top_out_startofpacket), 
-    	.out_eop                (top_out_endofpacket),   
-    	.out_empty              (top_out_empty), 
-        //PCIe    
-        .pcie_rb_wr_data        (pcie_rb_wr_data),           
-        .pcie_rb_wr_addr        (pcie_rb_wr_addr),          
-        .pcie_rb_wr_en          (pcie_rb_wr_en),  
-        .pcie_rb_wr_base_addr   (pcie_rb_wr_base_addr),  
-        .pcie_rb_wr_base_addr_valid(pcie_rb_wr_base_addr_valid),
-        .pcie_rb_almost_full    (pcie_rb_almost_full),          
-        .pcie_rb_update_valid   (pcie_rb_update_valid),
-        .pcie_rb_update_size    (pcie_rb_update_size),
-        .disable_pcie           (disable_pcie),
+        .in_data                (top_in_data),           
+        .in_valid               (top_in_valid),          
+        .in_sop                 (top_in_startofpacket),  
+        .in_eop                 (top_in_endofpacket),
+        .in_empty               (top_in_empty),  
+        .out_data               (top_out_data),          
+        .out_valid              (top_out_valid),         
+        .out_almost_full        (top_out_almost_full),         
+        .out_sop                (top_out_startofpacket), 
+        .out_eop                (top_out_endofpacket),   
+        .out_empty              (top_out_empty), 
         //eSRAM
         .esram_pkt_buf_wren     (esram_pkt_buf_wren),
         .esram_pkt_buf_wraddress(esram_pkt_buf_wraddress),
@@ -905,26 +891,17 @@ assign i_eth_reconfig_write = eth_write;
         .esram_pkt_buf_rd_valid (esram_pkt_buf_rd_valid),
         .esram_pkt_buf_rddata   (esram_pkt_buf_rddata),
         //output
-    	.reg_in_data                (reg_top_in_data),           
-    	.reg_in_valid               (reg_top_in_valid),          
-    	.reg_in_sop                 (reg_top_in_startofpacket),  
-    	.reg_in_eop                 (reg_top_in_endofpacket),
-    	.reg_in_empty               (reg_top_in_empty),  
-    	.reg_out_data               (reg_top_out_data),          
-    	.reg_out_valid              (reg_top_out_valid),         
-    	.reg_out_almost_full        (reg_top_out_almost_full),         
-    	.reg_out_sop                (reg_top_out_startofpacket), 
-    	.reg_out_eop                (reg_top_out_endofpacket),   
-    	.reg_out_empty              (reg_top_out_empty), 
-        .reg_pcie_rb_wr_data        (reg_pcie_rb_wr_data),           
-        .reg_pcie_rb_wr_addr        (reg_pcie_rb_wr_addr),          
-        .reg_pcie_rb_wr_en          (reg_pcie_rb_wr_en),  
-        .reg_pcie_rb_wr_base_addr   (reg_pcie_rb_wr_base_addr),  
-        .reg_pcie_rb_wr_base_addr_valid(reg_pcie_rb_wr_base_addr_valid),
-        .reg_pcie_rb_almost_full    (reg_pcie_rb_almost_full),          
-        .reg_pcie_rb_update_valid   (reg_pcie_rb_update_valid),
-        .reg_pcie_rb_update_size    (reg_pcie_rb_update_size),
-        .reg_disable_pcie           (reg_disable_pcie),
+        .reg_in_data                (reg_top_in_data),           
+        .reg_in_valid               (reg_top_in_valid),          
+        .reg_in_sop                 (reg_top_in_startofpacket),  
+        .reg_in_eop                 (reg_top_in_endofpacket),
+        .reg_in_empty               (reg_top_in_empty),  
+        .reg_out_data               (reg_top_out_data),          
+        .reg_out_valid              (reg_top_out_valid),         
+        .reg_out_almost_full        (reg_top_out_almost_full),         
+        .reg_out_sop                (reg_top_out_startofpacket), 
+        .reg_out_eop                (reg_top_out_endofpacket),   
+        .reg_out_empty              (reg_top_out_empty), 
         .reg_esram_pkt_buf_wren     (reg_esram_pkt_buf_wren),
         .reg_esram_pkt_buf_wraddress(reg_esram_pkt_buf_wraddress),
         .reg_esram_pkt_buf_wrdata   (reg_esram_pkt_buf_wrdata),
@@ -936,28 +913,28 @@ assign i_eth_reconfig_write = eth_write;
 
 
     dc_fifo_wrapper_infill output_fifo (
-		.in_clk            (user_clk),    
-		.in_reset_n        (!arst),      
-		.out_clk           (clk_din),    
-		.out_reset_n       (!arst),      
+        .in_clk            (user_clk),    
+        .in_reset_n        (!arst),      
+        .out_clk           (clk_din),    
+        .out_reset_n       (!arst),      
         .in_csr_address    (out_fifo0_in_csr_address),
         .in_csr_read       (out_fifo0_in_csr_read),
         .in_csr_write      (out_fifo0_in_csr_write),
         .in_csr_readdata   (out_fifo0_in_csr_readdata),
         .in_csr_writedata  (out_fifo0_in_csr_writedata),
         .in_data           (reg_top_out_data),           
-		.in_valid          (reg_top_out_valid),          
-		.in_ready          (),           
-		.in_startofpacket  (reg_top_out_startofpacket),  
-		.in_endofpacket    (reg_top_out_endofpacket),
-		.in_empty          (reg_top_out_empty), 
-		.out_data          (i_tx_data),          
-		.out_valid         (i_tx_valid),         
-		.out_ready         (o_tx_ready),         
-		.out_startofpacket (i_tx_startofpacket), 
-		.out_endofpacket   (i_tx_endofpacket),   
-		.out_empty         (i_tx_empty)          
-	);
+        .in_valid          (reg_top_out_valid),          
+        .in_ready          (),           
+        .in_startofpacket  (reg_top_out_startofpacket),  
+        .in_endofpacket    (reg_top_out_endofpacket),
+        .in_empty          (reg_top_out_empty), 
+        .out_data          (i_tx_data),          
+        .out_valid         (i_tx_valid),         
+        .out_ready         (o_tx_ready),         
+        .out_startofpacket (i_tx_startofpacket), 
+        .out_endofpacket   (i_tx_endofpacket),   
+        .out_empty         (i_tx_empty)          
+    );
 
     dc_back_pressure #(
         .FULL_LEVEL(490)
@@ -973,71 +950,78 @@ assign i_eth_reconfig_write = eth_write;
         .almost_full    (top_out_almost_full)
     );
 `ifdef NO_PCIE    
-    assign disable_pcie = 1'b1;
-    assign pcie_rb_almost_full = 1'b0;
-    assign pcie_rb_wr_base_addr = 0;
     assign pcie_clk = user_clk;
     assign pcie_reset_n = !arst;
-    assign pcie_status_readdata_valid = 0;
+    assign pcie_rddm_desc_ready = 0;
+    assign pcie_wrdm_desc_ready = 0;
+    assign pcie_wrdm_prio_ready = 0;
+    assign pcie_write_0 = 0;
+    assign pcie_read_0 = 0;
+    assign pcie_write_1 = 0;
+    assign pcie_read_1 = 0;
 `else
-    pcie_top pcie (
-	    .refclk_clk             (refclk_clk),                              //         refclk.clk
-	    .pcie_rstn_npor         (pcie_rstn_npor),                          //      pcie_rstn.npor
-	    .pcie_rstn_pin_perst    (pcie_rstn_pin_perst),                     //               .pin_perst
-        .xcvr_rx_in0            (xcvr_rx_in0),                             //           xcvr.rx_in0
-	    .xcvr_rx_in1            (xcvr_rx_in1),                             //               .rx_in1
-	    .xcvr_rx_in2            (xcvr_rx_in2),                             //               .rx_in2
-	    .xcvr_rx_in3            (xcvr_rx_in3),                             //               .rx_in3
-	    .xcvr_rx_in4            (xcvr_rx_in4),                             //               .rx_in4
-	    .xcvr_rx_in5            (xcvr_rx_in5),                             //               .rx_in5
-	    .xcvr_rx_in6            (xcvr_rx_in6),                             //               .rx_in6
-	    .xcvr_rx_in7            (xcvr_rx_in7),                             //               .rx_in7
-	    .xcvr_rx_in8            (xcvr_rx_in8),                             //               .rx_in8
-	    .xcvr_rx_in9            (xcvr_rx_in9),                             //               .rx_in9
-	    .xcvr_rx_in10           (xcvr_rx_in10),                            //               .rx_in10
-	    .xcvr_rx_in11           (xcvr_rx_in11),                            //               .rx_in11
-	    .xcvr_rx_in12           (xcvr_rx_in12),                            //               .rx_in12
-	    .xcvr_rx_in13           (xcvr_rx_in13),                            //               .rx_in13
-	    .xcvr_rx_in14           (xcvr_rx_in14),                            //               .rx_in14
-	    .xcvr_rx_in15           (xcvr_rx_in15),                            //               .rx_in15
-	    .xcvr_tx_out0           (xcvr_tx_out0),                            //               .tx_out0
-	    .xcvr_tx_out1           (xcvr_tx_out1),                            //               .tx_out1
-	    .xcvr_tx_out2           (xcvr_tx_out2),                            //               .tx_out2
-	    .xcvr_tx_out3           (xcvr_tx_out3),                            //               .tx_out3
-	    .xcvr_tx_out4           (xcvr_tx_out4),                            //               .tx_out4
-	    .xcvr_tx_out5           (xcvr_tx_out5),                            //               .tx_out5
-	    .xcvr_tx_out6           (xcvr_tx_out6),                            //               .tx_out6
-	    .xcvr_tx_out7           (xcvr_tx_out7),                            //               .tx_out7
-	    .xcvr_tx_out8           (xcvr_tx_out8),                            //               .tx_out8
-	    .xcvr_tx_out9           (xcvr_tx_out9),                            //               .tx_out9
-	    .xcvr_tx_out10          (xcvr_tx_out10),                           //               .tx_out10
-	    .xcvr_tx_out11          (xcvr_tx_out11),                           //               .tx_out11
-	    .xcvr_tx_out12          (xcvr_tx_out12),                           //               .tx_out12
-	    .xcvr_tx_out13          (xcvr_tx_out13),                           //               .tx_out13
-	    .xcvr_tx_out14          (xcvr_tx_out14),                           //               .tx_out14
-	    .xcvr_tx_out15          (xcvr_tx_out15),                           //               .tx_out15
-        .pcie_clk               (pcie_clk),
-        .pcie_reset_n           (pcie_reset_n),
-        .pcie_rb_wr_data        (reg_pcie_rb_wr_data),           
-        .pcie_rb_wr_addr        (reg_pcie_rb_wr_addr),          
-        .pcie_rb_wr_en          (reg_pcie_rb_wr_en),  
-        .pcie_rb_wr_base_addr   (pcie_rb_wr_base_addr),  
-        .pcie_rb_wr_base_addr_valid(pcie_rb_wr_base_addr_valid),
-        .pcie_rb_almost_full    (pcie_rb_almost_full),          
-        .pcie_rb_update_valid   (reg_pcie_rb_update_valid),
-        .pcie_rb_update_size    (reg_pcie_rb_update_size),
-        .disable_pcie           (disable_pcie),
-        .pdumeta_cpu_data       (pdumeta_cpu_data),
-        .pdumeta_cpu_valid      (pdumeta_cpu_valid),
-        .pdumeta_cnt            (pdumeta_cnt),
-        .clk_status             (i_reconfig_clk),
-        .status_addr            (pcie_status_addr),
-        .status_read            (pcie_status_read),
-        .status_write           (pcie_status_write),
-        .status_writedata       (pcie_status_writedata),
-        .status_readdata        (pcie_status_readdata),
-        .status_readdata_valid  (pcie_status_readdata_valid)
-	);
+pcie_core pcie (
+    .refclk_clk             (refclk_clk),           
+    .pcie_rstn_npor         (pcie_rstn_npor),       
+    .pcie_rstn_pin_perst    (pcie_rstn_pin_perst),  
+    .xcvr_rx_in0            (xcvr_rx_in0),              
+    .xcvr_rx_in1            (xcvr_rx_in1),          
+    .xcvr_rx_in2            (xcvr_rx_in2),          
+    .xcvr_rx_in3            (xcvr_rx_in3),          
+    .xcvr_rx_in4            (xcvr_rx_in4),          
+    .xcvr_rx_in5            (xcvr_rx_in5),          
+    .xcvr_rx_in6            (xcvr_rx_in6),          
+    .xcvr_rx_in7            (xcvr_rx_in7),          
+    .xcvr_rx_in8            (xcvr_rx_in8),          
+    .xcvr_rx_in9            (xcvr_rx_in9),          
+    .xcvr_rx_in10           (xcvr_rx_in10),         
+    .xcvr_rx_in11           (xcvr_rx_in11),         
+    .xcvr_rx_in12           (xcvr_rx_in12),         
+    .xcvr_rx_in13           (xcvr_rx_in13),         
+    .xcvr_rx_in14           (xcvr_rx_in14),         
+    .xcvr_rx_in15           (xcvr_rx_in15),         
+    .xcvr_tx_out0           (xcvr_tx_out0),         
+    .xcvr_tx_out1           (xcvr_tx_out1),         
+    .xcvr_tx_out2           (xcvr_tx_out2),         
+    .xcvr_tx_out3           (xcvr_tx_out3),         
+    .xcvr_tx_out4           (xcvr_tx_out4),         
+    .xcvr_tx_out5           (xcvr_tx_out5),         
+    .xcvr_tx_out6           (xcvr_tx_out6),         
+    .xcvr_tx_out7           (xcvr_tx_out7),         
+    .xcvr_tx_out8           (xcvr_tx_out8),         
+    .xcvr_tx_out9           (xcvr_tx_out9),         
+    .xcvr_tx_out10          (xcvr_tx_out10),        
+    .xcvr_tx_out11          (xcvr_tx_out11),        
+    .xcvr_tx_out12          (xcvr_tx_out12),        
+    .xcvr_tx_out13          (xcvr_tx_out13),        
+    .xcvr_tx_out14          (xcvr_tx_out14),        
+    .xcvr_tx_out15          (xcvr_tx_out15),        
+    .pcie_clk               (pcie_clk),
+    .pcie_reset_n           (pcie_reset_n),
+    .rddm_desc_ready        (pcie_rddm_desc_ready),
+    .rddm_desc_valid        (pcie_rddm_desc_valid),
+    .rddm_desc_data         (pcie_rddm_desc_data),
+    .wrdm_desc_ready        (pcie_wrdm_desc_ready),
+    .wrdm_desc_valid        (pcie_wrdm_desc_valid),
+    .wrdm_desc_data         (pcie_wrdm_desc_data),
+    .wrdm_prio_ready        (pcie_wrdm_prio_ready),
+    .wrdm_prio_valid        (pcie_wrdm_prio_valid),
+    .wrdm_prio_data         (pcie_wrdm_prio_data),
+    .address_0              (pcie_address_0), 
+    .write_0                (pcie_write_0), 
+    .read_0                 (pcie_read_0), 
+    .readdatavalid_0        (pcie_readdatavalid_0), 
+    .readdata_0             (pcie_readdata_0), 
+    .writedata_0            (pcie_writedata_0), 
+    .byteenable_0           (pcie_byteenable_0), 
+    .address_1              (pcie_address_1), 
+    .write_1                (pcie_write_1), 
+    .read_1                 (pcie_read_1), 
+    .readdatavalid_1        (pcie_readdatavalid_1), 
+    .readdata_1             (pcie_readdata_1), 
+    .writedata_1            (pcie_writedata_1), 
+    .byteenable_1           (pcie_byteenable_1)  
+);
 `endif
 
 
