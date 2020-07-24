@@ -1,8 +1,9 @@
 `ifndef MY_STRUCT_S
 `define MY_STRUCT_S
-`define SIM //Should comment this during synthesis
-`define NO_PCIE //Should comment this during synthesis
+// `define SIM //Should comment this during synthesis
+// `define NO_PCIE //Should comment this during synthesis
 `define USE_BRAM //Replace the esram with BRAM.
+
 //packet buffer
 //STORE 1024 pkts, each pkts takes 32 * 512 bits = 2 KB.
 //32 * 1024 = 32768 entries.
