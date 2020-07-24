@@ -343,3 +343,13 @@ set_global_assignment -name QSYS_FILE common/reset_ip.ip
 set_global_assignment -name SDC_ENTITY_FILE ./alt_ehipc2_hw.sdc -entity alt_ehipc2_hw
 set_global_assignment -name CDF_FILE output_files/load.cdf
 set_global_assignment -name SIGNALTAP_FILE stp1.stp
+set_instance_assignment -name PARTITION top -to top_inst -entity alt_ehipc2_hw
+set_instance_assignment -name PARTITION_COLOUR 4288937896 -to top_inst -entity alt_ehipc2_hw
+set_instance_assignment -name RESERVED_CORE ON -to top_inst -entity alt_ehipc2_hw
+set_instance_assignment -name PLACE_REGION "X70 Y50 X269 Y249" -to top_inst
+set_instance_assignment -name RESERVE_PLACE_REGION ON -to top_inst
+set_instance_assignment -name CORE_ONLY_PLACE_REGION ON -to top_inst
+set_instance_assignment -name REGION_NAME top_inst -to top_inst
+set_instance_assignment -name ROUTE_REGION "X0 Y0 X314 Y294" -to top_inst
+set_instance_assignment -name RESERVE_ROUTE_REGION OFF -to top_inst
+set_instance_assignment -name QDB_FILE_PARTITION root_partition.qdb -to | -entity alt_ehipc2_hw
