@@ -104,7 +104,8 @@ int dma_init(socket_internal* socket_entry)
     socket_entry->uio_data_bar2 = reinterpret_cast<pcie_block_t *>(uio_mmap_bar2_addr);
 
     socket_entry->head_ptr = &socket_entry->uio_data_bar2->head + 
-                             app_id * REGISTERS_PER_APP;
+                             app_id * MEMORY_SPACE_PER_APP /
+                             sizeof(socket_entry->uio_data_bar2->head);
 
     // the global block is unique per buffer so we use the first tail
     // regardless of the core id

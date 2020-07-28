@@ -646,81 +646,33 @@ always@(posedge pcie_clk)begin
         pcie_reg63_pcie <= 0;
     end else begin
         if(pcie_write_0) begin
-            case(pcie_address_0[7:6])
+            // case(pcie_address_0[7:6])
+            case(pcie_address_0[12+APP_IDX_WIDTH:12])
             //tail cannot be updated by CPU.
-            //if(pcie_address_0[17:6]==0) begin
                 2'd0:begin
-                    //pcie_reg0_pcie  <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg0_pcie; 
-                    pcie_reg1_pcie  <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg1_pcie; 
-                    pcie_reg2_pcie  <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg2_pcie; 
-                    pcie_reg3_pcie  <=  (pcie_byteenable_0[16:12] == 4'b1111) ? pcie_writedata_0[127:96]  : pcie_reg3_pcie; 
-                    //pcie_reg4_pcie  <=  (pcie_byteenable_0[19:16] == 4'b1111) ? pcie_writedata_0[159:128] : pcie_reg4_pcie; 
-                    pcie_reg5_pcie  <=  (pcie_byteenable_0[23:20] == 4'b1111) ? pcie_writedata_0[191:160] : pcie_reg5_pcie; 
-                    pcie_reg6_pcie  <=  (pcie_byteenable_0[27:24] == 4'b1111) ? pcie_writedata_0[223:192] : pcie_reg6_pcie; 
-                    pcie_reg7_pcie  <=  (pcie_byteenable_0[31:28] == 4'b1111) ? pcie_writedata_0[255:224] : pcie_reg7_pcie; 
-                    //pcie_reg8_pcie  <=  (pcie_byteenable_0[35:32] == 4'b1111) ? pcie_writedata_0[287:256] : pcie_reg8_pcie; 
-                    pcie_reg9_pcie  <=  (pcie_byteenable_0[39:36] == 4'b1111) ? pcie_writedata_0[319:288] : pcie_reg9_pcie; 
-                    pcie_reg10_pcie <=  (pcie_byteenable_0[43:40] == 4'b1111) ? pcie_writedata_0[351:320] : pcie_reg10_pcie; 
-                    pcie_reg11_pcie <=  (pcie_byteenable_0[47:44] == 4'b1111) ? pcie_writedata_0[383:352] : pcie_reg11_pcie; 
-                    //pcie_reg12_pcie <=  (pcie_byteenable_0[51:48] == 4'b1111) ? pcie_writedata_0[415:384] : pcie_reg12_pcie; 
-                    pcie_reg13_pcie <=  (pcie_byteenable_0[55:52] == 4'b1111) ? pcie_writedata_0[447:416] : pcie_reg13_pcie; 
-                    pcie_reg14_pcie <=  (pcie_byteenable_0[59:56] == 4'b1111) ? pcie_writedata_0[479:448] : pcie_reg14_pcie; 
-                    pcie_reg15_pcie <=  (pcie_byteenable_0[63:60] == 4'b1111) ? pcie_writedata_0[511:480] : pcie_reg15_pcie; 
+                    // pcie_reg0_pcie  <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg0_pcie;
+                    pcie_reg1_pcie  <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg1_pcie;
+                    pcie_reg2_pcie  <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg2_pcie;
+                    pcie_reg3_pcie  <=  (pcie_byteenable_0[16:12] == 4'b1111) ? pcie_writedata_0[127:96]  : pcie_reg3_pcie;
                 end
                 2'd1:begin
-                    //pcie_reg16_pcie <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg16_pcie; 
-                    pcie_reg17_pcie <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg17_pcie; 
-                    pcie_reg18_pcie <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg18_pcie; 
-                    pcie_reg19_pcie <=  (pcie_byteenable_0[16:12] == 4'b1111) ? pcie_writedata_0[127:96]  : pcie_reg19_pcie; 
-                    //pcie_reg20_pcie <=  (pcie_byteenable_0[19:16] == 4'b1111) ? pcie_writedata_0[159:128] : pcie_reg20_pcie; 
-                    pcie_reg21_pcie <=  (pcie_byteenable_0[23:20] == 4'b1111) ? pcie_writedata_0[191:160] : pcie_reg21_pcie; 
-                    pcie_reg22_pcie <=  (pcie_byteenable_0[27:24] == 4'b1111) ? pcie_writedata_0[223:192] : pcie_reg22_pcie; 
-                    pcie_reg23_pcie <=  (pcie_byteenable_0[31:28] == 4'b1111) ? pcie_writedata_0[255:224] : pcie_reg23_pcie; 
-                    //pcie_reg24_pcie <=  (pcie_byteenable_0[35:32] == 4'b1111) ? pcie_writedata_0[287:256] : pcie_reg24_pcie; 
-                    pcie_reg25_pcie <=  (pcie_byteenable_0[39:36] == 4'b1111) ? pcie_writedata_0[319:288] : pcie_reg25_pcie; 
-                    pcie_reg26_pcie <=  (pcie_byteenable_0[43:40] == 4'b1111) ? pcie_writedata_0[351:320] : pcie_reg26_pcie; 
-                    pcie_reg27_pcie <=  (pcie_byteenable_0[47:44] == 4'b1111) ? pcie_writedata_0[383:352] : pcie_reg27_pcie; 
-                    //pcie_reg28_pcie <=  (pcie_byteenable_0[51:48] == 4'b1111) ? pcie_writedata_0[415:384] : pcie_reg28_pcie; 
-                    pcie_reg29_pcie <=  (pcie_byteenable_0[55:52] == 4'b1111) ? pcie_writedata_0[447:416] : pcie_reg29_pcie; 
-                    pcie_reg30_pcie <=  (pcie_byteenable_0[59:56] == 4'b1111) ? pcie_writedata_0[479:448] : pcie_reg30_pcie; 
-                    pcie_reg31_pcie <=  (pcie_byteenable_0[63:60] == 4'b1111) ? pcie_writedata_0[511:480] : pcie_reg31_pcie; 
+                    // pcie_reg4_pcie <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg4_pcie; 
+                    pcie_reg5_pcie <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg5_pcie; 
+                    pcie_reg6_pcie <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg6_pcie; 
+                    pcie_reg7_pcie <=  (pcie_byteenable_0[16:12] == 4'b1111) ? pcie_writedata_0[127:96]  : pcie_reg7_pcie; 
                 end
-                2'd2:begin
-                    //pcie_reg0_pcie  <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg0_pcie; 
-                    pcie_reg33_pcie  <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg33_pcie; 
-                    pcie_reg34_pcie  <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg34_pcie; 
-                    pcie_reg35_pcie  <=  (pcie_byteenable_0[16:12] == 4'b1111) ? pcie_writedata_0[127:96]  : pcie_reg35_pcie; 
-                    //pcie_reg4_pcie  <=  (pcie_byteenable_0[19:16] == 4'b1111) ? pcie_writedata_0[159:128] : pcie_reg4_pcie; 
-                    pcie_reg37_pcie  <=  (pcie_byteenable_0[23:20] == 4'b1111) ? pcie_writedata_0[191:160] : pcie_reg37_pcie; 
-                    pcie_reg38_pcie  <=  (pcie_byteenable_0[27:24] == 4'b1111) ? pcie_writedata_0[223:192] : pcie_reg38_pcie; 
-                    pcie_reg39_pcie  <=  (pcie_byteenable_0[31:28] == 4'b1111) ? pcie_writedata_0[255:224] : pcie_reg39_pcie; 
-                    //pcie_reg8_pcie  <=  (pcie_byteenable_0[35:32] == 4'b1111) ? pcie_writedata_0[287:256] : pcie_reg8_pcie; 
-                    pcie_reg41_pcie  <=  (pcie_byteenable_0[39:36] == 4'b1111) ? pcie_writedata_0[319:288] : pcie_reg41_pcie; 
-                    pcie_reg42_pcie <=  (pcie_byteenable_0[43:40] == 4'b1111) ? pcie_writedata_0[351:320] : pcie_reg42_pcie; 
-                    pcie_reg43_pcie <=  (pcie_byteenable_0[47:44] == 4'b1111) ? pcie_writedata_0[383:352] : pcie_reg43_pcie; 
-                    //pcie_reg12_pcie <=  (pcie_byteenable_0[51:48] == 4'b1111) ? pcie_writedata_0[415:384] : pcie_reg12_pcie; 
-                    pcie_reg45_pcie <=  (pcie_byteenable_0[55:52] == 4'b1111) ? pcie_writedata_0[447:416] : pcie_reg45_pcie; 
-                    pcie_reg46_pcie <=  (pcie_byteenable_0[59:56] == 4'b1111) ? pcie_writedata_0[479:448] : pcie_reg46_pcie; 
-                    pcie_reg47_pcie <=  (pcie_byteenable_0[63:60] == 4'b1111) ? pcie_writedata_0[511:480] : pcie_reg47_pcie; 
-                end
-                2'd3:begin
-                    //pcie_reg16_pcie <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg16_pcie; 
-                    pcie_reg49_pcie <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg49_pcie; 
-                    pcie_reg50_pcie <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg50_pcie; 
-                    pcie_reg51_pcie <=  (pcie_byteenable_0[16:12] == 4'b1111) ? pcie_writedata_0[127:96]  : pcie_reg51_pcie; 
-                    //pcie_reg20_pcie <=  (pcie_byteenable_0[19:16] == 4'b1111) ? pcie_writedata_0[159:128] : pcie_reg20_pcie; 
-                    pcie_reg53_pcie <=  (pcie_byteenable_0[23:20] == 4'b1111) ? pcie_writedata_0[191:160] : pcie_reg53_pcie; 
-                    pcie_reg54_pcie <=  (pcie_byteenable_0[27:24] == 4'b1111) ? pcie_writedata_0[223:192] : pcie_reg54_pcie; 
-                    pcie_reg55_pcie <=  (pcie_byteenable_0[31:28] == 4'b1111) ? pcie_writedata_0[255:224] : pcie_reg55_pcie; 
-                    //pcie_reg24_pcie <=  (pcie_byteenable_0[35:32] == 4'b1111) ? pcie_writedata_0[287:256] : pcie_reg24_pcie; 
-                    pcie_reg57_pcie <=  (pcie_byteenable_0[39:36] == 4'b1111) ? pcie_writedata_0[319:288] : pcie_reg57_pcie; 
-                    pcie_reg58_pcie <=  (pcie_byteenable_0[43:40] == 4'b1111) ? pcie_writedata_0[351:320] : pcie_reg58_pcie; 
-                    pcie_reg59_pcie <=  (pcie_byteenable_0[47:44] == 4'b1111) ? pcie_writedata_0[383:352] : pcie_reg59_pcie; 
-                    //pcie_reg28_pcie <=  (pcie_byteenable_0[51:48] == 4'b1111) ? pcie_writedata_0[415:384] : pcie_reg28_pcie; 
-                    pcie_reg61_pcie <=  (pcie_byteenable_0[55:52] == 4'b1111) ? pcie_writedata_0[447:416] : pcie_reg61_pcie; 
-                    pcie_reg62_pcie <=  (pcie_byteenable_0[59:56] == 4'b1111) ? pcie_writedata_0[479:448] : pcie_reg62_pcie; 
-                    pcie_reg63_pcie <=  (pcie_byteenable_0[63:60] == 4'b1111) ? pcie_writedata_0[511:480] : pcie_reg63_pcie; 
-                end
+                // 2'd2:begin
+                //     // pcie_reg8_pcie  <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg8_pcie; 
+                //     pcie_reg9_pcie  <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg9_pcie; 
+                //     pcie_reg10_pcie  <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg10_pcie; 
+                //     pcie_reg11_pcie  <=  (pcie_byteenable_0[16:12] == 4'b1111) ? pcie_writedata_0[127:96]  : pcie_reg11_pcie;
+                // end
+                // 2'd3:begin
+                //     // pcie_reg12_pcie <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg16_pcie; 
+                //     pcie_reg13_pcie <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg13_pcie; 
+                //     pcie_reg14_pcie <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg14_pcie; 
+                //     pcie_reg15_pcie <=  (pcie_byteenable_0[16:12] == 4'b1111) ? pcie_writedata_0[127:96]  : pcie_reg15_pcie; 
+                // end
             endcase
         end
     end
@@ -805,7 +757,7 @@ assign c2f_kmem_addr = 0;
 //assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
 assign c2f_head_addr = 0;
 //update tail pointer
-//CPU side read MUX, first 512 bit is registers, the rest is BRAM.
+//CPU side read MUX, first RB_BRAM_OFFSET*512 bits are registers, the rest is BRAM.
 always@(posedge pcie_clk)begin
     if(!pcie_reset_n)begin
         tail_0 <= 0;
@@ -945,34 +897,35 @@ always@(posedge pcie_clk)begin
 end
 
 //PDU_BUFFER
-//CPU side read MUX, first 512 bit is registers, the rest is BRAM.
+//CPU side read MUX, first RB_BRAM_OFFSET*512 bits are registers, the rest is BRAM.
 always@(posedge pcie_clk)begin
     if(cpu_reg_region_r2) begin
-        case(pcie_address_0[7:6])
+        // case(pcie_address_0[7:6])
+        case(pcie_address_0[12+APP_IDX_WIDTH:12])
             2'd0:begin
-                pcie_readdata_0 <= {pcie_reg15_pcie,pcie_reg14_pcie,pcie_reg13_pcie,pcie_reg12_pcie,
-                               pcie_reg11_pcie,pcie_reg10_pcie,pcie_reg9_pcie,pcie_reg8_pcie,
-                               pcie_reg7_pcie,pcie_reg6_pcie,pcie_reg5_pcie,pcie_reg4_pcie,
-                               pcie_reg3_pcie,pcie_reg2_pcie,pcie_reg1_pcie,pcie_reg0_pcie};
+                pcie_readdata_0 <= {
+                    384'h0, pcie_reg3_pcie, pcie_reg2_pcie, pcie_reg1_pcie,
+                    pcie_reg0_pcie
+                };
             end
             2'd1:begin
-                pcie_readdata_0 <= {pcie_reg31_pcie,pcie_reg30_pcie,pcie_reg29_pcie,pcie_reg28_pcie,
-                               pcie_reg27_pcie,pcie_reg26_pcie,pcie_reg25_pcie,pcie_reg24_pcie,
-                               pcie_reg23_pcie,pcie_reg22_pcie,pcie_reg21_pcie,pcie_reg20_pcie,
-                               pcie_reg19_pcie,pcie_reg18_pcie,pcie_reg17_pcie,pcie_reg16_pcie};
+                pcie_readdata_0 <= {
+                    384'h0, pcie_reg7_pcie, pcie_reg6_pcie, pcie_reg5_pcie,
+                    pcie_reg4_pcie
+                };
             end
-            2'd2:begin
-                pcie_readdata_0 <= {pcie_reg47_pcie,pcie_reg46_pcie,pcie_reg45_pcie,pcie_reg44_pcie,
-                               pcie_reg43_pcie,pcie_reg42_pcie,pcie_reg41_pcie,pcie_reg40_pcie,
-                               pcie_reg39_pcie,pcie_reg38_pcie,pcie_reg37_pcie,pcie_reg36_pcie,
-                               pcie_reg35_pcie,pcie_reg34_pcie,pcie_reg33_pcie,pcie_reg32_pcie};
-            end
-            2'd3:begin
-                pcie_readdata_0 <= {pcie_reg63_pcie,pcie_reg62_pcie,pcie_reg61_pcie,pcie_reg60_pcie,
-                               pcie_reg59_pcie,pcie_reg58_pcie,pcie_reg57_pcie,pcie_reg56_pcie,
-                               pcie_reg55_pcie,pcie_reg54_pcie,pcie_reg53_pcie,pcie_reg52_pcie,
-                               pcie_reg51_pcie,pcie_reg50_pcie,pcie_reg49_pcie,pcie_reg48_pcie};
-            end
+            // 2'd2:begin
+            //     pcie_readdata_0 <= {
+            //         384'h0, pcie_reg11_pcie, pcie_reg10_pcie, pcie_reg9_pcie,
+            //         pcie_reg8_pcie
+            //     };
+            // end
+            // 2'd3:begin
+            //     pcie_readdata_0 <= {
+            //         384'h0, pcie_reg15_pcie, pcie_reg14_pcie,
+            //         pcie_reg13_pcie, pcie_reg12_pcie
+            //     };
+            // end
         endcase
         pcie_readdatavalid_0 <= read_0_r2;
     end else begin
@@ -984,7 +937,7 @@ end
 assign cpu_reg_region = pcie_address_0[17:6] < RB_BRAM_OFFSET;
 
 assign frb_read     = cpu_reg_region ? 1'b0 : pcie_read_0;
-assign frb_address  = pcie_address_0[17:6] - RB_BRAM_OFFSET; //first two 512 bit is registers.
+assign frb_address  = pcie_address_0[17:6] - RB_BRAM_OFFSET;
 //two cycle read delay
 always@(posedge pcie_clk)begin
     cpu_reg_region_r1 <= cpu_reg_region;

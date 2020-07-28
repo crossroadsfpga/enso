@@ -60,7 +60,7 @@ typedef struct pcie_block {
 
 #else
 
-#define REGISTERS_PER_APP 4
+#define MEMORY_SPACE_PER_APP (1<<12)
 
 typedef struct pcie_block {
     uint32_t tail;
