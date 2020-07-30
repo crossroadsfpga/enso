@@ -240,6 +240,7 @@ set_global_assignment -name FAST_PRESERVE AUTO -entity alt_ehipc2_hw
 set_global_assignment -name OPTIMIZATION_MODE BALANCED
 set_global_assignment -name ENABLE_SIGNALTAP OFF
 set_global_assignment -name USE_SIGNALTAP_FILE stp1.stp
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie_core.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_table_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/cpu2fpga_pcie.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe_fd.sv
