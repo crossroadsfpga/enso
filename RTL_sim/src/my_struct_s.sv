@@ -137,8 +137,7 @@ typedef struct packed
 } metadata_t; //Metadata
 
 //PDU_DEPTH is number of 512 bits for fpga side f2c ring buffer 
-// parameter PDU_DEPTH = 4096;
-parameter PDU_DEPTH = 1024;
+parameter PDU_DEPTH = 4096;
 parameter PDU_AWIDTH = ($clog2(PDU_DEPTH));
 //PDU_ID_DEPTH is number of PDUs we buffer on FPGA side
 parameter PDU_NUM = 256;
@@ -173,6 +172,8 @@ parameter MAX_NB_APPS = 2;
 parameter APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
 parameter FLITS_PER_PAGE = 64;
 parameter RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
+
+parameter PCIE_ADDR_WIDTH = 30;
 
 parameter PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 typedef struct packed

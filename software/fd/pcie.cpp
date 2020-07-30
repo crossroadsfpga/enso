@@ -96,7 +96,7 @@ int dma_init(socket_internal* socket_entry)
     pcie_block_t *global_block; // The global 512-bit register array.
     global_block = (pcie_block_t *) socket_entry->kdata;
 
-    uio_mmap_bar2_addr = dev->uio_mmap(sizeof(pcie_block), 2);
+    uio_mmap_bar2_addr = dev->uio_mmap((1<<12) * MAX_NB_APPS, 2);
     if (uio_mmap_bar2_addr == MAP_FAILED) {
         std::cerr << "Could not get mmap uio memory!" << std::endl;
         return -1;

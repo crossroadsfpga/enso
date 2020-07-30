@@ -535,8 +535,8 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
     kmem_addr_h = (dev_bk->kmem_info.bus_addr >> 32) & 0xFFFFFFFF;
     ep_addr = dev_bk->bar[2].base_addr;
 
-    iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET + core_id * 16);
-    iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4 + core_id * 16);
+    iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET + core_id * PAGE_SIZE);
+    iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4 + core_id * PAGE_SIZE);
 
     // iowrite32(kmem_addr_l + C2F_BUFFER_OFFSET, ep_addr + CPU2FPGA_OFFSET + 
     //           core_id * 32);

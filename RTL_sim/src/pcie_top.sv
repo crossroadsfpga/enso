@@ -13,14 +13,14 @@ module pcie_top (
     input  logic           pcie_wrdm_prio_ready,
     output logic           pcie_wrdm_prio_valid,
     output logic [173:0]   pcie_wrdm_prio_data,
-    input  logic [17:0]    pcie_address_0,    
+    input  logic [PCIE_ADDR_WIDTH-1:0]    pcie_address_0,    
     input  logic           pcie_write_0,      
     input  logic           pcie_read_0,       
     output logic           pcie_readdatavalid_0,    
     output logic [511:0]   pcie_readdata_0,  
     input  logic [511:0]   pcie_writedata_0, 
     input  logic [63:0]    pcie_byteenable_0,
-    input  logic [17:0]    pcie_address_1,   
+    input  logic [PCIE_ADDR_WIDTH-1:0]    pcie_address_1,   
     input  logic           pcie_write_1,     
     input  logic           pcie_read_1,      
     output logic           pcie_readdatavalid_1,    
@@ -646,16 +646,16 @@ always@(posedge pcie_clk)begin
         pcie_reg63_pcie <= 0;
     end else begin
         if(pcie_write_0) begin
-            // case(pcie_address_0[7:6])
-            case(pcie_address_0[12+APP_IDX_WIDTH:12])
+            // case(pcie_address_0[12+APP_IDX_WIDTH-1:12])
+            case(pcie_address_0[12])
             //tail cannot be updated by CPU.
-                2'd0:begin
+                1'd0:begin
                     // pcie_reg0_pcie  <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg0_pcie;
                     pcie_reg1_pcie  <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg1_pcie;
                     pcie_reg2_pcie  <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg2_pcie;
                     pcie_reg3_pcie  <=  (pcie_byteenable_0[16:12] == 4'b1111) ? pcie_writedata_0[127:96]  : pcie_reg3_pcie;
                 end
-                2'd1:begin
+                1'd1:begin
                     // pcie_reg4_pcie <=  (pcie_byteenable_0[3:0]   == 4'b1111) ? pcie_writedata_0[31:0]    : pcie_reg4_pcie; 
                     pcie_reg5_pcie <=  (pcie_byteenable_0[7:4]   == 4'b1111) ? pcie_writedata_0[63:32]   : pcie_reg5_pcie; 
                     pcie_reg6_pcie <=  (pcie_byteenable_0[11:8]  == 4'b1111) ? pcie_writedata_0[95:64]   : pcie_reg6_pcie; 
@@ -900,15 +900,15 @@ end
 //CPU side read MUX, first RB_BRAM_OFFSET*512 bits are registers, the rest is BRAM.
 always@(posedge pcie_clk)begin
     if(cpu_reg_region_r2) begin
-        // case(pcie_address_0[7:6])
-        case(pcie_address_0[12+APP_IDX_WIDTH:12])
-            2'd0:begin
+        // case(pcie_address_0[12+APP_IDX_WIDTH-1:12])
+        case(pcie_address_0[12])
+            1'd0:begin
                 pcie_readdata_0 <= {
                     384'h0, pcie_reg3_pcie, pcie_reg2_pcie, pcie_reg1_pcie,
                     pcie_reg0_pcie
                 };
             end
-            2'd1:begin
+            1'd1:begin
                 pcie_readdata_0 <= {
                     384'h0, pcie_reg7_pcie, pcie_reg6_pcie, pcie_reg5_pcie,
                     pcie_reg4_pcie
@@ -934,10 +934,10 @@ always@(posedge pcie_clk)begin
     end
 end
 
-assign cpu_reg_region = pcie_address_0[17:6] < RB_BRAM_OFFSET;
+assign cpu_reg_region = pcie_address_0[PCIE_ADDR_WIDTH-1:6] < RB_BRAM_OFFSET;
 
 assign frb_read     = cpu_reg_region ? 1'b0 : pcie_read_0;
-assign frb_address  = pcie_address_0[17:6] - RB_BRAM_OFFSET;
+assign frb_address  = pcie_address_0[PCIE_ADDR_WIDTH-1:6] - RB_BRAM_OFFSET;
 //two cycle read delay
 always@(posedge pcie_clk)begin
     cpu_reg_region_r1 <= cpu_reg_region;

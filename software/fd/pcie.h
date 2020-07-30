@@ -19,6 +19,9 @@
 #define HEAD_OFFSET 4
 #define C2F_TAIL_OFFSET 16
 
+#define MAX_NB_APPS 16 // TODO(sadok) Increase this when we increase the number
+                       // of supported apps
+
 #define PDU_ID_OFFSET 0
 #define PDU_PORTS_OFFSET 1
 #define PDU_DST_IP_OFFSET 2
