@@ -1,3 +1,5 @@
+`include "./my_struct_s.sv"
+
 module pcie_core (
         input  wire         refclk_clk,                              //         refclk.clk
         input  wire         pcie_rstn_npor,                          //      pcie_rstn.npor
@@ -49,14 +51,14 @@ module pcie_core (
         input  logic         wrdm_prio_valid,
         input  logic [173:0] wrdm_prio_data,
         
-        output logic [17:0] address_0,     //   input,    width = 9,     s1.address
+        output logic [PCIE_ADDR_WIDTH-1:0] address_0,     //   input,    width = 9,     s1.address
         output logic write_0,       //   input,    width = 1,       .write
         output logic read_0,       //   input,    width = 1,       .write
         input  logic readdatavalid_0,       //   input,    width = 1,       .write
         input  logic [511:0] readdata_0,    //  output,  width = 512,       .readdata
         output logic [511:0] writedata_0,   //   input,  width = 512,       .writedata
         output logic [63:0] byteenable_0,  //   input,   width = 64,       .byteenable
-        output logic [17:0] address_1,    //   input,    width = 9,     s2.address
+        output logic [PCIE_ADDR_WIDTH-1:0] address_1,    //   input,    width = 9,     s2.address
         output logic write_1,      //   input,    width = 1,       .write
         output logic read_1,      //   input,    width = 1,       .write
         input  logic readdatavalid_1,      //   input,    width = 1,       .write

@@ -199,8 +199,9 @@ failed_devtree_insert:
 failed_get_gbk:
     intel_fpga_pcie_dma_remove(dev_bk);
 failed_dma_init:
-    unmap_bars(dev);
+    uio_unregister_device(&(dev_bk->info));
 failed_uio_register:
+    unmap_bars(dev);
 failed_map:
     pci_release_regions(dev);
 failed_req_region:

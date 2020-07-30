@@ -633,9 +633,7 @@ proc set_core_num {core_num} {
     global wdata
 
     set rdata [reg_read $PCIE_BASE $PCIE_CTRL_REG]
-    set enable_pcie [expr $rdata & 1]
-    set buf_size [expr $rdata & 0xFFFFFFE]
-    set wdata [expr (($core_num << 27) | $buf_size | $enable_pcie)]
+    set wdata [expr ( ($core_num << 27) | ($rdata & 0x07FFFFFF) )]
 
     reg_write $PCIE_BASE $PCIE_CTRL_REG $wdata
 
@@ -649,8 +647,7 @@ proc set_buf_size {buf_size} {
     global wdata
 
     set rdata [reg_read $PCIE_BASE $PCIE_CTRL_REG]
-    set enable_pcie [expr $rdata & 1]
-    set wdata [expr ($buf_size << 1) | $enable_pcie]
+    set wdata [expr ( ($buf_size << 1) | ($rdata & 0xF8000001) )]
 
     reg_write $PCIE_BASE $PCIE_CTRL_REG $wdata
 

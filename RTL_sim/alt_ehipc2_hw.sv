@@ -10,7 +10,7 @@
 // Intel or its authorized distributors.  Please refer to the applicable 
 // agreement for further details.
 
-
+`include "./src/my_struct_s.sv"
 
 `timescale 1 ps / 1 ps
 //`define DISABLE_PCIE
@@ -257,14 +257,14 @@ wire [1:0]   tx_pll_locked;
     logic         pcie_wrdm_prio_ready;
     logic         pcie_wrdm_prio_valid;
     logic [173:0] pcie_wrdm_prio_data;
-    logic [17:0]  pcie_address_0;      
+    logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_0;      
     logic         pcie_write_0;        
     logic         pcie_read_0;         
     logic         pcie_readdatavalid_0;
     logic [511:0] pcie_readdata_0;     
     logic [511:0] pcie_writedata_0;    
     logic [63:0]  pcie_byteenable_0;   
-    logic [17:0]  pcie_address_1;      
+    logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_1;      
     logic         pcie_write_1;        
     logic         pcie_read_1;         
     logic         pcie_readdatavalid_1;
