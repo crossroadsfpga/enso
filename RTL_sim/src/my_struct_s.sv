@@ -168,7 +168,7 @@ parameter RB_AWIDTH = ($clog2(RB_DEPTH));
 parameter C2F_RB_DEPTH = 512; //in 512 bits.
 parameter C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
 
-parameter MAX_NB_APPS = 2;
+parameter MAX_NB_APPS = 16;
 parameter APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
 parameter FLITS_PER_PAGE = 64;
 parameter RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
