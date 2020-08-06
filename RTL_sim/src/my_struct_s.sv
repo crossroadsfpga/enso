@@ -176,7 +176,7 @@ parameter RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
 parameter PCIE_ADDR_WIDTH = 30;
 
 parameter REGS_PER_PAGE = 4;
-parameter NB_STATUS_REGS = 65;
+parameter NB_STATUS_REGS = MAX_NB_APPS * REGS_PER_PAGE + 1;
 
 parameter PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 typedef struct packed

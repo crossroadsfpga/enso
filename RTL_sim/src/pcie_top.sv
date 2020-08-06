@@ -66,7 +66,9 @@ logic [STAT_AWIDTH-1:0] status_addr_sel_r;
 logic [31:0] pcie_reg_status [NB_STATUS_REGS-1:0];
 logic [31:0] pcie_reg_r1 [NB_STATUS_REGS-1:0];
 logic [31:0] pcie_reg_pcie [NB_STATUS_REGS-1:0];
-logic [31:0] pcie_reg_pcie_wr [NB_STATUS_REGS-2:0];
+
+// do not include the last register
+logic [31:0] pcie_reg_pcie_wr [NB_STATUS_REGS-2:0]; 
 
 //internal signals
 pcie_block_t pcie_block;
@@ -154,35 +156,30 @@ end
 assign page_idx = pcie_address_0[12 +: APP_IDX_WIDTH];
 assign reg_set_idx = page_idx * REGS_PER_PAGE;
 
-//update PIO register
+// update PIO register
 always@(posedge pcie_clk)begin
     integer i;
-    if(!pcie_reset_n)begin
+    if (!pcie_reset_n) begin
         for (i = 0; i < NB_STATUS_REGS-1; i = i + 1) begin
-            // the first register of every pages is the tail pointer and should
-            // not be updatable from the CPU
             pcie_reg_pcie_wr[i] <= 0;
         end
-    end else begin
-        if(pcie_write_0) begin
-            // we purposefully skip the first register of every page so that it
-            // cannot be updated from the CPU
-            for (i = 1; i < REGS_PER_PAGE; i = i + 1) begin
-                if (pcie_byteenable_0[i*REGS_PER_PAGE +:REGS_PER_PAGE]==4'b1111)
-                begin
-                    pcie_reg_pcie_wr[reg_set_idx+i] <= 
-                        pcie_writedata_0[i*32 +:32];
-                end else begin
-                    pcie_reg_pcie_wr[reg_set_idx+i] <= 
-                        pcie_reg_pcie_wr[reg_set_idx+i];
-                end
+    end else if (pcie_write_0) begin
+        // the first register of every page is the tail pointer and should not
+        // be updatable from the CPU, so we purposefully skip it
+        for (i = 1; i < REGS_PER_PAGE; i = i + 1) begin
+            if (pcie_byteenable_0[i*REGS_PER_PAGE +:REGS_PER_PAGE]
+                    == {REGS_PER_PAGE{1'b1}}) begin
+                pcie_reg_pcie_wr[reg_set_idx+i] <= pcie_writedata_0[i*32 +:32];
+            end else begin
+                pcie_reg_pcie_wr[reg_set_idx+i] <= 
+                    pcie_reg_pcie_wr[reg_set_idx+i];
             end
         end
     end
 end
 
-//pio_write to jtag reg
-//below is FPGA write registers. FPGA -> CPU
+// pio_write to jtag reg
+// below is FPGA write registers. FPGA -> CPU
 always_comb begin
     integer i;
     integer j;
@@ -256,7 +253,8 @@ assign cpu_reg_region = pcie_address_0[PCIE_ADDR_WIDTH-1:6] < RB_BRAM_OFFSET;
 
 assign frb_read     = cpu_reg_region ? 1'b0 : pcie_read_0;
 assign frb_address  = pcie_address_0[PCIE_ADDR_WIDTH-1:6] - RB_BRAM_OFFSET;
-//two cycle read delay
+
+// two cycle read delay
 always@(posedge pcie_clk)begin
     cpu_reg_region_r1 <= cpu_reg_region;
     cpu_reg_region_r2 <= cpu_reg_region_r1;

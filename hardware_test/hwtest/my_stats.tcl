@@ -612,15 +612,33 @@ proc sanity_check {} {
 proc read_pcie {} {
     global PCIE_BASE
 
-
     for { set a 0 } { $a < 65 } {incr a} {
         set rdata [reg_read $PCIE_BASE $a]
         puts "$a : $rdata"
     }
 }
+
 proc disable_pcie {} {
     global PCIE_BASE
-    reg_write $PCIE_BASE 15 0x1
+    global PCIE_CTRL_REG
+
+    set rdata [reg_read $PCIE_BASE $PCIE_CTRL_REG]
+    set wdata [expr ($rdata | 0x1)]
+
+    reg_write $PCIE_BASE $PCIE_CTRL_REG $wdata
+
+    set_clear
+    set_up
+}
+
+proc enable_pcie {} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+
+    set rdata [reg_read $PCIE_BASE $PCIE_CTRL_REG]
+    set wdata [expr ($rdata & 0xFFFFFFFE)]
+
+    reg_write $PCIE_BASE $PCIE_CTRL_REG $wdata
 
     set_clear
     set_up
