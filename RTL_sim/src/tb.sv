@@ -3,6 +3,11 @@
 module tb;
 
 
+`ifndef PKT_FILE
+`define PKT_FILE "./input_gen/m10_100.pkt"
+`define PKT_FILE_NB_LINES 2400
+`endif
+
 // duration for each bit = 20 * timescale = 20 * 1 ns  = 20ns
 localparam period = 10;  
 localparam period_rx = 2.56;  
@@ -13,7 +18,7 @@ localparam period_esram = 5;
 localparam period_pcie = 4;  
 localparam data_width = 528;  
 localparam lo = 0;  
-localparam hi = 2400;     //m10_100
+localparam hi = `PKT_FILE_NB_LINES;
 localparam stop = (hi*2*1.25+100000);  
 
 logic  clk_status;
@@ -32,6 +37,7 @@ logic  rst;
 logic [31:0] pkt_cnt;
 logic [31:0] cnt;
 logic [31:0] addr;
+logic [63:0] nb_cycles;
 logic [data_width -1:0] arr[lo:hi];
 
 //Ethner signals
@@ -212,6 +218,7 @@ initial rx_cnt = 0;
 initial rst = 1;
 initial cnt = 0;
 initial rate_cnt = 0;
+initial nb_cycles = 0;
 always #(period) clk_status = ~clk_status;
 always #(period_rx) clk_rxmac = ~clk_rxmac;
 always #(period_tx) clk_txmac = ~clk_txmac;
@@ -228,7 +235,7 @@ initial
         for (i = lo; i <= hi; i = i + 1) begin
             arr[i] = {((data_width + 1)/2){2'b0}} ;//initial it as all zero(zzp 06.30.2015)
         end
-        $readmemh("./input_gen/m10_100.pkt", arr, lo, hi);//read data from rom
+        $readmemh(`PKT_FILE, arr, lo, hi);//read data from rom
     end // initial begin
 
 assign l8_rx_startofpacket = arr[addr][524];
@@ -242,8 +249,16 @@ always @(posedge clk_rxmac)
 begin
     if (rst) begin
         pktID <= 0;
-    end else if(l8_rx_startofpacket & l8_rx_valid)begin
-        pktID <= pktID + 1;
+        nb_cycles <= 0;
+    end else begin
+        nb_cycles <= nb_cycles + 1;
+        if(l8_rx_startofpacket & l8_rx_valid)begin
+            pktID <= pktID + 1;
+            nb_cycles <= nb_cycles + 1;
+        end else if (nb_cycles != 0) begin
+            // only start counting after the first packet
+            nb_cycles <= nb_cycles + 1;
+        end
     end
 end
 
@@ -295,6 +310,8 @@ begin
 
     if (cnt == stop) begin
         $display("STOP READING!");
+        $display("Number of cycles: %d", nb_cycles);
+        $display("Duration: %d", nb_cycles * period_rx);
     end
 end
 

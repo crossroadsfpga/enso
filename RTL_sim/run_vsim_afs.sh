@@ -1,9 +1,21 @@
-#!/bin/sh
-rm -r work
-rm vsim.wlf
+#!/usr/bin/env bash
+# Usage ./run_vsim_afs.sh [input.pkt]
+
+# exit when error occurs
+set -e
+trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
+trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
+
+# if pkt file not specified, use the default
+PKT_FILE=${1:-"./input_gen/m10_100.pkt"}
+PKT_FILE_NB_LINES=$(wc -l < $PKT_FILE)
+
+rm -rf work
+rm -f vsim.wlf
 
 vlib work
-vlog +define+NO_PCIE +define+SIM ./src/*.sv -sv 
+vlog +define+NO_PCIE +define+SIM +define+PKT_FILE=\"$PKT_FILE\" \
+     +define+PKT_FILE_NB_LINES=$PKT_FILE_NB_LINES ./src/*.sv -sv 
 #vlog *.v
 vlog +define+NO_PCIE +define+SIM ./src/common/*.sv -sv
 vlog +define+NO_PCIE +define+SIM ./src/common/*.v

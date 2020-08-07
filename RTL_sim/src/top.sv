@@ -250,6 +250,9 @@ logic [31:0] status_readdata_top;
 logic status_readdata_valid_pcie;
 logic [31:0] status_readdata_pcie;
 
+`ifdef SIM
+logic [63:0] datamover_cycles;
+`endif
 logic [31:0] in_pkt_cnt;
 logic [31:0] in_pkt_cnt_r1;
 logic [31:0] in_pkt_cnt_r2;
@@ -347,6 +350,9 @@ end
 //datamover clock domain
 always @(posedge clk_datamover) begin
     if(rst_datamover)begin
+        `ifdef SIM
+            datamover_cycles <= 0;
+        `endif
         in_pkt_cnt <= 0;
         out_pkt_cnt_incomp <= 0;
         out_pkt_cnt_parser <= 0;
@@ -362,12 +368,17 @@ always @(posedge clk_datamover) begin
         dm_pcie_meta_cnt <= 0;
         dm_eth_pkt_cnt <= 0;
     end else begin
+        `ifdef SIM
+            datamover_cycles <= datamover_cycles + 1;
+        `endif
         if(input_comp_eth_valid & input_comp_eth_eop)begin
             in_pkt_cnt <= in_pkt_cnt + 1;
-            //$display("PKT %d",in_pkt_cnt);
-            if(in_pkt_cnt[5:0]==6'b00_0000)begin
-                $display("PKT %d",in_pkt_cnt);
-            end
+            `ifdef SIM
+                $display("%d: PKT %d", datamover_cycles, in_pkt_cnt);
+                // if(in_pkt_cnt[5:0]==6'b00_0000)begin
+                //     $display("%d: PKT %d", datamover_cycles, in_pkt_cnt);
+                // end
+            `endif
         end
 
         if(input_comp_metadata_valid & input_comp_metadata_ready)begin
@@ -703,19 +714,19 @@ parser_out_fifo (
     .out_empty         ()          
 );
 
-flow_table_wrapper flow_table_wrapper_0 (
-    .clk               (clk),
-    .rst               (rst),
-    .in_meta_data      (parser_out_fifo_out_data),
-    .in_meta_valid     (parser_out_fifo_out_valid),
-    .in_meta_ready     (parser_out_fifo_out_ready),
-    .out_meta_data     (flow_table_wrapper_out_meta_data),
-    .out_meta_valid    (flow_table_wrapper_out_meta_valid),
-    .in_control_data   (pdumeta_cpu_out_data),
-    .in_control_valid  (pdumeta_cpu_out_valid),
-    .in_control_ready  (pdumeta_cpu_out_ready),
-    .out_control_done  (flow_table_wrapper_out_control_done)
-);
+// flow_table_wrapper flow_table_wrapper_0 (
+//     .clk               (clk),
+//     .rst               (rst),
+//     .in_meta_data      (parser_out_fifo_out_data),
+//     .in_meta_valid     (parser_out_fifo_out_valid),
+//     .in_meta_ready     (parser_out_fifo_out_ready),
+//     .out_meta_data     (flow_table_wrapper_out_meta_data),
+//     .out_meta_valid    (flow_table_wrapper_out_meta_valid),
+//     .in_control_data   (pdumeta_cpu_out_data),
+//     .in_control_valid  (pdumeta_cpu_out_valid),
+//     .in_control_ready  (pdumeta_cpu_out_ready),
+//     .out_control_done  (flow_table_wrapper_out_control_done)
+// );
 
 hyper_pipe_fd fd_reg_io(
     .clk                     (clk),  
@@ -734,10 +745,24 @@ hyper_pipe_fd fd_reg_io(
     .reg_out_meta_almost_full(reg_fdw_out_meta_almost_full)
 );
 
+// flow_director_wrapper flow_director_inst (
+//     .clk                     (clk),                        
+//     .rst                     (rst),              
+//     .in_meta_data            (reg_fdw_in_meta_data),                
+//     .in_meta_valid           (reg_fdw_in_meta_valid),               
+//     .reg_in_meta_almost_full (fdw_in_meta_almost_full),               
+//     .reg_out_meta_data       (fdw_out_meta_data),          
+//     .reg_out_meta_valid      (fdw_out_meta_valid),         
+//     .out_meta_almost_full    (reg_fdw_out_meta_almost_full)        
+// );
+
+assign parser_out_fifo_out_ready = !fdw_in_meta_almost_full;
+assign reg_fdw_in_meta_valid = parser_out_fifo_out_valid & parser_out_fifo_out_ready;
+
 flow_director_wrapper flow_director_inst (
     .clk                     (clk),                        
     .rst                     (rst),              
-    .in_meta_data            (reg_fdw_in_meta_data),                
+    .in_meta_data            (parser_out_fifo_out_data),                
     .in_meta_valid           (reg_fdw_in_meta_valid),               
     .reg_in_meta_almost_full (fdw_in_meta_almost_full),               
     .reg_out_meta_data       (fdw_out_meta_data),          
