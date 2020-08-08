@@ -372,7 +372,7 @@ always @(posedge clk_status) begin
             DISABLE_PCIE:begin
                 conf_state <= IDLE;
                 s_write <= 1;
-                s_addr <= 30'h2A00_000F;
+                s_addr <= 30'h2A00_0000 + NB_STATUS_REGS - 1;
             `ifdef NO_PCIE
                 s_writedata <= 1;
             `else

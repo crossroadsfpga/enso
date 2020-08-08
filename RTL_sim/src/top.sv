@@ -706,22 +706,23 @@ parser_out_fifo (
     .out_empty         ()          
 );
 
-// flow_table_wrapper flow_table_wrapper_0 (
-//     .clk               (clk),
-//     .rst               (rst),
-//     .in_meta_data      (parser_out_fifo_out_data),
-//     .in_meta_valid     (parser_out_fifo_out_valid),
-//     .in_meta_ready     (parser_out_fifo_out_ready),
-//     .out_meta_data     (flow_table_wrapper_out_meta_data),
-//     .out_meta_valid    (flow_table_wrapper_out_meta_valid),
-//     .in_control_data   (pdumeta_cpu_out_data),
-//     .in_control_valid  (pdumeta_cpu_out_valid),
-//     .in_control_ready  (pdumeta_cpu_out_ready),
-//     .out_control_done  (flow_table_wrapper_out_control_done)
-// );
-assign fdw_in_meta_data = parser_out_fifo_out_data;
-assign fdw_in_meta_valid = parser_out_fifo_out_valid;
-assign parser_out_fifo_out_ready = fdw_in_meta_ready;
+ flow_table_wrapper flow_table_wrapper_0 (
+     .clk               (clk),
+     .rst               (rst),
+     .in_meta_data      (parser_out_fifo_out_data),
+     .in_meta_valid     (parser_out_fifo_out_valid),
+     .in_meta_ready     (parser_out_fifo_out_ready),
+     .out_meta_data     (flow_table_wrapper_out_meta_data),
+     .out_meta_valid    (flow_table_wrapper_out_meta_valid),
+     .in_control_data   (pdumeta_cpu_out_data),
+     .in_control_valid  (pdumeta_cpu_out_valid),
+     .in_control_ready  (pdumeta_cpu_out_ready),
+     .out_control_done  (flow_table_wrapper_out_control_done)
+ );
+
+assign fdw_in_meta_data  = flow_table_wrapper_out_meta_data;
+assign fdw_in_meta_valid = flow_table_wrapper_out_meta_valid;
+//assign parser_out_fifo_out_ready = fdw_in_meta_ready;
 
 flow_director_wrapper flow_director_inst (
     .clk                     (clk),                        

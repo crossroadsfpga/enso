@@ -67,8 +67,7 @@ logic [31:0] pcie_reg_status [NB_STATUS_REGS-1:0];
 logic [31:0] pcie_reg_r1 [NB_STATUS_REGS-1:0];
 logic [31:0] pcie_reg_pcie [NB_STATUS_REGS-1:0];
 
-// do not include the last register
-logic [31:0] pcie_reg_pcie_wr [NB_STATUS_REGS-2:0]; 
+logic [31:0] pcie_reg_pcie_wr [NB_STATUS_REGS-1:0]; 
 
 //internal signals
 pcie_block_t pcie_block;
