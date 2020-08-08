@@ -1,14 +1,14 @@
 `include "./my_struct_s.sv"
 module basic_data_mover (
-		input  logic         clk,                    //        clk.clk
-		input  logic         rst,                    //        rst.reset
+        input  logic         clk,                    //        clk.clk
+        input  logic         rst,                    //        rst.reset
         input  logic         meta_valid,
         input  metadata_t    meta_data,
         output logic         meta_ready,  
-		output logic [PKTBUF_AWIDTH-1:0]   pkt_buffer_address,     // pkt_buffer.address
-		output logic         pkt_buffer_read,       //           .read
-		input  logic         pkt_buffer_readvalid,       //           .read
-		input flit_t         pkt_buffer_readdata,   //           .writedata
+        output logic [PKTBUF_AWIDTH-1:0]   pkt_buffer_address,     // pkt_buffer.address
+        output logic         pkt_buffer_read,       //           .read
+        input  logic         pkt_buffer_readvalid,       //           .read
+        input flit_t         pkt_buffer_readdata,   //           .writedata
         output logic [PKT_AWIDTH-1:0]   emptylist_in_data,
         output logic                    emptylist_in_valid,
         input  logic                    emptylist_in_ready,
@@ -30,7 +30,7 @@ module basic_data_mover (
         output logic [5:0]   eth_pkt_empty,
         input  logic         eth_pkt_ready,  
         input  logic         eth_pkt_almost_full
-	);
+    );
 
 `ifdef USE_BRAM
 localparam NUM_PIPES = (2+2+2+1);

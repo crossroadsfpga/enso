@@ -168,20 +168,12 @@ logic          fdw_in_meta_valid;
 metadata_t     fdw_in_meta_data;                               
 logic          fdw_in_meta_ready;                              
 logic          fdw_in_meta_almost_full;                              
-logic          reg_fdw_in_meta_valid;                              
-metadata_t     reg_fdw_in_meta_data;                               
-logic          reg_fdw_in_meta_ready;                              
-logic          reg_fdw_in_meta_almost_full;                              
 
 logic [31:0]   fdw_out_meta_csr_readdata;
 logic          fdw_out_meta_valid;                              
 metadata_t     fdw_out_meta_data;                               
 logic          fdw_out_meta_ready;                              
 logic          fdw_out_meta_almost_full;                              
-logic          reg_fdw_out_meta_valid;                              
-metadata_t     reg_fdw_out_meta_data;                               
-logic          reg_fdw_out_meta_ready;                              
-logic          reg_fdw_out_meta_almost_full;                              
 
 logic          dm_in_meta_valid;                              
 metadata_t     dm_in_meta_data;                               
@@ -332,7 +324,7 @@ begin
         if(parser_out_fifo_out_valid & parser_out_fifo_out_ready)begin
             fd_in_pkt_cnt <= fd_in_pkt_cnt + 1;
         end
-        if(reg_fdw_out_meta_valid & reg_fdw_out_meta_ready)begin
+        if(fdw_out_meta_valid & fdw_out_meta_ready)begin
             fd_out_pkt_cnt <= fd_out_pkt_cnt + 1;
         end
 
@@ -727,32 +719,20 @@ parser_out_fifo (
 //     .in_control_ready  (pdumeta_cpu_out_ready),
 //     .out_control_done  (flow_table_wrapper_out_control_done)
 // );
+assign fdw_in_meta_data = parser_out_fifo_out_data;
+assign fdw_in_meta_valid = parser_out_fifo_out_valid;
+assign parser_out_fifo_out_ready = fdw_in_meta_ready;
 
-
-// flow_director_wrapper flow_director_inst (
-//     .clk                     (clk),                        
-//     .rst                     (rst),              
-//     .in_meta_data            (reg_fdw_in_meta_data),                
-//     .in_meta_valid           (reg_fdw_in_meta_valid),               
-//     .reg_in_meta_almost_full (fdw_in_meta_almost_full),               
-//     .reg_out_meta_data       (fdw_out_meta_data),          
-//     .reg_out_meta_valid      (fdw_out_meta_valid),         
-//     .out_meta_almost_full    (reg_fdw_out_meta_almost_full)        
-// );
-
-//assign parser_out_fifo_out_ready = !fdw_in_meta_almost_full;
-//assign reg_fdw_in_meta_valid = parser_out_fifo_out_valid & parser_out_fifo_out_ready;
-//
-//flow_director_wrapper flow_director_inst (
-//    .clk                     (clk),                        
-//    .rst                     (rst),              
-//    .in_meta_data            (parser_out_fifo_out_data),                
-//    .in_meta_valid           (reg_fdw_in_meta_valid),               
-//    .reg_in_meta_almost_full (fdw_in_meta_almost_full),               
-//    .reg_out_meta_data       (fdw_out_meta_data),          
-//    .reg_out_meta_valid      (fdw_out_meta_valid),         
-//    .out_meta_almost_full    (reg_fdw_out_meta_almost_full)        
-//);
+flow_director_wrapper flow_director_inst (
+    .clk                     (clk),                        
+    .rst                     (rst),              
+    .in_meta_data            (fdw_in_meta_data),                
+    .in_meta_valid           (fdw_in_meta_valid),               
+    .in_meta_ready           (fdw_in_meta_ready),               
+    .out_meta_data           (fdw_out_meta_data),          
+    .out_meta_valid          (fdw_out_meta_valid),         
+    .out_meta_ready          (fdw_out_meta_ready)        
+);
 
 dc_fifo_wrapper_infill  #(
     .SYMBOLS_PER_BEAT(1),
@@ -770,9 +750,9 @@ flow_director_out_fifo (
     .in_csr_write      (1'b0),
     .in_csr_readdata   (fdw_out_meta_csr_readdata),
     .in_csr_writedata  (32'b0),
-    .in_data           (parser_out_fifo_out_data),           
-    .in_valid          (parser_out_fifo_out_valid),          
-    .in_ready          (parser_out_fifo_out_ready),           
+    .in_data           (fdw_out_meta_data),           
+    .in_valid          (fdw_out_meta_valid),          
+    .in_ready          (fdw_out_meta_ready),           
     .in_startofpacket  (1'b0),  
     .in_endofpacket    (1'b0),
     .in_empty          (6'b0), 
