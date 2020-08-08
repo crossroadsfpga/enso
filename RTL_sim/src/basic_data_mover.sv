@@ -93,7 +93,7 @@ always@(posedge clk)begin
         if(meta_valid & meta_ready)begin
             pktID <= meta_data.pktID;
             flits <= meta_data.flits;
-            if(disable_pcie)begin
+            if(disable_pcie & meta_data.pkt_flags!=PKT_DROP)begin
                 pkt_flags <= PKT_ETH;
             end else begin
                 pkt_flags <= meta_data.pkt_flags;

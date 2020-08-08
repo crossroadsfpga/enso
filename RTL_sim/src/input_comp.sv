@@ -10,16 +10,16 @@
 
 `timescale 1 ps / 1 ps
 module input_comp (
-		input  logic         clk,                   
-		input  logic         rst,                   
-		input  logic         eth_sop,      //       
-		input  logic         eth_eop,        //     
-		input  logic [511:0] eth_data,              
+        input  logic         clk,                   
+        input  logic         rst,                   
+        input  logic         eth_sop,      //       
+        input  logic         eth_eop,        //     
+        input  logic [511:0] eth_data,              
         input  logic [5:0]   eth_empty,
-		input  logic         eth_valid,             
-		output logic [PKTBUF_AWIDTH-1:0]   pkt_buffer_address,    
-		output logic         pkt_buffer_write,      
-		output flit_t        pkt_buffer_writedata,  
+        input  logic         eth_valid,             
+        output logic [PKTBUF_AWIDTH-1:0]   pkt_buffer_address,    
+        output logic         pkt_buffer_write,      
+        output flit_t        pkt_buffer_writedata,  
         input  logic [PKT_AWIDTH-1:0]    emptylist_out_data,
         input  logic                    emptylist_out_valid,
         output logic                    emptylist_out_ready,
@@ -33,7 +33,7 @@ module input_comp (
         output metadata_t    meta_data,
         input  logic         meta_ready   
 
-	);
+    );
 //Every pkt struct is 2 KB, which is 32 entries. 
 logic [PKTBUF_AWIDTH-1:0]   pkt_buffer_address_r;    
 logic         pkt_buffer_write_r;      
