@@ -728,22 +728,6 @@ parser_out_fifo (
 //     .out_control_done  (flow_table_wrapper_out_control_done)
 // );
 
-hyper_pipe_fd fd_reg_io(
-    .clk                     (clk),  
-    .rst                     (rst),    
-    .in_meta_data            (flow_table_wrapper_out_meta_data),
-    .in_meta_valid           (flow_table_wrapper_out_meta_valid),
-    .in_meta_almost_full     (fdw_in_meta_almost_full),
-    .out_meta_data           (fdw_out_meta_data),                    
-    .out_meta_valid          (fdw_out_meta_valid), 
-    .out_meta_almost_full    (fdw_out_meta_almost_full),
-    .reg_in_meta_data        (reg_fdw_in_meta_data),       
-    .reg_in_meta_valid       (reg_fdw_in_meta_valid),      
-    .reg_in_meta_almost_full (reg_fdw_in_meta_almost_full),
-    .reg_out_meta_data       (reg_fdw_out_meta_data),      
-    .reg_out_meta_valid      (reg_fdw_out_meta_valid),     
-    .reg_out_meta_almost_full(reg_fdw_out_meta_almost_full)
-);
 
 // flow_director_wrapper flow_director_inst (
 //     .clk                     (clk),                        
@@ -756,19 +740,19 @@ hyper_pipe_fd fd_reg_io(
 //     .out_meta_almost_full    (reg_fdw_out_meta_almost_full)        
 // );
 
-assign parser_out_fifo_out_ready = !fdw_in_meta_almost_full;
-assign reg_fdw_in_meta_valid = parser_out_fifo_out_valid & parser_out_fifo_out_ready;
-
-flow_director_wrapper flow_director_inst (
-    .clk                     (clk),                        
-    .rst                     (rst),              
-    .in_meta_data            (parser_out_fifo_out_data),                
-    .in_meta_valid           (reg_fdw_in_meta_valid),               
-    .reg_in_meta_almost_full (fdw_in_meta_almost_full),               
-    .reg_out_meta_data       (fdw_out_meta_data),          
-    .reg_out_meta_valid      (fdw_out_meta_valid),         
-    .out_meta_almost_full    (reg_fdw_out_meta_almost_full)        
-);
+//assign parser_out_fifo_out_ready = !fdw_in_meta_almost_full;
+//assign reg_fdw_in_meta_valid = parser_out_fifo_out_valid & parser_out_fifo_out_ready;
+//
+//flow_director_wrapper flow_director_inst (
+//    .clk                     (clk),                        
+//    .rst                     (rst),              
+//    .in_meta_data            (parser_out_fifo_out_data),                
+//    .in_meta_valid           (reg_fdw_in_meta_valid),               
+//    .reg_in_meta_almost_full (fdw_in_meta_almost_full),               
+//    .reg_out_meta_data       (fdw_out_meta_data),          
+//    .reg_out_meta_valid      (fdw_out_meta_valid),         
+//    .out_meta_almost_full    (reg_fdw_out_meta_almost_full)        
+//);
 
 dc_fifo_wrapper_infill  #(
     .SYMBOLS_PER_BEAT(1),
@@ -786,9 +770,9 @@ flow_director_out_fifo (
     .in_csr_write      (1'b0),
     .in_csr_readdata   (fdw_out_meta_csr_readdata),
     .in_csr_writedata  (32'b0),
-    .in_data           (reg_fdw_out_meta_data),           
-    .in_valid          (reg_fdw_out_meta_valid),          
-    .in_ready          (reg_fdw_out_meta_ready),           
+    .in_data           (parser_out_fifo_out_data),           
+    .in_valid          (parser_out_fifo_out_valid),          
+    .in_ready          (parser_out_fifo_out_ready),           
     .in_startofpacket  (1'b0),  
     .in_endofpacket    (1'b0),
     .in_empty          (6'b0), 
