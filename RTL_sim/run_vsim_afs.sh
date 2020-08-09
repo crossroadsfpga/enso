@@ -7,7 +7,8 @@ trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
 trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
 # if pkt file not specified, use the default
-PKT_FILE=${1:-"./input_gen/m10_100.pkt"}
+#PKT_FILE=${1:-"./input_gen/m10_100.pkt"}
+PKT_FILE=${1:-"./input_gen/small_pkt_100.pkt"}
 PKT_FILE_NB_LINES=$(wc -l < $PKT_FILE)
 
 rm -rf work

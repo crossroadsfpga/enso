@@ -573,6 +573,13 @@ assign out_valid_int = out_valid & !reg_out_almost_full;
 //pdumeta occupancy cnt
 assign pdumeta_cnt = pdumeta_cpu_csr_readdata[9:0];
 
+//connect flow_director_wrapper with flow_table_wrapper
+assign fdw_in_meta_data  = flow_table_wrapper_out_meta_data;
+assign fdw_in_meta_valid = flow_table_wrapper_out_meta_valid;
+assign flow_table_wrapper_out_ready = fdw_in_meta_ready;
+//assign parser_out_fifo_out_ready = fdw_in_meta_ready;
+
+
 //sync disable_pcie to clk_datamover domain
 always @(posedge clk_datamover) begin
     dm_disable_pcie_r1 <= disable_pcie;
@@ -706,7 +713,7 @@ parser_out_fifo (
     .out_empty         ()          
 );
 
- flow_table_wrapper flow_table_wrapper_0 (
+flow_table_wrapper flow_table_wrapper_0 (
      .clk               (clk),
      .rst               (rst),
      .in_meta_data      (parser_out_fifo_out_data),
@@ -714,15 +721,14 @@ parser_out_fifo (
      .in_meta_ready     (parser_out_fifo_out_ready),
      .out_meta_data     (flow_table_wrapper_out_meta_data),
      .out_meta_valid    (flow_table_wrapper_out_meta_valid),
+     .out_meta_ready    (flow_table_wrapper_out_ready),
      .in_control_data   (pdumeta_cpu_out_data),
      .in_control_valid  (pdumeta_cpu_out_valid),
      .in_control_ready  (pdumeta_cpu_out_ready),
      .out_control_done  (flow_table_wrapper_out_control_done)
  );
 
-assign fdw_in_meta_data  = flow_table_wrapper_out_meta_data;
-assign fdw_in_meta_valid = flow_table_wrapper_out_meta_valid;
-//assign parser_out_fifo_out_ready = fdw_in_meta_ready;
+
 
 flow_director_wrapper flow_director_inst (
     .clk                     (clk),                        
