@@ -134,7 +134,12 @@ end
 //Clock Crossing jtag -> pcie
 always @ (posedge pcie_clk)begin
     pcie_reg_r1[NB_STATUS_REGS-1] <= pcie_reg_status[NB_STATUS_REGS-1];
+`ifdef SIM // HACK(sadok) pcie_reg_pcie assignment does not work in simulation
+           // for some reason, while pcie_reg_pcie_wr does not work on sythesis
     pcie_reg_pcie_wr[NB_STATUS_REGS-1] <= pcie_reg_r1[NB_STATUS_REGS-1];
+`else
+    pcie_reg_pcie[NB_STATUS_REGS-1] <= pcie_reg_r1[NB_STATUS_REGS-1];
+`endif
 end
 assign disable_pcie = pcie_reg_pcie[NB_STATUS_REGS-1][0];
 assign rb_size      = pcie_reg_pcie[NB_STATUS_REGS-1][26:1];
@@ -193,7 +198,9 @@ always_comb begin
                 pcie_reg_pcie_wr[i*REGS_PER_PAGE+j];
         end
     end
+`ifdef SIM
     pcie_reg_pcie[NB_STATUS_REGS-1] =  pcie_reg_pcie_wr[NB_STATUS_REGS-1];
+`endif
 end
 
 assign c2f_tail = 0;
