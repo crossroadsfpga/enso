@@ -17,6 +17,8 @@
 // #include <netinet/in.h>
 // #include <arpa/inet.h> 
 
+#define ZERO_COPY
+
 #include "app.h"
 
 #define BUF_LEN 10000
@@ -75,16 +77,29 @@ int main(int argc, const char* argv[])
             }
         }
 
-        unsigned char buf[BUF_LEN];
+        #ifdef ZERO_COPY
+            unsigned char* buf;
+        #else
+            unsigned char buf[BUF_LEN];
+        #endif
 
         while (keep_running) {
             // HACK(sadok) this only work because socket_fd is incremental it would not work with an actual file descriptor
             for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-                int recv_len = recv(socket_fd, buf, BUF_LEN, 0);
+                #ifdef ZERO_COPY
+                    int recv_len = recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
+                #else
+                    int recv_len = recv(socket_fd, buf, BUF_LEN, 0);
+                #endif
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
                     exit(4);
                 }
+                #ifdef ZERO_COPY
+                    if (recv_len > 0) {
+                        free_pkt_buf(socket_fd);
+                    }
+                #endif
                 goodput += recv_len;
             }
         }

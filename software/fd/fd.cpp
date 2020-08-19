@@ -95,6 +95,11 @@ ssize_t recv_zc(int sockfd, void **buf, size_t len, int flags __attribute__((unu
     return dma_run(&open_sockets[sockfd], buf, len);
 }
 
+void free_pkt_buf(int sockfd)
+{
+    advance_ring_buffer(&open_sockets[sockfd]);
+}
+
 int shutdown(int sockfd, int how __attribute__((unused)))
 {
     int result;
