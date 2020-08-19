@@ -1,8 +1,8 @@
 CXX = g++
 LD = g++
-CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O3 \
+CXXFLAGS = -Wall -ansi -Wextra -O2 -std=c++11 \
 	-I fd/api/linux
-LDFLAGS = -Lfd -lfd -pthread -O3
+LDFLAGS = -O2 -Lfd -lfd -pthread
 
 SRCS = app.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
