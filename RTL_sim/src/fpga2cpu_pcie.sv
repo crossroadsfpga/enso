@@ -82,21 +82,32 @@ assign cpu_data_addr = kmem_addr + 64*tail + 64; //the global reg
 //The base addr of fpga side ring buffer. BRAM starts with an offset
 assign data_base_addr = EP_BASE_ADDR + (RB_BRAM_OFFSET + dma_base_addr) << 6;
 
+assign done_desc = {
+    14'h0,     // function number
+    DONE_ID,   // descriptor ID (8 bits)
+    3'b0,      // application specific
+    1'b0,      // reserved
+    1'b0,      // single source
+    1'b1,      // immediate
+    18'd1,     // number of dwords up to 1MB
+    kmem_addr, // destination PCIe address
+    32'h0, tail_padding, new_tail // src Avalon-MM address or immediate data
+                                  // (when immediate bit is set)
+};
 
 assign desc_padding = 0;
-//data region is the BRAM part. Note there is an offset.
-assign data_desc = {14'h0,desc_padding,dma_size_r,4'b0,cpu_data_addr,32'h0,data_base_addr};
+// data region is the BRAM part. Note there is an offset.
+// First 16 dwords are used for registers
 
-//First 16 dword is for registers
-//14'h function number, 
-//8'h descriptor ID,
-//3'b application specific,
-//1'b single destion, 
-//1'b1 immediate, 
-//18'd number of dwords up to 1MB. 
-//64'b destionation PCIe address
-//64'b src Avalon-MM address or immediate data.
-assign done_desc = {14'h0,DONE_ID,3'b0,1'b0,1'b0,1'b1,18'd1,kmem_addr,32'h0,tail_padding,new_tail};
+assign data_desc = {
+    14'h0,
+    desc_padding,
+    dma_size_r,
+    4'b0,
+    cpu_data_addr,
+    32'h0,
+    data_base_addr
+};
 
 //Rounding case
 assign dma_size_r_low = rb_size - tail;
@@ -105,9 +116,27 @@ assign cpu_data_addr_low = cpu_data_addr;
 assign cpu_data_addr_high = kmem_addr + (1 <<6); //always starts from the beginning
 assign ep_data_addr_high = data_base_addr + {dma_size_r_low,6'b0};
 
-assign data_desc_low = {14'h0,desc_padding,dma_size_r_low,4'b0,cpu_data_addr_low,32'h0,data_base_addr};
-assign data_desc_high = {14'h0,desc_padding,dma_size_r_high,4'b0,cpu_data_addr_high,32'h0,ep_data_addr_high};
-
+// When the data wraps around the ring buffer we use two DMAs: one for the first
+// part (until the end of the buffer) and the other for the second part. For
+// such case, we use the following two write data mover descriptors.
+assign data_desc_low = {
+    14'h0,
+    desc_padding,
+    dma_size_r_low,
+    4'b0,
+    cpu_data_addr_low,
+    32'h0,
+    data_base_addr
+};
+assign data_desc_high = {
+    14'h0,
+    desc_padding,
+    dma_size_r_high,
+    4'b0,
+    cpu_data_addr_high,
+    32'h0,
+    ep_data_addr_high
+};
 
 //Always have at least one slot not occupied.
 assign free_slot = (tail >= head) ? (rb_size - tail + head -1) : (head - tail -1);
