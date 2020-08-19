@@ -66,7 +66,7 @@ static inline uint32_t get_block_payload(uint32_t *addr, void** payload_ptr,
     return len;
 }
 
-int dma_init(socket_internal* socket_entry)
+int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues)
 {
     int result;
     void *mmap_addr, *uio_mmap_bar2_addr;
@@ -74,7 +74,7 @@ int dma_init(socket_internal* socket_entry)
     intel_fpga_pcie_dev *dev = socket_entry->dev;
 
     // FIXME(sadok) should find a better identifier than core id
-    app_id = sched_getcpu();
+    app_id = sched_getcpu() * nb_queues + socket_id;
     if (app_id < 0) {
         std::cerr << "Could not get cpu id" << std::endl;
         return -1;

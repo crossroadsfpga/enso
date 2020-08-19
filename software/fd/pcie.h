@@ -101,7 +101,7 @@ typedef struct {
     int app_id;
 } socket_internal;
 
-int dma_init(socket_internal* socket_entry);
+int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues);
 int dma_run(socket_internal* socket_entry, void** buf, size_t len);
 void advance_ring_buffer(socket_internal* socket_entry);
 int send_control_message(socket_internal* socket_entry, unsigned int nb_rules);

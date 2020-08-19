@@ -11,7 +11,7 @@ static socket_internal open_sockets[MAX_NB_SOCKETS];
 static unsigned int nb_open_sockets = 0;
 
 int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
-    int protocol __attribute__((unused)))
+    int nb_queues) // HACK(sadok) using protocol as nb_queues
 {
     intel_fpga_pcie_dev *dev;
     uint16_t bdf = 0;
@@ -40,7 +40,7 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     }
 
     open_sockets[nb_open_sockets].dev = dev;
-    result = dma_init(&open_sockets[nb_open_sockets]);
+    result = dma_init(&open_sockets[nb_open_sockets], nb_open_sockets, nb_queues);
 
     if (unlikely(result < 0)) {
         std::cerr << "Problem initializing DMA" << std::endl;
