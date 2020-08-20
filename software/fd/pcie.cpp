@@ -115,6 +115,8 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     socket_entry->c2f_cpu_tail = 0;
     socket_entry->cpu_head = *(socket_entry->head_ptr);
 
+    socket_entry->nb_head_updates = 0;
+
     return 0;
 }
 
@@ -129,6 +131,7 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 
     cpu_tail = *(socket_entry->tail_ptr);
     if (unlikely(cpu_tail == cpu_head)) {
+        socket_entry->last_flits = 0;
         return 0;
     }
 
@@ -147,7 +150,7 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     }
 
     block_s pdu; //current PDU block
-    fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
+    // fill_block(&kdata[(cpu_head + 1) * 16], &pdu); // FIXME(sadok) Do we need this?
     // print_block(&pdu);
 
     // fill in the pdu hdr
@@ -195,9 +198,16 @@ void advance_ring_buffer(socket_internal* socket_entry)
     // method using syscall
     // dev->write32(2, reinterpret_cast<void *>(HEAD_OFFSET), cpu_head);
 
-    // method using UIO
-    asm volatile ("" : : : "memory"); // compiler memory barrier
-    *(socket_entry->head_ptr) = cpu_head;
+    // HACK(sadok) there seems to be a limitation to the rate of updates we
+    // can issue to the MMIO region. This ensures that we reduce this number.
+    // However, it is not yet clear what the threshhold should be here, 10 seems
+    // to work for now
+    if (socket_entry->nb_head_updates > 10){
+        asm volatile ("" : : : "memory"); // compiler memory barrier
+        *(socket_entry->head_ptr) = cpu_head;
+        socket_entry->nb_head_updates = 0;
+    }
+    ++(socket_entry->nb_head_updates);
 
     socket_entry->cpu_head = cpu_head;
 }
