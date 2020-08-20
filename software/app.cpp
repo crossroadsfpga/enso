@@ -37,6 +37,7 @@ int main(int argc, const char* argv[])
 {
     int result;
     uint64_t goodput = 0;
+    uint64_t nb_pkts = 0;
 
     if (argc != 5) {
         std::cerr << "Usage: " << argv[0] << " core port nb_rules nb_queues"
@@ -50,7 +51,7 @@ int main(int argc, const char* argv[])
 
     std::cout << "running test with " << nb_rules << " rules" << std::endl;
     
-    std::thread socket_thread = std::thread([&goodput, port, nb_rules, nb_queues] {
+    std::thread socket_thread = std::thread([&goodput, port, nb_rules, nb_queues, &nb_pkts] {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
@@ -84,7 +85,8 @@ int main(int argc, const char* argv[])
         #endif
 
         while (keep_running) {
-            // HACK(sadok) this only work because socket_fd is incremental it would not work with an actual file descriptor
+            // HACK(sadok) this only works because socket_fd is incremental, it
+            // would not work with an actual file descriptor
             for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
                 #ifdef ZERO_COPY
                     int recv_len = recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
@@ -95,11 +97,12 @@ int main(int argc, const char* argv[])
                     std::cerr << "Error receiving" << std::endl;
                     exit(4);
                 }
-                #ifdef ZERO_COPY
-                    if (recv_len > 0) {
-                        free_pkt_buf(socket_fd);
-                    }
-                #endif
+                if (recv_len > 0) {
+                    ++nb_pkts;
+                    #ifdef ZERO_COPY
+                    free_pkt_buf(socket_fd);
+                    #endif
+                }
                 goodput += recv_len;
             }
         }
@@ -125,7 +128,7 @@ int main(int argc, const char* argv[])
         goodput = 0;
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::cout << std::dec << "Goodput: " << ((double) goodput) * 8. /1e6
-                  << " Mbps" << std::endl;
+                  << " Mbps" << "  #pkts: " << nb_pkts << std::endl;
     }
 
     socket_thread.join();
