@@ -16,6 +16,9 @@
 // logic devices manufactured by Intel and sold by Intel or its authorized
 // distributors. Please refer to the applicable agreement for further details.
 
+// Uncomment the following when debugging to check the packet rate
+// #define CHECK_PACKET_RATE
+
 #include <termios.h>
 #include <time.h>
 #include <cerrno>
@@ -27,6 +30,10 @@
 #include <stdexcept>
 #include <system_error>
 #include <string.h>
+
+#ifdef CHECK_PACKET_RATE
+#include <chrono>
+#endif
 
 #include <sched.h>
 #include <netinet/in.h>
@@ -120,6 +127,12 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     return 0;
 }
 
+#ifdef CHECK_PACKET_RATE
+static uint64_t nb_packets = 0;
+static std::chrono::time_point<std::chrono::high_resolution_clock> start;
+#define NB_EXPECTED_PKTS 1000000
+#endif // CHECK_PACKET_RATE
+
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
     unsigned int cpu_head = socket_entry->cpu_head;
@@ -134,6 +147,13 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
         socket_entry->last_flits = 0;
         return 0;
     }
+
+#ifdef CHECK_PACKET_RATE
+    if (unlikely(nb_packets == 0)) {
+        start = std::chrono::high_resolution_clock::now();
+    }
+    nb_packets++;
+#endif // CHECK_PACKET_RATE
 
     // calculate free_slot
     if (cpu_tail <= cpu_head) {
@@ -150,7 +170,9 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     }
 
     block_s pdu; //current PDU block
-    // fill_block(&kdata[(cpu_head + 1) * 16], &pdu); // FIXME(sadok) Do we need this?
+
+    // make sure we are reading the packet
+    fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
     // print_block(&pdu);
 
     // fill in the pdu hdr
@@ -181,6 +203,16 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     }
 
     socket_entry->last_flits = pdu_flit;
+
+#ifdef CHECK_PACKET_RATE
+    if (unlikely(nb_packets == NB_EXPECTED_PKTS)) {
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> diff = end - start;
+        double packet_rate = ((double) NB_EXPECTED_PKTS) / diff.count() * 1e-6;
+        std::cout << "Packet rate: " << packet_rate << " Mpps" << std::endl;
+        nb_packets = 0;
+    }
+#endif // CHECK_PACKET_RATE
 
     return payload_size;
 }
