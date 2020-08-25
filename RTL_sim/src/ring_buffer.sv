@@ -56,7 +56,8 @@ input  logic         dma_done;
 typedef enum
 {
     IDLE,
-    WAIT
+    WAIT,
+    DELAY
 } state_t;
 state_t state;
 
@@ -71,6 +72,7 @@ logic [PDU_AWIDTH-1:0]  rd_addr_r2;
 logic [PDU_AWIDTH-1:0] last_tail;
 logic wrap;
 logic [PDU_AWIDTH-1:0] send_slot;
+logic bram_delay;
 
 assign wr_base_addr = tail;
 
@@ -131,6 +133,7 @@ always@(posedge clk)begin
         dma_start <= 0;
         dma_size <= 0;
         dma_base_addr <= 0;
+        bram_delay <= 0;
     end else begin
         case(state)
             IDLE:begin
@@ -145,10 +148,25 @@ always@(posedge clk)begin
             WAIT:begin
                 dma_start <= 0;
                 if(dma_done)begin
-                    state <= IDLE;
+                    // state <= IDLE;
+                    state <= DELAY; // FIXME(sadok) I'm introducing a delay
+                                    // after DMA is done, to read the BRAM. A
+                                    // better strategy is to somehow prefetch
+                                    // the BRAM. Once this is done, should get
+                                    // rid of the DELAY state and go straight to
+                                    // IDLE
                 end
-           end
-           default: state <= IDLE;
+            end
+            DELAY:begin
+                if (bram_delay) begin
+                    bram_delay <= 0;
+                    state <= IDLE;
+                end else begin
+                    bram_delay <= 1;
+                    state <= DELAY;
+                end
+            end
+            default: state <= IDLE;
         endcase
     end
 end
