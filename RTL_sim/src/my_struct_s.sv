@@ -177,6 +177,8 @@ parameter PCIE_ADDR_WIDTH = 30;
 
 parameter REGS_PER_PAGE = 4;
 parameter NB_STATUS_REGS = MAX_NB_APPS * REGS_PER_PAGE;
+parameter STATS_REGS_WIDTH = ($clog2(NB_STATUS_REGS));
+parameter JTAG_ADDR_WIDTH = ($clog2(NB_STATUS_REGS+1)); // includes control reg
 
 
 parameter PDU_META_WIDTH=(TUPLE_DWIDTH+64);

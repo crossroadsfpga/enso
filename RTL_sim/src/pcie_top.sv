@@ -123,7 +123,8 @@ always@(posedge clk_status)begin
         if (status_addr_r[6:0] == 0) begin
             status_readdata <= control_reg_status;
         end else begin
-            status_readdata <= pcie_reg_status[{status_addr_r[6:0]-1}[5:0]]; // FIXME(sadok) should depend on the number of apps
+            status_readdata <= pcie_reg_status[
+                {status_addr_r[0 +:JTAG_ADDR_WIDTH]-1}[0 +:STATS_REGS_WIDTH]];
         end
         status_readdata_valid <= 1;
     end
