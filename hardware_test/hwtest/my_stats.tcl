@@ -55,7 +55,7 @@ set DM_ETH_PKT          19
 set DMA_PKT             20
 
 #PCIE reg
-set PCIE_CTRL_REG       64
+set PCIE_CTRL_REG       0
 
 set log 0
 #clock period

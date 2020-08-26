@@ -120,16 +120,16 @@ always@(posedge clk_status)begin
     status_readdata_valid <= 0;
 
     if(status_addr_sel_r == PCIE & status_read_r) begin
-        if (status_addr_r[6:0] == 7'd64) begin // TODO(sadok) change to 0
+        if (status_addr_r[6:0] == 0) begin
             status_readdata <= control_reg_status;
         end else begin
-            status_readdata <= pcie_reg_status[status_addr_r[5:0]]; // FIXME(sadok) should depend on the number of apps
+            status_readdata <= pcie_reg_status[{status_addr_r[6:0]-1}[5:0]]; // FIXME(sadok) should depend on the number of apps
         end
         status_readdata_valid <= 1;
     end
 
     if (status_addr_sel_r == PCIE & status_write_r) begin
-        if (status_addr_r[6:0] == 7'd64) begin // TODO(sadok) change to 0
+        if (status_addr_r[6:0] == 0) begin 
             control_reg_status <= status_writedata_r;
         end
     end
