@@ -66,8 +66,11 @@ logic [STAT_AWIDTH-1:0] status_addr_sel_r;
 logic [31:0] pcie_reg_status [NB_STATUS_REGS-1:0];
 logic [31:0] pcie_reg_r1 [NB_STATUS_REGS-1:0];
 logic [31:0] pcie_reg_pcie [NB_STATUS_REGS-1:0];
+logic [31:0] pcie_reg_pcie_wr [NB_STATUS_REGS-1:0];
 
-logic [31:0] pcie_reg_pcie_wr [NB_STATUS_REGS-1:0]; 
+logic [31:0] control_reg_status;
+logic [31:0] control_reg_r1;
+logic [31:0] control_reg;
 
 //internal signals
 pcie_block_t pcie_block;
@@ -98,10 +101,10 @@ logic [63:0]                c2f_head_addr;
 
 logic                    dma_done;
 logic [RB_AWIDTH-1:0]    new_tail;
-logic [RB_AWIDTH-1:0]    tails     [15:0];
-logic [RB_AWIDTH-1:0]    heads     [15:0];
-logic [31:0]             kmem_low  [15:0];
-logic [31:0]             kmem_high [15:0];
+logic [RB_AWIDTH-1:0]    tails     [MAX_NB_APPS-1:0];
+logic [RB_AWIDTH-1:0]    heads     [MAX_NB_APPS-1:0];
+logic [31:0]             kmem_low  [MAX_NB_APPS-1:0];
+logic [31:0]             kmem_high [MAX_NB_APPS-1:0];
 
 logic [C2F_RB_AWIDTH-1:0]   c2f_head_1;
 
@@ -117,38 +120,39 @@ always@(posedge clk_status)begin
     status_readdata_valid <= 0;
 
     if(status_addr_sel_r == PCIE & status_read_r) begin
-        status_readdata <= pcie_reg_status[status_addr_r[6:0]];
+        if (status_addr_r[6:0] == 7'd64) begin
+            status_readdata <= control_reg_status;
+        end else begin
+            status_readdata <= pcie_reg_status[status_addr_r[6:0]];
+        end
         status_readdata_valid <= 1;
     end
 
-    if(status_addr_sel_r == PCIE & status_write_r) begin
-        case (status_addr_r[6:0])
-            7'd64: begin
-                pcie_reg_status[NB_STATUS_REGS-1] <= status_writedata_r;
-            end
-        endcase
+    if (status_addr_sel_r == PCIE & status_write_r) begin
+        if (status_addr_r[6:0] == 7'd64) begin
+            control_reg_status <= status_writedata_r;
+        end
     end
 end
 
 
 //Clock Crossing jtag -> pcie
 always @ (posedge pcie_clk)begin
-    pcie_reg_r1[NB_STATUS_REGS-1] <= pcie_reg_status[NB_STATUS_REGS-1];
-`ifdef SIM // HACK(sadok) pcie_reg_pcie assignment does not work in simulation
-           // for some reason, while pcie_reg_pcie_wr does not work on sythesis
-    pcie_reg_pcie_wr[NB_STATUS_REGS-1] <= pcie_reg_r1[NB_STATUS_REGS-1];
-`else
-    pcie_reg_pcie[NB_STATUS_REGS-1] <= pcie_reg_r1[NB_STATUS_REGS-1];
-`endif
+    control_reg_r1 <= control_reg_status;
+    control_reg <= control_reg_r1;
 end
-assign disable_pcie = pcie_reg_pcie[NB_STATUS_REGS-1][0];
-assign rb_size      = pcie_reg_pcie[NB_STATUS_REGS-1][26:1];
-assign total_core   = pcie_reg_pcie[NB_STATUS_REGS-1][31:27];
+// assign disable_pcie = pcie_reg_pcie[NB_STATUS_REGS-1][0];
+// assign rb_size      = pcie_reg_pcie[NB_STATUS_REGS-1][26:1];
+// assign total_core   = pcie_reg_pcie[NB_STATUS_REGS-1][31:27];
+assign disable_pcie = control_reg[0];
+assign rb_size      = control_reg[26:1];
+assign total_core   = control_reg[31:27];
+
 //Clock Crossing pcie -> jtag
 always @ (posedge clk_status)begin
     integer i;
     // last register is special
-    for (i = 0; i < (NB_STATUS_REGS-1); i = i + 1) begin
+    for (i = 0; i < NB_STATUS_REGS; i = i + 1) begin
         pcie_reg_r1[i]     <= pcie_reg_pcie[i];
         pcie_reg_status[i] <= pcie_reg_r1[i];
     end
@@ -164,7 +168,7 @@ assign reg_set_idx = page_idx * REGS_PER_PAGE;
 always@(posedge pcie_clk)begin
     integer i;
     if (!pcie_reset_n) begin
-        for (i = 0; i < NB_STATUS_REGS-1; i = i + 1) begin
+        for (i = 0; i < NB_STATUS_REGS; i = i + 1) begin
             pcie_reg_pcie_wr[i] <= 0;
         end
     end else if (pcie_write_0) begin
@@ -188,7 +192,7 @@ always_comb begin
     integer i;
     integer j;
 
-    for (i = 0; i < (NB_STATUS_REGS-1)/REGS_PER_PAGE; i = i + 1) begin
+    for (i = 0; i < NB_STATUS_REGS/REGS_PER_PAGE; i = i + 1) begin
         pcie_reg_pcie[i*REGS_PER_PAGE] = tails[i];
         heads[i] = pcie_reg_pcie[i*REGS_PER_PAGE+1];
         kmem_low[i] = pcie_reg_pcie[i*REGS_PER_PAGE+2];
@@ -198,9 +202,6 @@ always_comb begin
                 pcie_reg_pcie_wr[i*REGS_PER_PAGE+j];
         end
     end
-`ifdef SIM
-    pcie_reg_pcie[NB_STATUS_REGS-1] =  pcie_reg_pcie_wr[NB_STATUS_REGS-1];
-`endif
 end
 
 assign c2f_tail = 0;
@@ -214,7 +215,7 @@ assign c2f_head_addr = 0;
 always@(posedge pcie_clk)begin
     integer i;
     if(!pcie_reset_n)begin
-        for (i = 0; i < (NB_STATUS_REGS-1)/REGS_PER_PAGE; i = i + 1) begin
+        for (i = 0; i < NB_STATUS_REGS/REGS_PER_PAGE; i = i + 1) begin
             tails[i] <= 0;
         end
         f2c_tail <= 0;
