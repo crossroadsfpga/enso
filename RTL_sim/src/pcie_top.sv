@@ -120,16 +120,16 @@ always@(posedge clk_status)begin
     status_readdata_valid <= 0;
 
     if(status_addr_sel_r == PCIE & status_read_r) begin
-        if (status_addr_r[6:0] == 7'd64) begin
+        if (status_addr_r[6:0] == 7'd64) begin // TODO(sadok) change to 0
             status_readdata <= control_reg_status;
         end else begin
-            status_readdata <= pcie_reg_status[status_addr_r[6:0]];
+            status_readdata <= pcie_reg_status[status_addr_r[5:0]]; // FIXME(sadok) should depend on the number of apps
         end
         status_readdata_valid <= 1;
     end
 
     if (status_addr_sel_r == PCIE & status_write_r) begin
-        if (status_addr_r[6:0] == 7'd64) begin
+        if (status_addr_r[6:0] == 7'd64) begin // TODO(sadok) change to 0
             control_reg_status <= status_writedata_r;
         end
     end
@@ -141,9 +141,6 @@ always @ (posedge pcie_clk)begin
     control_reg_r1 <= control_reg_status;
     control_reg <= control_reg_r1;
 end
-// assign disable_pcie = pcie_reg_pcie[NB_STATUS_REGS-1][0];
-// assign rb_size      = pcie_reg_pcie[NB_STATUS_REGS-1][26:1];
-// assign total_core   = pcie_reg_pcie[NB_STATUS_REGS-1][31:27];
 assign disable_pcie = control_reg[0];
 assign rb_size      = control_reg[26:1];
 assign total_core   = control_reg[31:27];
@@ -192,7 +189,7 @@ always_comb begin
     integer i;
     integer j;
 
-    for (i = 0; i < NB_STATUS_REGS/REGS_PER_PAGE; i = i + 1) begin
+    for (i = 0; i < MAX_NB_APPS; i = i + 1) begin
         pcie_reg_pcie[i*REGS_PER_PAGE] = tails[i];
         heads[i] = pcie_reg_pcie[i*REGS_PER_PAGE+1];
         kmem_low[i] = pcie_reg_pcie[i*REGS_PER_PAGE+2];
@@ -215,7 +212,7 @@ assign c2f_head_addr = 0;
 always@(posedge pcie_clk)begin
     integer i;
     if(!pcie_reset_n)begin
-        for (i = 0; i < NB_STATUS_REGS/REGS_PER_PAGE; i = i + 1) begin
+        for (i = 0; i < MAX_NB_APPS; i = i + 1) begin
             tails[i] <= 0;
         end
         f2c_tail <= 0;
