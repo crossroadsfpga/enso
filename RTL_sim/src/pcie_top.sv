@@ -137,6 +137,38 @@ logic q_table_heads_wr_en_b;
 logic q_table_l_addrs_wr_en_b;
 logic q_table_h_addrs_wr_en_b;
 
+logic q_table_tails_rd_en_b_jtag;
+logic q_table_heads_rd_en_b_jtag;
+logic q_table_l_addrs_rd_en_b_jtag;
+logic q_table_h_addrs_rd_en_b_jtag;
+
+logic q_table_tails_rd_en_b_jtag_r1;
+logic q_table_heads_rd_en_b_jtag_r1;
+logic q_table_l_addrs_rd_en_b_jtag_r1;
+logic q_table_h_addrs_rd_en_b_jtag_r1;
+
+logic [APP_IDX_WIDTH-1:0] q_table_tails_addr_b_jtag;
+logic [APP_IDX_WIDTH-1:0] q_table_heads_addr_b_jtag;
+logic [APP_IDX_WIDTH-1:0] q_table_l_addrs_addr_b_jtag;
+logic [APP_IDX_WIDTH-1:0] q_table_h_addrs_addr_b_jtag;
+
+logic [APP_IDX_WIDTH-1:0] q_table_tails_addr_b_jtag_r1;
+logic [APP_IDX_WIDTH-1:0] q_table_heads_addr_b_jtag_r1;
+logic [APP_IDX_WIDTH-1:0] q_table_l_addrs_addr_b_jtag_r1;
+logic [APP_IDX_WIDTH-1:0] q_table_h_addrs_addr_b_jtag_r1;
+
+logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] q_table_tails_rd_data_b_r;
+logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] q_table_tails_rd_data_b_jtag;
+
+logic [QUEUE_TABLE_HEADS_DWIDTH-1:0] q_table_heads_rd_data_b_r;
+logic [QUEUE_TABLE_HEADS_DWIDTH-1:0] q_table_heads_rd_data_b_jtag;
+
+logic [QUEUE_TABLE_L_ADDRS_DWIDTH-1:0] q_table_l_addrs_rd_data_b_r;
+logic [QUEUE_TABLE_L_ADDRS_DWIDTH-1:0] q_table_l_addrs_rd_data_b_jtag;
+
+logic [QUEUE_TABLE_H_ADDRS_DWIDTH-1:0] q_table_h_addrs_rd_data_b_r;
+logic [QUEUE_TABLE_H_ADDRS_DWIDTH-1:0] q_table_h_addrs_rd_data_b_jtag;
+
 logic [RB_AWIDTH-1:0]    f2c_head;
 logic [RB_AWIDTH-1:0]    f2c_tail;
 logic [63:0]             f2c_kmem_addr;
@@ -159,10 +191,10 @@ logic [31:0]             kmem_high [MAX_NB_APPS-1:0];
 
 logic [C2F_RB_AWIDTH-1:0]   c2f_head_1;
 logic [1:0] pending_table;
-logic [1:0] pending_table_r;
-logic [1:0] pending_table_r2;
 logic rd_en_r;
 logic rd_en_r2;
+logic rd_en_jtag;
+logic rd_en_jtag_r;
 
 // JTAG
 always@(posedge clk_status)begin
@@ -175,31 +207,24 @@ always@(posedge clk_status)begin
 
     status_readdata_valid <= 0;
     
-    q_table_tails_rd_en_b <= 0;
-    q_table_heads_rd_en_b <= 0;
-    q_table_l_addrs_rd_en_b <= 0;
-    q_table_h_addrs_rd_en_b <= 0;
+    q_table_tails_rd_en_b_jtag <= 0;
+    q_table_heads_rd_en_b_jtag <= 0;
+    q_table_l_addrs_rd_en_b_jtag <= 0;
+    q_table_h_addrs_rd_en_b_jtag <= 0;
 
-    pending_table <= 0;
-    pending_table_r <= pending_table;
-    pending_table_r2 <= pending_table_r;
-    rd_en_r <= q_table_tails_rd_en_b | q_table_heads_rd_en_b | 
-        q_table_l_addrs_rd_en_b | q_table_h_addrs_rd_en_b;
-    rd_en_r2 <= rd_en_r;
-
-    if (rd_en_r2) begin
-        case (pending_table_r2)
+    if (rd_en_jtag_r) begin
+        case (pending_table)
             2'd0: begin
-                status_readdata <= q_table_tails_rd_data_b;
+                status_readdata <= q_table_tails_rd_data_b_jtag;
             end
             2'd1: begin
-                status_readdata <= q_table_heads_rd_data_b;
+                status_readdata <= q_table_heads_rd_data_b_jtag;
             end
             2'd2: begin
-                status_readdata <= q_table_l_addrs_rd_data_b;
+                status_readdata <= q_table_l_addrs_rd_data_b_jtag;
             end
             2'd3: begin
-                status_readdata <= q_table_h_addrs_rd_data_b;
+                status_readdata <= q_table_h_addrs_rd_data_b_jtag;
             end
         endcase
         status_readdata_valid <= 1;
@@ -215,26 +240,26 @@ always@(posedge clk_status)begin
             case ({status_addr_r[0 +:JTAG_ADDR_WIDTH]-1}[1:0])
                 2'd0: begin
                     pending_table <= 2'd0;
-                    q_table_tails_rd_en_b <= 1;
-                    q_table_tails_addr_b <= {status_addr_r[
+                    q_table_tails_rd_en_b_jtag <= 1;
+                    q_table_tails_addr_b_jtag <= {status_addr_r[
                         0 +:JTAG_ADDR_WIDTH]-1}[2 +:APP_IDX_WIDTH];
                 end
                 2'd1: begin
                     pending_table <= 2'd1;
-                    q_table_heads_rd_en_b <= 1;
-                    q_table_heads_addr_b <= {status_addr_r[
+                    q_table_heads_rd_en_b_jtag <= 1;
+                    q_table_heads_addr_b_jtag <= {status_addr_r[
                         0 +:JTAG_ADDR_WIDTH]-1}[2 +:APP_IDX_WIDTH];
                 end
                 2'd2: begin
                     pending_table <= 2'd2;
-                    q_table_l_addrs_rd_en_b <= 1;
-                    q_table_l_addrs_addr_b <= {status_addr_r[
+                    q_table_l_addrs_rd_en_b_jtag <= 1;
+                    q_table_l_addrs_addr_b_jtag <= {status_addr_r[
                         0 +:JTAG_ADDR_WIDTH]-1}[2 +:APP_IDX_WIDTH];
                 end
                 2'd3: begin
                     pending_table <= 2'd3;
-                    q_table_h_addrs_rd_en_b <= 1;
-                    q_table_h_addrs_addr_b <= {status_addr_r[
+                    q_table_h_addrs_rd_en_b_jtag <= 1;
+                    q_table_h_addrs_addr_b_jtag <= {status_addr_r[
                         0 +:JTAG_ADDR_WIDTH]-1}[2 +:APP_IDX_WIDTH];
                 end
             endcase
@@ -253,6 +278,30 @@ end
 always @ (posedge pcie_clk)begin
     control_reg_r1 <= control_reg_status;
     control_reg <= control_reg_r1;
+
+    q_table_tails_rd_en_b_jtag_r1 <= q_table_tails_rd_en_b_jtag;
+    q_table_tails_rd_en_b <= q_table_tails_rd_en_b_jtag_r1;
+    q_table_tails_addr_b_jtag_r1 <= q_table_tails_addr_b_jtag;
+    q_table_tails_addr_b <= q_table_tails_addr_b_jtag_r1;
+
+    q_table_heads_rd_en_b_jtag_r1 <= q_table_heads_rd_en_b_jtag;
+    q_table_heads_rd_en_b <= q_table_heads_rd_en_b_jtag_r1;
+    q_table_heads_addr_b_jtag_r1 <= q_table_heads_addr_b_jtag;
+    q_table_heads_addr_b <= q_table_heads_addr_b_jtag_r1;
+    
+    q_table_l_addrs_rd_en_b_jtag_r1 <= q_table_l_addrs_rd_en_b_jtag;
+    q_table_l_addrs_rd_en_b <= q_table_l_addrs_rd_en_b_jtag_r1;
+    q_table_l_addrs_addr_b_jtag_r1 <= q_table_l_addrs_addr_b_jtag;
+    q_table_l_addrs_addr_b <= q_table_l_addrs_addr_b_jtag_r1;
+    
+    q_table_h_addrs_rd_en_b_jtag_r1 <= q_table_h_addrs_rd_en_b_jtag;
+    q_table_h_addrs_rd_en_b <= q_table_h_addrs_rd_en_b_jtag_r1;
+    q_table_h_addrs_addr_b_jtag_r1 <= q_table_h_addrs_addr_b_jtag;
+    q_table_h_addrs_addr_b <= q_table_h_addrs_addr_b_jtag_r1;
+
+    rd_en_r <= q_table_tails_rd_en_b | q_table_heads_rd_en_b | 
+        q_table_l_addrs_rd_en_b | q_table_h_addrs_rd_en_b;
+    rd_en_r2 <= rd_en_r;
 end
 assign disable_pcie = control_reg[0];
 assign rb_size      = control_reg[26:1];
@@ -261,11 +310,22 @@ assign total_core   = control_reg[31:27];
 //Clock Crossing pcie -> jtag
 always @ (posedge clk_status)begin
     integer i;
-    // last register is special
     for (i = 0; i < NB_STATUS_REGS; i = i + 1) begin
         pcie_reg_r1[i]     <= pcie_reg_pcie[i];
         pcie_reg_status[i] <= pcie_reg_r1[i];
     end
+
+    rd_en_jtag <= rd_en_r2;
+    rd_en_jtag_r <= rd_en_jtag;
+
+    q_table_tails_rd_data_b_r <= q_table_tails_rd_data_b;
+    q_table_tails_rd_data_b_jtag <= q_table_tails_rd_data_b_r;
+    q_table_heads_rd_data_b_r <= q_table_heads_rd_data_b;
+    q_table_heads_rd_data_b_jtag <= q_table_heads_rd_data_b_r;
+    q_table_l_addrs_rd_data_b_r <= q_table_l_addrs_rd_data_b;
+    q_table_l_addrs_rd_data_b_jtag <= q_table_l_addrs_rd_data_b_r;
+    q_table_h_addrs_rd_data_b_r <= q_table_h_addrs_rd_data_b;
+    q_table_h_addrs_rd_data_b_jtag <= q_table_h_addrs_rd_data_b_r;
 end
 
 // we choose the right set of registers based on the page (the page's index LSB
