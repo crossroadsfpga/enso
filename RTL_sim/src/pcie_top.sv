@@ -335,7 +335,7 @@ assign page_idx = pcie_address_0[12 +: APP_IDX_WIDTH];
 assign reg_set_idx = page_idx * REGS_PER_PAGE;
 
 // update PIO register
-always@(posedge pcie_clk)begin
+always@(posedge pcie_clk) begin
     integer i;
     // q_table_tails_wr_en_a <= 0;
     q_table_heads_wr_en_a <= 0;
@@ -383,6 +383,9 @@ always@(posedge pcie_clk)begin
             q_table_h_addrs_wr_en_a <= 1;
             q_table_h_addrs_addr_a <= page_idx;
         end
+    // end else if () begin
+    //     // TODO(sadok) add JTAG reads here
+
     end
 end
 
@@ -407,7 +410,8 @@ end
 typedef enum
 {
     IDLE,
-    BRAM_DELAY,
+    BRAM_DELAY_1,
+    BRAM_DELAY_2,
     SWITCH_QUEUE
 } state_t;
 state_t state;
@@ -470,7 +474,7 @@ always@(posedge pcie_clk)begin
                     // once we start using value from BRAM
                     // q_table_rd_en_a <= 1;
 
-                    state <= BRAM_DELAY;
+                    state <= BRAM_DELAY_1;
                     // f2c_tail <= new_tail;
                     tails[queue_id] <= new_tail; // FIXME(sadok)
                 end
@@ -480,7 +484,10 @@ always@(posedge pcie_clk)begin
                 // f2c_head      <= heads[queue_id][RB_AWIDTH-1:0];
                 // f2c_kmem_addr <= {kmem_high[queue_id],kmem_low[queue_id]};
             end
-            BRAM_DELAY: begin
+            BRAM_DELAY_1: begin
+                state <= BRAM_DELAY_2;
+            end
+            BRAM_DELAY_2: begin
                 state <= SWITCH_QUEUE;
             end
             SWITCH_QUEUE: begin
