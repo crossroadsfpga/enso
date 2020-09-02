@@ -156,6 +156,13 @@ typedef struct packed
     logic [31:0] pdu_id;
 } pdu_hdr_t;
 
+typedef struct packed
+{
+    logic [31:0] f2c_tail;
+    logic [31:0] f2c_head;
+    logic [63:0] f2c_kmem_addr;
+} queue_state_t;
+
 //Ring buffer 
 //Used for FPGA-CPU communication. Some fields are FPGA read only, used for
 //CPU indicatings FPGA info. Some fields are CPU read only, used for FPGA
@@ -180,6 +187,15 @@ parameter NB_STATUS_REGS = MAX_NB_APPS * REGS_PER_PAGE;
 parameter STATS_REGS_WIDTH = ($clog2(NB_STATUS_REGS));
 parameter JTAG_ADDR_WIDTH = ($clog2(NB_STATUS_REGS+1)); // includes control reg
 
+// queue table that keeps state for every queue
+parameter QUEUE_TABLE_DEPTH = MAX_NB_APPS;
+parameter QUEUE_TABLE_AWIDTH = ($clog2(QUEUE_TABLE_DEPTH));
+// TODO(sadok) we may save space by only holding an offset to kmem address,
+// we also do not need 32 bits for the tail and head 
+parameter QUEUE_TABLE_TAILS_DWIDTH = 32;
+parameter QUEUE_TABLE_HEADS_DWIDTH = 32;
+parameter QUEUE_TABLE_L_ADDRS_DWIDTH = 32;
+parameter QUEUE_TABLE_H_ADDRS_DWIDTH = 32;
 
 parameter PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 typedef struct packed

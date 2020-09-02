@@ -82,9 +82,60 @@ logic read_0_r2;
 logic [25:0] rb_size;
 logic [4:0]  total_core;
 logic [3:0]  core_id;
+logic [3:0]  next_core_id;
 logic internal_update_valid;
 logic [APP_IDX_WIDTH-1:0] page_idx;
 logic [$clog2(NB_STATUS_REGS)-1:0] reg_set_idx;
+
+// queue table
+logic [APP_IDX_WIDTH-1:0] q_table_tails_addr_a;
+logic [APP_IDX_WIDTH-1:0] q_table_heads_addr_a;
+logic [APP_IDX_WIDTH-1:0] q_table_l_addrs_addr_a;
+logic [APP_IDX_WIDTH-1:0] q_table_h_addrs_addr_a;
+logic [APP_IDX_WIDTH-1:0] q_table_tails_addr_b;
+logic [APP_IDX_WIDTH-1:0] q_table_heads_addr_b;
+logic [APP_IDX_WIDTH-1:0] q_table_l_addrs_addr_b;
+logic [APP_IDX_WIDTH-1:0] q_table_h_addrs_addr_b;
+logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] q_table_tails_wr_data_a;
+logic [QUEUE_TABLE_HEADS_DWIDTH-1:0] q_table_heads_wr_data_a;
+logic [QUEUE_TABLE_L_ADDRS_DWIDTH-1:0] q_table_l_addrs_wr_data_a;
+logic [QUEUE_TABLE_H_ADDRS_DWIDTH-1:0] q_table_h_addrs_wr_data_a;
+logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] q_table_tails_wr_data_b;
+logic [QUEUE_TABLE_HEADS_DWIDTH-1:0] q_table_heads_wr_data_b;
+logic [QUEUE_TABLE_L_ADDRS_DWIDTH-1:0] q_table_l_addrs_wr_data_b;
+logic [QUEUE_TABLE_H_ADDRS_DWIDTH-1:0] q_table_h_addrs_wr_data_b;
+logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] q_table_tails_rd_data_a;
+logic [QUEUE_TABLE_HEADS_DWIDTH-1:0] q_table_heads_rd_data_a;
+logic [QUEUE_TABLE_L_ADDRS_DWIDTH-1:0] q_table_l_addrs_rd_data_a;
+logic [QUEUE_TABLE_H_ADDRS_DWIDTH-1:0] q_table_h_addrs_rd_data_a;
+logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] q_table_tails_rd_data_b;
+logic [QUEUE_TABLE_HEADS_DWIDTH-1:0] q_table_heads_rd_data_b;
+logic [QUEUE_TABLE_L_ADDRS_DWIDTH-1:0] q_table_l_addrs_rd_data_b;
+logic [QUEUE_TABLE_H_ADDRS_DWIDTH-1:0] q_table_h_addrs_rd_data_b;
+logic q_table_tails_rd_en_a;
+logic q_table_heads_rd_en_a;
+logic q_table_l_addrs_rd_en_a;
+logic q_table_h_addrs_rd_en_a;
+logic q_table_tails_rd_en_a_r1;
+logic q_table_heads_rd_en_a_r1;
+logic q_table_l_addrs_rd_en_a_r1;
+logic q_table_h_addrs_rd_en_a_r1;
+logic q_table_tails_rd_en_a_r2;
+logic q_table_heads_rd_en_a_r2;
+logic q_table_l_addrs_rd_en_a_r2;
+logic q_table_h_addrs_rd_en_a_r2;
+logic q_table_tails_rd_en_b;
+logic q_table_heads_rd_en_b;
+logic q_table_l_addrs_rd_en_b;
+logic q_table_h_addrs_rd_en_b;
+logic q_table_tails_wr_en_a;
+logic q_table_heads_wr_en_a;
+logic q_table_l_addrs_wr_en_a;
+logic q_table_h_addrs_wr_en_a;
+logic q_table_tails_wr_en_b;
+logic q_table_heads_wr_en_b;
+logic q_table_l_addrs_wr_en_b;
+logic q_table_h_addrs_wr_en_b;
 
 logic [RB_AWIDTH-1:0]    f2c_head;
 logic [RB_AWIDTH-1:0]    f2c_tail;
@@ -107,6 +158,11 @@ logic [31:0]             kmem_low  [MAX_NB_APPS-1:0];
 logic [31:0]             kmem_high [MAX_NB_APPS-1:0];
 
 logic [C2F_RB_AWIDTH-1:0]   c2f_head_1;
+logic [1:0] pending_table;
+logic [1:0] pending_table_r;
+logic [1:0] pending_table_r2;
+logic rd_en_r;
+logic rd_en_r2;
 
 // JTAG
 always@(posedge clk_status)begin
@@ -118,19 +174,75 @@ always@(posedge clk_status)begin
     status_writedata_r  <= status_writedata;
 
     status_readdata_valid <= 0;
+    
+    q_table_tails_rd_en_b <= 0;
+    q_table_heads_rd_en_b <= 0;
+    q_table_l_addrs_rd_en_b <= 0;
+    q_table_h_addrs_rd_en_b <= 0;
 
-    if(status_addr_sel_r == PCIE & status_read_r) begin
-        if (status_addr_r[6:0] == 0) begin
-            status_readdata <= control_reg_status;
-        end else begin
-            status_readdata <= pcie_reg_status[
-                {status_addr_r[0 +:JTAG_ADDR_WIDTH]-1}[0 +:STATS_REGS_WIDTH]];
-        end
+    pending_table <= 0;
+    pending_table_r <= pending_table;
+    pending_table_r2 <= pending_table_r;
+    rd_en_r <= q_table_tails_rd_en_b | q_table_heads_rd_en_b | 
+        q_table_l_addrs_rd_en_b | q_table_h_addrs_rd_en_b;
+    rd_en_r2 <= rd_en_r;
+
+    if (rd_en_r2) begin
+        case (pending_table_r2)
+            2'd0: begin
+                status_readdata <= q_table_tails_rd_data_b;
+            end
+            2'd1: begin
+                status_readdata <= q_table_heads_rd_data_b;
+            end
+            2'd2: begin
+                status_readdata <= q_table_l_addrs_rd_data_b;
+            end
+            2'd3: begin
+                status_readdata <= q_table_h_addrs_rd_data_b;
+            end
+        endcase
         status_readdata_valid <= 1;
     end
 
+    if(status_addr_sel_r == PCIE & status_read_r) begin
+        if (status_addr_r[0 +:JTAG_ADDR_WIDTH] == 0) begin
+            status_readdata <= control_reg_status;
+            status_readdata_valid <= 1;
+        end else begin
+            // status_readdata <= pcie_reg_status[
+            //     {status_addr_r[0 +:JTAG_ADDR_WIDTH]-1}[0 +:STATS_REGS_WIDTH]];
+            case ({status_addr_r[0 +:JTAG_ADDR_WIDTH]-1}[1:0])
+                2'd0: begin
+                    pending_table <= 2'd0;
+                    q_table_tails_rd_en_b <= 1;
+                    q_table_tails_addr_b <= {status_addr_r[
+                        0 +:JTAG_ADDR_WIDTH]-1}[2 +:APP_IDX_WIDTH];
+                end
+                2'd1: begin
+                    pending_table <= 2'd1;
+                    q_table_heads_rd_en_b <= 1;
+                    q_table_heads_addr_b <= {status_addr_r[
+                        0 +:JTAG_ADDR_WIDTH]-1}[2 +:APP_IDX_WIDTH];
+                end
+                2'd2: begin
+                    pending_table <= 2'd2;
+                    q_table_l_addrs_rd_en_b <= 1;
+                    q_table_l_addrs_addr_b <= {status_addr_r[
+                        0 +:JTAG_ADDR_WIDTH]-1}[2 +:APP_IDX_WIDTH];
+                end
+                2'd3: begin
+                    pending_table <= 2'd3;
+                    q_table_h_addrs_rd_en_b <= 1;
+                    q_table_h_addrs_addr_b <= {status_addr_r[
+                        0 +:JTAG_ADDR_WIDTH]-1}[2 +:APP_IDX_WIDTH];
+                end
+            endcase
+        end
+    end
+
     if (status_addr_sel_r == PCIE & status_write_r) begin
-        if (status_addr_r[6:0] == 0) begin 
+        if (status_addr_r[0 +:JTAG_ADDR_WIDTH] == 0) begin 
             control_reg_status <= status_writedata_r;
         end
     end
@@ -165,6 +277,10 @@ assign reg_set_idx = page_idx * REGS_PER_PAGE;
 // update PIO register
 always@(posedge pcie_clk)begin
     integer i;
+    // q_table_tails_wr_en_a <= 0;
+    q_table_heads_wr_en_a <= 0;
+    q_table_l_addrs_wr_en_a <= 0;
+    q_table_h_addrs_wr_en_a <= 0;
     if (!pcie_reset_n) begin
         for (i = 0; i < NB_STATUS_REGS; i = i + 1) begin
             pcie_reg_pcie_wr[i] <= 0;
@@ -181,6 +297,32 @@ always@(posedge pcie_clk)begin
                     pcie_reg_pcie_wr[reg_set_idx+i];
             end
         end
+
+        // // update BRAMs
+        // // if (pcie_byteenable_0[0*REGS_PER_PAGE +:REGS_PER_PAGE] 
+        // //         == {REGS_PER_PAGE{1'b1}}) begin
+        // //     q_table_tails_wr_data_a <= pcie_writedata_0[0*32 +: 32];
+        // //     q_table_tails_wr_en_a <= 1;
+        // //     q_table_tails_addr_a <= page_idx;
+        // // end
+        // if (pcie_byteenable_0[1*REGS_PER_PAGE +:REGS_PER_PAGE]
+        //         == {REGS_PER_PAGE{1'b1}}) begin
+        //     q_table_heads_wr_data_a <= pcie_writedata_0[1*32 +: 32];
+        //     q_table_heads_wr_en_a <= 1;
+        //     q_table_heads_addr_a <= page_idx;
+        // end
+        // if (pcie_byteenable_0[2*REGS_PER_PAGE +:REGS_PER_PAGE]
+        //         == {REGS_PER_PAGE{1'b1}}) begin
+        //     q_table_l_addrs_wr_data_a <= pcie_writedata_0[2*32 +: 32];
+        //     q_table_l_addrs_wr_en_a <= 1;
+        //     q_table_l_addrs_addr_a <= page_idx;
+        // end
+        // if (pcie_byteenable_0[3*REGS_PER_PAGE +:REGS_PER_PAGE]
+        //         == {REGS_PER_PAGE{1'b1}}) begin
+        //     q_table_h_addrs_wr_data_a <= pcie_writedata_0[3*32 +: 32];
+        //     q_table_h_addrs_wr_en_a <= 1;
+        //     q_table_h_addrs_addr_a <= page_idx;
+        // end
     end
 end
 
@@ -202,6 +344,14 @@ always_comb begin
     end
 end
 
+typedef enum
+{
+    IDLE,
+    BRAM_DELAY,
+    SWITCH_QUEUE
+} state_t;
+state_t state;
+
 assign c2f_tail = 0;
 assign c2f_kmem_addr = 0;
 // the first slot in f2c_kmem_addr is used as the "global reg" includes the
@@ -220,23 +370,76 @@ always@(posedge pcie_clk)begin
         f2c_head <= 0;
         f2c_kmem_addr <= 0;
         core_id <= 0;
+        next_core_id <= total_core > 1;
+        q_table_tails_wr_en_a <= 0;
     end else begin
-
         //update core_id and tail pointer
-        if(dma_done)begin
-            if(core_id == total_core - 1)begin
-               core_id <= 0;
-            end else begin
-               core_id <= core_id + 1;
-            end
+        // if(dma_done)begin
+        //     if(core_id == total_core - 1)begin
+        //        core_id <= 0;
+        //     end else begin
+        //        core_id <= core_id + 1;
+        //     end
 
-            tails[core_id] <= new_tail;
-        end
+        //     tails[core_id] <= new_tail;
+        // end
 
         //select tail and kmem_addr
         f2c_tail      <= tails[core_id];
-        f2c_head      <= heads[core_id][RB_AWIDTH-1:0];
+        f2c_head      <= heads[core_id]; // [RB_AWIDTH-1:0];
         f2c_kmem_addr <= {kmem_high[core_id],kmem_low[core_id]};
+        // TODO(sadok) read from BRAM
+
+        case (state)
+            IDLE: begin
+                q_table_tails_wr_en_a <= 0;
+                // TODO(sadok) ring_buffer.sv has a 2-clock delay between DMAs.
+                // This ensures that we have time to read the BRAM and switch
+                // the queue before the new DMA starts. Eventually we should do
+                // something more clever
+
+                // retrieve next queue from queue table
+                if (dma_done) begin
+                    q_table_tails_addr_a <= next_core_id;
+                    // TODO(sadok) uncommend and change to the right enable signal
+                    // once we start using value from BRAM
+                    // q_table_rd_en_a <= 1;
+
+                    state <= BRAM_DELAY;
+                    // f2c_tail <= new_tail;
+                    tails[core_id] <= new_tail; // FIXME(sadok)
+                end
+
+                //select tail and kmem_addr
+                // f2c_tail      <= tails[core_id];
+                // f2c_head      <= heads[core_id][RB_AWIDTH-1:0];
+                // f2c_kmem_addr <= {kmem_high[core_id],kmem_low[core_id]};
+            end
+            BRAM_DELAY: begin
+                state <= SWITCH_QUEUE;
+                // TODO(sadok) uncommend and change to the right enable signal
+                // once we start using value from BRAM
+                // q_table_rd_en_a <= 0;
+                q_table_tails_wr_en_a <= 0;
+            end
+            SWITCH_QUEUE: begin
+                // update tail pointer for core_id
+                q_table_tails_addr_a <= core_id;
+                // q_table_wr_data_a <= current_queue;
+                q_table_tails_wr_data_a <= tails[core_id]; // FIXME(sadok) there should be only a single active queue
+                q_table_tails_wr_en_a <= 1;
+
+                core_id <= next_core_id;
+                if (next_core_id == total_core - 1) begin
+                    next_core_id <= 0;
+                end else begin
+                    next_core_id <= next_core_id + 1;
+                end
+
+                state <= IDLE;
+            end
+            default: state <= IDLE;
+        endcase
     end
 end
 
@@ -249,6 +452,7 @@ always@(posedge pcie_clk)begin
             pcie_reg_pcie[reg_set_idx+1], pcie_reg_pcie[reg_set_idx]
         };
         pcie_readdatavalid_0 <= read_0_r2;
+        // TODO(sadok) read regs from BRAM
     end else begin
         pcie_readdata_0 <= frb_readdata;
         pcie_readdatavalid_0 <= frb_readvalid;
@@ -314,6 +518,84 @@ cpu2fpga_pcie c2f_inst (
     .c2f_writedata          (pcie_writedata_1),
     .c2f_write              (pcie_write_1),
     .c2f_address            (pcie_address_1[14:6])
+);
+
+assign q_table_rd_en_a = cpu_reg_region & pcie_read_0;
+
+bram_true2port #(
+    .AWIDTH(QUEUE_TABLE_AWIDTH),
+    .DWIDTH(QUEUE_TABLE_TAILS_DWIDTH),
+    .DEPTH(QUEUE_TABLE_DEPTH)
+)
+q_table_tails (
+    .address_a  (q_table_tails_addr_a),
+    .address_b  (q_table_tails_addr_b),
+    .clock      (pcie_clk),
+    .data_a     (q_table_tails_wr_data_a),
+    .data_b     (q_table_tails_wr_data_b),
+    .rden_a     (q_table_tails_rd_en_a),
+    .rden_b     (q_table_tails_rd_en_b),
+    .wren_a     (q_table_tails_wr_en_a),
+    .wren_b     (q_table_tails_wr_en_b),
+    .q_a        (q_table_tails_rd_data_a),
+    .q_b        (q_table_tails_rd_data_b)
+);
+
+bram_true2port #(
+    .AWIDTH(QUEUE_TABLE_AWIDTH),
+    .DWIDTH(QUEUE_TABLE_HEADS_DWIDTH),
+    .DEPTH(QUEUE_TABLE_DEPTH)
+)
+q_table_heads (
+    .address_a  (q_table_heads_addr_a),
+    .address_b  (q_table_heads_addr_b),
+    .clock      (pcie_clk),
+    .data_a     (q_table_heads_wr_data_a),
+    .data_b     (q_table_heads_wr_data_b),
+    .rden_a     (q_table_heads_rd_en_a),
+    .rden_b     (q_table_heads_rd_en_b),
+    .wren_a     (q_table_heads_wr_en_a),
+    .wren_b     (q_table_heads_wr_en_b),
+    .q_a        (q_table_heads_rd_data_a),
+    .q_b        (q_table_heads_rd_data_b)
+);
+
+bram_true2port #(
+    .AWIDTH(QUEUE_TABLE_AWIDTH),
+    .DWIDTH(QUEUE_TABLE_L_ADDRS_DWIDTH),
+    .DEPTH(QUEUE_TABLE_DEPTH)
+)
+q_table_l_addrs (
+    .address_a  (q_table_l_addrs_addr_a),
+    .address_b  (q_table_l_addrs_addr_b),
+    .clock      (pcie_clk),
+    .data_a     (q_table_l_addrs_wr_data_a),
+    .data_b     (q_table_l_addrs_wr_data_b),
+    .rden_a     (q_table_l_addrs_rd_en_a),
+    .rden_b     (q_table_l_addrs_rd_en_b),
+    .wren_a     (q_table_l_addrs_wr_en_a),
+    .wren_b     (q_table_l_addrs_wr_en_b),
+    .q_a        (q_table_l_addrs_rd_data_a),
+    .q_b        (q_table_l_addrs_rd_data_b)
+);
+
+bram_true2port #(
+    .AWIDTH(QUEUE_TABLE_AWIDTH),
+    .DWIDTH(QUEUE_TABLE_H_ADDRS_DWIDTH),
+    .DEPTH(QUEUE_TABLE_DEPTH)
+)
+q_table_h_addrs (
+    .address_a  (q_table_h_addrs_addr_a),
+    .address_b  (q_table_h_addrs_addr_b),
+    .clock      (pcie_clk),
+    .data_a     (q_table_h_addrs_wr_data_a),
+    .data_b     (q_table_h_addrs_wr_data_b),
+    .rden_a     (q_table_h_addrs_rd_en_a),
+    .rden_b     (q_table_h_addrs_rd_en_b),
+    .wren_a     (q_table_h_addrs_wr_en_a),
+    .wren_b     (q_table_h_addrs_wr_en_b),
+    .q_a        (q_table_h_addrs_rd_data_a),
+    .q_b        (q_table_h_addrs_rd_data_b)
 );
 
 endmodule
