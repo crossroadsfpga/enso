@@ -36,7 +36,7 @@ void int_handler(int signal __attribute__((unused)))
 int main(int argc, const char* argv[])
 {
     int result;
-    uint64_t goodput = 0;
+    uint64_t recv_bytes = 0;
     uint64_t nb_pkts = 0;
 
     if (argc != 5) {
@@ -51,7 +51,7 @@ int main(int argc, const char* argv[])
 
     std::cout << "running test with " << nb_rules << " rules" << std::endl;
     
-    std::thread socket_thread = std::thread([&goodput, port, nb_rules, nb_queues, &nb_pkts] {
+    std::thread socket_thread = std::thread([&recv_bytes, port, nb_rules, nb_queues, &nb_pkts] {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
@@ -102,8 +102,12 @@ int main(int argc, const char* argv[])
                     #ifdef ZERO_COPY
                     free_pkt_buf(socket_fd);
                     #endif
+                    // for (int i = 0; i < recv_len; i++) {
+                    //     printf("%02X ", buf[i]);
+                    // }
+                    // printf("\n");
                 }
-                goodput += recv_len;
+                recv_bytes += recv_len;
             }
         }
 
@@ -125,10 +129,11 @@ int main(int argc, const char* argv[])
     }
 
     while (keep_running) {
-        goodput = 0;
+        uint64_t recv_bytes_before = recv_bytes;
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        std::cout << std::dec << "Goodput: " << ((double) goodput) * 8. /1e6
-                  << " Mbps" << "  #pkts: " << nb_pkts << std::endl;
+        std::cout << std::dec << "Goodput: " << 
+            ((double) recv_bytes - recv_bytes_before) * 8. /1e6
+            << " Mbps  #pkts: " << nb_pkts << std::endl;
     }
 
     socket_thread.join();
