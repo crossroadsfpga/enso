@@ -8,60 +8,60 @@
 //STORE 1024 pkts, each pkts takes 32 * 512 bits = 2 KB.
 //32 * 1024 = 32768 entries.
 `ifdef USE_BRAM
-parameter PKT_NUM = 1024;
+localparam PKT_NUM = 1024;
 `else
-parameter PKT_NUM = 2688;
+localparam PKT_NUM = 2688;
 `endif
 
 //15 = 10(2^10=1024) + 5 (32=2^5)
-parameter PKTBUF_AWIDTH = ($clog2(PKT_NUM)+5);
-parameter PKTBUF_DEPTH = (32 * PKT_NUM);
+localparam PKTBUF_AWIDTH = ($clog2(PKT_NUM)+5);
+localparam PKTBUF_DEPTH = (32 * PKT_NUM);
 
 //PKT_ID width, which is the index to the 32-entries block
-parameter PKT_AWIDTH = ($clog2(PKT_NUM));
+localparam PKT_AWIDTH = ($clog2(PKT_NUM));
 
 //Flow table
-parameter FT_SUBTABLE = 4;
-parameter FT_SIZE = 8192;
-parameter FT_DEPTH = (FT_SIZE/FT_SUBTABLE);
-parameter FT_AWIDTH= ($clog2(FT_DEPTH));
+localparam FT_SUBTABLE = 4;
+localparam FT_SIZE = 8192;
+localparam FT_DEPTH = (FT_SIZE/FT_SUBTABLE);
+localparam FT_AWIDTH= ($clog2(FT_DEPTH));
 
-//packet parameter
-parameter ETH_HDR_LEN=14;
+//packet localparam
+localparam ETH_HDR_LEN=14;
 
 //packet type
-parameter PROT_ETH=16'h0800;
-parameter IP_V4 = 4'h4;
-parameter PROT_TCP=8'h06;
-parameter PROT_UDP=8'h11;
+localparam PROT_ETH=16'h0800;
+localparam IP_V4 = 4'h4;
+localparam PROT_TCP=8'h06;
+localparam PROT_UDP=8'h11;
 
-parameter NS=8'hFF;//reserved
-parameter S_UDP=PROT_UDP;
-parameter S_TCP=PROT_TCP;
+localparam NS=8'hFF;//reserved
+localparam S_UDP=PROT_UDP;
+localparam S_TCP=PROT_TCP;
 
 //TCP flags
-parameter TCP_FIN=0;
-parameter TCP_SYN=1;
-parameter TCP_RST=2;
-parameter TCP_PSH=3;
-parameter TCP_FACK=4;
-parameter TCP_URG=5;
-parameter TCP_ECE=6;
-parameter TCP_CWR=7;
-parameter TCP_NS=8;
+localparam TCP_FIN=0;
+localparam TCP_SYN=1;
+localparam TCP_RST=2;
+localparam TCP_PSH=3;
+localparam TCP_FACK=4;
+localparam TCP_URG=5;
+localparam TCP_ECE=6;
+localparam TCP_CWR=7;
+localparam TCP_NS=8;
 
 //PKT flags
-parameter PKT_ETH=0;//send to ETH
-parameter PKT_DROP=1; //DROP pkt
-parameter PKT_PCIE=2; //send to PCIE
+localparam PKT_ETH=0;//send to ETH
+localparam PKT_DROP=1; //DROP pkt
+localparam PKT_PCIE=2; //send to PCIE
 
 //my_stats
-parameter STAT_AWIDTH = 5;
-parameter BASE_REG = 5'b10_000; //(5'b10000);
-parameter TOP_REG = 5'b10_001;
-parameter LATENCY_HIST = 5'b10_100; // (5'b10100);
-parameter PCIE = 5'b10_101;
-parameter TX_TRACK = 5'b11_000; //(5'b11000);
+localparam STAT_AWIDTH = 5;
+localparam BASE_REG = 5'b10_000; //(5'b10000);
+localparam TOP_REG = 5'b10_001;
+localparam LATENCY_HIST = 5'b10_100; // (5'b10100);
+localparam PCIE = 5'b10_101;
+localparam TX_TRACK = 5'b11_000; //(5'b11000);
 
 typedef struct packed
 {
@@ -86,7 +86,7 @@ typedef struct packed
 } flit_meta_t;
 
 //96 bits
-parameter TUPLE_DWIDTH = (32+32+16+16);
+localparam TUPLE_DWIDTH = (32+32+16+16);
 typedef struct packed
 {
     logic [31:0] sIP; 
@@ -112,7 +112,7 @@ typedef struct packed
 } pcie_block_t;
 
 //1 + 96 + 64 = 195
-parameter FT_DWIDTH = (1+TUPLE_DWIDTH+64);
+localparam FT_DWIDTH = (1+TUPLE_DWIDTH+64);
 typedef struct packed
 {
     logic valid;
@@ -120,9 +120,9 @@ typedef struct packed
     logic [63:0] pcie_address;
 } fce_t; //Flow context entry
 
-parameter META_WIDTH=256; //Change this will affect hyper_reg_fd
-parameter INT_META_WIDTH=(8+TUPLE_DWIDTH+16+PKT_AWIDTH+5+9+3+64);
-parameter PADDING_WIDTH = (META_WIDTH - INT_META_WIDTH);
+localparam META_WIDTH=256; //Change this will affect hyper_reg_fd
+localparam INT_META_WIDTH=(8+TUPLE_DWIDTH+16+PKT_AWIDTH+5+9+3+64);
+localparam PADDING_WIDTH = (META_WIDTH - INT_META_WIDTH);
 typedef struct packed
 {
     logic [7:0] prot;
@@ -137,13 +137,13 @@ typedef struct packed
 } metadata_t; //Metadata
 
 //PDU_DEPTH is number of 512 bits for fpga side f2c ring buffer 
-parameter PDU_DEPTH = 4096;
-parameter PDU_AWIDTH = ($clog2(PDU_DEPTH));
+localparam PDU_DEPTH = 4096;
+localparam PDU_AWIDTH = ($clog2(PDU_DEPTH));
 //PDU_ID_DEPTH is number of PDUs we buffer on FPGA side
-parameter PDU_NUM = 256;
-parameter PDUBUF_AWIDTH = ($clog2(PDU_NUM)+5);
-parameter PDUBUF_DEPTH = (32 * PDU_NUM);
-parameter PDUID_WIDTH = ($clog2(PDU_NUM));
+localparam PDU_NUM = 256;
+localparam PDUBUF_AWIDTH = ($clog2(PDU_NUM)+5);
+localparam PDUBUF_DEPTH = (32 * PDU_NUM);
+localparam PDUID_WIDTH = ($clog2(PDU_NUM));
 typedef struct packed
 {
     logic [191:0] padding;
@@ -169,35 +169,35 @@ typedef struct packed
 //indicating CPU info. 
 //The higher half is used for CPU ring buffer registers
 //The bottom half is used as PDU header for each PDU transfer.
-parameter RB_DEPTH = 8191; //in 512 bits. 
-parameter RB_AWIDTH = ($clog2(RB_DEPTH));
+localparam RB_DEPTH = 8191; //in 512 bits. 
+localparam RB_AWIDTH = ($clog2(RB_DEPTH));
 
-parameter C2F_RB_DEPTH = 512; //in 512 bits.
-parameter C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
+localparam C2F_RB_DEPTH = 512; //in 512 bits.
+localparam C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
 
-parameter MAX_NB_APPS = 16;
-parameter APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
-parameter FLITS_PER_PAGE = 64;
-parameter RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
+localparam MAX_NB_APPS = 16;
+localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
+localparam FLITS_PER_PAGE = 64;
+localparam RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
 
-parameter PCIE_ADDR_WIDTH = 30;
+localparam PCIE_ADDR_WIDTH = 30;
 
-parameter REGS_PER_PAGE = 4;
-parameter NB_STATUS_REGS = MAX_NB_APPS * REGS_PER_PAGE;
-parameter STATS_REGS_WIDTH = ($clog2(NB_STATUS_REGS));
-parameter JTAG_ADDR_WIDTH = ($clog2(NB_STATUS_REGS+1)); // includes control reg
+localparam REGS_PER_PAGE = 4;
+localparam NB_STATUS_REGS = MAX_NB_APPS * REGS_PER_PAGE;
+localparam STATS_REGS_WIDTH = ($clog2(NB_STATUS_REGS));
+localparam JTAG_ADDR_WIDTH = ($clog2(NB_STATUS_REGS+1)); // includes control reg
 
 // queue table that keeps state for every queue
-parameter QUEUE_TABLE_DEPTH = MAX_NB_APPS;
-parameter QUEUE_TABLE_AWIDTH = ($clog2(QUEUE_TABLE_DEPTH));
+localparam QUEUE_TABLE_DEPTH = MAX_NB_APPS;
+localparam QUEUE_TABLE_AWIDTH = ($clog2(QUEUE_TABLE_DEPTH));
 // TODO(sadok) we may save space by only holding an offset to kmem address,
 // we also do not need 32 bits for the tail and head 
-parameter QUEUE_TABLE_TAILS_DWIDTH = 32;
-parameter QUEUE_TABLE_HEADS_DWIDTH = 32;
-parameter QUEUE_TABLE_L_ADDRS_DWIDTH = 32;
-parameter QUEUE_TABLE_H_ADDRS_DWIDTH = 32;
+localparam QUEUE_TABLE_TAILS_DWIDTH = 32;
+localparam QUEUE_TABLE_HEADS_DWIDTH = 32;
+localparam QUEUE_TABLE_L_ADDRS_DWIDTH = 32;
+localparam QUEUE_TABLE_H_ADDRS_DWIDTH = 32;
 
-parameter PDU_META_WIDTH=(TUPLE_DWIDTH+64);
+localparam PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 typedef struct packed
 {
     tuple_t tuple;
