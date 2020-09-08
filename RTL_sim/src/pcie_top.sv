@@ -87,6 +87,18 @@ logic internal_update_valid;
 logic [APP_IDX_WIDTH-1:0] page_idx;
 logic [$clog2(NB_STATUS_REGS)-1:0] reg_set_idx;
 
+// communicate updated queues to the ring buffer
+logic [APP_IDX_WIDTH-1:0] last_updated_queue;
+logic updated_tail;
+logic updated_head;
+logic updated_l_addr;
+logic updated_h_addr;
+
+logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] last_tail;
+logic [QUEUE_TABLE_HEADS_DWIDTH-1:0] last_head;
+logic [QUEUE_TABLE_L_ADDRS_DWIDTH-1:0] last_l_addr;
+logic [QUEUE_TABLE_H_ADDRS_DWIDTH-1:0] last_h_addr;
+
 // queue table
 logic [APP_IDX_WIDTH-1:0] q_table_tails_addr_a;
 logic [APP_IDX_WIDTH-1:0] q_table_heads_addr_a;
@@ -267,10 +279,6 @@ assign reg_set_idx = page_idx * REGS_PER_PAGE;
 // update PIO register
 always@(posedge pcie_clk)begin
     integer i;
-    // // q_table_tails_wr_en_a <= 0;
-    // q_table_heads_wr_en_a <= 0;
-    // q_table_l_addrs_wr_en_a <= 0;
-    // q_table_h_addrs_wr_en_a <= 0;
 
     q_table_tails_wr_en_b <= 0;
     q_table_heads_wr_en_b <= 0;
@@ -307,6 +315,11 @@ always@(posedge pcie_clk)begin
         q_table_rd_data_b <= 0;
     end
 
+    updated_tail <= 0;
+    updated_head <= 0;
+    updated_l_addr <= 0;
+    updated_h_addr <= 0;
+
     if (!pcie_reset_n) begin
         for (i = 0; i < NB_STATUS_REGS; i = i + 1) begin
             pcie_reg_pcie_wr[i] <= 0;
@@ -333,24 +346,36 @@ always@(posedge pcie_clk)begin
         //     q_table_tails_wr_data_b <= pcie_writedata_0[0*32 +: 32];
         //     q_table_tails_wr_en_b <= 1;
         //     q_table_tails_addr_b <= page_idx;
+        //     last_updated_queue <= page_idx;
+        //     updated_tail <= 1;
+        //     last_tail <= pcie_writedata_0[0*32 +: 32];
         // end
         if (pcie_byteenable_0[1*REGS_PER_PAGE +:REGS_PER_PAGE]
                 == {REGS_PER_PAGE{1'b1}}) begin
             q_table_heads_wr_data_b <= pcie_writedata_0[1*32 +: 32];
             q_table_heads_wr_en_b <= 1;
             q_table_heads_addr_b <= page_idx;
+            last_updated_queue <= page_idx;
+            updated_head <= 1;
+            last_head <= pcie_writedata_0[1*32 +: 32];
         end
         if (pcie_byteenable_0[2*REGS_PER_PAGE +:REGS_PER_PAGE]
                 == {REGS_PER_PAGE{1'b1}}) begin
             q_table_l_addrs_wr_data_b <= pcie_writedata_0[2*32 +: 32];
             q_table_l_addrs_wr_en_b <= 1;
             q_table_l_addrs_addr_b <= page_idx;
+            last_updated_queue <= page_idx;
+            updated_l_addr <= 1;
+            last_l_addr <= pcie_writedata_0[2*32 +: 32];
         end
         if (pcie_byteenable_0[3*REGS_PER_PAGE +:REGS_PER_PAGE]
                 == {REGS_PER_PAGE{1'b1}}) begin
             q_table_h_addrs_wr_data_b <= pcie_writedata_0[3*32 +: 32];
             q_table_h_addrs_wr_en_b <= 1;
             q_table_h_addrs_addr_b <= page_idx;
+            last_updated_queue <= page_idx;
+            updated_h_addr <= 1;
+            last_h_addr <= pcie_writedata_0[3*32 +: 32];
         end
     end else if (q_table_rd_en_pending) begin
         q_table_rd_en_pending <= 0;
@@ -438,6 +463,15 @@ assign c2f_head_addr = 0;
 // CPU side read MUX, first RB_BRAM_OFFSET*512 bits are regs, the rest is BRAM
 always@(posedge pcie_clk)begin
     integer i;
+    q_table_tails_wr_en_a <= 0;
+    q_table_heads_wr_en_a <= 0;
+    q_table_l_addrs_wr_en_a <= 0;
+    q_table_h_addrs_wr_en_a <= 0;
+
+    q_table_tails_rd_en_a <= 0;
+    q_table_heads_rd_en_a <= 0;
+    q_table_l_addrs_rd_en_a <= 0;
+    q_table_h_addrs_rd_en_a <= 0;
     if(!pcie_reset_n)begin
         for (i = 0; i < MAX_NB_APPS; i = i + 1) begin
             tails[i] <= 0;
@@ -450,31 +484,34 @@ always@(posedge pcie_clk)begin
         q_table_tails_wr_en_a <= 0;
         state <= IDLE;
     end else begin
-        //update queue_id and tail pointer
-        // if(dma_done)begin
-        //     if(queue_id == total_nb_queues - 1)begin
-        //        queue_id <= 0;
-        //     end else begin
-        //        queue_id <= queue_id + 1;
-        //     end
 
-        //     tails[queue_id] <= new_tail;
-        // end
-
-        //select tail and kmem_addr
-        f2c_tail      <= tails[queue_id];
-        f2c_head      <= heads[queue_id]; // [RB_AWIDTH-1:0];
-        f2c_kmem_addr <= {kmem_high[queue_id],kmem_low[queue_id]};
-        // TODO(sadok) read from BRAM
-
-        q_table_tails_wr_en_a <= 0;
-        // TODO(sadok) uncommend and change to the right enable signal
-        // once we start using value from BRAM
-        // q_table_rd_en_a <= 0;
+        // ensure that queue updates are applied when the queue is active
+        // this is particularly important in the beginning: when there is only
+        // one queue and it is not set
+        // FIXME(sadok) this may mess things up if we are receiving packets
+        // when it happens as the ring buffer state machine is unaware of this
+        if (queue_id == last_updated_queue) begin
+            if (updated_tail) begin
+                f2c_tail <= last_tail;
+            end
+            if (updated_head) begin
+                f2c_head <= last_head;
+            end
+            if (updated_l_addr) begin
+                f2c_kmem_addr <= f2c_kmem_addr <= {
+                    f2c_kmem_addr[63:32], last_l_addr
+                };
+            end
+            if (updated_h_addr) begin
+                f2c_kmem_addr <= f2c_kmem_addr <= {
+                    last_h_addr, f2c_kmem_addr[31:0]
+                };
+            end
+        end
 
         case (state)
             IDLE: begin
-                // TODO(sadok) ring_buffer.sv has a 2-clock delay between DMAs.
+                // TODO(sadok) ring_buffer.sv has a 3-clock delay between DMAs.
                 // This ensures that we have time to read the BRAM and switch
                 // the queue before the new DMA starts. Eventually we should do
                 // something more clever
@@ -482,19 +519,17 @@ always@(posedge pcie_clk)begin
                 // retrieve next queue from queue table
                 if (dma_done) begin
                     q_table_tails_addr_a <= next_queue_id;
-                    // TODO(sadok) uncommend and change to the right enable signal
-                    // once we start using value from BRAM
-                    // q_table_rd_en_a <= 1;
+                    q_table_heads_addr_a <= next_queue_id;
+                    q_table_l_addrs_addr_a <= next_queue_id;
+                    q_table_h_addrs_addr_a <= next_queue_id;
+                    q_table_tails_rd_en_a <= 1;
+                    q_table_heads_rd_en_a <= 1;
+                    q_table_l_addrs_rd_en_a <= 1;
+                    q_table_h_addrs_rd_en_a <= 1;
 
                     state <= BRAM_DELAY_1;
-                    // f2c_tail <= new_tail;
-                    tails[queue_id] <= new_tail; // FIXME(sadok)
+                    f2c_tail <= new_tail;
                 end
-
-                //select tail and kmem_addr
-                // f2c_tail      <= tails[queue_id];
-                // f2c_head      <= heads[queue_id][RB_AWIDTH-1:0];
-                // f2c_kmem_addr <= {kmem_high[queue_id],kmem_low[queue_id]};
             end
             BRAM_DELAY_1: begin
                 state <= BRAM_DELAY_2;
@@ -505,8 +540,14 @@ always@(posedge pcie_clk)begin
             SWITCH_QUEUE: begin
                 // update tail pointer for queue_id
                 q_table_tails_addr_a <= queue_id;
-                q_table_tails_wr_data_a <= tails[queue_id]; // FIXME(sadok) there should be only a single active queue
+                q_table_tails_wr_data_a <= f2c_tail;
                 q_table_tails_wr_en_a <= 1;
+
+                f2c_tail <= q_table_tails_rd_data_a;
+                f2c_head <= q_table_heads_rd_data_a;
+                f2c_kmem_addr <= {
+                    q_table_h_addrs_rd_data_a, q_table_l_addrs_rd_data_a
+                };
 
                 queue_id <= next_queue_id;
                 if (next_queue_id == total_nb_queues - 1) begin

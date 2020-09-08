@@ -57,7 +57,9 @@ typedef enum
 {
     IDLE,
     WAIT,
-    DELAY
+    DELAY_1,
+    DELAY_2,
+    DELAY_3
 } state_t;
 state_t state;
 
@@ -72,7 +74,6 @@ logic [PDU_AWIDTH-1:0]  rd_addr_r2;
 logic [PDU_AWIDTH-1:0] last_tail;
 logic wrap;
 logic [PDU_AWIDTH-1:0] send_slot;
-logic bram_delay;
 
 assign wr_base_addr = tail;
 
@@ -133,7 +134,6 @@ always@(posedge clk)begin
         dma_start <= 0;
         dma_size <= 0;
         dma_base_addr <= 0;
-        bram_delay <= 0;
     end else begin
         case(state)
             IDLE:begin
@@ -149,22 +149,22 @@ always@(posedge clk)begin
                 dma_start <= 0;
                 if(dma_done)begin
                     // state <= IDLE;
-                    state <= DELAY; // FIXME(sadok) I'm introducing a delay
-                                    // after DMA is done, to read the BRAM. A
-                                    // better strategy is to somehow prefetch
-                                    // the BRAM. Once this is done, should get
-                                    // rid of the DELAY state and go straight to
-                                    // IDLE
+                    state <= DELAY_1; // FIXME(sadok) I'm introducing a delay
+                                      // after DMA is done to read the BRAM. A
+                                      // better strategy is to somehow prefetch
+                                      // the BRAM. Once this is done, should get
+                                      // rid of the DELAY state and go straight
+                                      // to IDLE
                 end
             end
-            DELAY:begin
-                if (bram_delay) begin
-                    bram_delay <= 0;
-                    state <= IDLE;
-                end else begin
-                    bram_delay <= 1;
-                    state <= DELAY;
-                end
+            DELAY_1:begin
+                state <= DELAY_2;
+            end
+            DELAY_2:begin
+                state <= DELAY_3;
+            end
+            DELAY_3:begin
+                state <= IDLE;
             end
             default: state <= IDLE;
         endcase
