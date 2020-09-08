@@ -139,6 +139,8 @@ logic [1:0] q_table_jtag_r1;
 logic [1:0] q_table_pcie;
 logic [1:0] q_table_pending;
 logic [1:0] last_rd_b_table;
+logic [1:0] last_rd_b_table_r;
+logic [1:0] last_rd_b_table_r2;
 
 logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] q_table_rd_data_b;
 logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] q_table_rd_data_b_r;
@@ -152,6 +154,7 @@ logic q_table_rd_pending;
 
 logic rd_en_r;
 logic rd_en_r2;
+logic rd_en_r3;
 
 // ready if at least one of the bits is 1
 logic [1:0] q_table_rd_data_b_ready;
@@ -279,6 +282,8 @@ always@(posedge pcie_clk)begin
     q_table_l_addrs_rd_en_b <= 0;
     q_table_h_addrs_rd_en_b <= 0;
 
+    last_rd_b_table <= 0;
+
     // We assign the JTAG read enable and the address to pending registers.
     // These are read opportunistically, when there is no operation from the
     // PCIe. This lets us share the same BRAM port for PCIe and JTAG
@@ -286,12 +291,20 @@ always@(posedge pcie_clk)begin
         q_table_pending <= q_table_pcie;
         q_table_addr_pending <= q_table_addr_pcie;
         q_table_rd_en_pending <= 1;
+    end else begin
+        q_table_pending <= q_table_pending;
+        q_table_addr_pending <= q_table_addr_pending;
+        q_table_rd_en_pending <= q_table_rd_en_pending;
     end
 
     // make sure qtable_rd_data_b_ready is active for 3 cycles (01, 10, 11)
     // after 3 cycles, it goes back to zero and is considered not ready
     if (q_table_rd_data_b_ready) begin
         q_table_rd_data_b_ready <= q_table_rd_data_b_ready + 1;
+        q_table_rd_data_b <= q_table_rd_data_b;
+    end else begin
+        q_table_rd_data_b_ready <= 0;
+        q_table_rd_data_b <= 0;
     end
 
     if (!pcie_reset_n) begin
@@ -300,6 +313,7 @@ always@(posedge pcie_clk)begin
         end
         q_table_rd_en_pending <= 0;
         q_table_rd_data_b_ready <= 0;
+        q_table_rd_data_b <= 0;
     end else if (pcie_write_0) begin
         // the first register of every page is the tail pointer and should not
         // be updatable from the CPU, so we purposefully skip it
@@ -361,12 +375,15 @@ always@(posedge pcie_clk)begin
         endcase
     end
 
+    last_rd_b_table_r <= last_rd_b_table;
+    last_rd_b_table_r2 <= last_rd_b_table_r;
+
     rd_en_r <= q_table_tails_rd_en_b | q_table_heads_rd_en_b | 
         q_table_l_addrs_rd_en_b | q_table_h_addrs_rd_en_b;
     rd_en_r2 <= rd_en_r;
 
     if (rd_en_r2) begin
-        case (last_rd_b_table)
+        case (last_rd_b_table_r2)
             2'd0: begin
                 q_table_rd_data_b <= q_table_tails_rd_data_b;
             end
