@@ -498,14 +498,10 @@ always@(posedge pcie_clk)begin
                 f2c_head <= last_head;
             end
             if (updated_l_addr) begin
-                f2c_kmem_addr <= f2c_kmem_addr <= {
-                    f2c_kmem_addr[63:32], last_l_addr
-                };
+                f2c_kmem_addr[31:0] <= last_l_addr;
             end
             if (updated_h_addr) begin
-                f2c_kmem_addr <= f2c_kmem_addr <= {
-                    last_h_addr, f2c_kmem_addr[31:0]
-                };
+                f2c_kmem_addr[63:32] <= last_h_addr;
             end
         end
 
@@ -543,7 +539,11 @@ always@(posedge pcie_clk)begin
                 q_table_tails_wr_data_a <= f2c_tail;
                 q_table_tails_wr_en_a <= 1;
 
-                f2c_tail <= q_table_tails_rd_data_a;
+                // when we only have a single queue, the tail is not yet
+                // updated, so we ignore it
+                if (total_nb_queues > 1) begin
+                    f2c_tail <= q_table_tails_rd_data_a;
+                end
                 f2c_head <= q_table_heads_rd_data_a;
                 f2c_kmem_addr <= {
                     q_table_h_addrs_rd_data_a, q_table_l_addrs_rd_data_a
