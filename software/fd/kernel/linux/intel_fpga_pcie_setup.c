@@ -46,6 +46,7 @@
 #include "intel_fpga_pcie_dma.h"
 #include "intel_fpga_pcie_ioctl.h"
 #include "intel_fpga_pcie_setup.h"
+#include "event_queue.h"
 
 /*
  * Define global bookkeeper as a global variable in .bss section.
@@ -358,6 +359,12 @@ static int __init intel_fpga_pcie_init(void)
         goto failed_pci_reg;
     }
 
+    retval = launch_event_kthread();
+    if (retval) {
+        INTEL_FPGA_PCIE_ERR("couldn't launch event kthread.");
+        goto failed_pci_reg;
+    }
+
     return retval;
 
 
@@ -380,6 +387,7 @@ module_init(intel_fpga_pcie_init);
  */
 static void __exit intel_fpga_pcie_exit(void)
 {
+    stop_event_kthread();
     pci_unregister_driver(&intel_fpga_pcie_driver);
     intel_fpga_pcie_chr_exit();
 }

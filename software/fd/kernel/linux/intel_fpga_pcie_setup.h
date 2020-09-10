@@ -63,6 +63,8 @@
 #include <linux/uio_driver.h>
 #include <linux/version.h>
 
+#include "event_queue.h"
+
 #include "../intel_fpga_pcie_ip_params.h"
 
 
@@ -155,6 +157,7 @@ struct global_bookkeep {
     int chr_minor;
     struct radix_tree_root dev_tree;
     struct mutex lock;
+    event_kthread_data_t event_kthread_data;
 };
 
 

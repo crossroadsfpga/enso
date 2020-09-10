@@ -1,6 +1,8 @@
 MODULE_NAME := intel_fpga_pcie_drv
 obj-m += $(MODULE_NAME).o
-$(MODULE_NAME)-y := intel_fpga_pcie_chr.o intel_fpga_pcie_dma.o intel_fpga_pcie_setup.o intel_fpga_pcie_ioctl.o
+$(MODULE_NAME)-y := intel_fpga_pcie_chr.o intel_fpga_pcie_dma.o \
+	intel_fpga_pcie_setup.o intel_fpga_pcie_ioctl.o event_queue.o \
+	event_handler.o
 USE_AVX ?= 0
 
 PWD       := $(shell pwd)
