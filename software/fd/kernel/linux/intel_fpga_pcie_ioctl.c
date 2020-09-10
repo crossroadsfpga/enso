@@ -504,7 +504,7 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
     if (size > 0) {
         retval = dma_set_mask_and_coherent(&dev_bk->dev->dev, DMA_BIT_MASK(64));
         if (retval) {
-            printk(KERN_INFO "dma_set_mask returned: %d\n",  retval);
+            printk(KERN_INFO "dma_set_mask returned: %li\n",  retval);
             return -EIO;
         }
         dev_bk->kmem_info.virt_addr =
@@ -542,10 +542,6 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
     //           core_id * 32);
     // iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4 + core_id * 32);
 
-    printk("[Zhipeng] kmem_addr_l = 0x%llx; kmem_addr_h = 0x%llx \n", 
-           kmem_addr_l, kmem_addr_h);
-
-    printk("retval %i\n", retval);
     return retval;
 }
 
