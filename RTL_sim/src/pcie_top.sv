@@ -79,18 +79,6 @@ logic [3:0]  next_queue_id;
 logic internal_update_valid;
 logic [APP_IDX_WIDTH-1:0] page_idx;
 
-// // communicate updated queues to the ring buffer
-// logic [APP_IDX_WIDTH-1:0] last_updated_queue;
-// logic updated_tail;
-// logic updated_head;
-// logic updated_l_addr;
-// logic updated_h_addr;
-
-// logic [QUEUE_TABLE_TAILS_DWIDTH-1:0] last_tail;
-// logic [QUEUE_TABLE_HEADS_DWIDTH-1:0] last_head;
-// logic [QUEUE_TABLE_L_ADDRS_DWIDTH-1:0] last_l_addr;
-// logic [QUEUE_TABLE_H_ADDRS_DWIDTH-1:0] last_h_addr;
-
 // queue table
 logic [APP_IDX_WIDTH-1:0] q_table_tails_addr_a;
 logic [APP_IDX_WIDTH-1:0] q_table_heads_addr_a;
@@ -277,11 +265,6 @@ always@(posedge pcie_clk) begin
 
     q_table_rd_data_b_jtag_ready <= 0;
 
-    // updated_tail <= 0;
-    // updated_head <= 0;
-    // updated_l_addr <= 0;
-    // updated_h_addr <= 0;
-
     if (!pcie_reset_n) begin
         q_table_pcie_rd_set <= 0;
         q_table_data_jtag_rd_set <= 0;
@@ -294,36 +277,24 @@ always@(posedge pcie_clk) begin
         //     q_table_tails_wr_data_b <= pcie_writedata_0[0*32 +: 32];
         //     q_table_tails_wr_en_b <= 1;
         //     q_table_tails_addr_b <= page_idx;
-        //     // last_updated_queue <= page_idx;
-        //     // updated_tail <= 1;
-        //     // last_tail <= pcie_writedata_0[0*32 +: 32];
         // end
         if (pcie_byteenable_0[1*REGS_PER_PAGE +:REGS_PER_PAGE]
                 == {REGS_PER_PAGE{1'b1}}) begin
             q_table_heads_wr_data_b <= pcie_writedata_0[1*32 +: 32];
             q_table_heads_wr_en_b <= 1;
             q_table_heads_addr_b <= page_idx;
-            // last_updated_queue <= page_idx;
-            // updated_head <= 1;
-            // last_head <= pcie_writedata_0[1*32 +: 32];
         end
         if (pcie_byteenable_0[2*REGS_PER_PAGE +:REGS_PER_PAGE]
                 == {REGS_PER_PAGE{1'b1}}) begin
             q_table_l_addrs_wr_data_b <= pcie_writedata_0[2*32 +: 32];
             q_table_l_addrs_wr_en_b <= 1;
             q_table_l_addrs_addr_b <= page_idx;
-            // last_updated_queue <= page_idx;
-            // updated_l_addr <= 1;
-            // last_l_addr <= pcie_writedata_0[2*32 +: 32];
         end
         if (pcie_byteenable_0[3*REGS_PER_PAGE +:REGS_PER_PAGE]
                 == {REGS_PER_PAGE{1'b1}}) begin
             q_table_h_addrs_wr_data_b <= pcie_writedata_0[3*32 +: 32];
             q_table_h_addrs_wr_en_b <= 1;
             q_table_h_addrs_addr_b <= page_idx;
-            // last_updated_queue <= page_idx;
-            // updated_h_addr <= 1;
-            // last_h_addr <= pcie_writedata_0[3*32 +: 32];
         end
     end else if (q_table_pcie_rd_set) begin
         q_table_pcie_rd_set <= 0;
