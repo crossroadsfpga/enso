@@ -68,8 +68,8 @@ logic [31:0] pcie_reg_r1 [NB_STATUS_REGS-1:0];
 logic [31:0] pcie_reg_pcie [NB_STATUS_REGS-1:0];
 logic [31:0] pcie_reg_pcie_wr [NB_STATUS_REGS-1:0];
 
-logic [31:0] control_reg_status;
-logic [31:0] control_reg_r1;
+// logic [31:0] control_reg_status;
+// logic [31:0] control_reg_r1;
 logic [31:0] control_reg;
 
 //internal signals
@@ -216,7 +216,7 @@ always@(posedge clk_status)begin
 
     if(status_addr_sel_r == PCIE & status_read_r) begin
         if (status_addr_r[0 +:JTAG_ADDR_WIDTH] == 0) begin
-            status_readdata <= control_reg_status;
+            status_readdata <= control_reg;
             status_readdata_valid <= 1;
         end else begin
             q_table_jtag <= {status_addr_r[0 +:JTAG_ADDR_WIDTH]-1}[1:0];
