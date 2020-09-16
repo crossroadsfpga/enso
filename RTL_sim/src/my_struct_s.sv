@@ -175,7 +175,7 @@ localparam RB_AWIDTH = ($clog2(RB_DEPTH));
 localparam C2F_RB_DEPTH = 512; //in 512 bits.
 localparam C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
 
-localparam MAX_NB_APPS = 16;
+localparam MAX_NB_APPS = 1024;
 localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
 localparam FLITS_PER_PAGE = 64;
 localparam RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
