@@ -26,7 +26,7 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     try {
         dev = new intel_fpga_pcie_dev(bdf, bar);
     } catch (const std::exception &ex) {
-        std::cerr << "Invalid BDF or BAR!" << std::endl;
+        std::cerr << "Error initializing: " << ex.what() << std::endl;
         return -1;
     }
     std::cout << std::hex << std::showbase;
