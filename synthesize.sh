@@ -28,10 +28,18 @@ cp -r $SCRIPT_DIR/RTL_sim/src $quartus_project_root/hardware_test_design/
 
 # run synthesis
 cd $quartus_project_root/hardware_test_design
+start=$(date +%s.%N)
 quartus_syn --read_settings_files=on --write_settings_files=off alt_ehipc2_hw -c alt_ehipc2_hw
 quartus_fit --read_settings_files=on --write_settings_files=off alt_ehipc2_hw -c alt_ehipc2_hw
 quartus_sta alt_ehipc2_hw -c alt_ehipc2_hw --mode=finalize
 quartus_asm --read_settings_files=on --write_settings_files=off alt_ehipc2_hw -c alt_ehipc2_hw
+
+dur=$(echo "$(date +%s.%N) - $start" | bc)
+printf "Synthesis completed in %.6f seconds" $dur
+
 cd $CUR_DIR
 cp "$quartus_project_root/hardware_test_design/output_files/alt_ehipc2_hw.sof" \
     "$BITSTREAM_DESTINATION"
+
+# announce that it is over
+tput bel
