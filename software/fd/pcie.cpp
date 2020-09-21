@@ -266,7 +266,7 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
         block.protocol = 0x11;
         block.pdu_size = 0x0;
         block.pdu_flit = 0x0;
-        block.pcie_address = (((uint64_t) (uio_data_bar2->kmem_high)) << 32) 
+        block.queue_id = (((uint64_t) (uio_data_bar2->kmem_high)) << 32) 
                             | (uio_data_bar2->kmem_low);
 
         // print_block(&block);
@@ -344,7 +344,7 @@ void fill_block(uint32_t *addr, block_s *block) {
     block->protocol = addr[4];
     block->pdu_size = addr[5];
     block->pdu_flit = addr[6];
-    block->pcie_address = (((uint64_t) addr[7]) << 32) | addr[8];
+    block->queue_id = (((uint64_t) addr[7]) << 32) | addr[8];
 
     // Payload
     block->pdu_payload = (uint8_t*) &addr[16];
@@ -361,7 +361,7 @@ void print_block(block_s *block) {
     printf("protocol    : 0x%08x \n", block->protocol);
     printf("pdu_size    : 0x%08x \n", block->pdu_size);
     printf("pdu_flit    : 0x%08x \n", block->pdu_flit);
-    printf("pcie addr   : 0x%016lx \n", block->pcie_address);
+    printf("queue id    : 0x%016lx \n", block->queue_id);
     printf("----PDU payload------\n");
     for (uint32_t i = 0; i < block->pdu_size; i++) {
         printf("%02x ", block->pdu_payload[i]);
@@ -428,8 +428,8 @@ uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
     //exclude the rule flits and header flit
     kdata[base_addr + PDU_FLIT_OFFSET] = block->pdu_flit - 1;
     kdata[base_addr + ACTION_OFFSET] = ACTION_NO_MATCH;
-    kdata[base_addr + PCIE_ADDRESS_LO_OFFSET] = block->pcie_address & 0xFFFFFFFF;
-    kdata[base_addr + PCIE_ADDRESS_HI_OFFSET] = (block->pcie_address >> 32) & 0xFFFFFFFF;
+    kdata[base_addr + QUEUE_ID_LO_OFFSET] = block->queue_id & 0xFFFFFFFF;
+    kdata[base_addr + QUEUE_ID_HI_OFFSET] = (block->queue_id >> 32) & 0xFFFFFFFF;
     
     //print_slot(kdata,base_addr/16, 1);
 

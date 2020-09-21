@@ -332,7 +332,7 @@ always @(posedge clk_pcie) begin
                 else begin
                     pdumeta_state <= PDUMETA_UPDATE;
                     sim_pdumeta_cpu_valid <= 1'b1;
-                    sim_pdumeta_cpu_data.pcie_address <= 64'hdeadbeef;
+                    sim_pdumeta_cpu_data.queue_id <= 64'hdeadbeef;
                     sim_pdumeta_cpu_data.tuple <= 96'h0a000001c0a8010204010400;
                 end
             end
@@ -344,7 +344,7 @@ always @(posedge clk_pcie) begin
                 else begin
                     pdumeta_state <= PDUMETA_DONE;
                     sim_pdumeta_cpu_valid <= 1'b1;
-                    sim_pdumeta_cpu_data.pcie_address <= 64'habcdef123456;
+                    sim_pdumeta_cpu_data.queue_id <= 64'habcdef123456;
                     sim_pdumeta_cpu_data.tuple <= 96'h0a000001c0a8010204010400;
                 end
             end

@@ -192,7 +192,7 @@ always@(posedge clk)begin
         pdumeta_cpu_valid <= c2f_write;
     end
     pdumeta_cpu_data.tuple <= pdu_hdr.tuple;
-    pdumeta_cpu_data.pcie_address <= pdu_hdr.pcie_address;
+    pdumeta_cpu_data.queue_id <= pdu_hdr.queue_id;
 end
 
 endmodule

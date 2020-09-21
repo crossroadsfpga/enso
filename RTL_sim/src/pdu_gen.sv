@@ -52,7 +52,7 @@ logic [PDUID_WIDTH-1:0] pdu_id;
 assign in_ready = (state == WRITE);
 
 assign pdu_hdr.padding = 0;
-assign pdu_hdr.pcie_address = in_meta_data.pcie_address;
+assign pdu_hdr.queue_id = in_meta_data.queue_id;
 assign pdu_hdr.action = 0;
 assign pdu_hdr.pdu_flit = pdu_flit + 1;//one more flit for head
 assign pdu_hdr.pdu_size = pdu_size;

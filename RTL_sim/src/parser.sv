@@ -162,7 +162,7 @@ assign metadata.pktID = in_meta_data.pktID;
 assign metadata.flits = in_meta_data.flits;
 assign metadata.tcp_flags = {tcp_ns,tcp_cwr,tcp_ece,tcp_urg,tcp_fack,tcp_psh,tcp_rst,tcp_syn,tcp_fin};
 assign metadata.pkt_flags = disable_pcie ? PKT_ETH : PKT_PCIE;
-assign metadata.pcie_address = 64'b0;
+assign metadata.queue_id = 0;
 assign metadata.padding = 0;
 
 assign in_pkt_ready = out_meta_ready;

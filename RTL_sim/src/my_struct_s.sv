@@ -117,7 +117,7 @@ typedef struct packed
 {
     logic valid;
     tuple_t tuple;
-    logic [63:0] pcie_address;
+    logic [63:0] queue_id;
 } fce_t; //Flow context entry
 
 localparam META_WIDTH=256; //Change this will affect hyper_reg_fd
@@ -132,7 +132,7 @@ typedef struct packed
     logic [4:0] flits; //total number of flits
     logic [8:0] tcp_flags;
     logic [2:0] pkt_flags;
-    logic [63:0] pcie_address;
+    logic [63:0] queue_id;
     logic [PADDING_WIDTH-1:0] padding;
 } metadata_t; //Metadata
 
@@ -147,7 +147,7 @@ localparam PDUID_WIDTH = ($clog2(PDU_NUM));
 typedef struct packed
 {
     logic [191:0] padding;
-    logic [63:0] pcie_address;
+    logic [63:0] queue_id;
     logic [31:0] action;
     logic [31:0] pdu_flit;
     logic [31:0] pdu_size;
@@ -201,7 +201,7 @@ localparam PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 typedef struct packed
 {
     tuple_t tuple;
-    logic [63:0] pcie_address;
+    logic [63:0] queue_id;
 } pdu_metadata_t; //Metadata
 
 `endif

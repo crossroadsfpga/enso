@@ -30,8 +30,8 @@
 #define PDU_SIZE_OFFSET 5
 #define PDU_FLIT_OFFSET 6
 #define ACTION_OFFSET 7
-#define PCIE_ADDRESS_LO_OFFSET 8
-#define PCIE_ADDRESS_HI_OFFSET 9
+#define QUEUE_ID_LO_OFFSET 8
+#define QUEUE_ID_HI_OFFSET 9
 
 #define ACTION_NO_MATCH 1
 #define ACTION_MATCH 2
@@ -85,7 +85,7 @@ typedef struct block {
     uint32_t pdu_size; // in bytes
     uint32_t pdu_flit;
     uint32_t action;
-    uint64_t pcie_address;
+    uint64_t queue_id;
     uint8_t *pdu_payload; // immediately after pdu_hdr
 } block_s;
 
