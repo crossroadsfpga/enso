@@ -312,6 +312,7 @@ begin
         $display("STOP READING!");
         $display("Number of cycles: %d", nb_cycles);
         $display("Duration: %d", nb_cycles * period_rx);
+        $display("Count: %d", cnt);
     end
 end
 
@@ -324,7 +325,7 @@ always @(posedge clk_pcie) begin
     end else begin
         case (pdumeta_state)
             PDUMETA_INSERT: begin
-                if (cnt < 8000) begin
+                if (cnt < 2000) begin
                     sim_pdumeta_cpu_data <= 0;
                     sim_pdumeta_cpu_valid <= 0;
                     pdumeta_state <= PDUMETA_INSERT;
@@ -332,20 +333,20 @@ always @(posedge clk_pcie) begin
                 else begin
                     pdumeta_state <= PDUMETA_UPDATE;
                     sim_pdumeta_cpu_valid <= 1'b1;
-                    sim_pdumeta_cpu_data.queue_id <= 64'hdeadbeef;
-                    sim_pdumeta_cpu_data.tuple <= 96'h0a000001c0a8010204010400;
+                    sim_pdumeta_cpu_data.queue_id <= 64'h0;
+                    sim_pdumeta_cpu_data.tuple <= 96'h8002d06ac0a8010100140050;
                 end
             end
             PDUMETA_UPDATE: begin
-                if (cnt < 9000) begin
+                if (cnt < 2500) begin
                     sim_pdumeta_cpu_valid <= 1'b0;
                     pdumeta_state <= PDUMETA_UPDATE;
                 end
                 else begin
                     pdumeta_state <= PDUMETA_DONE;
                     sim_pdumeta_cpu_valid <= 1'b1;
-                    sim_pdumeta_cpu_data.queue_id <= 64'habcdef123456;
-                    sim_pdumeta_cpu_data.tuple <= 96'h0a000001c0a8010204010400;
+                    sim_pdumeta_cpu_data.queue_id <= 64'h1;
+                    sim_pdumeta_cpu_data.tuple <= 96'h8002d06ac0a8010100140050;
                 end
             end
             PDUMETA_DONE: begin
@@ -660,7 +661,10 @@ top top_inst (
     .status_write                 (s_write),
     .status_writedata             (s_writedata),
     .status_readdata              (top_readdata),
-    .status_readdata_valid        (top_readdata_valid)
+    .status_readdata_valid        (top_readdata_valid),
+
+    .sim_pdumeta_cpu_valid        (sim_pdumeta_cpu_valid),
+    .sim_pdumeta_cpu_data         (sim_pdumeta_cpu_data)
 );
 
 hyper_pipe_root reg_io_inst (
