@@ -609,10 +609,10 @@ proc sanity_check {} {
 
 ################## PCIE ##################
 
-proc read_pcie {} {
+proc read_pcie {{nb_bytes 65}} {
     global PCIE_BASE
 
-    for { set a 0 } { $a < 65 } {incr a} {
+    for { set a 0 } { $a < $nb_bytes } {incr a} {
         set rdata [reg_read $PCIE_BASE $a]
         puts "$a : $rdata"
     }
