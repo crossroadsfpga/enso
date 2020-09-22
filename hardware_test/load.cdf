@@ -4,7 +4,7 @@ JedecChain;
 	DefaultMfr(6E);
 
 	P ActionCode(Cfg)
-		Device PartName(1SM21BHU2F53S1) Path("/home/sadok/frontdoor/front_door_rtl/hardware_test/") File("alt_ehipc2_hw.sof") MfrSpec(OpMask(1));
+		Device PartName(1SM21BHU2F53S1) File("alt_ehipc2_hw.sof") MfrSpec(OpMask(1));
 	P ActionCode(Ign)
 		Device PartName(VTAP10) MfrSpec(OpMask(0));
 
