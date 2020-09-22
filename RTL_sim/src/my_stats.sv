@@ -370,7 +370,7 @@ module my_stats (
         tx_warmup_pkt_tx <= tx_warmup_pkt_1;
     end
 
-    assign tx_scale = tx_latency_tx[5:1];
+    assign tx_scale = tx_latency_tx[4:1];
     assign tx_fetch = tx_latency_tx[0];
 
     always @(posedge clk_status)begin
@@ -679,6 +679,9 @@ module my_stats (
     end
 
     assign tx_tracker_rd_valid = 0;
+    assign tx_tracker_rdata = 0;
+    assign fetch_rd_valid = 0;
+    assign status_readdata = 0;
 /*
     ///////////////////////////
     //tx tracker
