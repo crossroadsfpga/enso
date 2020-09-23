@@ -574,6 +574,15 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("DMA_PKT:\t%d",top_readdata);
+                    conf_state <= RULE_SET;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0015;
+                end
+            end
+            RULE_SET: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("RULE_SET:\t%d",top_readdata);
                     $display("done");
                     $finish;
                 end
