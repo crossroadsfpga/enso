@@ -47,7 +47,7 @@ int main(int argc, const char* argv[])
 
     int port = atoi(argv[2]);
     unsigned nb_rules = atoi(argv[3]);
-    unsigned nb_queues = atoi(argv[4]);
+    int nb_queues = atoi(argv[4]);
 
     std::cout << "running test with " << nb_rules << " rules" << std::endl;
     
