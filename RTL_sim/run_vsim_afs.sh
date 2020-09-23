@@ -15,11 +15,11 @@ rm -rf work
 rm -f vsim.wlf
 
 vlib work
-vlog +define+NO_PCIE +define+SIM +define+PKT_FILE=\"$PKT_FILE\" \
+vlog +define+SIM +define+PKT_FILE=\"$PKT_FILE\" \
      +define+PKT_FILE_NB_LINES=$PKT_FILE_NB_LINES ./src/*.sv -sv 
 #vlog *.v
-vlog +define+NO_PCIE +define+SIM ./src/common/*.sv -sv
-vlog +define+NO_PCIE +define+SIM ./src/common/*.v
+vlog +define+SIM ./src/common/*.sv -sv
+vlog +define+SIM ./src/common/*.v
 #vlog ./src/common/esram/synth/esram.v  
 #vlog ./src/common/esram/esram_1913/synth/iopll.v  
 #vlog ./src/common/esram/esram_1913/synth/esram_esram_1913_a3ainji.sv -sv
@@ -27,10 +27,10 @@ vlog +define+NO_PCIE +define+SIM ./src/common/*.v
 #vlog ./src/common/esram/altera_iopll_1930/synth/esram_altera_iopll_1930_rnqonzq.v
 
 #GUI full debug
-vsim tb -L altera_mf_ver -L altera_lnsim_ver -L altera_ver -L lpm_ver -L sgate_ver -L fourteennm_ver -L fourteennm_ct1_ver -voptargs="+acc"
+# vsim tb -L altera_mf_ver -L altera_lnsim_ver -L altera_ver -L lpm_ver -L sgate_ver -L fourteennm_ver -L fourteennm_ct1_ver -voptargs="+acc"
 
 #NO GUI
-#vsim -L altera_mf_ver -L altera_lnsim_ver -L altera_ver -L lpm_ver -L sgate_ver -L fourteennm_ver -L fourteennm_ct1_ver -voptargs="+acc" -c -do "run -all" tb
+vsim -L altera_mf_ver -L altera_lnsim_ver -L altera_ver -L lpm_ver -L sgate_ver -L fourteennm_ver -L fourteennm_ct1_ver -voptargs="+acc" -c -do "run -all" tb
 
 #NO GUI, Optimized, but the stats may not match
 #vsim -L altera_mf_ver -L altera_lnsim_ver -L altera_ver -L lpm_ver -L sgate_ver -L fourteennm_ver -L fourteennm_ct1_ver -c -do "run -all" tb

@@ -44,7 +44,7 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
 1. \*.ini, \*.pcap, \*.pkt are ingored in .gitignore. You should change your local .ini file and you can add new pcap/pkt in your local copy. But please do not upload to this repo.
 2. In input_gen, you can change the run.sh to capture different number of pkts from the pcap. Usually start with small number.
 3. run_vsim_afs.sh allow you choose GUI mode, CLI mode, and optimized CLI mode. GUI mode is great for debugging using waveform. CLI mode is good for getting the results quickly. Optimized CLI applied internal optimizations which may affect the results.
-4. In simulation, you can toggle `+define+NO_PCIE` in `run_vsim_afs.sh` to disable/enable pcie. In Synthesis, you will need to write a tcl command in JTAG system console.
+4. In simulation, you can add `+define+NO_PCIE` to the `vsim` lines in `run_vsim_afs.sh` to disable PCIe. In Synthesis, you will need to write a tcl command in JTAG system console.
 
 # Hardware test
 ### Restore the Quartus project

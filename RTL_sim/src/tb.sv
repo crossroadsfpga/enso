@@ -154,19 +154,7 @@ logic [31:0] pktID;
 logic [31:0] ft_pkt;
 
 logic [3:0] rate_cnt;
-pdu_metadata_t          sim_pdumeta_cpu_data;
-logic                   sim_pdumeta_cpu_valid;
-logic                   sim_pdumeta_cpu_ready;
 
-typedef enum{
-    PDUMETA_INSERT,
-    PDUMETA_UPDATE,
-    PDUMETA_DONE
-} pdumeta_state_t;
-
-pdumeta_state_t pdumeta_state;
-
-logic [7:0]             pdumeta_wait_cnt;
 typedef enum{
     READ,
     WAIT
@@ -175,7 +163,8 @@ typedef enum{
 state_t read_state;
 
 typedef enum{
-    DISABLE_PCIE,
+    CONFIGURE,
+    READ_PCIE,
     IDLE,
     IN_PKT,
     OUT_PKT,
@@ -197,7 +186,8 @@ typedef enum{
     DM_PCIE_PKT,
     DM_PCIE_META,
     DM_ETH_PKT,
-    DMA_PKT
+    DMA_PKT,
+    RULE_SET
 } c_state_t;
 
 c_state_t conf_state;
@@ -316,71 +306,211 @@ begin
     end
 end
 
-//FAKE pdumeta_cpu
+typedef enum{
+    PCIE_SET_F2C_QUEUE,
+    PCIE_READ_F2C_QUEUE,
+    PCIE_READ_F2C_QUEUE_WAIT,
+    PCIE_SET_C2F_QUEUE,
+    PCIE_READ_C2F_QUEUE,
+    PCIE_READ_C2F_QUEUE_WAIT,
+    PCIE_RULE_INSERT,
+    PCIE_RULE_UPDATE,
+    PCIE_CONSUME_PKT_BUFFER
+} pcie_state_t;
+
+pcie_state_t pcie_state;
+
+// PCIe FPGA -> CPU
 always @(posedge clk_pcie) begin
+    pcie_address_0 <= 0;
+    pcie_write_0 <= 0;
+    pcie_read_0 <= 0;
+
+    pcie_writedata_0 <= 0;
+    pcie_byteenable_0 <= 0;
+
+    pcie_address_1 <= 0;
+    pcie_write_1 <= 0;
+    pcie_read_1 <= 0; // not used at the moment
+
+    pcie_writedata_1 <= 0;
+    pcie_byteenable_1 <= 0; // not used at the moment
+
+    // outputs
+    // pcie_readdatavalid_0
+    // pcie_readdata_0
+
+    // PCIe FPGA -> CPU
+    pcie_wrdm_desc_ready <= 0;
+    
+    // outputs
+    // pcie_wrdm_desc_valid
+    // pcie_wrdm_desc_data
+    // pcie_readdatavalid_1 // not used at the moment
+    // pcie_readdata_1 // not used at the moment
+
+    // PCIe CPU -> FPGA
+    pcie_rddm_desc_ready <= 0;
+    pcie_wrdm_prio_ready <= 0;
+    // outputs
+    // pcie_rddm_desc_valid
+    // pcie_rddm_desc_data
+    // pcie_wrdm_prio_valid
+    // pcie_wrdm_prio_data
     if (rst) begin
-        sim_pdumeta_cpu_valid <= 0;
-        sim_pdumeta_cpu_data <= 0;
-        pdumeta_state <= PDUMETA_INSERT;
+        pcie_state <= PCIE_SET_F2C_QUEUE;
     end else begin
-        case (pdumeta_state)
-            PDUMETA_INSERT: begin
-                if (cnt < 2000) begin
-                    sim_pdumeta_cpu_data <= 0;
-                    sim_pdumeta_cpu_valid <= 0;
-                    pdumeta_state <= PDUMETA_INSERT;
-                end
-                else begin
-                    pdumeta_state <= PDUMETA_UPDATE;
-                    sim_pdumeta_cpu_valid <= 1'b1;
-                    sim_pdumeta_cpu_data.queue_id <= 64'h0;
-                    sim_pdumeta_cpu_data.tuple <= 96'h8002d06ac0a8010100140050;
+        case (pcie_state)
+            PCIE_SET_F2C_QUEUE: begin
+                if (cnt >= 1000) begin
+                    pcie_write_0 <= 1;
+
+                    // configure queue 0
+                    pcie_address_0 <= 0 << 12;
+
+                    // addr
+                    pcie_writedata_0[127:64] <= 64'hdeadbeef00000000;
+                    // enable
+                    pcie_byteenable_0[15:8] <= 8'hff;
+
+                    pcie_state <= PCIE_READ_F2C_QUEUE;
+                end 
+            end
+            PCIE_READ_F2C_QUEUE: begin
+                if (cnt >= 1010) begin
+                    // read queue 0
+                    pcie_address_0 <= 0 << 12;
+                    pcie_read_0 <= 1;
+                    pcie_state <= PCIE_READ_F2C_QUEUE_WAIT;
                 end
             end
-            PDUMETA_UPDATE: begin
-                if (cnt < 2500) begin
-                    sim_pdumeta_cpu_valid <= 1'b0;
-                    pdumeta_state <= PDUMETA_UPDATE;
-                end
-                else begin
-                    pdumeta_state <= PDUMETA_DONE;
-                    sim_pdumeta_cpu_valid <= 1'b1;
-                    sim_pdumeta_cpu_data.queue_id <= 64'h1;
-                    sim_pdumeta_cpu_data.tuple <= 96'h8002d06ac0a8010100140050;
+            PCIE_READ_F2C_QUEUE_WAIT: begin
+                if (pcie_readdatavalid_0) begin
+                    assert(pcie_readdata_0[127:64] == 64'hdeadbeef00000000);
+
+                    pcie_state <= PCIE_SET_C2F_QUEUE;
                 end
             end
-            PDUMETA_DONE: begin
-                sim_pdumeta_cpu_valid <= 1'b0;
-                pdumeta_state <= PDUMETA_DONE;
+            PCIE_SET_C2F_QUEUE: begin
+                if (cnt >= 1050) begin
+                    pcie_write_0 <= 1;
+
+                    // configure queue 0
+                    pcie_address_0 <= 0 << 12;
+
+                    // addr
+                    pcie_writedata_0[255:192] <= 64'h0123456789abcdef;
+                    // enable
+                    pcie_byteenable_0[31:24] <= 8'hff;
+
+                    pcie_state <= PCIE_READ_C2F_QUEUE;
+                end 
+            end
+            PCIE_READ_C2F_QUEUE: begin
+                if (cnt >= 1060) begin
+                    // read queue 0
+                    pcie_address_0 <= 0 << 12;
+                    pcie_read_0 <= 1;
+                    pcie_state <= PCIE_READ_C2F_QUEUE_WAIT;
+                end
+            end
+            PCIE_READ_C2F_QUEUE_WAIT: begin
+                if (pcie_readdatavalid_0) begin
+                    assert(pcie_readdata_0[255:192] == 64'h0123456789abcdef);
+
+                    pcie_state <= PCIE_RULE_INSERT;
+                end
+            end
+            PCIE_RULE_INSERT: begin
+                if (cnt >= 2000) begin
+                    automatic pdu_hdr_t pdu_hdr = 0;
+                    pdu_hdr.queue_id = 64'h0;
+                    pdu_hdr.prot = 32'h11;
+                    pdu_hdr.tuple = 96'h8002d06ac0a8010100140050;
+                    pcie_writedata_1 <= pdu_hdr;
+                    pcie_write_1 <= 1;
+
+                    pcie_state <= PCIE_RULE_UPDATE;
+                end
+            end
+            // TODO(sadok) assert that RULE_SET == 1
+            PCIE_RULE_UPDATE: begin
+                if (cnt >= 2500) begin
+                    // update previously added rule to use a different queue
+                    automatic pdu_hdr_t pdu_hdr = 0;
+                    pdu_hdr.queue_id = 64'h1;
+                    pdu_hdr.prot = 32'h11;
+                    pdu_hdr.tuple = 96'h8002d06ac0a8010100140050;
+                    pcie_writedata_1 <= pdu_hdr;
+                    pcie_write_1 <= 1;
+
+                    // prepare to consume pkts from buffer
+                    pcie_state <= PCIE_CONSUME_PKT_BUFFER;
+                    pcie_wrdm_desc_ready <= 0;
+                end
+            end
+            // TODO(sadok) assert that RULE_SET == 2
+            PCIE_CONSUME_PKT_BUFFER: begin
+                if (pcie_wrdm_desc_valid) begin
+                    pcie_wrdm_desc_ready <= 1;
+                    $display("pcie_wrdm_desc_data: 0x%h", pcie_wrdm_desc_data);
+
+                    // read the packet
+
+                    // read the tail
+                    // update the tail
+                end else begin
+                    pcie_wrdm_desc_ready <= 0;
+                end
             end
         endcase
     end
 end
 
+logic waiting;
 
 //Configure
 //Read and display pkt/flow cnts
 always @(posedge clk_status) begin
+    s_read <= 0;
+    s_write <= 0;
+    s_writedata <= 0;
     if(rst)begin
-        s_addr <= 0;
-        s_read <= 0;
-        s_write <= 0;
-        s_writedata <= 0;
         s_cnt <= 0;
-        conf_state <= DISABLE_PCIE;
+        s_addr <= 0;
+        conf_state <= CONFIGURE;
+        waiting <= 0;
     end else begin
         case(conf_state)
-            DISABLE_PCIE:begin
-                conf_state <= IDLE;
+            CONFIGURE: begin
+                conf_state <= READ_PCIE;
+                s_addr <= 30'h2A00_0000;
                 s_write <= 1;
-                s_addr <= 30'h2A00_0000 + NB_STATUS_REGS - 1;
             `ifdef NO_PCIE
-                s_writedata <= 1;
+                s_writedata <= 32'h10003fff; // 2 queues, buf_size=8191, pcie disabled
             `else
-                s_writedata <= 0;
+                s_writedata <= 32'h10003ffe; // 2 queues, buf_size=8191, pcie enabled
             `endif
             end
-            IDLE:begin
+            READ_PCIE: begin
+                if (cnt >= 7500) begin
+                    if (!waiting) begin
+                        s_read <= 1;
+                        waiting <= 1;
+                    end
+                    if (top_readdata_valid) begin
+                        waiting <= 0;
+                        $display("%d: 0x%8h (cnt: %d)", s_addr[6:0],
+                                 top_readdata, cnt);
+                        if (s_addr == (30'h2A00_0000 + 30'd65)) begin
+                            conf_state <= IDLE;     
+                        end else begin
+                            s_addr <= s_addr + 1;
+                        end
+                    end
+                end
+            end
+            IDLE: begin
                 s_write <= 0;
                 if(cnt>=stop)begin
                     conf_state <= IN_PKT;
@@ -388,7 +518,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0000;
                 end
             end
-            IN_PKT:begin
+            IN_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("---- PRINT STATS ------");
@@ -398,7 +528,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0001;
                 end
             end
-            OUT_PKT:begin
+            OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("OUT_PKT:\t%d",top_readdata);
@@ -407,7 +537,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0002;
                 end
             end
-            INCOMP_OUT_PKT:begin
+            INCOMP_OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("INCOMP_OUT_PKT:\t%d",top_readdata);
@@ -416,7 +546,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0003;
                 end
             end
-            PARSER_OUT_PKT:begin
+            PARSER_OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("PARSER_OUT_PKT:\t%d",top_readdata);
@@ -425,7 +555,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0004;
                 end
             end
-            MAX_PARSER_FIFO:begin
+            MAX_PARSER_FIFO: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("MAX_PARSER_FIFO:\t%d",top_readdata);
@@ -434,7 +564,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0005;
                 end
             end
-            FD_IN_PKT:begin
+            FD_IN_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("FD_IN_PKT:\t%d",top_readdata);
@@ -443,7 +573,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0006;
                 end
             end
-            FD_OUT_PKT:begin
+            FD_OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("FD_OUT_PKT:\t%d",top_readdata);
@@ -452,7 +582,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0007;
                 end
             end
-            MAX_FD_OUT_FIFO:begin
+            MAX_FD_OUT_FIFO: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("MAX_FD_OUT_PKT:\t%d",top_readdata);
@@ -461,7 +591,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0008;
                 end
             end
-            DM_IN_PKT:begin
+            DM_IN_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("DM_IN_PKT:\t%d",top_readdata);
@@ -471,7 +601,7 @@ always @(posedge clk_status) begin
                 end
             end
 
-            IN_EMPTYLIST_PKT:begin
+            IN_EMPTYLIST_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("IN_EMPTYLIST_PKT:\t%d",top_readdata);
@@ -480,7 +610,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_000A;
                 end
             end
-            OUT_EMPTYLIST_PKT:begin
+            OUT_EMPTYLIST_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("OUT_EMPTYLIST_PKT:\t%d",top_readdata);
@@ -489,7 +619,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_000B;
                 end
             end
-            PKT_ETH:begin
+            PKT_ETH: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("PKT_ETH:\t%d",top_readdata);
@@ -498,7 +628,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_000C;
                 end
             end
-            PKT_DROP:begin
+            PKT_DROP: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("PKT_DROP:\t%d",top_readdata);
@@ -507,7 +637,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_000D;
                 end
             end
-            PKT_PCIE:begin
+            PKT_PCIE: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("PKT_PCIE:\t%d",top_readdata);
@@ -516,7 +646,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_000E;
                 end
             end
-            MAX_DM2PCIE_FIFO:begin
+            MAX_DM2PCIE_FIFO: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("MAX_DM2PCIE_FIFO:\t%d",top_readdata);
@@ -525,7 +655,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_000F;
                 end
             end
-            PCIE_PKT:begin
+            PCIE_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("PCIE_PKT:\t%d",top_readdata);
@@ -534,7 +664,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0010;
                 end
             end
-            PCIE_META:begin
+            PCIE_META: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("PCIE_META:\t%d",top_readdata);
@@ -543,7 +673,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0011;
                 end
             end
-            DM_PCIE_PKT:begin
+            DM_PCIE_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("DM_PCIE_PKT:\t%d",top_readdata);
@@ -552,7 +682,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0012;
                 end
             end
-            DM_PCIE_META:begin
+            DM_PCIE_META: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("DM_PCIE_META:\t%d",top_readdata);
@@ -561,7 +691,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0013;
                 end
             end
-            DM_ETH_PKT:begin
+            DM_ETH_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("DM_ETH_PKT:\t%d",top_readdata);
@@ -570,7 +700,7 @@ always @(posedge clk_status) begin
                     s_addr <= 30'h2200_0014;
                 end
             end
-            DMA_PKT:begin
+            DMA_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("DMA_PKT:\t%d",top_readdata);
@@ -670,10 +800,7 @@ top top_inst (
     .status_write                 (s_write),
     .status_writedata             (s_writedata),
     .status_readdata              (top_readdata),
-    .status_readdata_valid        (top_readdata_valid),
-
-    .sim_pdumeta_cpu_valid        (sim_pdumeta_cpu_valid),
-    .sim_pdumeta_cpu_data         (sim_pdumeta_cpu_data)
+    .status_readdata_valid        (top_readdata_valid)
 );
 
 hyper_pipe_root reg_io_inst (
@@ -796,13 +923,7 @@ my_stats stats(
     .status_readdata_valid(s_readdata_valid)
 );
 
-`ifdef SIM
-    assign rddm_desc_ready = 0;
-    assign wrdm_desc_ready = 0;
-    assign wrdm_prio_ready = 0;
-    assign readdata_0 = 0;
-    assign readdata_1 = 0;
-`else
+`ifndef SIM
 pcie_core pcie (
     .refclk_clk             (1'b0),                              //         refclk.clk
     .pcie_rstn_npor         (1'b1),                          //      pcie_rstn.npor

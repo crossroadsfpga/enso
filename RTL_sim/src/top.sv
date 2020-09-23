@@ -64,12 +64,6 @@ module top (
     input   logic   [31:0]           status_writedata,
     output  logic   [31:0]           status_readdata,
     output  logic                    status_readdata_valid
-
-`ifdef SIM
-    ,
-    input logic sim_pdumeta_cpu_valid,
-    input pdu_metadata_t sim_pdumeta_cpu_data
-`endif
 );
 
 //counters
@@ -375,12 +369,9 @@ always @(posedge clk_datamover) begin
         `endif
         if(input_comp_eth_valid & input_comp_eth_eop)begin
             in_pkt_cnt <= in_pkt_cnt + 1;
-            `ifdef SIM
-                $display("%d: PKT %d", datamover_cycles, in_pkt_cnt);
-                // if(in_pkt_cnt[5:0]==6'b00_0000)begin
-                //     $display("%d: PKT %d", datamover_cycles, in_pkt_cnt);
-                // end
-            `endif
+            // `ifdef SIM
+            //     $display("%d: PKT %d", datamover_cycles, in_pkt_cnt);
+            // `endif
         end
 
         if(input_comp_metadata_valid & input_comp_metadata_ready)begin
@@ -435,6 +426,7 @@ always @(posedge clk_pcie) begin
         pcie_pkt_cnt <= 0;
         pcie_meta_cnt <= 0;
         dma_pkt_cnt <= 0;
+        rule_set_cnt <= 0;
     end else begin
         if(pcie_pkt_valid & pcie_pkt_ready & pcie_pkt_eop)begin
             pcie_pkt_cnt <= pcie_pkt_cnt + 1;
@@ -739,13 +731,8 @@ flow_table_wrapper flow_table_wrapper_0 (
      .out_meta_data     (flow_table_wrapper_out_meta_data),
      .out_meta_valid    (flow_table_wrapper_out_meta_valid),
      .out_meta_ready    (flow_table_wrapper_out_ready),
-`ifdef SIM
-    .in_control_data   (sim_pdumeta_cpu_data),
-    .in_control_valid  (sim_pdumeta_cpu_valid),
-`else
     .in_control_data   (pdumeta_cpu_out_data),
     .in_control_valid  (pdumeta_cpu_out_valid),
-`endif
      .in_control_ready  (pdumeta_cpu_out_ready),
      .out_control_done  (flow_table_wrapper_out_control_done)
  );
