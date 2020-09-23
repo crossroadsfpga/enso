@@ -44,8 +44,9 @@
 #include "pcie.h"
 
 // Add one more page for rounding pkts
-static const unsigned int allocated_size = 
-    (BUFFER_SIZE + 1 + C2F_BUFFER_SIZE) * 16 * 4 + 4096;
+static const unsigned f2c_allocated_size = (BUFFER_SIZE + 1) * 64 + 4096;
+static const unsigned c2f_allocated_size = C2F_BUFFER_SIZE * 64;
+static const unsigned allocated_size = f2c_allocated_size + c2f_allocated_size;
 
 static inline uint32_t get_block_payload(uint32_t *addr, void** payload_ptr,
     uint32_t* pdu_flit)
@@ -88,7 +89,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     }
 
     // Obtain kernel memory.
-    result = dev->set_kmem_size(allocated_size, app_id);
+    result = dev->set_kmem_size(f2c_allocated_size, c2f_allocated_size, app_id);
     if (result != 1) {
         std::cerr << "Could not get kernel memory!" << std::endl;
         return -1;
@@ -266,15 +267,18 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
         block.protocol = 0x11;
         block.pdu_size = 0x0;
         block.pdu_flit = 0x0;
-        block.queue_id = (((uint64_t) (uio_data_bar2->kmem_high)) << 32) 
-                            | (uio_data_bar2->kmem_low);
+        block.queue_id = 1; // FIXME(sadok) specify the relevant queue
 
+        // std::cout << "Setting rule: " << nb_rules << std::endl;
         // print_block(&block);
 
         socket_entry->c2f_cpu_tail = c2f_copy_head(socket_entry->c2f_cpu_tail,
             global_block, &block, socket_entry->kdata);
         asm volatile ("" : : : "memory"); // compiler memory barrier
         uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
+
+        asm volatile ("" : : : "memory"); // compiler memory barrier
+        print_pcie_block(uio_data_bar2);
     }
 #endif // CONTROL_MSG
 
@@ -332,6 +336,13 @@ void print_pcie_block(pcie_block_t * pb)
     printf("pb->head = %d \n", pb->head);
     printf("pb->kmem_low = 0x%08x \n", pb->kmem_low);
     printf("pb->kmem_high = 0x%08x \n", pb->kmem_high);
+
+    #ifdef CONTROL_MSG
+    printf("pb->c2f_tail = %d \n", pb->c2f_tail);
+    printf("pb->c2f_head = %d \n", pb->c2f_head);
+    printf("pb->c2f_kmem_low = 0x%08x \n", pb->c2f_kmem_low);
+    printf("pb->c2f_kmem_high = 0x%08x \n", pb->c2f_kmem_high);
+    #endif // CONTROL_MSG
 }
 
 void fill_block(uint32_t *addr, block_s *block) {
@@ -415,6 +426,8 @@ uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
     }
     base_addr = C2F_BUFFER_OFFSET + c2f_tail * 16;
 
+    // printf("c2f base addr: 0x%08x\n", base_addr);
+
     //memcpy(&kdata[base_addr], src_addr, 16*4); //each flit is 512 bit
 
     //Fake match
@@ -431,7 +444,7 @@ uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
     kdata[base_addr + QUEUE_ID_LO_OFFSET] = block->queue_id & 0xFFFFFFFF;
     kdata[base_addr + QUEUE_ID_HI_OFFSET] = (block->queue_id >> 32) & 0xFFFFFFFF;
     
-    //print_slot(kdata,base_addr/16, 1);
+    // print_slot(kdata, base_addr/16, 1);
 
     //update c2f_tail
     if(c2f_tail == C2F_BUFFER_SIZE-1){

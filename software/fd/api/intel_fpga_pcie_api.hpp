@@ -253,11 +253,15 @@ public:
 
     /**
      * Set the size of kernel memory to use.
-     * @param size Size of the kernel memory in bytes; setting to 0 frees
-     *             the kernel memory.
+     * @param f2c_size Size of the fpga2cpu buffer in bytes; setting to 0 frees
+     *                 the kernel memory.
+     * @param c2f_size Size of the cpu2fpga buffer in bytes; setting to 0 frees
+     *                 the kernel memory.
+     * @param app_id Application identifier
      * @return 1 on success; 0 otherwise
      */
-    int set_kmem_size(unsigned int size, unsigned int app_id);
+    int set_kmem_size(unsigned int f2c_size, unsigned int c2f_size,
+                      unsigned int app_id);
 
     /**
      * Map device's kernel memory into user-space

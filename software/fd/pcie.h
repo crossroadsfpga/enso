@@ -12,9 +12,12 @@
 // N * 512 bits, N * 16 dwords
 #define BUFFER_SIZE 8191
 #define C2F_BUFFER_SIZE 512
-//Interms of dwords. 1 means the first 16 dwords are global registers
-//the 1024 is the extra page for memory-copy
-#define C2F_BUFFER_OFFSET ((BUFFER_SIZE+1)*16+1024)
+
+// In terms of dwords. 1 means the first 16 dwords are global registers
+// the 1024 is the extra page for memory-copy
+// if changed, should also change the kernel
+#define C2F_BUFFER_OFFSET ((BUFFER_SIZE+1)*16 + 1024)
+
 // 4 bytes, 1 dword
 #define HEAD_OFFSET 4
 #define C2F_TAIL_OFFSET 16
@@ -36,34 +39,29 @@
 #define ACTION_NO_MATCH 1
 #define ACTION_MATCH 2
 
+#define MEMORY_SPACE_PER_APP (1<<12)
+
 #define likely(x)       __builtin_expect((x),1)
 #define unlikely(x)     __builtin_expect((x),0)
+
+#define CONTROL_MSG
 
 #ifdef CONTROL_MSG
 
 #define REGISTERS_PER_APP 8
 typedef struct pcie_block {
-    uint32_t tail1;
-    uint32_t head1;
-    uint32_t kmem_low1;
-    uint32_t kmem_high1;
+    uint32_t tail;
+    uint32_t head;
+    uint32_t kmem_low;
+    uint32_t kmem_high;
     uint32_t c2f_tail;
     uint32_t c2f_head;
     uint32_t c2f_kmem_low;
     uint32_t c2f_kmem_high;
-    uint32_t tail2;
-    uint32_t head2;
-    uint32_t kmem_low2;
-    uint32_t kmem_high2;
-    uint32_t padding4;
-    uint32_t padding5;
-    uint32_t padding6;
-    uint32_t padding7;
+    uint32_t padding[8];
 } pcie_block_t;
 
 #else
-
-#define MEMORY_SPACE_PER_APP (1<<12)
 
 typedef struct pcie_block {
     uint32_t tail;

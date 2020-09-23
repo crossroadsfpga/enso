@@ -52,9 +52,8 @@ module pcie_top (
     output logic   [31:0]  status_readdata,
     output logic           status_readdata_valid
     );
-    
-localparam JTAG_REG_SIZE = 20;
-localparam C2F_HEAD_OFFSET = (5*4); // 5th dwords
+
+localparam C2F_HEAD_OFFSET = 5 * REG_SIZE;
 
 // JTAG signals
 logic [29:0]  status_addr_r;
@@ -70,8 +69,6 @@ pcie_block_t pcie_block;
 logic cpu_reg_region;
 logic cpu_reg_region_r1;
 logic cpu_reg_region_r2;
-logic read_0_r1;
-logic read_0_r2;
 logic [25:0] rb_size;
 logic [4:0]  total_nb_queues;
 logic [3:0]  queue_id;
@@ -167,15 +164,13 @@ logic                    frb_read;
 
 logic pcie_reg_read;
 
-logic [C2F_RB_AWIDTH-1:0]   c2f_head;
-logic [C2F_RB_AWIDTH-1:0]   c2f_tail;
+logic [31:0]   c2f_head;
+logic [31:0]   c2f_tail;
 logic [63:0]                c2f_kmem_addr;
 logic [63:0]                c2f_head_addr;
 
 logic                    dma_done;
 logic [RB_AWIDTH-1:0]    new_tail;
-
-logic [C2F_RB_AWIDTH-1:0]   c2f_head_1;
 
 // JTAG
 always@(posedge clk_status)begin
@@ -270,31 +265,44 @@ always@(posedge pcie_clk) begin
         q_table_data_jtag_rd_set <= 0;
         q_table_addr_jtag_rd_set <= 0;
         q_table_rd_data_b <= 0;
+        c2f_kmem_addr <= 0;
     end else if (pcie_write_0) begin
         // update BRAMs
-        // if (pcie_byteenable_0[0*REGS_PER_PAGE +:REGS_PER_PAGE] 
-        //         == {REGS_PER_PAGE{1'b1}}) begin
+        // if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
         //     q_table_tails_wr_data_b <= pcie_writedata_0[0*32 +: 32];
         //     q_table_tails_wr_en_b <= 1;
         //     q_table_tails_addr_b <= page_idx;
         // end
-        if (pcie_byteenable_0[1*REGS_PER_PAGE +:REGS_PER_PAGE]
-                == {REGS_PER_PAGE{1'b1}}) begin
+        if (pcie_byteenable_0[1*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
             q_table_heads_wr_data_b <= pcie_writedata_0[1*32 +: 32];
             q_table_heads_wr_en_b <= 1;
             q_table_heads_addr_b <= page_idx;
         end
-        if (pcie_byteenable_0[2*REGS_PER_PAGE +:REGS_PER_PAGE]
-                == {REGS_PER_PAGE{1'b1}}) begin
+        if (pcie_byteenable_0[2*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
             q_table_l_addrs_wr_data_b <= pcie_writedata_0[2*32 +: 32];
             q_table_l_addrs_wr_en_b <= 1;
             q_table_l_addrs_addr_b <= page_idx;
         end
-        if (pcie_byteenable_0[3*REGS_PER_PAGE +:REGS_PER_PAGE]
-                == {REGS_PER_PAGE{1'b1}}) begin
+        if (pcie_byteenable_0[3*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
             q_table_h_addrs_wr_data_b <= pcie_writedata_0[3*32 +: 32];
             q_table_h_addrs_wr_en_b <= 1;
             q_table_h_addrs_addr_b <= page_idx;
+        end
+
+        // CPU -> FPGA
+        // TODO(sadok) This assumes a single control queue. We also need to add
+        //             TX data queues eventually
+        if (pcie_byteenable_0[4*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
+            c2f_tail <= pcie_writedata_0[4*32 +: 32];
+        end
+        // if (pcie_byteenable_0[5*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
+        //     c2f_head <= pcie_writedata_0[5*32 +: 32];
+        // end
+        if (pcie_byteenable_0[6*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
+            c2f_kmem_addr[31:0] <= pcie_writedata_0[6*32 +: 32];
+        end
+        if (pcie_byteenable_0[7*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
+            c2f_kmem_addr[63:32] <= pcie_writedata_0[7*32 +: 32];
         end
     end else if (q_table_pcie_rd_set) begin
         q_table_pcie_rd_set <= 0;
@@ -375,12 +383,12 @@ typedef enum
 } state_t;
 state_t state;
 
-assign c2f_tail = 0;
-assign c2f_kmem_addr = 0;
+// assign c2f_tail = 0;
+// assign c2f_kmem_addr = 0;
 // the first slot in f2c_kmem_addr is used as the "global reg" includes the
 // C2F_head
-// assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
-assign c2f_head_addr = 0;
+assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
+// assign c2f_head_addr = 0;
 // update tail pointer
 // CPU side read MUX, first RB_BRAM_OFFSET*512 bits are regs, the rest is BRAM
 always@(posedge pcie_clk)begin
@@ -409,20 +417,20 @@ always@(posedge pcie_clk)begin
         // FIXME(sadok) this may mess things up if we are receiving packets
         // when it happens as the ring buffer state machine is unaware of this
         if (pcie_write_0 && (page_idx == queue_id)) begin
-            if (pcie_byteenable_0[0*REGS_PER_PAGE +:REGS_PER_PAGE] 
-                    == {REGS_PER_PAGE{1'b1}}) begin
+            if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE] 
+                    == {REG_SIZE{1'b1}}) begin
                 f2c_tail <= pcie_writedata_0[0*32 +: 32];
             end
-            if (pcie_byteenable_0[1*REGS_PER_PAGE +:REGS_PER_PAGE]
-                    == {REGS_PER_PAGE{1'b1}}) begin
+            if (pcie_byteenable_0[1*REG_SIZE +:REG_SIZE]
+                    == {REG_SIZE{1'b1}}) begin
                 f2c_head <= pcie_writedata_0[1*32 +: 32];
             end
-            if (pcie_byteenable_0[2*REGS_PER_PAGE +:REGS_PER_PAGE]
-                    == {REGS_PER_PAGE{1'b1}}) begin
+            if (pcie_byteenable_0[2*REG_SIZE +:REG_SIZE]
+                    == {REG_SIZE{1'b1}}) begin
                 f2c_kmem_addr[31:0] <= pcie_writedata_0[2*32 +: 32];
             end
-            if (pcie_byteenable_0[3*REGS_PER_PAGE +:REGS_PER_PAGE]
-                    == {REGS_PER_PAGE{1'b1}}) begin
+            if (pcie_byteenable_0[3*REG_SIZE +:REG_SIZE]
+                    == {REG_SIZE{1'b1}}) begin
                 f2c_kmem_addr[63:32] <= pcie_writedata_0[3*32 +: 32];
             end
         end
@@ -488,9 +496,13 @@ end
 // PDU_BUFFER
 // CPU side read MUX, first RB_BRAM_OFFSET*512 bits are regs, the rest is BRAM
 always@(posedge pcie_clk) begin
-    if (cpu_reg_region_r2) begin
+    if (!pcie_reset_n) begin
+        pcie_readdata_0 <= 0;
+        pcie_readdatavalid_0 <= 0;
+    end else if (cpu_reg_region_r2) begin
         pcie_readdata_0 <= {
-            384'h0, q_table_h_addrs_rd_data_b, q_table_l_addrs_rd_data_b,
+            256'h0, c2f_kmem_addr, c2f_head, c2f_tail, 
+            q_table_h_addrs_rd_data_b, q_table_l_addrs_rd_data_b,
             q_table_heads_rd_data_b, q_table_tails_rd_data_b
         };
         pcie_readdatavalid_0 <= q_table_rd_data_b_pcie_ready;
@@ -507,13 +519,17 @@ assign frb_read = !cpu_reg_region & pcie_read_0;
 assign frb_address = pcie_address_0[PCIE_ADDR_WIDTH-1:6] - RB_BRAM_OFFSET;
 
 // two cycle read delay
-always@(posedge pcie_clk)begin
+always@(posedge pcie_clk) begin
     cpu_reg_region_r1 <= cpu_reg_region;
     cpu_reg_region_r2 <= cpu_reg_region_r1;
-
-    read_0_r1 <= pcie_read_0;
-    read_0_r2 <= read_0_r1;
 end
+
+// explicitly truncating outputs
+logic [31:0] q_table_pcie_out;
+logic [31:0] q_table_addr_pcie_out;
+
+assign q_table_pcie = q_table_pcie_out[1:0];
+assign q_table_addr_pcie = q_table_addr_pcie_out[APP_IDX_WIDTH-1:0];
 
 // PCIe and JTAG are in different clock domains, we use the following
 // dual-clocked FIFOs to transfer data between the two
@@ -523,9 +539,9 @@ dc_fifo_reg_core  jtag_to_pcie_data_fifo (
     .rdclock               (pcie_clk),
     .rdreset_n             (pcie_reset_n),
     .avalonst_sink_valid   (q_table_rd_en_jtag),
-    .avalonst_sink_data    (q_table_jtag),
+    .avalonst_sink_data    ({ 30'b0, q_table_jtag }),
     .avalonst_source_valid (q_table_data_rd_en_pcie),
-    .avalonst_source_data  (q_table_pcie)
+    .avalonst_source_data  (q_table_pcie_out)
 );
 dc_fifo_reg_core  jtag_to_pcie_addr_fifo (
     .wrclock               (clk_status), // jtag clock
@@ -533,9 +549,9 @@ dc_fifo_reg_core  jtag_to_pcie_addr_fifo (
     .rdclock               (pcie_clk),
     .rdreset_n             (pcie_reset_n),
     .avalonst_sink_valid   (q_table_rd_en_jtag),
-    .avalonst_sink_data    (q_table_addr_jtag),
+    .avalonst_sink_data    ({ {{32-APP_IDX_WIDTH}{1'b0}}, q_table_addr_jtag }),
     .avalonst_source_valid (q_table_addr_rd_en_pcie),
-    .avalonst_source_data  (q_table_addr_pcie)
+    .avalonst_source_data  (q_table_addr_pcie_out)
 );
 dc_fifo_reg_core  pcie_to_jtag_fifo (
     .wrclock               (pcie_clk),
@@ -549,22 +565,22 @@ dc_fifo_reg_core  pcie_to_jtag_fifo (
 );
 
 fpga2cpu_pcie f2c_inst (
-    .clk            (pcie_clk),               
-    .rst            (!pcie_reset_n),           
-    .wr_data        (pcie_rb_wr_data),           
-    .wr_addr        (pcie_rb_wr_addr),          
-    .wr_en          (pcie_rb_wr_en),  
-    .wr_base_addr   (pcie_rb_wr_base_addr),  
+    .clk            (pcie_clk),
+    .rst            (!pcie_reset_n),
+    .wr_data        (pcie_rb_wr_data),
+    .wr_addr        (pcie_rb_wr_addr),
+    .wr_en          (pcie_rb_wr_en),
+    .wr_base_addr   (pcie_rb_wr_base_addr),
     .wr_base_addr_valid(pcie_rb_wr_base_addr_valid),
-    .almost_full    (pcie_rb_almost_full),          
+    .almost_full    (pcie_rb_almost_full),
     .update_valid   (pcie_rb_update_valid),
     .update_size    (pcie_rb_update_size),
-    .head           (f2c_head), 
+    .head           (f2c_head),
     .tail           (f2c_tail),
     .kmem_addr      (f2c_kmem_addr),
     .out_tail       (new_tail),
     .dma_done       (dma_done),
-    .rb_size        (rb_size),
+    .rb_size        ({5'b0, rb_size}),
     .wrdm_desc_ready(pcie_wrdm_desc_ready),
     .wrdm_desc_valid(pcie_wrdm_desc_valid),
     .wrdm_desc_data (pcie_wrdm_desc_data),
@@ -580,8 +596,8 @@ cpu2fpga_pcie c2f_inst (
     .pdumeta_cpu_data       (pdumeta_cpu_data),
     .pdumeta_cpu_valid      (pdumeta_cpu_valid),
     .pdumeta_cnt            (pdumeta_cnt),
-    .head                   (c2f_head),
-    .tail                   (c2f_tail),
+    .head                   (c2f_head[C2F_RB_AWIDTH-1:0]),
+    .tail                   (c2f_tail[C2F_RB_AWIDTH-1:0]),
     .kmem_addr              (c2f_kmem_addr),
     .cpu_c2f_head_addr      (c2f_head_addr),
     .wrdm_prio_ready        (pcie_wrdm_prio_ready),

@@ -182,7 +182,8 @@ localparam RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
 
 localparam PCIE_ADDR_WIDTH = 30;
 
-localparam REGS_PER_PAGE = 4;
+localparam REG_SIZE = 4; // in bytes
+localparam REGS_PER_PAGE = 8;
 localparam NB_STATUS_REGS = MAX_NB_APPS * REGS_PER_PAGE;
 localparam STATS_REGS_WIDTH = ($clog2(NB_STATUS_REGS));
 localparam JTAG_ADDR_WIDTH = ($clog2(NB_STATUS_REGS+1)); // includes control reg
