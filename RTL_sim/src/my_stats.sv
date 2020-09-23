@@ -681,7 +681,7 @@ module my_stats (
     assign tx_tracker_rd_valid = 0;
     assign tx_tracker_rdata = 0;
     assign fetch_rd_valid = 0;
-    assign status_readdata = 0;
+    assign fetch_rd_data = 0;
 /*
     ///////////////////////////
     //tx tracker
