@@ -6,7 +6,7 @@ wr_data,
 wr_addr,          
 wr_en,  
 wr_base_addr,  
-wr_base_addr_valid, // TODO(sadok) check if we need this
+wr_base_addr_valid,
 almost_full,          
 update_valid,
 update_size,
