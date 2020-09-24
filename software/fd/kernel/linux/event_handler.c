@@ -36,6 +36,6 @@
 
 int handle_event(int queue_id)
 {
-    printk("Processing event for queue %i\n", queue_id);
+    // printk("Processing event for queue %i\n", queue_id);
     return 0;
 }
