@@ -164,6 +164,7 @@ state_t read_state;
 
 typedef enum{
     CONFIGURE,
+    READ_PCIE_START,
     READ_PCIE,
     IDLE,
     IN_PKT,
@@ -306,6 +307,35 @@ begin
     end
 end
 
+typedef struct packed
+{
+    logic [13:0] func_nb;
+    logic [7:0] desc_id;
+    logic [2:0] app_spec;
+    logic reserved;
+    logic single_src;
+    logic immediate;
+    logic [17:0] nb_dwords;
+    logic [63:0] dst_addr;
+    logic [63:0] saddr_data; // src addr, or data when `immediate` is set
+} pcie_desc_t;
+
+function print_pcie_desc(input pcie_desc_t pcie_desc);
+    $display("  func_nb:\t0x%h", pcie_desc.func_nb);
+    $display("  desc_id:\t0x%h", pcie_desc.desc_id);
+    $display("  app_spec:\t0x%h", pcie_desc.app_spec);
+    $display("  reserved:\t0x%h", pcie_desc.reserved);
+    $display("  single_src:\t0x%h", pcie_desc.single_src);
+    $display("  immediate:\t0x%h", pcie_desc.immediate);
+    $display("  nb_dwords:\t0x%h", pcie_desc.nb_dwords);
+    $display("  dst_addr:\t0x%h", pcie_desc.dst_addr);
+    $display("  saddr_data:\t0x%h", pcie_desc.saddr_data);
+    $display("");
+endfunction
+
+logic [31:0] head;
+logic [31:0] tail;
+
 typedef enum{
     PCIE_SET_F2C_QUEUE,
     PCIE_READ_F2C_QUEUE,
@@ -336,29 +366,17 @@ always @(posedge clk_pcie) begin
     pcie_writedata_1 <= 0;
     pcie_byteenable_1 <= 0; // not used at the moment
 
-    // outputs
-    // pcie_readdatavalid_0
-    // pcie_readdata_0
-
     // PCIe FPGA -> CPU
     pcie_wrdm_desc_ready <= 0;
-    
-    // outputs
-    // pcie_wrdm_desc_valid
-    // pcie_wrdm_desc_data
-    // pcie_readdatavalid_1 // not used at the moment
-    // pcie_readdata_1 // not used at the moment
 
     // PCIe CPU -> FPGA
     pcie_rddm_desc_ready <= 0;
     pcie_wrdm_prio_ready <= 0;
-    // outputs
-    // pcie_rddm_desc_valid
-    // pcie_rddm_desc_data
-    // pcie_wrdm_prio_valid
-    // pcie_wrdm_prio_data
+
     if (rst) begin
         pcie_state <= PCIE_SET_F2C_QUEUE;
+        head <= 0;
+        tail <= 0;
     end else begin
         case (pcie_state)
             PCIE_SET_F2C_QUEUE: begin
@@ -452,22 +470,38 @@ always @(posedge clk_pcie) begin
             // TODO(sadok) assert that RULE_SET == 2
             PCIE_CONSUME_PKT_BUFFER: begin
                 if (pcie_wrdm_desc_valid) begin
+                    automatic pcie_desc_t pcie_desc = pcie_wrdm_desc_data;
+                    print_pcie_desc(pcie_desc);
+
                     pcie_wrdm_desc_ready <= 1;
-                    $display("pcie_wrdm_desc_data: 0x%h", pcie_wrdm_desc_data);
 
-                    // read the packet
+                    if (pcie_desc.immediate) begin
+                        // update head using the tail we got from the descriptor
+                        // to simulate reading the packets
+                        tail <= pcie_desc.saddr_data[31:0];
+                        head <= pcie_desc.saddr_data[31:0];
 
-                    // read the tail
-                    // update the tail
-                end else begin
-                    pcie_wrdm_desc_ready <= 0;
+                        // update head on the FPGA
+                        pcie_write_0 <= 1;
+                        pcie_address_0 <= 0 << 12; // queue 0
+                        pcie_writedata_0[63:32] <= pcie_desc.saddr_data[31:0];
+                        pcie_byteenable_0[7:4] <= 8'hff;
+                    end
+                    else begin
+                        // read data from FPGA BRAM using the Avalon-MM address
+                        // HACK(sadok) we are reading only the last pending flit
+                        pcie_address_0 <= pcie_desc.saddr_data + 
+                                          pcie_desc.nb_dwords * 4 - 64;
+                        pcie_read_0 <= 1;
+                    end
+                end
+                if (pcie_readdatavalid_0) begin
+                    $display("Flit from PCIe: 0x%64h", pcie_readdata_0);
                 end
             end
         endcase
     end
 end
-
-logic waiting;
 
 //Configure
 //Read and display pkt/flow cnts
@@ -479,34 +513,50 @@ always @(posedge clk_status) begin
         s_cnt <= 0;
         s_addr <= 0;
         conf_state <= CONFIGURE;
-        waiting <= 0;
     end else begin
         case(conf_state)
             CONFIGURE: begin
-                conf_state <= READ_PCIE;
+                conf_state <= READ_PCIE_START;
                 s_addr <= 30'h2A00_0000;
                 s_write <= 1;
-            `ifdef NO_PCIE
-                s_writedata <= 32'h10003fff; // 2 queues, buf_size=8191, pcie disabled
-            `else
-                s_writedata <= 32'h10003ffe; // 2 queues, buf_size=8191, pcie enabled
-            `endif
+
+                // 1 queue
+                `ifdef NO_PCIE
+                    // 1 queue, buf_size=8191, pcie disabled
+                    s_writedata <= 32'h08003fff;
+                `else
+                    // 1 queue, buf_size=8191, pcie enabled
+                    s_writedata <= 32'h08003ffe;
+                `endif
+                // // 2 queues
+                // `ifdef NO_PCIE
+                //     // 2 queues, buf_size=8191, pcie disabled
+                //     s_writedata <= 32'h10003fff;
+                // `else
+                //     // 2 queues, buf_size=8191, pcie enabled
+                //     s_writedata <= 32'h10003ffe;
+                // `endif
+            end
+            READ_PCIE_START: begin
+                // can adjust this value to use read_pcie at different points
+                // right now we run at the end
+                if (cnt >= stop) begin
+                    s_read <= 1;
+                    conf_state <= READ_PCIE;
+                    $display("read_pcie:");
+                end
             end
             READ_PCIE: begin
-                if (cnt >= 7500) begin
-                    if (!waiting) begin
+                if (top_readdata_valid) begin
+                    $display("%d: 0x%8h", s_addr[6:0], top_readdata);
+
+                    // read the first 5 registers, can read more if using
+                    // more queues
+                    if (s_addr == (30'h2A00_0000 + 30'd4)) begin
+                        conf_state <= IDLE;
+                    end else begin
+                        s_addr <= s_addr + 1;
                         s_read <= 1;
-                        waiting <= 1;
-                    end
-                    if (top_readdata_valid) begin
-                        waiting <= 0;
-                        $display("%d: 0x%8h (cnt: %d)", s_addr[6:0],
-                                 top_readdata, cnt);
-                        if (s_addr == (30'h2A00_0000 + 30'd65)) begin
-                            conf_state <= IDLE;     
-                        end else begin
-                            s_addr <= s_addr + 1;
-                        end
                     end
                 end
             end
@@ -522,7 +572,7 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("---- PRINT STATS ------");
-                    $display("IN_PKT:\t%d",top_readdata);
+                    $display("IN_PKT:\t\t%d",top_readdata);
                     conf_state <= OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0001;
@@ -531,7 +581,7 @@ always @(posedge clk_status) begin
             OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("OUT_PKT:\t%d",top_readdata);
+                    $display("OUT_PKT:\t\t%d",top_readdata);
                     conf_state <= INCOMP_OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0002;
@@ -567,7 +617,7 @@ always @(posedge clk_status) begin
             FD_IN_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("FD_IN_PKT:\t%d",top_readdata);
+                    $display("FD_IN_PKT:\t\t%d",top_readdata);
                     conf_state <= FD_OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0006;
@@ -576,7 +626,7 @@ always @(posedge clk_status) begin
             FD_OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("FD_OUT_PKT:\t%d",top_readdata);
+                    $display("FD_OUT_PKT:\t\t%d",top_readdata);
                     conf_state <= MAX_FD_OUT_FIFO;
                     s_read <= 1;
                     s_addr <= 30'h2200_0007;
@@ -594,7 +644,7 @@ always @(posedge clk_status) begin
             DM_IN_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DM_IN_PKT:\t%d",top_readdata);
+                    $display("DM_IN_PKT:\t\t%d",top_readdata);
                     conf_state <= IN_EMPTYLIST_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0009;
@@ -622,7 +672,7 @@ always @(posedge clk_status) begin
             PKT_ETH: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PKT_ETH:\t%d",top_readdata);
+                    $display("PKT_ETH:\t\t%d",top_readdata);
                     conf_state <= PKT_DROP;
                     s_read <= 1;
                     s_addr <= 30'h2200_000C;
@@ -631,7 +681,7 @@ always @(posedge clk_status) begin
             PKT_DROP: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PKT_DROP:\t%d",top_readdata);
+                    $display("PKT_DROP:\t\t%d",top_readdata);
                     conf_state <= PKT_PCIE;
                     s_read <= 1;
                     s_addr <= 30'h2200_000D;
@@ -640,7 +690,7 @@ always @(posedge clk_status) begin
             PKT_PCIE: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PKT_PCIE:\t%d",top_readdata);
+                    $display("PKT_PCIE:\t\t%d",top_readdata);
                     conf_state <= MAX_DM2PCIE_FIFO;
                     s_read <= 1;
                     s_addr <= 30'h2200_000E;
@@ -658,7 +708,7 @@ always @(posedge clk_status) begin
             PCIE_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PCIE_PKT:\t%d",top_readdata);
+                    $display("PCIE_PKT:\t\t%d",top_readdata);
                     conf_state <= PCIE_META;
                     s_read <= 1;
                     s_addr <= 30'h2200_0010;
@@ -667,7 +717,7 @@ always @(posedge clk_status) begin
             PCIE_META: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PCIE_META:\t%d",top_readdata);
+                    $display("PCIE_META:\t\t%d",top_readdata);
                     conf_state <= DM_PCIE_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0011;
@@ -676,7 +726,7 @@ always @(posedge clk_status) begin
             DM_PCIE_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DM_PCIE_PKT:\t%d",top_readdata);
+                    $display("DM_PCIE_PKT:\t\t%d",top_readdata);
                     conf_state <= DM_PCIE_META;
                     s_read <= 1;
                     s_addr <= 30'h2200_0012;
@@ -685,7 +735,7 @@ always @(posedge clk_status) begin
             DM_PCIE_META: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DM_PCIE_META:\t%d",top_readdata);
+                    $display("DM_PCIE_META:\t\t%d",top_readdata);
                     conf_state <= DM_ETH_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0013;
@@ -694,7 +744,7 @@ always @(posedge clk_status) begin
             DM_ETH_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DM_ETH_PKT:\t%d",top_readdata);
+                    $display("DM_ETH_PKT:\t\t%d",top_readdata);
                     conf_state <= DMA_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0014;
@@ -703,7 +753,7 @@ always @(posedge clk_status) begin
             DMA_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DMA_PKT:\t%d",top_readdata);
+                    $display("DMA_PKT:\t\t%d",top_readdata);
                     conf_state <= RULE_SET;
                     s_read <= 1;
                     s_addr <= 30'h2200_0015;
@@ -712,7 +762,7 @@ always @(posedge clk_status) begin
             RULE_SET: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("RULE_SET:\t%d",top_readdata);
+                    $display("RULE_SET:\t\t%d",top_readdata);
                     $display("done");
                     $finish;
                 end
