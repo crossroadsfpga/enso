@@ -30,6 +30,7 @@ module  bram_true2port  (
     parameter AWIDTH=9;
     parameter DWIDTH=16;
     parameter DEPTH=512;
+    parameter INIT_FILE="";
 
     input  [AWIDTH-1:0]  address_a;
     input  [AWIDTH-1:0]  address_b;
@@ -96,6 +97,7 @@ module  bram_true2port  (
         altera_syncram_component.clock_enable_output_b  = "BYPASS",
         altera_syncram_component.indata_reg_b  = "CLOCK0",
         altera_syncram_component.intended_device_family  = "Stratix 10",
+        altera_syncram_component.init_file = INIT_FILE,
         altera_syncram_component.lpm_type  = "altera_syncram",
         altera_syncram_component.numwords_a  = DEPTH,
         altera_syncram_component.numwords_b  = DEPTH,
@@ -118,17 +120,4 @@ module  bram_true2port  (
         altera_syncram_component.width_byteena_a  = 1,
         altera_syncram_component.width_byteena_b  = 1;
 
-
-
-
-
-
-
-
-
-
-
-
 endmodule
-
-
