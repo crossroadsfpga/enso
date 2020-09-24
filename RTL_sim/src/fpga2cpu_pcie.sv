@@ -10,12 +10,12 @@ module fpga2cpu_pcie (
     input  logic [PDU_AWIDTH-1:0]   wr_addr,         
     input  logic                    wr_en,  
     output logic [PDU_AWIDTH-1:0]   wr_base_addr,    
-    output logic                    wr_base_addr_valid, // TODO(sadok) check if we need this
+    output logic                    wr_base_addr_valid,
     output logic                    almost_full,          
     input  logic                    update_valid,
     input  logic [PDU_AWIDTH-1:0]   update_size,
 
-    //CPU ring buffer signals
+    // CPU ring buffer signals
     input  logic [RB_AWIDTH-1:0]    head,
     input  logic [RB_AWIDTH-1:0]    tail,
     input  logic [63:0]             kmem_addr,
@@ -23,12 +23,12 @@ module fpga2cpu_pcie (
     output logic                    dma_done, 
     input  logic [30:0]             rb_size,
 
-    //Write to Write data mover
+    // Write to Write data mover
     input  logic                    wrdm_desc_ready,           
     output logic                    wrdm_desc_valid,           
     output logic [173:0]            wrdm_desc_data,            
 
-    //Write-data-mover read data 
+    // Write-data-mover read data 
     output logic [511:0]            frb_readdata,             
     output logic                    frb_readvalid,        
     input  logic [PDU_AWIDTH-1:0]   frb_address,              
@@ -52,13 +52,15 @@ logic [31:0] data_base_addr;
 logic [RB_AWIDTH-1:0] free_slot;
 logic [RB_AWIDTH-1:0] new_tail;
 
-logic [PDU_AWIDTH-1:0] dma_size_r; //in 512 bits, or 16 DWORD.
-logic [PDU_AWIDTH-1:0] dma_size_r_low; //in 512 bits, or 16 DWORD.
-logic [PDU_AWIDTH-1:0] dma_size_r_high; //in 512 bits, or 16 DWORD.
-logic [31-PDU_AWIDTH-4:0] desc_padding; //4 is for 16 DWORD
-logic [31-RB_AWIDTH:0] tail_padding; //4 is for 16 DWORD
+logic [PDU_AWIDTH-1:0] dma_size_r; // in 512 bits, or 16 DWORD.
+logic [PDU_AWIDTH-1:0] dma_size_r_low; // in 512 bits, or 16 DWORD.
+logic [PDU_AWIDTH-1:0] dma_size_r_high; // in 512 bits, or 16 DWORD.
+logic [31-PDU_AWIDTH-4:0] desc_padding; // 4 is for 16 DWORD
+logic [31-RB_AWIDTH:0] tail_padding; // 4 is for 16 DWORD
 logic [PDU_AWIDTH-1:0]   frb_address_r1;              
 logic [PDU_AWIDTH-1:0]   frb_address_r2;              
+
+assign tail_padding = 0;
 
 typedef enum
 {
@@ -76,10 +78,10 @@ logic [PDU_AWIDTH-1:0]  dma_size;
 logic [PDU_AWIDTH-1:0]  dma_base_addr;
 // logic                   dma_done;
 
-//CPU side addr
-assign cpu_data_addr = kmem_addr + 64*tail + 64; //the global reg
+// CPU side addr
+assign cpu_data_addr = kmem_addr + 64*tail + 64; // the global reg
 
-//The base addr of fpga side ring buffer. BRAM starts with an offset
+// The base addr of fpga side ring buffer. BRAM starts with an offset
 assign data_base_addr = EP_BASE_ADDR + (RB_BRAM_OFFSET + dma_base_addr) << 6;
 
 assign done_desc = {
@@ -103,13 +105,13 @@ assign data_desc = {
     14'h0,
     desc_padding,
     dma_size_r,
-    4'b0,
+    4'b0, // dma_size_r is in #512-bit flits, we shift 4 bits to be in #dwords
     cpu_data_addr,
     32'h0,
     data_base_addr
 };
 
-//Rounding case
+// Rounding case
 assign dma_size_r_low = rb_size - tail;
 assign dma_size_r_high = dma_size_r - rb_size + tail; //dma_size_r - dma_size_r_low
 assign cpu_data_addr_low = cpu_data_addr;
@@ -138,15 +140,16 @@ assign data_desc_high = {
     ep_data_addr_high
 };
 
-//Always have at least one slot not occupied.
-assign free_slot = (tail >= head) ? (rb_size - tail + head -1) : (head - tail -1);
+// Always have at least one slot not occupied
+assign free_slot = (tail >= head) ? (rb_size-tail+head-1) : (head-tail-1);
 
-//We need two transfter. if it is =, we only need one transfer and round the fpga_tail.
+// We need two transfers. iIf it is equal, we only need one transfer and to
+// round the fpga_tail
 assign wrap = tail + dma_size_r > rb_size;
 
 assign new_tail = (tail+dma_size_r >= rb_size) ? (tail+dma_size_r-rb_size) : (tail+dma_size_r);
 
-//two cycle delay
+// two cycle delay
 always@(posedge clk)begin
     frb_address_r1 <= frb_address;
     frb_address_r2 <= frb_address_r1;
@@ -159,27 +162,21 @@ always@(posedge clk)begin
         wrdm_desc_valid <= 0;
         out_tail <= 0;
         dma_done <= 0;
-        //free_slot <= 0;
+        // free_slot <= 0;
     end else begin
         case(state)
-            IDLE:begin
+            IDLE: begin
                 dma_done <= 0;
                 wrdm_desc_valid <= 0;
                 if (dma_start) begin
                     state <= DESC;
                     dma_size_r <= dma_size;
-                    //use register instead of comb
-                    //if(tail >= head)begin
-                    //    free_slot <= rb_size - tail + head -1;
-                    //end else begin
-                    //    free_slot <= head - tail -1;
-                    //end 
                 end                
             end
-            DESC:begin
-                //Have enough space for this transfer.
+            DESC: begin
+                // Have enough space for this transfer.
                 if(free_slot >= dma_size_r) begin
-                    //Need wrap around
+                    // Need wrap around
                     if(wrap) begin
                         wrdm_desc_valid <= 1;
                         wrdm_desc_data <= data_desc_low;
@@ -191,36 +188,32 @@ always@(posedge clk)begin
                     end
                 end
             end
-            DESC_WRAP:begin
-                //the previous request is consumed.
+            DESC_WRAP: begin
+                // the previous request is consumed.
                 if(wrdm_desc_ready)begin
                     wrdm_desc_valid <= 1;
                     wrdm_desc_data <= data_desc_high;
                     state <= DONE;
                 end   
             end
-            DONE:begin
+            DONE: begin
                 if(wrdm_desc_ready) begin
                     wrdm_desc_valid <= 1;
                     wrdm_desc_data <= done_desc;
                     state <= WAIT;
-                 
-                    //update tail
+
+                    // update tail
                     out_tail <= new_tail;
-                    //if(tail+dma_size_r >= rb_size)begin
-                    //    tail <= tail+dma_size_r-rb_size;
-                    //end else begin
-                    //    tail <= tail + dma_size_r;
-                    //end
                 end
             end
-            WAIT:begin
-                //the previous request is consumed
+            WAIT: begin
+                // the previous request is consumed
                 if(wrdm_desc_ready)begin
                     wrdm_desc_valid <= 0;
                 end
-                //the last data is fetched
-                if(frb_readvalid & (frb_address_r2 == (dma_base_addr + dma_size_r -1))) begin
+                // the last data is fetched
+                if(frb_readvalid & (frb_address_r2 == 
+                                    (dma_base_addr + dma_size_r -1))) begin
                     dma_done <= 1;
                     state <= IDLE;
                 end
