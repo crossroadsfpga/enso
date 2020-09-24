@@ -408,7 +408,6 @@ always@(posedge pcie_clk)begin
         f2c_kmem_addr <= 0;
         queue_id <= 0;
         next_queue_id <= total_nb_queues > 1;
-        q_table_tails_wr_en_a <= 0;
         state <= IDLE;
     end else begin
         // ensure that queue updates are applied when the queue is active
@@ -442,19 +441,30 @@ always@(posedge pcie_clk)begin
                 // the queue before the new DMA starts. Eventually we should do
                 // something more clever
 
-                // retrieve next queue from queue table
                 if (dma_done) begin
-                    q_table_tails_addr_a <= next_queue_id;
-                    q_table_heads_addr_a <= next_queue_id;
-                    q_table_l_addrs_addr_a <= next_queue_id;
-                    q_table_h_addrs_addr_a <= next_queue_id;
-                    q_table_tails_rd_en_a <= 1;
-                    q_table_heads_rd_en_a <= 1;
-                    q_table_l_addrs_rd_en_a <= 1;
-                    q_table_h_addrs_rd_en_a <= 1;
-
-                    state <= BRAM_DELAY_1;
                     f2c_tail <= new_tail;
+
+                    if (total_nb_queues > 1) begin
+                        // retrieve next queue from queue table
+                        q_table_tails_addr_a <= next_queue_id;
+                        q_table_heads_addr_a <= next_queue_id;
+                        q_table_l_addrs_addr_a <= next_queue_id;
+                        q_table_h_addrs_addr_a <= next_queue_id;
+                        q_table_tails_rd_en_a <= 1;
+                        q_table_heads_rd_en_a <= 1;
+                        q_table_l_addrs_rd_en_a <= 1;
+                        q_table_h_addrs_rd_en_a <= 1;
+
+                        state <= BRAM_DELAY_1;
+
+                    end else begin
+                        // we do not need to retrieve the next queue, but we
+                        // still need to update the tail on BRAM
+                        q_table_tails_addr_a <= queue_id;
+                        q_table_tails_wr_data_a <= new_tail;
+                        q_table_tails_wr_en_a <= 1;
+                    end
+                    
                 end
             end
             BRAM_DELAY_1: begin
@@ -469,11 +479,7 @@ always@(posedge pcie_clk)begin
                 q_table_tails_wr_data_a <= f2c_tail;
                 q_table_tails_wr_en_a <= 1;
 
-                // when we only have a single queue, the tail is not yet
-                // updated, so we ignore it
-                if (total_nb_queues > 1) begin
-                    f2c_tail <= q_table_tails_rd_data_a;
-                end
+                f2c_tail <= q_table_tails_rd_data_a;
                 f2c_head <= q_table_heads_rd_data_a;
                 f2c_kmem_addr <= {
                     q_table_h_addrs_rd_data_a, q_table_l_addrs_rd_data_a
