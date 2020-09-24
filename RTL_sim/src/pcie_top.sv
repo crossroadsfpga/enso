@@ -173,7 +173,7 @@ logic                    dma_done;
 logic [RB_AWIDTH-1:0]    new_tail;
 
 // JTAG
-always@(posedge clk_status)begin
+always@(posedge clk_status) begin
     status_addr_r       <= status_addr;
     status_addr_sel_r   <= status_addr[29:30-STAT_AWIDTH];
 
@@ -183,6 +183,10 @@ always@(posedge clk_status)begin
 
     status_readdata_valid <= 0;
     q_table_rd_en_jtag <= 0;
+
+    if (!pcie_reset_n) begin
+        control_reg <= 0;
+    end
 
     if (q_table_rd_data_b_ready_from_jtag && q_table_rd_pending_from_jtag) begin
         status_readdata <= q_table_rd_data_b_jtag;
@@ -388,6 +392,15 @@ state_t state;
 // the first slot in f2c_kmem_addr is used as the "global reg" includes the
 // C2F_head
 assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
+
+always_comb begin
+    if ((total_nb_queues == 0) || (queue_id == total_nb_queues - 1)) begin
+        next_queue_id = 0;
+    end else begin
+        next_queue_id = queue_id + 1;
+    end
+end
+
 // assign c2f_head_addr = 0;
 // update tail pointer
 // CPU side read MUX, first RB_BRAM_OFFSET*512 bits are regs, the rest is BRAM
@@ -407,7 +420,6 @@ always@(posedge pcie_clk)begin
         f2c_head <= 0;
         f2c_kmem_addr <= 0;
         queue_id <= 0;
-        next_queue_id <= total_nb_queues > 1;
         state <= IDLE;
     end else begin
         // ensure that queue updates are applied when the queue is active
@@ -486,11 +498,6 @@ always@(posedge pcie_clk)begin
                 };
 
                 queue_id <= next_queue_id;
-                if (next_queue_id == total_nb_queues - 1) begin
-                    next_queue_id <= 0;
-                end else begin
-                    next_queue_id <= next_queue_id + 1;
-                end
 
                 state <= IDLE;
             end
