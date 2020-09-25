@@ -2,37 +2,44 @@
 
 import sys
 
+from itertools import cycle
+
 from scapy.all import IP, TCP, UDP, wrpcap, Ether, Raw
 
 
-def generate_pcap(nb_pkts, out_pcap, pig=False):
-    pkt = Ether()/IP(dst='192.168.1.1')/TCP(dport=80, flags='S')
-    if pig:
-        data = 'Pigs can also fly!'
-        pkt = pkt/Raw(load=data)
-    pkts = []
+def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest):
+    sample_pkts = []
+    for i in range(nb_dest):
+        pkt = Ether()/IP(dst=f'192.168.1.{i}')/TCP(dport=80, flags='S')
 
-    for _ in range(nb_pkts):
-        pkts.append(pkt.copy())
+        # payload = '0' * missing_bytes
+        # pkt = pkt/Raw(load=payload)
+        sample_pkts.append(pkt)
+
+    pkts = []
+    for i, pkt in zip(range(nb_pkts), cycle(sample_pkts)):
+        missing_bytes = pkt_size - len(pkt) - 4  # does not include CRC
+        payload = str(i).zfill(missing_bytes)
+        pkt = pkt/Raw(load=payload)
+        pkts.append(pkt)
 
     wrpcap(out_pcap, pkts)
 
 
 def main():
-    argv = sys.argv[:]
-    pig = False
-    if '--pig' in argv:
-        pig = True
-        argv.remove('--pig')
-
-    if len(argv) != 3:
-        print('Usage:', sys.argv[0], 'nb_pkts output_pcap [--pig]')
+    if len(sys.argv) != 5:
+        print('Usage:', sys.argv[0], 'nb_pkts output_pcap pkt_size nb_dest')
         sys.exit(1)
 
-    nb_pkts = int(argv[1])
-    out_pcap = argv[2]
+    nb_pkts = int(sys.argv[1])
+    out_pcap = sys.argv[2]
+    pkt_size = int(sys.argv[3])
+    nb_dest = int(sys.argv[4])
 
-    generate_pcap(nb_pkts, out_pcap, pig=pig)
+    if nb_dest > 256:
+        print('Can only support up to 256 destinations')
+
+    generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest)
 
 
 if __name__ == "__main__":
