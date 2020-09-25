@@ -5,36 +5,38 @@ module fpga2cpu_pcie (
     input clk,
     input rst,
 
-    //write to FPGA ring buffer.
-    input  flit_lite_t              wr_data,
-    input  logic [PDU_AWIDTH-1:0]   wr_addr,         
-    input  logic                    wr_en,  
-    output logic [PDU_AWIDTH-1:0]   wr_base_addr,    
-    output logic                    wr_base_addr_valid,
-    output logic                    almost_full,          
-    input  logic                    update_valid,
-    input  logic [PDU_AWIDTH-1:0]   update_size,
+    // write to FPGA ring buffer.
+    input  flit_lite_t               wr_data,
+    input  logic [PDU_AWIDTH-1:0]    wr_addr,
+    input  logic                     wr_en,
+    output logic [PDU_AWIDTH-1:0]    wr_base_addr,
+    output logic                     wr_base_addr_valid,
+    output logic                     almost_full,
+    input  logic                     update_valid,
+    input  logic [PDU_AWIDTH-1:0]    update_size,
 
     // CPU ring buffer signals
-    input  logic [RB_AWIDTH-1:0]    head,
-    input  logic [RB_AWIDTH-1:0]    tail,
-    input  logic [63:0]             kmem_addr,
-    output logic [RB_AWIDTH-1:0]    out_tail,
-    output logic                    dma_done, 
-    input  logic [30:0]             rb_size,
+    input  logic [RB_AWIDTH-1:0]     head,
+    input  logic [RB_AWIDTH-1:0]     tail,
+    input  logic [63:0]              kmem_addr,
+    input  logic                     queue_ready,
+    output logic [RB_AWIDTH-1:0]     out_tail,
+    output logic                     dma_done,
+    output logic [APP_IDX_WIDTH-1:0] dma_queue,
+    output logic                     dma_start,
+    input  logic [30:0]              rb_size,
 
     // Write to Write data mover
-    input  logic                    wrdm_desc_ready,           
-    output logic                    wrdm_desc_valid,           
-    output logic [173:0]            wrdm_desc_data,            
+    input  logic                     wrdm_desc_ready,
+    output logic                     wrdm_desc_valid,
+    output logic [173:0]             wrdm_desc_data,
 
-    // Write-data-mover read data 
-    output logic [511:0]            frb_readdata,             
-    output logic                    frb_readvalid,        
-    input  logic [PDU_AWIDTH-1:0]   frb_address,              
-    input  logic                    frb_read                 
-
-	);
+    // Write-data-mover read data
+    output logic [511:0]             frb_readdata,
+    output logic                     frb_readvalid,
+    input  logic [PDU_AWIDTH-1:0]    frb_address,
+    input  logic                     frb_read
+);
 
 localparam EP_BASE_ADDR = 32'h0004_0000;
 localparam DONE_ID = 8'hFE;
@@ -57,14 +59,15 @@ logic [PDU_AWIDTH-1:0] dma_size_r_low; // in 512 bits, or 16 DWORD.
 logic [PDU_AWIDTH-1:0] dma_size_r_high; // in 512 bits, or 16 DWORD.
 logic [31-PDU_AWIDTH-4:0] desc_padding; // 4 is for 16 DWORD
 logic [31-RB_AWIDTH:0] tail_padding; // 4 is for 16 DWORD
-logic [PDU_AWIDTH-1:0]   frb_address_r1;              
-logic [PDU_AWIDTH-1:0]   frb_address_r2;              
+logic [PDU_AWIDTH-1:0] frb_address_r1;
+logic [PDU_AWIDTH-1:0] frb_address_r2;
 
 assign tail_padding = 0;
 
 typedef enum
 {
     IDLE,
+    WAIT_QUEUE_STATE,
     DESC,
     DESC_WRAP,
     DONE,
@@ -73,7 +76,6 @@ typedef enum
 
 state_t state;
 
-logic                   dma_start;
 logic [PDU_AWIDTH-1:0]  dma_size;
 logic [PDU_AWIDTH-1:0]  dma_base_addr;
 // logic                   dma_done;
@@ -113,9 +115,9 @@ assign data_desc = {
 
 // Rounding case
 assign dma_size_r_low = rb_size - tail;
-assign dma_size_r_high = dma_size_r - rb_size + tail; //dma_size_r - dma_size_r_low
+assign dma_size_r_high = dma_size_r - rb_size + tail; // dma_size_r - dma_size_r_low
 assign cpu_data_addr_low = cpu_data_addr;
-assign cpu_data_addr_high = kmem_addr + (1 <<6); //always starts from the beginning
+assign cpu_data_addr_high = kmem_addr + (1<<6); // always starts from the beginning
 assign ep_data_addr_high = data_base_addr + {dma_size_r_low,6'b0};
 
 // When the data wraps around the ring buffer we use two DMAs: one for the first
@@ -147,37 +149,44 @@ assign free_slot = (tail >= head) ? (rb_size-tail+head-1) : (head-tail-1);
 // round the fpga_tail
 assign wrap = tail + dma_size_r > rb_size;
 
-assign new_tail = (tail+dma_size_r >= rb_size) ? (tail+dma_size_r-rb_size) : (tail+dma_size_r);
+assign new_tail = (tail+dma_size_r >= rb_size) ? 
+                        (tail + dma_size_r - rb_size) :
+                        (tail+dma_size_r);
 
 // two cycle delay
-always@(posedge clk)begin
+always @(posedge clk)begin
     frb_address_r1 <= frb_address;
     frb_address_r2 <= frb_address_r1;
 end
 
-//FSM
-always@(posedge clk)begin
-    if(rst)begin
+// FSM
+always @ (posedge clk)begin
+    if (rst)begin
         state <= IDLE;
         wrdm_desc_valid <= 0;
         out_tail <= 0;
         dma_done <= 0;
         // free_slot <= 0;
     end else begin
-        case(state)
+        case (state)
             IDLE: begin
                 dma_done <= 0;
                 wrdm_desc_valid <= 0;
                 if (dma_start) begin
-                    state <= DESC;
+                    state <= WAIT_QUEUE_STATE;
                     dma_size_r <= dma_size;
-                end                
+                end
+            end
+            WAIT_QUEUE_STATE: begin
+                if (queue_ready) begin
+                    state <= DESC; 
+                end
             end
             DESC: begin
                 // Have enough space for this transfer.
-                if(free_slot >= dma_size_r) begin
+                if (free_slot >= dma_size_r) begin
                     // Need wrap around
-                    if(wrap) begin
+                    if (wrap) begin
                         wrdm_desc_valid <= 1;
                         wrdm_desc_data <= data_desc_low;
                         state <= DESC_WRAP;
@@ -190,14 +199,14 @@ always@(posedge clk)begin
             end
             DESC_WRAP: begin
                 // the previous request is consumed.
-                if(wrdm_desc_ready)begin
+                if (wrdm_desc_ready) begin
                     wrdm_desc_valid <= 1;
                     wrdm_desc_data <= data_desc_high;
                     state <= DONE;
-                end   
+                end
             end
             DONE: begin
-                if(wrdm_desc_ready) begin
+                if (wrdm_desc_ready) begin
                     wrdm_desc_valid <= 1;
                     wrdm_desc_data <= done_desc;
                     state <= WAIT;
@@ -208,11 +217,11 @@ always@(posedge clk)begin
             end
             WAIT: begin
                 // the previous request is consumed
-                if(wrdm_desc_ready)begin
+                if (wrdm_desc_ready) begin
                     wrdm_desc_valid <= 0;
                 end
                 // the last data is fetched
-                if(frb_readvalid & (frb_address_r2 == 
+                if (frb_readvalid & (frb_address_r2 ==
                                     (dma_base_addr + dma_size_r -1))) begin
                     dma_done <= 1;
                     state <= IDLE;
@@ -226,16 +235,16 @@ end
 ring_buffer #(
     .PDU_DEPTH(PDU_DEPTH),
     .PDU_AWIDTH(PDU_AWIDTH)
-)    
+)
 ring_buffer_inst (
-    .clk            (clk),               
-    .rst            (rst),           
-    .wr_data        (wr_data),           
-    .wr_addr        (wr_addr),          
-    .wr_en          (wr_en),  
-    .wr_base_addr   (wr_base_addr),  
+    .clk            (clk),
+    .rst            (rst),
+    .wr_data        (wr_data),
+    .wr_addr        (wr_addr),
+    .wr_en          (wr_en),
+    .wr_base_addr   (wr_base_addr),
     .wr_base_addr_valid(wr_base_addr_valid),
-    .almost_full    (almost_full),          
+    .almost_full    (almost_full),
     .update_valid   (update_valid),
     .update_size    (update_size),
     .rd_addr        (frb_address),
@@ -245,6 +254,7 @@ ring_buffer_inst (
     .dma_start      (dma_start),
     .dma_size       (dma_size),
     .dma_base_addr  (dma_base_addr),
+    .dma_queue      (dma_queue),
     .dma_done       (dma_done)
 );
 endmodule

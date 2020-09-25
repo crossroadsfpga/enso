@@ -1,65 +1,42 @@
 `include "./my_struct_s.sv"
 module ring_buffer(
-clk,               
-rst,           
-wr_data,           
-wr_addr,          
-wr_en,  
-wr_base_addr,  
-wr_base_addr_valid,
-almost_full,          
-update_valid,
-update_size,
+    input logic clk,
+    input logic rst,
 
-rd_addr,
-rd_en,
-rd_valid,
-rd_data,
+    // write side
+    input  flit_lite_t            wr_data,
+    input  logic [PDU_AWIDTH-1:0] wr_addr,
+    input  logic                  wr_en,
+    output logic [PDU_AWIDTH-1:0] wr_base_addr,
+    output logic                  wr_base_addr_valid,
+    output logic                  almost_full,
+    input  logic                  update_valid,
+    input  logic [PDU_AWIDTH-1:0] update_size,
 
-dma_start,
-dma_size,
-dma_base_addr,
-dma_done
+    // fetch side
+    input  logic [PDU_AWIDTH-1:0] rd_addr,
+    input  logic                  rd_en,
+    output logic                  rd_valid,
+    output logic [511:0]          rd_data,
+
+    // dma signals
+    output logic                     dma_start,
+    output logic [PDU_AWIDTH-1:0]    dma_size,
+    output logic [PDU_AWIDTH-1:0]    dma_base_addr,
+    output logic [APP_IDX_WIDTH-1:0] dma_queue,
+    input  logic                     dma_done
 );
 
 parameter PDU_DEPTH = 512;
 parameter PDU_AWIDTH = ($clog2(PDU_DEPTH));
 
-localparam THRESHOLD = 64;    
+localparam THRESHOLD = 64;
 localparam MAX_SLOT = PDU_DEPTH - THRESHOLD;
-
-input  logic         clk;               
-input  logic         rst;           
-
-//write side
-input  flit_lite_t wr_data;
-input  logic [PDU_AWIDTH-1:0]  wr_addr;          
-input  logic         wr_en;  
-output logic [PDU_AWIDTH-1:0]  wr_base_addr;          
-output logic         wr_base_addr_valid;
-output logic         almost_full;          
-input  logic         update_valid;
-input  logic [PDU_AWIDTH-1:0]  update_size;
-
-//fetch side
-input  logic [PDU_AWIDTH-1:0]  rd_addr;
-input  logic         rd_en;
-output logic         rd_valid;
-output logic [511:0] rd_data;
-
-//dma signals
-output logic         dma_start;
-output logic [PDU_AWIDTH-1:0]  dma_size;
-output logic [PDU_AWIDTH-1:0]  dma_base_addr;
-input  logic         dma_done;
 
 typedef enum
 {
     IDLE,
-    WAIT,
-    DELAY_1,
-    DELAY_2,
-    DELAY_3
+    WAIT
 } state_t;
 state_t state;
 
@@ -75,26 +52,57 @@ logic [PDU_AWIDTH-1:0] last_tail;
 logic wrap;
 logic [PDU_AWIDTH-1:0] send_slot;
 
+// for every packet inserted in the ring buffer, we keep its queue id and size
+typedef struct packed {
+    logic [APP_IDX_WIDTH-1:0] queue_id;
+    logic [PDU_AWIDTH-1:0] size; // in number of flits
+} pkt_desc_t;
+
+// TODO(sadok) move to BRAM?
+pkt_desc_t pkt_descs [PDU_DEPTH/2:0]; // packets have a minimum of 2 flits
+logic [PDU_AWIDTH-2:0] desc_tail;
+logic [PDU_AWIDTH-2:0] desc_head;
+
 assign wr_base_addr = tail;
 
-//Always have at least one slot not occupied.
+// TODO(sadok) we may group consecutive descriptors to the same queue
+always @(posedge clk) begin
+    if (rst) begin
+        desc_tail <= 0;
+    end else if (wr_en) begin
+        automatic flit_lite_t flit_lite = wr_data;
+        if (flit_lite.sop) begin
+            automatic pdu_hdr_t pdu_hdr = flit_lite.data;
+            automatic pkt_desc_t pkt_desc;
+
+            pkt_desc.queue_id = pdu_hdr.queue_id;
+            pkt_desc.size = pdu_hdr.pdu_flit;
+            pkt_descs[desc_tail] <= pkt_desc;
+            desc_tail <= desc_tail + 1;
+            $display("Adding pkt desc, desc_tail: %h queue_id: %h size: %h", desc_tail, pkt_desc.queue_id, pkt_desc.size);
+            $display("occupied_slot: %h", occupied_slot);
+        end
+    end
+end
+
+// Always have at least one slot not occupied.
 assign free_slot = PDU_DEPTH - occupied_slot - 1;
 assign occupied_slot = wrap ? (last_tail-head+tail) : (tail-head);
 assign send_slot = wrap ? (last_tail-head) : (tail-head);
 
 assign wrap = (tail < head);
 
-//update tail
-always@(posedge clk)begin
-    if(rst)begin
+// update tail
+always @(posedge clk) begin
+    if (rst) begin
         tail <= 0;
         almost_full <= 0;
         last_tail <= 0;
         wr_base_addr_valid <= 0;
     end else begin
-        if(update_valid)begin
-            if(tail + update_size < MAX_SLOT)begin
-                tail <= tail + update_size; 
+        if (update_valid) begin
+            if (tail + update_size < MAX_SLOT) begin
+                tail <= tail + update_size;
             end else begin
                 tail <= 0;
                 last_tail <= tail + update_size;
@@ -102,7 +110,7 @@ always@(posedge clk)begin
         end
         wr_base_addr_valid <= update_valid;
 
-        if(free_slot >= 2*THRESHOLD)begin
+        if (free_slot >= 2*THRESHOLD) begin
             almost_full <= 0;
         end else begin
             almost_full <= 1;
@@ -111,14 +119,14 @@ always@(posedge clk)begin
 end
 
 
-//udpate head
-always@(posedge clk)begin
-    if(rst)begin
+// udpate head
+always @(posedge clk)begin
+    if (rst) begin
         head <= 0;
     end else begin
-        //One block has been rd
-        if(rd_valid & rd_flit_lite.eop)begin
-            if(rd_addr_r2 + 1 >= MAX_SLOT)begin
+        // One block has been read
+        if (rd_valid & rd_flit_lite.eop) begin
+            if (rd_addr_r2 + 1 >= MAX_SLOT) begin
                 head <= 0;
             end else begin
                 head <= rd_addr_r2 + 1;
@@ -127,51 +135,43 @@ always@(posedge clk)begin
     end
 end
 
-//dma state machine
-always@(posedge clk)begin
-    if(rst)begin
+// dma state machine
+always@(posedge clk) begin
+    dma_start <= 0;
+    if (rst) begin
         state <= IDLE;
-        dma_start <= 0;
         dma_size <= 0;
         dma_base_addr <= 0;
+        desc_head <= 0;
+        dma_queue <= 0;
     end else begin
-        case(state)
-            IDLE:begin
-                //We have data to send
-                if (occupied_slot > 0) begin
+        case (state)
+            IDLE: begin
+                // We have data to send
+                if (desc_head != desc_tail) begin
+                    automatic pkt_desc_t cur_desc = pkt_descs[desc_head];
+                    desc_head <= desc_head + 1;
+
+                    // dma_size <= send_slot;
+                    dma_size <= cur_desc.size;
+                    dma_queue <= cur_desc.queue_id;
+
                     dma_start <= 1;
-                    dma_size <= send_slot;
                     dma_base_addr <= head;
                     state <= WAIT;
-                end 
-            end
-            WAIT:begin
-                dma_start <= 0;
-                if(dma_done)begin
-                    // state <= IDLE;
-                    state <= DELAY_1; // FIXME(sadok) I'm introducing a delay
-                                      // after DMA is done to read the BRAM. A
-                                      // better strategy is to somehow prefetch
-                                      // the BRAM. Once this is done, should get
-                                      // rid of the DELAY state and go straight
-                                      // to IDLE
                 end
             end
-            DELAY_1:begin
-                state <= DELAY_2;
-            end
-            DELAY_2:begin
-                state <= DELAY_3;
-            end
-            DELAY_3:begin
-                state <= IDLE;
+            WAIT: begin
+                if (dma_done) begin
+                    state <= IDLE;
+                end
             end
             default: state <= IDLE;
         endcase
     end
 end
 
-//two cycles delay
+// two cycles delay
 always@(posedge clk)begin
     rd_en_r <= rd_en;
     rd_valid <= rd_en_r;

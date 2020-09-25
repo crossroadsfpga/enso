@@ -1,57 +1,57 @@
 `include "./my_struct_s.sv"
 
 module pcie_top (
-    //PCIE
-    input  logic           pcie_clk,
-    input  logic           pcie_reset_n,
+    // PCIE
+    input logic pcie_clk,
+    input logic pcie_reset_n,
 
-    input  logic           pcie_rddm_desc_ready,
-    output logic           pcie_rddm_desc_valid,
-    output logic [173:0]   pcie_rddm_desc_data,
-    input  logic           pcie_wrdm_desc_ready,
-    output logic           pcie_wrdm_desc_valid,
-    output logic [173:0]   pcie_wrdm_desc_data,
-    input  logic           pcie_wrdm_prio_ready,
-    output logic           pcie_wrdm_prio_valid,
-    output logic [173:0]   pcie_wrdm_prio_data,
-    input  logic [PCIE_ADDR_WIDTH-1:0]    pcie_address_0,    
-    input  logic           pcie_write_0,      
-    input  logic           pcie_read_0,       
-    output logic           pcie_readdatavalid_0,    
-    output logic [511:0]   pcie_readdata_0,  
-    input  logic [511:0]   pcie_writedata_0, 
-    input  logic [63:0]    pcie_byteenable_0,
-    input  logic [PCIE_ADDR_WIDTH-1:0]    pcie_address_1,   
-    input  logic           pcie_write_1,     
-    input  logic           pcie_read_1,      
-    output logic           pcie_readdatavalid_1,    
-    output logic [511:0]   pcie_readdata_1, 
-    input  logic [511:0]   pcie_writedata_1,
-    input  logic [63:0]    pcie_byteenable_1,
+    input  logic                       pcie_rddm_desc_ready,
+    output logic                       pcie_rddm_desc_valid,
+    output logic [173:0]               pcie_rddm_desc_data,
+    input  logic                       pcie_wrdm_desc_ready,
+    output logic                       pcie_wrdm_desc_valid,
+    output logic [173:0]               pcie_wrdm_desc_data,
+    input  logic                       pcie_wrdm_prio_ready,
+    output logic                       pcie_wrdm_prio_valid,
+    output logic [173:0]               pcie_wrdm_prio_data,
+    input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_0,
+    input  logic                       pcie_write_0,
+    input  logic                       pcie_read_0,
+    output logic                       pcie_readdatavalid_0,
+    output logic [511:0]               pcie_readdata_0,
+    input  logic [511:0]               pcie_writedata_0,
+    input  logic [63:0]                pcie_byteenable_0,
+    input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1,
+    input  logic                       pcie_write_1,
+    input  logic                       pcie_read_1,
+    output logic                       pcie_readdatavalid_1,
+    output logic [511:0]               pcie_readdata_1,
+    input  logic [511:0]               pcie_writedata_1,
+    input  logic [63:0]                pcie_byteenable_1,
 
-    //internal signals
-    input  flit_lite_t              pcie_rb_wr_data,
-    input  logic [PDU_AWIDTH-1:0]   pcie_rb_wr_addr,          
-    input  logic                    pcie_rb_wr_en,  
-    output logic [PDU_AWIDTH-1:0]   pcie_rb_wr_base_addr,          
-    output logic                    pcie_rb_wr_base_addr_valid,
-    output logic                    pcie_rb_almost_full,          
-    input  logic                    pcie_rb_update_valid,
-    input  logic [PDU_AWIDTH-1:0]   pcie_rb_update_size,
-    output logic                    disable_pcie,
-    output pdu_metadata_t           pdumeta_cpu_data,
-    output logic                    pdumeta_cpu_valid,
-    input  logic   [9:0]            pdumeta_cnt,
+    // internal signals
+    input  flit_lite_t            pcie_rb_wr_data,
+    input  logic [PDU_AWIDTH-1:0] pcie_rb_wr_addr,
+    input  logic                  pcie_rb_wr_en,
+    output logic [PDU_AWIDTH-1:0] pcie_rb_wr_base_addr,
+    output logic                  pcie_rb_wr_base_addr_valid,
+    output logic                  pcie_rb_almost_full,
+    input  logic                  pcie_rb_update_valid,
+    input  logic [PDU_AWIDTH-1:0] pcie_rb_update_size,
+    output logic                  disable_pcie,
+    output pdu_metadata_t         pdumeta_cpu_data,
+    output logic                  pdumeta_cpu_valid,
+    input  logic   [9:0]          pdumeta_cnt,
 
     // status register bus
-    input  logic           clk_status,
-    input  logic   [29:0]  status_addr,
-    input  logic           status_read,
-    input  logic           status_write,
-    input  logic   [31:0]  status_writedata,
-    output logic   [31:0]  status_readdata,
-    output logic           status_readdata_valid
-    );
+    input  logic        clk_status,
+    input  logic [29:0] status_addr,
+    input  logic        status_read,
+    input  logic        status_write,
+    input  logic [31:0] status_writedata,
+    output logic [31:0] status_readdata,
+    output logic        status_readdata_valid
+);
 
 localparam C2F_HEAD_OFFSET = 5 * REG_SIZE;
 
@@ -64,7 +64,7 @@ logic [STAT_AWIDTH-1:0] status_addr_sel_r;
 
 logic [31:0] control_reg;
 
-//internal signals
+// internal signals
 pcie_block_t pcie_block;
 logic cpu_reg_region;
 logic cpu_reg_region_r1;
@@ -72,7 +72,6 @@ logic cpu_reg_region_r2;
 logic [25:0] rb_size;
 logic [4:0]  total_nb_queues;
 logic [3:0]  queue_id;
-logic [3:0]  next_queue_id;
 logic internal_update_valid;
 logic [APP_IDX_WIDTH-1:0] page_idx;
 
@@ -157,9 +156,9 @@ logic q_table_rd_data_b_ready_from_jtag;
 logic [RB_AWIDTH-1:0]    f2c_head;
 logic [RB_AWIDTH-1:0]    f2c_tail;
 logic [63:0]             f2c_kmem_addr;
-logic [511:0]            frb_readdata;            
-logic                    frb_readvalid;        
-logic [PDU_AWIDTH-1:0]   frb_address;              
+logic [511:0]            frb_readdata;
+logic                    frb_readvalid;
+logic [PDU_AWIDTH-1:0]   frb_address;
 logic                    frb_read;
 
 logic pcie_reg_read;
@@ -169,8 +168,12 @@ logic [31:0]   c2f_tail;
 logic [63:0]                c2f_kmem_addr;
 logic [63:0]                c2f_head_addr;
 
-logic                    dma_done;
-logic [RB_AWIDTH-1:0]    new_tail;
+logic                     f2c_queue_ready;
+logic                     dma_done;
+logic                     dma_start;
+logic [APP_IDX_WIDTH-1:0] dma_queue;
+logic [APP_IDX_WIDTH-1:0] dma_queue_r;
+logic [RB_AWIDTH-1:0]     new_tail;
 
 // JTAG
 always@(posedge clk_status) begin
@@ -208,7 +211,7 @@ always@(posedge clk_status) begin
     end
 
     if (status_addr_sel_r == PCIE & status_write_r) begin
-        if (status_addr_r[0 +:JTAG_ADDR_WIDTH] == 0) begin 
+        if (status_addr_r[0 +:JTAG_ADDR_WIDTH] == 0) begin
             control_reg <= status_writedata_r;
         end
     end
@@ -216,7 +219,7 @@ end
 
 assign disable_pcie = control_reg[0];
 assign rb_size = control_reg[26:1];
-assign total_nb_queues = control_reg[31:27];
+assign total_nb_queues = control_reg[31:27]; // TODO(sadok) remove
 
 // we choose the right set of registers based on the page (the page's index LSB
 // is at bit 12 of the memory address, the MSB depends on the number of apps we
@@ -349,7 +352,7 @@ always@(posedge pcie_clk) begin
     last_rd_b_table_r <= last_rd_b_table;
     last_rd_b_table_r2 <= last_rd_b_table_r;
 
-    rd_en_r <= q_table_tails_rd_en_b | q_table_heads_rd_en_b | 
+    rd_en_r <= q_table_tails_rd_en_b | q_table_heads_rd_en_b |
         q_table_l_addrs_rd_en_b | q_table_h_addrs_rd_en_b;
     rd_en_r2 <= rd_en_r;
 
@@ -381,6 +384,7 @@ end
 typedef enum
 {
     IDLE,
+    WAIT_DMA,
     BRAM_DELAY_1,
     BRAM_DELAY_2,
     SWITCH_QUEUE
@@ -392,14 +396,6 @@ state_t state;
 // the first slot in f2c_kmem_addr is used as the "global reg" includes the
 // C2F_head
 assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
-
-always_comb begin
-    if ((total_nb_queues == 0) || (queue_id == total_nb_queues - 1)) begin
-        next_queue_id = 0;
-    end else begin
-        next_queue_id = queue_id + 1;
-    end
-end
 
 // assign c2f_head_addr = 0;
 // update tail pointer
@@ -428,7 +424,7 @@ always@(posedge pcie_clk)begin
         // FIXME(sadok) this may mess things up if we are receiving packets
         // when it happens as the ring buffer state machine is unaware of this
         if (pcie_write_0 && (page_idx == queue_id)) begin
-            if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE] 
+            if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE]
                     == {REG_SIZE{1'b1}}) begin
                 f2c_tail <= pcie_writedata_0[0*32 +: 32];
             end
@@ -448,35 +444,38 @@ always@(posedge pcie_clk)begin
 
         case (state)
             IDLE: begin
-                // TODO(sadok) ring_buffer.sv has a 3-clock delay between DMAs.
-                // This ensures that we have time to read the BRAM and switch
-                // the queue before the new DMA starts. Eventually we should do
-                // something more clever
-
-                if (dma_done) begin
-                    f2c_tail <= new_tail;
-
-                    if (total_nb_queues > 1) begin
-                        // retrieve next queue from queue table
-                        q_table_tails_addr_a <= next_queue_id;
-                        q_table_heads_addr_a <= next_queue_id;
-                        q_table_l_addrs_addr_a <= next_queue_id;
-                        q_table_h_addrs_addr_a <= next_queue_id;
+                if (dma_start) begin
+                    if (queue_id != dma_queue) begin
+                        // TODO(sadok) We may be able to reduce the number of
+                        // cycles when switching queues by combinationally
+                        // assigning these signals
+                        q_table_tails_addr_a <= dma_queue;
+                        q_table_heads_addr_a <= dma_queue;
+                        q_table_l_addrs_addr_a <= dma_queue;
+                        q_table_h_addrs_addr_a <= dma_queue;
                         q_table_tails_rd_en_a <= 1;
                         q_table_heads_rd_en_a <= 1;
                         q_table_l_addrs_rd_en_a <= 1;
                         q_table_h_addrs_rd_en_a <= 1;
+                        dma_queue_r <= dma_queue;
 
                         state <= BRAM_DELAY_1;
-
                     end else begin
-                        // we do not need to retrieve the next queue, but we
-                        // still need to update the tail on BRAM
-                        q_table_tails_addr_a <= queue_id;
-                        q_table_tails_wr_data_a <= new_tail;
-                        q_table_tails_wr_en_a <= 1;
+                        f2c_queue_ready <= 1;
+                        state <= WAIT_DMA;
                     end
-                    
+                end
+            end
+            WAIT_DMA: begin
+                if (dma_done) begin
+                    f2c_tail <= new_tail;
+
+                    // update the tail on BRAM
+                    q_table_tails_addr_a <= queue_id;
+                    q_table_tails_wr_data_a <= new_tail;
+                    q_table_tails_wr_en_a <= 1;
+
+                    state <= IDLE;
                 end
             end
             BRAM_DELAY_1: begin
@@ -486,20 +485,16 @@ always@(posedge pcie_clk)begin
                 state <= SWITCH_QUEUE;
             end
             SWITCH_QUEUE: begin
-                // update tail pointer for queue_id
-                q_table_tails_addr_a <= queue_id;
-                q_table_tails_wr_data_a <= f2c_tail;
-                q_table_tails_wr_en_a <= 1;
-
                 f2c_tail <= q_table_tails_rd_data_a;
                 f2c_head <= q_table_heads_rd_data_a;
                 f2c_kmem_addr <= {
                     q_table_h_addrs_rd_data_a, q_table_l_addrs_rd_data_a
                 };
 
-                queue_id <= next_queue_id;
+                f2c_queue_ready <= 1;
+                queue_id <= dma_queue_r;
 
-                state <= IDLE;
+                state <= WAIT_DMA;
             end
             default: state <= IDLE;
         endcase
@@ -514,7 +509,7 @@ always@(posedge pcie_clk) begin
         pcie_readdatavalid_0 <= 0;
     end else if (cpu_reg_region_r2) begin
         pcie_readdata_0 <= {
-            256'h0, c2f_kmem_addr, c2f_head, c2f_tail, 
+            256'h0, c2f_kmem_addr, c2f_head, c2f_tail,
             q_table_h_addrs_rd_data_b, q_table_l_addrs_rd_data_b,
             q_table_heads_rd_data_b, q_table_tails_rd_data_b
         };
@@ -591,8 +586,11 @@ fpga2cpu_pcie f2c_inst (
     .head           (f2c_head),
     .tail           (f2c_tail),
     .kmem_addr      (f2c_kmem_addr),
+    .queue_ready    (f2c_queue_ready),
     .out_tail       (new_tail),
     .dma_done       (dma_done),
+    .dma_queue      (dma_queue),
+    .dma_start      (dma_start),
     .rb_size        ({5'b0, rb_size}),
     .wrdm_desc_ready(pcie_wrdm_desc_ready),
     .wrdm_desc_valid(pcie_wrdm_desc_valid),
