@@ -362,7 +362,6 @@ void fill_block(uint32_t *addr, block_s *block) {
 }
 
 void print_block(block_s *block) {
-    // uint32_t i;
     printf("=============PRINT BLOCK=========\n");
     printf("pdu_id      : 0x%08x \n", block->pdu_id);
     printf("dst_port    : 0x%04x \n", block->dst_port);
@@ -384,13 +383,6 @@ void print_block(block_s *block) {
         }
     }
     printf("\n");
-    // printf("\n----Rule IDs------\n");
-    // //512-bit aligned. 32 16-bit rule ID per line.
-    // for(i=0;i<block->num_rule_id*32;i++){
-    //     if(block->rule_id[i]!=0){
-    //         printf("ruleID[%d] = 0x%04x \n",i, block->rule_id[i]);
-    //     }
-    // }
 }
 
 uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
