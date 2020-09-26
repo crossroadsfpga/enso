@@ -411,11 +411,13 @@ always@(posedge pcie_clk)begin
     q_table_l_addrs_rd_en_a <= 0;
     q_table_h_addrs_rd_en_a <= 0;
 
+    f2c_queue_ready <= 0;
+
     if(!pcie_reset_n) begin
         f2c_tail <= 0;
         f2c_head <= 0;
         f2c_kmem_addr <= 0;
-        queue_id <= 0;
+        queue_id <= '1; // invalid queue (all 1s)
         state <= IDLE;
     end else begin
         // ensure that queue updates are applied when the queue is active

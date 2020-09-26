@@ -161,9 +161,9 @@ end
 
 // FSM
 always @ (posedge clk)begin
+    wrdm_desc_valid <= 0;
     if (rst)begin
         state <= IDLE;
-        wrdm_desc_valid <= 0;
         out_tail <= 0;
         dma_done <= 0;
         // free_slot <= 0;
@@ -216,10 +216,8 @@ always @ (posedge clk)begin
                 end
             end
             WAIT: begin
-                // the previous request is consumed
-                if (wrdm_desc_ready) begin
-                    wrdm_desc_valid <= 0;
-                end
+                // TODO(sadok) should we ensure that wrdm_desc_ready was 1 at
+                // some point before that?
                 // the last data is fetched
                 if (frb_readvalid & (frb_address_r2 ==
                                     (dma_base_addr + dma_size_r -1))) begin
