@@ -79,8 +79,6 @@ always @(posedge clk) begin
             pkt_desc.size = pdu_hdr.pdu_flit;
             pkt_descs[desc_tail] <= pkt_desc;
             desc_tail <= desc_tail + 1;
-            $display("Adding pkt desc, desc_tail: %h queue_id: %h size: %h", desc_tail, pkt_desc.queue_id, pkt_desc.size);
-            $display("occupied_slot: %h", occupied_slot);
         end
     end
 end

@@ -28,10 +28,10 @@ always @(*) begin
     out_meta_data.pkt_flags = PKT_DROP;
   end
 
-  if (in_meta_valid) begin
-    $display("Flow Director: Flow ID=0x%h, Queue ID=0x%h",
-              in_meta_data.tuple, in_meta_data.queue_id);
-  end
+  // if (in_meta_valid) begin
+  //   $display("Flow Director: Flow ID=0x%h, Queue ID=0x%h",
+  //             in_meta_data.tuple, in_meta_data.queue_id);
+  // end
 end
 
 endmodule
