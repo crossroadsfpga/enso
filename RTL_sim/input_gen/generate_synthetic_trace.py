@@ -12,7 +12,7 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest):
     for i in range(nb_dest):
         pkt = (
             Ether() /
-            IP(dst=f'192.168.1.{i}', src='192.168.0.1') /
+            IP(dst='192.168.1.1', src=f'192.168.0.{i}') /
             TCP(dport=80, sport=8080, flags='S')
         )
 

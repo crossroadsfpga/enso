@@ -263,7 +263,7 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
         block.dst_port = 80;
         block.src_port = 8080;
         block.dst_ip = 0xc0a80101; // inet_addr("192.168.1.1");
-        block.src_ip = 0xc0a80001 + i; // inet_addr("192.168.0.1");
+        block.src_ip = 0xc0a80000 + i; // inet_addr("192.168.0.0");
         block.protocol = 0x11;
         block.pdu_size = 0x0;
         block.pdu_flit = 0x0;
