@@ -10,7 +10,11 @@ from scapy.all import IP, TCP, UDP, wrpcap, Ether, Raw
 def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest):
     sample_pkts = []
     for i in range(nb_dest):
-        pkt = Ether()/IP(dst=f'192.168.1.{i}')/TCP(dport=80, flags='S')
+        pkt = (
+            Ether() /
+            IP(dst=f'192.168.1.{i}', src='192.168.0.1') /
+            TCP(dport=80, sport=8080, flags='S')
+        )
 
         # payload = '0' * missing_bytes
         # pkt = pkt/Raw(load=payload)
