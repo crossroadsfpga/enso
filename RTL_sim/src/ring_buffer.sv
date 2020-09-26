@@ -58,10 +58,12 @@ typedef struct packed {
     logic [PDU_AWIDTH-1:0] size; // in number of flits
 } pkt_desc_t;
 
+typedef logic [PDU_AWIDTH-2:0] desc_pointer_t;
+
 // TODO(sadok) move to BRAM?
 pkt_desc_t pkt_descs [PDU_DEPTH/2:0]; // packets have a minimum of 2 flits
-logic [PDU_AWIDTH-2:0] desc_tail;
-logic [PDU_AWIDTH-2:0] desc_head;
+desc_pointer_t desc_tail;
+desc_pointer_t desc_head;
 
 assign wr_base_addr = tail;
 
@@ -73,12 +75,21 @@ always @(posedge clk) begin
         automatic flit_lite_t flit_lite = wr_data;
         if (flit_lite.sop) begin
             automatic pdu_hdr_t pdu_hdr = flit_lite.data;
-            automatic pkt_desc_t pkt_desc;
+            automatic desc_pointer_t nb_descs = desc_tail - desc_head;
+            automatic pkt_desc_t last_desc = pkt_descs[desc_tail-1];
 
-            pkt_desc.queue_id = pdu_hdr.queue_id;
-            pkt_desc.size = pdu_hdr.pdu_flit;
-            pkt_descs[desc_tail] <= pkt_desc;
-            desc_tail <= desc_tail + 1;
+            // We merge DMAs to the same queue when we have at least 2 packets
+            // This avoids that we modify a request that is being consumed
+            if (nb_descs > 1 && pdu_hdr.queue_id == last_desc.queue_id) begin
+                last_desc.size += pdu_hdr.pdu_flit;
+                pkt_descs[desc_tail-1] <= last_desc;
+            end else begin
+                automatic pkt_desc_t pkt_desc;
+                pkt_desc.queue_id = pdu_hdr.queue_id;
+                pkt_desc.size = pdu_hdr.pdu_flit;
+                pkt_descs[desc_tail] <= pkt_desc;
+                desc_tail <= desc_tail + 1;
+            end
         end
     end
 end
@@ -117,7 +128,7 @@ always @(posedge clk) begin
 end
 
 
-// udpate head
+// update head
 always @(posedge clk)begin
     if (rst) begin
         head <= 0;
