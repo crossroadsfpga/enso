@@ -188,6 +188,7 @@ typedef enum{
     DM_PCIE_META,
     DM_ETH_PKT,
     DMA_PKT,
+    DMA_REQUEST,
     RULE_SET
 } c_state_t;
 
@@ -762,9 +763,18 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("DMA_PKT:\t\t%d",top_readdata);
-                    conf_state <= RULE_SET;
+                    conf_state <= DMA_REQUEST;
                     s_read <= 1;
                     s_addr <= 30'h2200_0015;
+                end
+            end
+            DMA_REQUEST: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("DMA_REQUEST:\t\t%d",top_readdata);
+                    conf_state <= RULE_SET;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0016;
                 end
             end
             RULE_SET: begin

@@ -88,6 +88,7 @@ logic [31:0] dm_pcie_pkt_cnt_status;
 logic [31:0] dm_pcie_meta_cnt_status;
 logic [31:0] dm_eth_pkt_cnt_status;
 logic [31:0] dma_pkt_cnt_status;
+logic [31:0] dma_request_cnt_status;
 logic [31:0] rule_set_cnt_status;
 
 //Register I/O
@@ -309,6 +310,9 @@ logic [31:0] dm_eth_pkt_cnt_r2;
 logic [31:0] dma_pkt_cnt;
 logic [31:0] dma_pkt_cnt_r1;
 logic [31:0] dma_pkt_cnt_r2;
+logic [31:0] dma_request_cnt;
+logic [31:0] dma_request_cnt_r1;
+logic [31:0] dma_request_cnt_r2;
 logic [31:0] rule_set_cnt;
 logic [31:0] rule_set_cnt_r1;
 logic [31:0] rule_set_cnt_r2;
@@ -422,22 +426,26 @@ end
 
 //pcie clock domain
 always @(posedge clk_pcie) begin
-    if(rst_pcie)begin
+    if (rst_pcie) begin
         pcie_pkt_cnt <= 0;
         pcie_meta_cnt <= 0;
         dma_pkt_cnt <= 0;
+        dma_request_cnt <= 0;
         rule_set_cnt <= 0;
     end else begin
-        if(pcie_pkt_valid & pcie_pkt_ready & pcie_pkt_eop)begin
+        if (pcie_pkt_valid & pcie_pkt_ready & pcie_pkt_eop) begin
             pcie_pkt_cnt <= pcie_pkt_cnt + 1;
         end
-        if(pcie_meta_valid & pcie_meta_ready)begin
+        if (pcie_meta_valid & pcie_meta_ready) begin
             pcie_meta_cnt <= pcie_meta_cnt + 1;
         end
-        if(pcie_rb_update_valid)begin
+        if (pcie_rb_update_valid) begin
             dma_pkt_cnt <= dma_pkt_cnt + 1;
         end
-        if(pdumeta_cpu_valid)begin
+        if (pcie_wrdm_desc_valid) begin
+            dma_request_cnt <= dma_request_cnt + 1;
+        end
+        if (pdumeta_cpu_valid) begin
             rule_set_cnt <= rule_set_cnt + 1;
         end
     end
@@ -509,6 +517,9 @@ always @(posedge clk_status) begin
     dma_pkt_cnt_r1                  <= dma_pkt_cnt;
     dma_pkt_cnt_r2                  <= dma_pkt_cnt_r1;
     dma_pkt_cnt_status              <= dma_pkt_cnt_r2;
+    dma_request_cnt_r1              <= dma_request_cnt;
+    dma_request_cnt_r2              <= dma_request_cnt_r1;
+    dma_request_cnt_status          <= dma_request_cnt_r2;
     rule_set_cnt_r1                 <= rule_set_cnt;
     rule_set_cnt_r2                 <= rule_set_cnt_r1;
     rule_set_cnt_status             <= rule_set_cnt_r2;
@@ -549,7 +560,8 @@ always @(posedge clk_status) begin
                 8'd18 : status_readdata_top <= dm_pcie_meta_cnt_status;
                 8'd19 : status_readdata_top <= dm_eth_pkt_cnt_status;
                 8'd20 : status_readdata_top <= dma_pkt_cnt_status;
-                8'd21 : status_readdata_top <= rule_set_cnt_status;
+                8'd21 : status_readdata_top <= dma_request_cnt_status;
+                8'd22 : status_readdata_top <= rule_set_cnt_status;
 
                 default : status_readdata_top <= 32'h345;
             endcase
