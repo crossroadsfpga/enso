@@ -95,6 +95,18 @@ typedef struct packed
     logic [15:0] dPort; 
 } tuple_t;
 
+typedef struct packed
+{
+    logic [13:0] func_nb; // function number
+    logic [7:0] desc_id; // descriptor ID (8 bits)
+    logic [2:0] app_spec; // application specific
+    logic reserved;
+    logic single_src; // single source
+    logic immediate;
+    logic [17:0] nb_dwords; // number of dwords up to 1MB
+    logic [63:0] dst_addr; // destination PCIe address
+    logic [63:0] saddr_data; // src addr, or data when `immediate` is set
+} pcie_desc_t;
 
 typedef struct packed
 {

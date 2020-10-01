@@ -41,10 +41,10 @@ module fpga2cpu_pcie (
 localparam EP_BASE_ADDR = 32'h0004_0000;
 localparam DONE_ID = 8'hFE;
 
-logic [173:0] data_desc;
-logic [173:0] data_desc_low;
-logic [173:0] data_desc_high;
-logic [173:0] done_desc;
+pcie_desc_t data_desc;
+pcie_desc_t data_desc_low;
+pcie_desc_t data_desc_high;
+pcie_desc_t done_desc;
 logic [63:0] cpu_data_addr;
 logic [63:0] cpu_data_addr_low;
 logic [63:0] cpu_data_addr_high;
@@ -57,7 +57,7 @@ logic [RB_AWIDTH-1:0] new_tail;
 logic [PDU_AWIDTH-1:0] dma_size_r; // in 512 bits, or 16 DWORD.
 logic [PDU_AWIDTH-1:0] dma_size_r_low; // in 512 bits, or 16 DWORD.
 logic [PDU_AWIDTH-1:0] dma_size_r_high; // in 512 bits, or 16 DWORD.
-logic [31-PDU_AWIDTH-4:0] desc_padding; // 4 is for 16 DWORD
+// logic [31-PDU_AWIDTH-4:0] desc_padding; // 4 is for 16 DWORD
 logic [31-RB_AWIDTH:0] tail_padding; // 4 is for 16 DWORD
 logic [PDU_AWIDTH-1:0] frb_address_r1;
 logic [PDU_AWIDTH-1:0] frb_address_r2;
@@ -79,39 +79,13 @@ state_t state;
 logic [PDU_AWIDTH-1:0]  dma_size;
 logic [PDU_AWIDTH-1:0]  dma_base_addr;
 // logic                   dma_done;
+logic [7:0] descriptor_id;
 
 // CPU side addr
 assign cpu_data_addr = kmem_addr + 64*tail + 64; // the global reg
 
 // The base addr of fpga side ring buffer. BRAM starts with an offset
 assign data_base_addr = EP_BASE_ADDR + (RB_BRAM_OFFSET + dma_base_addr) << 6;
-
-assign done_desc = {
-    14'h0,     // function number
-    DONE_ID,   // descriptor ID (8 bits)
-    3'b0,      // application specific
-    1'b0,      // reserved
-    1'b0,      // single source
-    1'b1,      // immediate
-    18'd1,     // number of dwords up to 1MB
-    kmem_addr, // destination PCIe address
-    32'h0, tail_padding, new_tail // src Avalon-MM address or immediate data
-                                  // (when immediate bit is set)
-};
-
-assign desc_padding = 0;
-// data region is the BRAM part. Note there is an offset.
-// First 16 dwords are used for registers
-
-assign data_desc = {
-    14'h0,
-    desc_padding,
-    dma_size_r,
-    4'b0, // dma_size_r is in #512-bit flits, we shift 4 bits to be in #dwords
-    cpu_data_addr,
-    32'h0,
-    data_base_addr
-};
 
 // Rounding case
 assign dma_size_r_low = rb_size - tail;
@@ -120,26 +94,56 @@ assign cpu_data_addr_low = cpu_data_addr;
 assign cpu_data_addr_high = kmem_addr + (1<<6); // always starts from the beginning
 assign ep_data_addr_high = data_base_addr + {dma_size_r_low,6'b0};
 
+assign done_desc = '{
+    func_nb: 0,
+    desc_id: descriptor_id,
+    app_spec: 0,
+    reserved: 0,
+    single_src: 0,
+    immediate: 1,
+    nb_dwords: 18'd1,
+    dst_addr: kmem_addr,
+    saddr_data: {32'h0, tail_padding, new_tail} // data
+};
+
+assign data_desc = '{
+    func_nb: 0,
+    desc_id: descriptor_id,
+    app_spec: 0,
+    reserved: 0,
+    single_src: 0,
+    immediate: 0,
+    // dma_size_r is in #512-bit flits, we shift 4 bits to be in #dwords
+    nb_dwords: {dma_size_r, 4'h0},
+    dst_addr: cpu_data_addr,
+    saddr_data: {32'h0, data_base_addr}
+};
+
 // When the data wraps around the ring buffer we use two DMAs: one for the first
 // part (until the end of the buffer) and the other for the second part. For
 // such case, we use the following two write data mover descriptors.
-assign data_desc_low = {
-    14'h0,
-    desc_padding,
-    dma_size_r_low,
-    4'b0,
-    cpu_data_addr_low,
-    32'h0,
-    data_base_addr
+assign data_desc_low = '{
+    func_nb: 0,
+    desc_id: descriptor_id,
+    app_spec: 0,
+    reserved: 0,
+    single_src: 0,
+    immediate: 0,
+    nb_dwords: {dma_size_r_low, 4'h0},
+    dst_addr: cpu_data_addr_low,
+    saddr_data: {32'h0, data_base_addr}
 };
-assign data_desc_high = {
-    14'h0,
-    desc_padding,
-    dma_size_r_high,
-    4'b0,
-    cpu_data_addr_high,
-    32'h0,
-    ep_data_addr_high
+
+assign data_desc_high = '{
+    func_nb: 0,
+    desc_id: descriptor_id,
+    app_spec: 0,
+    reserved: 0,
+    single_src: 0,
+    immediate: 0,
+    nb_dwords: {dma_size_r_high, 4'h0},
+    dst_addr: cpu_data_addr_high,
+    saddr_data: {32'h0, ep_data_addr_high}
 };
 
 // Always have at least one slot not occupied
@@ -166,6 +170,7 @@ always @ (posedge clk)begin
         state <= IDLE;
         out_tail <= 0;
         dma_done <= 0;
+        descriptor_id <= 0;
         // free_slot <= 0;
     end else begin
         case (state)
@@ -227,6 +232,10 @@ always @ (posedge clk)begin
             end
             default: state <= IDLE;
         endcase
+
+        if (wrdm_desc_valid) begin
+            descriptor_id <= descriptor_id + 1'b1;
+        end
     end
 end
 
