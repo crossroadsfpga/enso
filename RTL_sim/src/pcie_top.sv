@@ -70,8 +70,6 @@ logic cpu_reg_region;
 logic cpu_reg_region_r1;
 logic cpu_reg_region_r2;
 logic [25:0] rb_size;
-logic [4:0]  total_nb_queues;
-logic [3:0]  queue_id;
 logic internal_update_valid;
 logic [APP_IDX_WIDTH-1:0] page_idx;
 
@@ -173,6 +171,7 @@ logic                     dma_done;
 logic                     dma_start;
 logic [APP_IDX_WIDTH-1:0] dma_queue;
 logic [APP_IDX_WIDTH-1:0] dma_queue_r;
+logic [APP_IDX_WIDTH:0]   queue_id; // extra bit for invalid queue
 logic [RB_AWIDTH-1:0]     new_tail;
 
 // JTAG
@@ -219,7 +218,6 @@ end
 
 assign disable_pcie = control_reg[0];
 assign rb_size = control_reg[26:1];
-assign total_nb_queues = control_reg[31:27]; // TODO(sadok) remove
 
 // we choose the right set of registers based on the page (the page's index LSB
 // is at bit 12 of the memory address, the MSB depends on the number of apps we
@@ -417,7 +415,7 @@ always@(posedge pcie_clk)begin
         f2c_tail <= 0;
         f2c_head <= 0;
         f2c_kmem_addr <= 0;
-        queue_id <= '1; // invalid queue (all 1s)
+        queue_id <= ~0; // invalid queue (all 1s)
         state <= IDLE;
     end else begin
         // ensure that queue updates are applied when the queue is active
@@ -425,7 +423,7 @@ always@(posedge pcie_clk)begin
         // one queue and it is not set
         // FIXME(sadok) this may mess things up if we are receiving packets
         // when it happens as the ring buffer state machine is unaware of this
-        if (pcie_write_0 && (page_idx == queue_id)) begin
+        if (pcie_write_0 && ({1'b0, page_idx} == queue_id)) begin
             if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE]
                     == {REG_SIZE{1'b1}}) begin
                 f2c_tail <= pcie_writedata_0[0*32 +: 32];
@@ -447,7 +445,7 @@ always@(posedge pcie_clk)begin
         case (state)
             IDLE: begin
                 if (dma_start) begin
-                    if (queue_id != dma_queue) begin
+                    if (queue_id != {1'b0, dma_queue}) begin
                         // TODO(sadok) We may be able to reduce the number of
                         // cycles when switching queues by combinationally
                         // assigning these signals
@@ -471,9 +469,10 @@ always@(posedge pcie_clk)begin
             WAIT_DMA: begin
                 if (dma_done) begin
                     f2c_tail <= new_tail;
+                    $display("dma_done -- new_tail: %h", new_tail);
 
                     // update the tail on BRAM
-                    q_table_tails_addr_a <= queue_id;
+                    q_table_tails_addr_a <= queue_id[APP_IDX_WIDTH-1:0];
                     q_table_tails_wr_data_a <= new_tail;
                     q_table_tails_wr_en_a <= 1;
 
@@ -494,7 +493,7 @@ always@(posedge pcie_clk)begin
                 };
 
                 f2c_queue_ready <= 1;
-                queue_id <= dma_queue_r;
+                queue_id <= {1'b0, dma_queue_r};
 
                 state <= WAIT_DMA;
             end
