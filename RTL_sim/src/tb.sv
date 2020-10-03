@@ -308,19 +308,6 @@ begin
     end
 end
 
-typedef struct packed
-{
-    logic [13:0] func_nb;
-    logic [7:0] desc_id;
-    logic [2:0] app_spec;
-    logic reserved;
-    logic single_src;
-    logic immediate;
-    logic [17:0] nb_dwords;
-    logic [63:0] dst_addr;
-    logic [63:0] saddr_data; // src addr, or data when `immediate` is set
-} pcie_desc_t;
-
 function print_pcie_desc(input pcie_desc_t pcie_desc);
     $display("  func_nb:\t0x%h", pcie_desc.func_nb);
     $display("  desc_id:\t0x%h", pcie_desc.desc_id);
