@@ -69,7 +69,11 @@ typedef enum
     IDLE,
     WAIT_QUEUE_STATE,
     DESC,
+    DESC_WRAP_DELAY_0,
+    DESC_WRAP_DELAY_1,
     DESC_WRAP,
+    DONE_DELAY_0,
+    DONE_DELAY_1,
     DONE,
     WAIT
 } state_t;
@@ -184,31 +188,46 @@ always @ (posedge clk)begin
             end
             WAIT_QUEUE_STATE: begin
                 if (queue_ready) begin
-                    state <= DESC; 
+                    state <= DESC;
                 end
             end
             DESC: begin
                 // Have enough space for this transfer.
-                if (free_slot >= dma_size_r) begin
+                if (wrdm_desc_ready && free_slot >= dma_size_r) begin
                     // Need wrap around
                     if (wrap) begin
                         wrdm_desc_valid <= 1;
                         wrdm_desc_data <= data_desc_low;
-                        state <= DESC_WRAP;
+                        state <= DESC_WRAP_DELAY_0;
                     end else begin
                         wrdm_desc_valid <= 1;
                         wrdm_desc_data <= data_desc;
-                        state <= DONE;
+                        state <= DONE_DELAY_0;
                     end
                 end
+            end
+            // wrdm_desc_ready has a 3-cycle latency
+            DESC_WRAP_DELAY_0: begin
+                state <= DESC_WRAP_DELAY_1;
+            end
+            DESC_WRAP_DELAY_1: begin
+                state <= DESC_WRAP;
             end
             DESC_WRAP: begin
                 // the previous request is consumed.
                 if (wrdm_desc_ready) begin
                     wrdm_desc_valid <= 1;
                     wrdm_desc_data <= data_desc_high;
-                    state <= DONE;
+                    // $display("DESC_WRAP sending desc: %h", data_desc_high);
+                    state <= DONE_DELAY_0;
                 end
+            end
+            // wrdm_desc_ready has a 3-cycle latency
+            DONE_DELAY_0: begin
+                state <= DONE_DELAY_1;
+            end
+            DONE_DELAY_1: begin
+                state <= DONE;
             end
             DONE: begin
                 if (wrdm_desc_ready) begin
@@ -224,8 +243,11 @@ always @ (posedge clk)begin
                 // TODO(sadok) should we ensure that wrdm_desc_ready was 1 at
                 // some point before that?
                 // the last data is fetched
+                // if (wrdm_desc_ready) begin
+                //     wrdm_desc_valid <= 0;
+                // end
                 if (frb_readvalid & (frb_address_r2 ==
-                                    (dma_base_addr + dma_size_r -1))) begin
+                                    (dma_base_addr + dma_size_r - 1))) begin
                     dma_done <= 1;
                     state <= IDLE;
                 end
