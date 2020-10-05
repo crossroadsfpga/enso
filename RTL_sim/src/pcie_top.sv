@@ -421,8 +421,6 @@ always@(posedge pcie_clk)begin
         // ensure that queue updates are applied when the queue is active
         // this is particularly important in the beginning: when there is only
         // one queue and it is not set
-        // FIXME(sadok) this may mess things up if we are receiving packets
-        // when it happens as the ring buffer state machine is unaware of this
         if (pcie_write_0 && ({1'b0, page_idx} == queue_id)) begin
             if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE]
                     == {REG_SIZE{1'b1}}) begin
