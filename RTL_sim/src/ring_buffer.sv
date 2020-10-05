@@ -44,60 +44,122 @@ logic [PDU_AWIDTH-1:0] head;
 logic [PDU_AWIDTH-1:0] tail;
 logic [PDU_AWIDTH-1:0] free_slot;
 logic [PDU_AWIDTH-1:0] occupied_slot;
+logic [PDU_AWIDTH-1:0] last_sop_wr_addr;
 logic rd_en_r;
 flit_lite_t rd_flit_lite;
 logic [PDU_AWIDTH-1:0]  rd_addr_r1;
 logic [PDU_AWIDTH-1:0]  rd_addr_r2;
 logic [PDU_AWIDTH-1:0] last_tail;
 logic wrap;
-logic [PDU_AWIDTH-1:0] send_slot;
+
+
+localparam DESC_RBUF_DEPTH = PDU_DEPTH/2; // packets have a minimum of 2 flits
 
 // for every packet inserted in the ring buffer, we keep its queue id and size
 typedef struct packed {
     logic [APP_IDX_WIDTH-1:0] queue_id;
     logic [PDU_AWIDTH-1:0] size; // in number of flits
 } pkt_desc_t;
+localparam DESC_RBUF_DWIDTH = $bits(pkt_desc_t);
+localparam DESC_RBUF_AWIDTH = $clog2(DESC_RBUF_DEPTH);
 
-typedef logic [PDU_AWIDTH-2:0] desc_pointer_t;
+typedef logic [DESC_RBUF_AWIDTH-1:0] desc_pointer_t;
 
-// TODO(sadok) move to BRAM?
-pkt_desc_t pkt_descs [PDU_DEPTH/2:0]; // packets have a minimum of 2 flits
+// descriptors ring buffer
+pkt_desc_t desc_wr_data;
+desc_pointer_t desc_rd_addr;
+logic desc_rd_en;
+logic desc_rd_en_r;
+logic desc_rd_en_r2;
+desc_pointer_t desc_wr_addr;
+logic desc_wr_en;
+pkt_desc_t desc_rd_data;
+
 desc_pointer_t desc_tail;
 desc_pointer_t desc_head;
+desc_pointer_t nb_descs;
+
+// We save packet descriptors to BRAM but always keep a last_desc and a
+// current_desc in registers. The last_desc is the last descriptor that we
+// inserted and may be susceptible to changes as new packets from the same queue
+// come in. The curren_desc is the descriptor that should be consumed now and is
+// prefetched from BRAM
+pkt_desc_t last_desc;
+pkt_desc_t current_desc;
 
 assign wr_base_addr = tail;
+assign nb_descs = desc_tail - desc_head;
 
-// TODO(sadok) we may group consecutive descriptors to the same queue
 always @(posedge clk) begin
+    desc_wr_en <= 0;
+    desc_rd_en <= 0;
     if (rst) begin
         desc_tail <= 0;
-    end else if (wr_en) begin
-        automatic flit_lite_t flit_lite = wr_data;
-        if (flit_lite.sop) begin
-            automatic pdu_hdr_t pdu_hdr = flit_lite.data;
-            automatic desc_pointer_t nb_descs = desc_tail - desc_head;
-            automatic pkt_desc_t last_desc = pkt_descs[desc_tail-1];
+        desc_rd_en_r <= 0;
+        desc_rd_en_r2 <= 0;
+        last_sop_wr_addr <= 0;
+    end else begin
+        if (wr_en) begin
+            automatic flit_lite_t flit_lite = wr_data;
+            if (flit_lite.sop) begin
+                automatic pdu_hdr_t pdu_hdr = flit_lite.data;
 
-            // We merge DMAs to the same queue when we have at least 2 packets
-            // This avoids that we modify a request that is being consumed
-            if (nb_descs > 1 && pdu_hdr.queue_id == last_desc.queue_id) begin
-                last_desc.size += pdu_hdr.pdu_flit;
-                pkt_descs[desc_tail-1] <= last_desc;
-            end else begin
-                automatic pkt_desc_t pkt_desc;
-                pkt_desc.queue_id = pdu_hdr.queue_id;
-                pkt_desc.size = pdu_hdr.pdu_flit;
-                pkt_descs[desc_tail] <= pkt_desc;
-                desc_tail <= desc_tail + 1;
+                // We merge DMAs to the same queue when we have at least two
+                // packets in the queue. This avoids that we modify a request
+                // that is being consumed. We also only merge requests when they
+                // do not wrap around in the buffer
+                if (nb_descs == 0) begin
+                    current_desc.queue_id <= pdu_hdr.queue_id;
+                    current_desc.size <= pdu_hdr.pdu_flit;
+                    desc_tail <= desc_tail + 1'b1;
+                end else if (nb_descs == 1) begin
+                    last_desc.queue_id <= pdu_hdr.queue_id;
+                    last_desc.size <= pdu_hdr.pdu_flit;
+                    desc_tail <= desc_tail + 1'b1;
+                end else if (pdu_hdr.queue_id == last_desc.queue_id && 
+                             last_sop_wr_addr < wr_addr) begin
+                    last_desc.size <= last_desc.size + pdu_hdr.pdu_flit;
+                end else begin
+                    // save last_desc to bram
+                    desc_wr_data <= last_desc;
+                    desc_wr_addr <= desc_tail - 1;
+                    desc_wr_en <= 1;
+
+                    last_desc.queue_id <= pdu_hdr.queue_id;
+                    last_desc.size <= pdu_hdr.pdu_flit;
+                    desc_tail <= desc_tail + 1'b1;
+                end
+                
+                last_sop_wr_addr <= wr_addr;
             end
+        end
+
+        // update current_desc or read it from BRAM
+        if (dma_start && nb_descs > 0) begin
+            // intercept write to the same address
+            if (desc_wr_en && desc_wr_addr == desc_head) begin
+                current_desc <= desc_wr_data;
+            end else if (nb_descs == 1) begin
+                current_desc <= last_desc;
+            end else begin
+                desc_rd_en <= 1;
+                desc_rd_addr <= desc_head;
+            end
+        end
+
+        desc_rd_en_r <= desc_rd_en;
+        desc_rd_en_r2 <= desc_rd_en_r;
+
+        // update current_desc with value read from BRAM
+        if (desc_rd_en_r2) begin
+            current_desc <= desc_rd_data;
         end
     end
 end
 
 // Always have at least one slot not occupied.
 assign free_slot = PDU_DEPTH - occupied_slot - 1;
-assign occupied_slot = wrap ? (last_tail-head+tail) : (tail-head);
-assign send_slot = wrap ? (last_tail-head) : (tail-head);
+assign occupied_slot = wrap ? (last_tail - head + tail) : (tail - head);
 
 assign wrap = (tail < head);
 
@@ -129,7 +191,7 @@ end
 
 
 // update head
-always @(posedge clk)begin
+always @(posedge clk) begin
     if (rst) begin
         head <= 0;
     end else begin
@@ -145,7 +207,7 @@ always @(posedge clk)begin
 end
 
 // dma state machine
-always@(posedge clk) begin
+always @(posedge clk) begin
     dma_start <= 0;
     if (rst) begin
         state <= IDLE;
@@ -157,20 +219,19 @@ always@(posedge clk) begin
         case (state)
             IDLE: begin
                 // We have data to send
-                if (desc_head != desc_tail) begin
-                    automatic pkt_desc_t cur_desc = pkt_descs[desc_head];
-                    desc_head <= desc_head + 1;
+                if ((desc_head != desc_tail) && (occupied_slot > 0)) begin
+                    dma_size <= current_desc.size;
+                    dma_queue <= current_desc.queue_id;
 
-                    // dma_size <= send_slot;
-                    dma_size <= cur_desc.size;
-                    dma_queue <= cur_desc.queue_id;
-
+                    desc_head <= desc_head + 1'b1;
                     dma_start <= 1;
                     dma_base_addr <= head;
                     state <= WAIT;
                 end
             end
             WAIT: begin
+                // we are assuming that dma_done will only activate after at
+                // least 3 clock cycles
                 if (dma_done) begin
                     state <= IDLE;
                 end
@@ -181,7 +242,7 @@ always@(posedge clk) begin
 end
 
 // two cycles delay
-always@(posedge clk)begin
+always @(posedge clk) begin
     rd_en_r <= rd_en;
     rd_valid <= rd_en_r;
     rd_addr_r1 <= rd_addr;
@@ -203,6 +264,21 @@ pdu_buffer (
     .wraddress  (wr_addr),
     .wren       (wr_en),
     .q          (rd_flit_lite)
+);
+
+bram_simple2port #(
+    .AWIDTH(DESC_RBUF_AWIDTH),
+    .DWIDTH(DESC_RBUF_DWIDTH),
+    .DEPTH(DESC_RBUF_DEPTH)
+)
+pkt_descs (
+    .clock      (clk),
+    .data       (desc_wr_data),
+    .rdaddress  (desc_rd_addr),
+    .rden       (desc_rd_en),
+    .wraddress  (desc_wr_addr),
+    .wren       (desc_wr_en),
+    .q          (desc_rd_data)
 );
 
 endmodule
