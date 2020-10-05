@@ -96,7 +96,7 @@ assign dma_size_r_low = rb_size - tail;
 assign dma_size_r_high = dma_size_r - rb_size + tail; // dma_size_r - dma_size_r_low
 assign cpu_data_addr_low = cpu_data_addr;
 assign cpu_data_addr_high = kmem_addr + (1<<6); // always starts from the beginning
-assign ep_data_addr_high = data_base_addr + {dma_size_r_low,6'b0};
+assign ep_data_addr_high = data_base_addr + {dma_size_r_low, 6'b0};
 
 assign done_desc = '{
     func_nb: 0,
@@ -157,9 +157,9 @@ assign free_slot = (tail >= head) ? (rb_size-tail+head-1) : (head-tail-1);
 // round the fpga_tail
 assign wrap = tail + dma_size_r > rb_size;
 
-assign new_tail = (tail+dma_size_r >= rb_size) ? 
+assign new_tail = (tail + dma_size_r >= rb_size) ? 
                         (tail + dma_size_r - rb_size) :
-                        (tail+dma_size_r);
+                        (tail + dma_size_r);
 
 // two cycle delay
 always @(posedge clk)begin
