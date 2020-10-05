@@ -100,7 +100,7 @@ assign ep_data_addr_high = data_base_addr + {dma_size_r_low,6'b0};
 
 assign done_desc = '{
     func_nb: 0,
-    desc_id: descriptor_id,
+    desc_id: DONE_ID,
     app_spec: 0,
     reserved: 0,
     single_src: 0,
@@ -112,7 +112,7 @@ assign done_desc = '{
 
 assign data_desc = '{
     func_nb: 0,
-    desc_id: descriptor_id,
+    desc_id: 0,
     app_spec: 0,
     reserved: 0,
     single_src: 0,
@@ -128,7 +128,7 @@ assign data_desc = '{
 // such case, we use the following two write data mover descriptors.
 assign data_desc_low = '{
     func_nb: 0,
-    desc_id: descriptor_id,
+    desc_id: 0,
     app_spec: 0,
     reserved: 0,
     single_src: 0,
@@ -140,7 +140,7 @@ assign data_desc_low = '{
 
 assign data_desc_high = '{
     func_nb: 0,
-    desc_id: descriptor_id,
+    desc_id: 0,
     app_spec: 0,
     reserved: 0,
     single_src: 0,
