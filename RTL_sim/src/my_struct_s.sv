@@ -181,10 +181,10 @@ typedef struct packed
 //indicating CPU info. 
 //The higher half is used for CPU ring buffer registers
 //The bottom half is used as PDU header for each PDU transfer.
-localparam RB_DEPTH = 8191; //in 512 bits. 
-localparam RB_AWIDTH = ($clog2(RB_DEPTH));
+localparam MAX_RB_DEPTH = 8191; // in 512 bits.
+localparam RB_AWIDTH = ($clog2(MAX_RB_DEPTH));
 
-localparam C2F_RB_DEPTH = 512; //in 512 bits.
+localparam C2F_RB_DEPTH = 512; // in 512 bits.
 localparam C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
 
 localparam MAX_NB_APPS = 16;
