@@ -98,7 +98,9 @@ logic         pcie_rddm_desc_valid;
 logic [173:0] pcie_rddm_desc_data;
 logic         pcie_wrdm_desc_ready;
 logic         pcie_wrdm_desc_valid;
+logic         delayed_pcie_wrdm_desc_valid;
 logic [173:0] pcie_wrdm_desc_data;
+logic [173:0] delayed_pcie_wrdm_desc_data;
 logic         pcie_wrdm_prio_ready;
 logic         pcie_wrdm_prio_valid;
 logic [173:0] pcie_wrdm_prio_data;
@@ -321,11 +323,12 @@ function print_pcie_desc(input pcie_desc_t pcie_desc);
     $display("");
 endfunction
 
-localparam NB_QUEUES = 16;
+localparam NB_QUEUES = 2;
 logic [31:0] head;
 logic [31:0] tail;
 logic [31:0] cnt_delay;
 logic [PCIE_ADDR_WIDTH-1:0] cfg_queue;
+logic [7:0] pcie_delay_cnt;
 
 typedef enum{
     PCIE_SET_F2C_QUEUE,
@@ -358,7 +361,7 @@ always @(posedge clk_pcie) begin
     pcie_byteenable_1 <= 0; // not used at the moment
 
     // PCIe FPGA -> CPU
-    pcie_wrdm_desc_ready <= 0;
+    delayed_pcie_wrdm_desc_valid <= 0;
 
     // PCIe CPU -> FPGA
     pcie_rddm_desc_ready <= 0;
@@ -370,20 +373,22 @@ always @(posedge clk_pcie) begin
         tail <= 0;
         cfg_queue <= 0;
         cnt_delay <= 0;
+        pcie_delay_cnt <= 0;
+        pcie_wrdm_desc_ready <= 0;
     end else begin
         case (pcie_state)
             PCIE_SET_F2C_QUEUE: begin
                 if (cnt >= 1000) begin
                     pcie_write_0 <= 1;
+                    pcie_wrdm_desc_ready <= 1;
 
                     // configure queue
-                    $display("Configuring queue %d", cfg_queue);
                     pcie_address_0 <= cfg_queue << 12;
-                    pcie_writedata_0[127:64] <= 64'hdeadbeef00000000 + 
+                    pcie_writedata_0[127:64] <= 64'hdeadbeef00000000 +
                                                 (cfg_queue << 24);
                     pcie_byteenable_0[15:8] <= 8'hff;
 
-                    if (cfg_queue == NB_QUEUES-1) begin
+                    if (cfg_queue == NB_QUEUES - 1) begin
                         pcie_state <= PCIE_READ_F2C_QUEUE;
                         cfg_queue <= 0;
                         cnt_delay <= cnt + 10;
@@ -446,7 +451,7 @@ always @(posedge clk_pcie) begin
                     automatic pdu_hdr_t pdu_hdr = 0;
                     pdu_hdr.queue_id = 64'h0;
                     pdu_hdr.prot = 32'h11;
-                    pdu_hdr.tuple = 96'h8002d06ac0a8010100140050;
+                    pdu_hdr.tuple = 96'hc0a80000c0a801011f900050;
                     pcie_writedata_1 <= pdu_hdr;
                     pcie_write_1 <= 1;
 
@@ -461,20 +466,21 @@ always @(posedge clk_pcie) begin
                     automatic pdu_hdr_t pdu_hdr = 0;
                     pdu_hdr.queue_id = 64'h1;
                     pdu_hdr.prot = 32'h11;
-                    pdu_hdr.tuple = 96'h8002d06ac0a8010100140050;
+                    pdu_hdr.tuple = 96'hc0a80000c0a801011f900050;
                     pcie_writedata_1 <= pdu_hdr;
                     pcie_write_1 <= 1;
 
                     // prepare to consume pkts from buffer
                     pcie_state <= PCIE_CONSUME_PKT_BUFFER;
-                    pcie_wrdm_desc_ready <= 0;
+                    // pcie_wrdm_desc_ready <= 0;
                 end
             end
             // TODO(sadok) assert that RULE_SET == 2
             PCIE_CONSUME_PKT_BUFFER: begin
-                if (pcie_wrdm_desc_valid) begin
-                    automatic pcie_desc_t pcie_desc = pcie_wrdm_desc_data;
-                    print_pcie_desc(pcie_desc);
+                if (delayed_pcie_wrdm_desc_valid) begin
+                    automatic pcie_desc_t pcie_desc = delayed_pcie_wrdm_desc_data;
+                    // $display("pcie_desc: %h", pcie_desc);
+                    // print_pcie_desc(pcie_desc);
 
                     pcie_wrdm_desc_ready <= 1;
 
@@ -487,26 +493,61 @@ always @(posedge clk_pcie) begin
                         head <= pcie_desc.saddr_data[31:0];
                         queue = pcie_desc.dst_addr[31:24];
 
+                        $display("Receiving packet on queue %d (t=%h, h=%h)", queue, tail, head);
+
                         // update head on the FPGA
-                        $display("Updating head on queue %d", queue);
                         pcie_write_0 <= 1;
                         pcie_address_0 <= queue << 12;
                         pcie_writedata_0[63:32] <= pcie_desc.saddr_data[31:0];
                         pcie_byteenable_0[7:4] <= 8'hff;
-                    end
-                    else begin
+                        pcie_wrdm_desc_ready <= 1;
+                    end else begin
                         // read data from FPGA BRAM using the Avalon-MM address
                         // HACK(sadok) we are reading only the last pending flit
+
+                        $display("Receiving DMA batch with %d bytes",
+                                 pcie_desc.nb_dwords * 4);
+
+                        // pcie_address_0 <= pcie_desc.saddr_data;
                         pcie_address_0 <= pcie_desc.saddr_data +
                                           pcie_desc.nb_dwords * 4 - 64;
+                        // last_dma_transfer_addr <= pcie_desc.saddr_data;
+                        // end_dma_transfer_addr <= pcie_desc.saddr_data +
+                        //                          pcie_desc.nb_dwords * 4;
+
+                        $display("Reading data to dest. memory address: %h",
+                                 pcie_desc.dst_addr);
                         pcie_read_0 <= 1;
                     end
                 end
+                // if (pending_flits_to_dma) begin
+                //     pcie_address_0 <= pcie_desc.saddr_data +
+                //                           pcie_desc.nb_dwords * 4 - 64;
+
+                //     if (done_transfer) begin
+                //         pcie_wrdm_desc_ready <= 1;
+                //     end
+                // end
                 if (pcie_readdatavalid_0) begin
+                    // TODO(sadok) simulate host memory so that we can check
+                    // what has been written to it
                     $display("Flit from PCIe: 0x%64h", pcie_readdata_0);
                 end
             end
         endcase
+    end
+
+    if (pcie_wrdm_desc_valid || pcie_delay_cnt) begin
+        // $display("pcie_wrdm_desc_ready: %b", pcie_wrdm_desc_ready);
+        pcie_wrdm_desc_ready <= 0;
+        pcie_delay_cnt <= pcie_delay_cnt + 1;
+        if (pcie_delay_cnt == 0) begin
+            delayed_pcie_wrdm_desc_data <= pcie_wrdm_desc_data;
+        end else if (pcie_delay_cnt == 63) begin
+            // $display("delayed_pcie_wrdm_desc_valid <= 1");
+            delayed_pcie_wrdm_desc_valid <= 1;
+            pcie_delay_cnt <= 0;
+        end
     end
 end
 
@@ -523,16 +564,18 @@ always @(posedge clk_status) begin
     end else begin
         case(conf_state)
             CONFIGURE: begin
+                automatic logic [25:0] buf_size = 8191;
+                // automatic logic [25:0] buf_size = 31;
                 conf_state <= READ_PCIE_START;
                 s_addr <= 30'h2A00_0000;
                 s_write <= 1;
 
                 `ifdef NO_PCIE
-                    // NB_QUEUES queues, buf_size=8191, pcie disabled
-                    s_writedata <= 32'h00003fff + (NB_QUEUES << 27);
+                    // pcie disabled
+                    s_writedata <= {5'(NB_QUEUES), buf_size, 1'b1};
                 `else
-                    // NB_QUEUES queues, buf_size=8191, pcie enabled
-                    s_writedata <= 32'h00003ffe + (NB_QUEUES << 27);
+                    // pcie enabled
+                    s_writedata <= {5'(NB_QUEUES), buf_size, 1'b0};
                 `endif
             end
             READ_PCIE_START: begin
