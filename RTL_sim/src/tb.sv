@@ -104,6 +104,10 @@ logic [173:0] delayed_pcie_wrdm_desc_data;
 logic         pcie_wrdm_prio_ready;
 logic         pcie_wrdm_prio_valid;
 logic [173:0] pcie_wrdm_prio_data;
+logic         pcie_rddm_tx_valid;
+logic [31:0]  pcie_rddm_tx_data;
+logic         pcie_wrdm_tx_valid;
+logic [31:0]  pcie_wrdm_tx_data;
 logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_0;
 logic         pcie_write_0;
 logic         pcie_read_0;
@@ -367,6 +371,10 @@ always @(posedge clk_pcie) begin
     pcie_rddm_desc_ready <= 0;
     pcie_wrdm_prio_ready <= 0;
 
+
+    pcie_wrdm_tx_valid <= 0;
+    pcie_wrdm_tx_data <= 0;
+
     if (rst) begin
         pcie_state <= PCIE_SET_F2C_QUEUE;
         head <= 0;
@@ -532,6 +540,14 @@ always @(posedge clk_pcie) begin
                     // TODO(sadok) simulate host memory so that we can check
                     // what has been written to it
                     $display("Flit from PCIe: 0x%64h", pcie_readdata_0);
+
+                    // FIXME(sadok) this only works because we are reading the
+                    // last data of the descriptor only, if we read all the data
+                    // we would need to check if it is over
+                    pcie_wrdm_tx_valid <= 1;
+
+                    // TODO(sadok) Fill tx_data (table 17 of the manual)
+                    // pcie_wrdm_tx_data <= {};
                 end
             end
         endcase
@@ -869,6 +885,10 @@ top top_inst (
     .pcie_wrdm_prio_ready         (pcie_wrdm_prio_ready),
     .pcie_wrdm_prio_valid         (pcie_wrdm_prio_valid),
     .pcie_wrdm_prio_data          (pcie_wrdm_prio_data),
+    .pcie_rddm_tx_valid           (pcie_rddm_tx_valid),
+    .pcie_rddm_tx_data            (pcie_rddm_tx_data),
+    .pcie_wrdm_tx_valid           (pcie_wrdm_tx_valid),
+    .pcie_wrdm_tx_data            (pcie_wrdm_tx_data),
     .pcie_address_0               (pcie_address_0),
     .pcie_write_0                 (pcie_write_0),
     .pcie_read_0                  (pcie_read_0),
@@ -1069,6 +1089,10 @@ pcie_core pcie (
     .wrdm_prio_ready        (pcie_wrdm_prio_ready),
     .wrdm_prio_valid        (pcie_wrdm_prio_valid),
     .wrdm_prio_data         (pcie_wrdm_prio_data),
+    .rddm_tx_valid          (pcie_rddm_tx_valid),
+    .rddm_tx_data           (pcie_rddm_tx_data),
+    .wrdm_tx_valid          (pcie_wrdm_tx_valid),
+    .wrdm_tx_data           (pcie_wrdm_tx_data),
     .address_0              (pcie_address_0),
     .write_0                (pcie_write_0),
     .read_0                 (pcie_read_0),

@@ -50,6 +50,11 @@ module pcie_core (
         output logic         wrdm_prio_ready,
         input  logic         wrdm_prio_valid,
         input  logic [173:0] wrdm_prio_data,
+
+        output logic         rddm_tx_valid,
+        output logic [31:0]  rddm_tx_data,
+        output logic         wrdm_tx_valid,
+        output logic [31:0]  wrdm_tx_data,
         
         output logic [PCIE_ADDR_WIDTH-1:0] address_0,     //   input,    width = 9,     s1.address
         output logic write_0,       //   input,    width = 1,       .write
@@ -552,8 +557,8 @@ logic         pipe_sim_only_sim_pipe_mask_tx_pll_lock; //               .sim_pip
         .dut_wrdm_prio_ready                     (wrdm_prio_ready),                             //                           dut_wrdm_prio.ready
         .dut_wrdm_prio_valid                     (wrdm_prio_valid),                             //                                        .valid
         .dut_wrdm_prio_data                      (wrdm_prio_data),                              //                                        .data
-        .dut_wrdm_tx_valid                       (),                               //                             dut_wrdm_tx.valid
-        .dut_wrdm_tx_data                        (),                                //                                        .data
+        .dut_wrdm_tx_valid                       (wrdm_tx_valid),                               //                             dut_wrdm_tx.valid
+        .dut_wrdm_tx_data                        (wrdm_tx_data),                                //                                        .data
         .dut_rddm_conduit_pfnum                  (),                          //                        dut_rddm_conduit.pfnum
         .dut_rddm_desc_ready                     (rddm_desc_ready),                             //                           dut_rddm_desc.ready
         .dut_rddm_desc_valid                     (rddm_desc_valid),                             //                                        .valid
@@ -561,8 +566,8 @@ logic         pipe_sim_only_sim_pipe_mask_tx_pll_lock; //               .sim_pip
         .dut_rddm_prio_ready                     (),                             //                           dut_rddm_prio.ready
         .dut_rddm_prio_valid                     (0),                             //                                        .valid
         .dut_rddm_prio_data                      (0),                              //                                        .data
-        .dut_rddm_tx_valid                       (),                               //                             dut_rddm_tx.valid
-        .dut_rddm_tx_data                        (),                                //                                        .data
+        .dut_rddm_tx_valid                       (rddm_tx_valid),                               //                             dut_rddm_tx.valid
+        .dut_rddm_tx_data                        (rddm_tx_data),                                //                                        .data
         .pipe_sim_only_sim_pipe_pclk_in          (pipe_sim_only_sim_pipe_pclk_in),          //   input,    width = 1,  pipe_sim_only.sim_pipe_pclk_in
         .pipe_sim_only_sim_pipe_rate             (pipe_sim_only_sim_pipe_rate),             //  output,    width = 2,               .sim_pipe_rate
         .pipe_sim_only_sim_ltssmstate            (pipe_sim_only_sim_ltssmstate),            //  output,    width = 6,               .sim_ltssmstate

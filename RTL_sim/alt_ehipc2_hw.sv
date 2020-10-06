@@ -257,6 +257,10 @@ wire [1:0]   tx_pll_locked;
     logic         pcie_wrdm_prio_ready;
     logic         pcie_wrdm_prio_valid;
     logic [173:0] pcie_wrdm_prio_data;
+    logic         pcie_rddm_tx_valid;
+    logic [31:0]  pcie_rddm_tx_data;
+    logic         pcie_wrdm_tx_valid;
+    logic [31:0]  pcie_wrdm_tx_data;
     logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_0;      
     logic         pcie_write_0;        
     logic         pcie_read_0;         
@@ -832,6 +836,10 @@ assign i_eth_reconfig_write = eth_write;
         .pcie_wrdm_prio_ready         (pcie_wrdm_prio_ready),
         .pcie_wrdm_prio_valid         (pcie_wrdm_prio_valid),
         .pcie_wrdm_prio_data          (pcie_wrdm_prio_data),
+        .pcie_rddm_tx_valid           (pcie_rddm_tx_valid),
+        .pcie_rddm_tx_data            (pcie_rddm_tx_data),
+        .pcie_wrdm_tx_valid           (pcie_wrdm_tx_valid),
+        .pcie_wrdm_tx_data            (pcie_wrdm_tx_data),
         .pcie_address_0               (pcie_address_0), 
         .pcie_write_0                 (pcie_write_0), 
         .pcie_read_0                  (pcie_read_0), 
@@ -1007,6 +1015,10 @@ pcie_core pcie (
     .wrdm_prio_ready        (pcie_wrdm_prio_ready),
     .wrdm_prio_valid        (pcie_wrdm_prio_valid),
     .wrdm_prio_data         (pcie_wrdm_prio_data),
+    .rddm_tx_valid          (pcie_rddm_tx_valid),
+    .rddm_tx_data           (pcie_rddm_tx_data),
+    .wrdm_tx_valid          (pcie_wrdm_tx_valid),
+    .wrdm_tx_data           (pcie_wrdm_tx_data),
     .address_0              (pcie_address_0), 
     .write_0                (pcie_write_0), 
     .read_0                 (pcie_read_0), 
