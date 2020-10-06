@@ -8,6 +8,10 @@ module tb;
 `define PKT_FILE_NB_LINES 2400
 `endif
 
+`ifndef NB_QUEUES
+`define NB_QUEUES 4
+`endif
+
 // duration for each bit = 20 * timescale = 20 * 1 ns  = 20ns
 localparam period = 10;
 localparam period_rx = 2.56;
@@ -20,6 +24,7 @@ localparam data_width = 528;
 localparam lo = 0;
 localparam hi = `PKT_FILE_NB_LINES;
 localparam stop = (hi*2*1.25+100000);
+localparam nb_queues = `NB_QUEUES;
 
 logic  clk_status;
 logic  clk_rxmac;
@@ -29,7 +34,6 @@ logic  clk_datamover;
 logic  clk_esram_ref;
 logic  clk_esram;
 logic  clk_pcie;
-
 
 logic rst_datamover;
 
@@ -327,12 +331,12 @@ function print_pcie_desc(input pcie_desc_t pcie_desc);
     $display("");
 endfunction
 
-localparam NB_QUEUES = 2;
 logic [31:0] head;
 logic [31:0] tail;
 logic [31:0] cnt_delay;
 logic [PCIE_ADDR_WIDTH-1:0] cfg_queue;
 logic [7:0] pcie_delay_cnt;
+logic [63:0] nb_config_queues;
 
 typedef enum{
     PCIE_SET_F2C_QUEUE,
@@ -371,6 +375,8 @@ always @(posedge clk_pcie) begin
     pcie_rddm_desc_ready <= 0;
     pcie_wrdm_prio_ready <= 0;
 
+    // pcie_wrdm_desc_ready always 1 simulates an infinite DMA queue
+    pcie_wrdm_desc_ready <= 1;
 
     pcie_wrdm_tx_valid <= 0;
     pcie_wrdm_tx_data <= 0;
@@ -382,13 +388,12 @@ always @(posedge clk_pcie) begin
         cfg_queue <= 0;
         cnt_delay <= 0;
         pcie_delay_cnt <= 0;
-        pcie_wrdm_desc_ready <= 0;
+        nb_config_queues <= 0;
     end else begin
         case (pcie_state)
             PCIE_SET_F2C_QUEUE: begin
                 if (cnt >= 1000) begin
                     pcie_write_0 <= 1;
-                    pcie_wrdm_desc_ready <= 1;
 
                     // configure queue
                     pcie_address_0 <= cfg_queue << 12;
@@ -396,7 +401,7 @@ always @(posedge clk_pcie) begin
                                                 (cfg_queue << 24);
                     pcie_byteenable_0[15:8] <= 8'hff;
 
-                    if (cfg_queue == NB_QUEUES - 1) begin
+                    if (cfg_queue == nb_queues - 1) begin
                         pcie_state <= PCIE_READ_F2C_QUEUE;
                         cfg_queue <= 0;
                         cnt_delay <= cnt + 10;
@@ -457,30 +462,35 @@ always @(posedge clk_pcie) begin
             PCIE_RULE_INSERT: begin
                 if (cnt >= cnt_delay) begin
                     automatic pdu_hdr_t pdu_hdr = 0;
-                    pdu_hdr.queue_id = 64'h0;
+                    pdu_hdr.queue_id = nb_config_queues;
                     pdu_hdr.prot = 32'h11;
-                    pdu_hdr.tuple = 96'hc0a80000c0a801011f900050;
+                    pdu_hdr.tuple = {
+                        32'hc0a80000 + nb_config_queues[31:0],
+                        64'hc0a801011f900050
+                    };
                     pcie_writedata_1 <= pdu_hdr;
                     pcie_write_1 <= 1;
-
-                    pcie_state <= PCIE_RULE_UPDATE;
+                    
                     cnt_delay <= cnt + 10;
+                    nb_config_queues <= nb_config_queues + 1;
+
+                    if (nb_config_queues + 1 == nb_queues) begin
+                        pcie_state <= PCIE_RULE_UPDATE;
+                    end
                 end
             end
             // TODO(sadok) assert that RULE_SET == 1
             PCIE_RULE_UPDATE: begin
                 if (cnt >= cnt_delay) begin
-                    // update previously added rule to use a different queue
-                    automatic pdu_hdr_t pdu_hdr = 0;
-                    pdu_hdr.queue_id = 64'h1;
-                    pdu_hdr.prot = 32'h11;
-                    pdu_hdr.tuple = 96'hc0a80000c0a801011f900050;
-                    pcie_writedata_1 <= pdu_hdr;
-                    pcie_write_1 <= 1;
+                    // // update previously added rule to use a different queue
+                    // automatic pdu_hdr_t pdu_hdr = 0;
+                    // pdu_hdr.queue_id = 64'h1;
+                    // pdu_hdr.prot = 32'h11;
+                    // pdu_hdr.tuple = 96'hc0a80000c0a801011f900050;
+                    // pcie_writedata_1 <= pdu_hdr;
+                    // pcie_write_1 <= 1;
 
-                    // prepare to consume pkts from buffer
                     pcie_state <= PCIE_CONSUME_PKT_BUFFER;
-                    // pcie_wrdm_desc_ready <= 0;
                 end
             end
             // TODO(sadok) assert that RULE_SET == 2
@@ -489,8 +499,6 @@ always @(posedge clk_pcie) begin
                     automatic pcie_desc_t pcie_desc = delayed_pcie_wrdm_desc_data;
                     // $display("pcie_desc: %h", pcie_desc);
                     // print_pcie_desc(pcie_desc);
-
-                    pcie_wrdm_desc_ready <= 1;
 
                     if (pcie_desc.immediate) begin
                         automatic logic [7:0] queue;
@@ -508,7 +516,6 @@ always @(posedge clk_pcie) begin
                         pcie_address_0 <= queue << 12;
                         pcie_writedata_0[63:32] <= pcie_desc.saddr_data[31:0];
                         pcie_byteenable_0[7:4] <= 8'hff;
-                        pcie_wrdm_desc_ready <= 1;
                     end else begin
                         // read data from FPGA BRAM using the Avalon-MM address
                         // HACK(sadok) we are reading only the last pending flit
@@ -531,10 +538,6 @@ always @(posedge clk_pcie) begin
                 // if (pending_flits_to_dma) begin
                 //     pcie_address_0 <= pcie_desc.saddr_data +
                 //                           pcie_desc.nb_dwords * 4 - 64;
-
-                //     if (done_transfer) begin
-                //         pcie_wrdm_desc_ready <= 1;
-                //     end
                 // end
                 if (pcie_readdatavalid_0) begin
                     // TODO(sadok) simulate host memory so that we can check
@@ -554,8 +557,6 @@ always @(posedge clk_pcie) begin
     end
 
     if (pcie_wrdm_desc_valid || pcie_delay_cnt) begin
-        // $display("pcie_wrdm_desc_ready: %b", pcie_wrdm_desc_ready);
-        pcie_wrdm_desc_ready <= 0;
         pcie_delay_cnt <= pcie_delay_cnt + 1;
         if (pcie_delay_cnt == 0) begin
             delayed_pcie_wrdm_desc_data <= pcie_wrdm_desc_data;
@@ -588,10 +589,10 @@ always @(posedge clk_status) begin
 
                 `ifdef NO_PCIE
                     // pcie disabled
-                    s_writedata <= {5'(NB_QUEUES), buf_size, 1'b1};
+                    s_writedata <= {5'(nb_queues), buf_size, 1'b1};
                 `else
                     // pcie enabled
-                    s_writedata <= {5'(NB_QUEUES), buf_size, 1'b0};
+                    s_writedata <= {5'(nb_queues), buf_size, 1'b0};
                 `endif
             end
             READ_PCIE_START: begin
@@ -607,7 +608,7 @@ always @(posedge clk_status) begin
                 if (top_readdata_valid) begin
                     $display("%d: 0x%8h", s_addr[6:0], top_readdata);
 
-                    if (s_addr == (30'h2A00_0000 + 30'd4 * NB_QUEUES)) begin
+                    if (s_addr == (30'h2A00_0000 + 30'd4 * nb_queues)) begin
                         conf_state <= IDLE;
                     end else begin
                         s_addr <= s_addr + 1;

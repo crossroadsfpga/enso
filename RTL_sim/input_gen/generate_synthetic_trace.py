@@ -32,13 +32,13 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest):
 
 def main():
     if len(sys.argv) != 5:
-        print('Usage:', sys.argv[0], 'nb_pkts output_pcap pkt_size nb_dest')
+        print('Usage:', sys.argv[0], 'nb_pkts pkt_size nb_dest output_pcap')
         sys.exit(1)
 
     nb_pkts = int(sys.argv[1])
-    out_pcap = sys.argv[2]
-    pkt_size = int(sys.argv[3])
-    nb_dest = int(sys.argv[4])
+    pkt_size = int(sys.argv[2])
+    nb_dest = int(sys.argv[3])
+    out_pcap = sys.argv[4]
 
     if nb_dest > 256:
         print('Can only support up to 256 destinations')
