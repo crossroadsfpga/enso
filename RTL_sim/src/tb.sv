@@ -333,11 +333,67 @@ function print_pcie_desc(input pcie_desc_t pcie_desc);
     $display("");
 endfunction
 
+localparam DMA_DELAY = 64;
+logic [7:0] pcie_delay_cnt;
+
+// DMA requests ring buffer
+localparam DMA_BUF_SIZE = 64;
+localparam DMA_BUF_AWIDTH = ($clog2(DMA_BUF_SIZE));
+pcie_desc_t dma_buf [DMA_BUF_SIZE-1:0];
+logic [DMA_BUF_AWIDTH-1:0] dma_buf_head;
+logic [DMA_BUF_AWIDTH-1:0] dma_buf_tail;
+logic dma_buf_full;
+logic dma_buf_full_r1;
+logic dma_buf_full_r2;
+logic dma_buf_full_r3;
+assign dma_buf_full = dma_buf_head + 1'b1 == dma_buf_tail;
+assign pcie_wrdm_desc_ready = !dma_buf_full;
+
+// DMA Controller: receives DMA requests, inserts in the buffer and advances the
+// head pointer. It also consumes data from the ring buffer and place it in the 
+// delayed_pcie_wrdm_desc_data, waiting DMA_DELAY cycles to set 
+// delayed_pcie_wrdm_desc_valid
+always @(posedge clk_pcie) begin
+    delayed_pcie_wrdm_desc_valid <= 0;
+    if (rst) begin
+        dma_buf_head <= 0;
+        dma_buf_tail <= 0;
+        pcie_delay_cnt <= 0;
+    end else begin
+        automatic logic [DMA_BUF_AWIDTH-1:0] next_head;
+        if (!dma_buf_full && !dma_buf_full_r3 && pcie_wrdm_desc_valid) begin
+            dma_buf[dma_buf_head] <= pcie_wrdm_desc_data;
+            next_head = dma_buf_head + 1'b1;
+        end else begin
+            next_head = dma_buf_head;
+        end
+
+        if (dma_buf_full_r3 && pcie_wrdm_desc_valid) begin
+            $display("Warning: DMA Write while not ready");
+        end
+
+        dma_buf_head <= next_head;
+
+        if ((dma_buf_head != dma_buf_tail) || pcie_delay_cnt) begin
+            pcie_delay_cnt <= pcie_delay_cnt + 1'b1;
+            if (pcie_delay_cnt == 0) begin
+                delayed_pcie_wrdm_desc_data <= dma_buf[dma_buf_tail]; // pcie_wrdm_desc_data;
+                dma_buf_tail <= dma_buf_tail + 1'b1;
+            end else if (pcie_delay_cnt == DMA_DELAY-1) begin
+                delayed_pcie_wrdm_desc_valid <= 1;
+                pcie_delay_cnt <= 0;
+            end
+        end
+    end
+    dma_buf_full_r1 <= dma_buf_full;
+    dma_buf_full_r2 <= dma_buf_full_r1;
+    dma_buf_full_r3 <= dma_buf_full_r2;
+end
+
 logic [31:0] head;
 logic [31:0] tail;
 logic [31:0] cnt_delay;
 logic [PCIE_ADDR_WIDTH-1:0] cfg_queue;
-logic [7:0] pcie_delay_cnt;
 logic [63:0] nb_config_queues;
 
 typedef enum{
@@ -370,15 +426,9 @@ always @(posedge clk_pcie) begin
     pcie_writedata_1 <= 0;
     pcie_byteenable_1 <= 0; // not used at the moment
 
-    // PCIe FPGA -> CPU
-    delayed_pcie_wrdm_desc_valid <= 0;
-
     // PCIe CPU -> FPGA
     pcie_rddm_desc_ready <= 0;
     pcie_wrdm_prio_ready <= 0;
-
-    // pcie_wrdm_desc_ready always 1 simulates an infinite DMA queue
-    pcie_wrdm_desc_ready <= 1;
 
     pcie_wrdm_tx_valid <= 0;
     pcie_wrdm_tx_data <= 0;
@@ -389,8 +439,8 @@ always @(posedge clk_pcie) begin
         tail <= 0;
         cfg_queue <= 0;
         cnt_delay <= 0;
-        pcie_delay_cnt <= 0;
         nb_config_queues <= 0;
+        dma_buf_tail <= 0;
     end else begin
         case (pcie_state)
             PCIE_SET_F2C_QUEUE: begin
@@ -499,7 +549,7 @@ always @(posedge clk_pcie) begin
             PCIE_CONSUME_PKT_BUFFER: begin
                 if (delayed_pcie_wrdm_desc_valid) begin
                     automatic pcie_desc_t pcie_desc = delayed_pcie_wrdm_desc_data;
-                    // $display("pcie_desc: %h", pcie_desc);
+                    $display("pcie_desc: %h", pcie_desc);
                     // print_pcie_desc(pcie_desc);
 
                     if (pcie_desc.immediate) begin
@@ -518,6 +568,10 @@ always @(posedge clk_pcie) begin
                         pcie_address_0 <= queue << 12;
                         pcie_writedata_0[63:32] <= pcie_desc.saddr_data[31:0];
                         pcie_byteenable_0[7:4] <= 8'hff;
+
+                        pcie_wrdm_tx_valid <= 1;
+                        // TODO(sadok) Fill tx_data (table 17 of the manual)
+                        // pcie_wrdm_tx_data <= {};
                     end else begin
                         // read data from FPGA BRAM using the Avalon-MM address
                         // HACK(sadok) we are reading only the last pending flit
@@ -556,17 +610,6 @@ always @(posedge clk_pcie) begin
                 end
             end
         endcase
-    end
-
-    if (pcie_wrdm_desc_valid || pcie_delay_cnt) begin
-        pcie_delay_cnt <= pcie_delay_cnt + 1;
-        if (pcie_delay_cnt == 0) begin
-            delayed_pcie_wrdm_desc_data <= pcie_wrdm_desc_data;
-        end else if (pcie_delay_cnt == 63) begin
-            // $display("delayed_pcie_wrdm_desc_valid <= 1");
-            delayed_pcie_wrdm_desc_valid <= 1;
-            pcie_delay_cnt <= 0;
-        end
     end
 end
 
