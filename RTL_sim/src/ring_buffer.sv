@@ -79,13 +79,15 @@ desc_pointer_t desc_tail;
 desc_pointer_t desc_head;
 desc_pointer_t nb_descs;
 
-// We save packet descriptors to BRAM but always keep a last_desc and a
-// current_desc in registers. The last_desc is the last descriptor that we
+// We save packet descriptors to BRAM but always keep a current_desc, next_desc
+// and last_desc in registers. The last_desc is the last descriptor that we
 // inserted and may be susceptible to changes as new packets from the same queue
-// come in. The curren_desc is the descriptor that should be consumed now and is
-// prefetched from BRAM
-pkt_desc_t last_desc;
+// come in. The current_desc is the descriptor that should be consumed now. The
+// next_desc is prefetched from BRAM and will become current_desc once
+// current_desc is consumed.
 pkt_desc_t current_desc;
+pkt_desc_t next_desc;
+pkt_desc_t last_desc;
 
 assign wr_base_addr = tail;
 assign nb_descs = desc_tail - desc_head;
@@ -104,21 +106,26 @@ always @(posedge clk) begin
             if (flit_lite.sop) begin
                 automatic pdu_hdr_t pdu_hdr = flit_lite.data;
 
-                // We merge DMAs to the same queue when we have at least two
-                // packets in the queue. This avoids that we modify a request
-                // that is being consumed. We also only merge requests when they
-                // do not wrap around in the buffer
+                desc_tail <= desc_tail + 1'b1;
+
+                // We merge DMAs to the same queue when we already have at least
+                // three packets in the queue. This avoids that we modify a
+                // request that is being consumed. We also only merge requests
+                // when they do not wrap around in the buffer
                 if (nb_descs == 0) begin
                     current_desc.queue_id <= pdu_hdr.queue_id;
                     current_desc.size <= pdu_hdr.pdu_flit;
-                    desc_tail <= desc_tail + 1'b1;
                 end else if (nb_descs == 1) begin
+                    next_desc.queue_id <= pdu_hdr.queue_id;
+                    next_desc.size <= pdu_hdr.pdu_flit;
+                end else if (nb_descs == 2) begin
                     last_desc.queue_id <= pdu_hdr.queue_id;
-                    last_desc.size <= pdu_hdr.pdu_flit;
-                    desc_tail <= desc_tail + 1'b1;
+                    last_desc.size <= pdu_hdr.pdu_flit;      
                 end else if (pdu_hdr.queue_id == last_desc.queue_id && 
                              last_sop_wr_addr < wr_addr) begin
+                    // merge descriptors
                     last_desc.size <= last_desc.size + pdu_hdr.pdu_flit;
+                    desc_tail <= desc_tail; // avoid incrementing the tail
                 end else begin
                     // save last_desc to bram
                     desc_wr_data <= last_desc;
@@ -127,32 +134,34 @@ always @(posedge clk) begin
 
                     last_desc.queue_id <= pdu_hdr.queue_id;
                     last_desc.size <= pdu_hdr.pdu_flit;
-                    desc_tail <= desc_tail + 1'b1;
                 end
                 
                 last_sop_wr_addr <= wr_addr;
             end
         end
 
-        // update current_desc or read it from BRAM
+        // update current_desc and next_desc or read next_desc from BRAM
         if (dma_start && nb_descs > 0) begin
-            // intercept write to the same address
-            if (desc_wr_en && desc_wr_addr == desc_head) begin
-                current_desc <= desc_wr_data;
-            end else if (nb_descs == 1) begin
-                current_desc <= last_desc;
-            end else begin
-                desc_rd_en <= 1;
-                desc_rd_addr <= desc_head;
+            current_desc <= next_desc;
+            if (nb_descs == 2) begin
+                next_desc <= last_desc;
+            end else if (nb_descs > 2) begin
+                // intercept write to the next_desc's address
+                if (desc_wr_en && desc_wr_addr == (desc_head + 1)) begin
+                    next_desc <= desc_wr_data;
+                end else begin
+                    desc_rd_en <= 1;
+                    desc_rd_addr <= desc_head;
+                end
             end
         end
 
         desc_rd_en_r <= desc_rd_en;
         desc_rd_en_r2 <= desc_rd_en_r;
 
-        // update current_desc with value read from BRAM
+        // update next_desc with value read from BRAM
         if (desc_rd_en_r2) begin
-            current_desc <= desc_rd_data;
+            next_desc <= desc_rd_data;
         end
     end
 end
