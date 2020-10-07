@@ -436,6 +436,8 @@ always @(posedge clk_pcie) begin
         dma_queue_occup <= 0;
         max_dma_queue_occup <= 0;
     end else begin
+        automatic logic non_prio_desc_cons = pcie_wrdm_tx_valid && 
+                                             !pcie_wrdm_tx_data[8]; // priority
         if (pcie_pkt_valid & pcie_pkt_ready & pcie_pkt_eop) begin
             pcie_pkt_cnt <= pcie_pkt_cnt + 1;
         end
@@ -451,10 +453,10 @@ always @(posedge clk_pcie) begin
         if (pdumeta_cpu_valid) begin
             rule_set_cnt <= rule_set_cnt + 1;
         end
-        if (pcie_wrdm_desc_valid && !pcie_wrdm_tx_valid) begin
+        if (pcie_wrdm_desc_valid && !non_prio_desc_cons) begin
             dma_queue_occup <= dma_queue_occup + 1'b1;
         end
-        if (!pcie_wrdm_desc_valid && pcie_wrdm_tx_valid) begin
+        if (!pcie_wrdm_desc_valid && non_prio_desc_cons) begin
             dma_queue_occup <= dma_queue_occup - 1'b1;
         end
         if (dma_queue_occup > max_dma_queue_occup) begin
@@ -580,8 +582,8 @@ always @(posedge clk_status) begin
                 8'd20 : status_readdata_top <= dma_pkt_cnt_status;
                 8'd21 : status_readdata_top <= dma_request_cnt_status;
                 8'd22 : status_readdata_top <= rule_set_cnt_status;
-                8'd23 : status_readdata_top <= dma_queue_full_cnt;
-                8'd24 : status_readdata_top <= max_dma_queue_occup;
+                8'd23 : status_readdata_top <= dma_queue_full_cnt_status;
+                8'd24 : status_readdata_top <= max_dma_queue_occup_status;
 
                 default : status_readdata_top <= 32'h345;
             endcase

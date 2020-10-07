@@ -571,7 +571,7 @@ always @(posedge clk_pcie) begin
 
                         pcie_wrdm_tx_valid <= 1;
                         // TODO(sadok) Fill tx_data (table 17 of the manual)
-                        // pcie_wrdm_tx_data <= {};
+                        pcie_wrdm_tx_data <= 0;
                     end else begin
                         // read data from FPGA BRAM using the Avalon-MM address
                         // HACK(sadok) we are reading only the last pending flit
@@ -606,7 +606,7 @@ always @(posedge clk_pcie) begin
                     pcie_wrdm_tx_valid <= 1;
 
                     // TODO(sadok) Fill tx_data (table 17 of the manual)
-                    // pcie_wrdm_tx_data <= {};
+                    pcie_wrdm_tx_data <= 0;
                 end
             end
         endcase
