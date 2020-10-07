@@ -47,8 +47,8 @@ logic [PDU_AWIDTH-1:0] occupied_slot;
 logic [PDU_AWIDTH-1:0] last_sop_wr_addr;
 logic rd_en_r;
 flit_lite_t rd_flit_lite;
-logic [PDU_AWIDTH-1:0]  rd_addr_r1;
-logic [PDU_AWIDTH-1:0]  rd_addr_r2;
+logic [PDU_AWIDTH-1:0] rd_addr_r1;
+logic [PDU_AWIDTH-1:0] rd_addr_r2;
 logic [PDU_AWIDTH-1:0] last_tail;
 logic wrap;
 
