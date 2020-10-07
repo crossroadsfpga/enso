@@ -35,7 +35,10 @@ module fpga2cpu_pcie (
     output logic [511:0]             frb_readdata,
     output logic                     frb_readvalid,
     input  logic [PDU_AWIDTH-1:0]    frb_address,
-    input  logic                     frb_read
+    input  logic                     frb_read,
+
+    // counters
+    output logic [31:0]              dma_queue_full_cnt
 );
 
 localparam EP_BASE_ADDR = 32'h0004_0000;
@@ -62,6 +65,9 @@ logic [31-RB_AWIDTH:0] tail_padding; // 4 is for 16 DWORD
 logic [PDU_AWIDTH-1:0] frb_address_r1;
 logic [PDU_AWIDTH-1:0] frb_address_r2;
 
+logic wrdm_desc_ready_r1;
+logic wrdm_desc_ready_r2;
+
 assign tail_padding = 0;
 
 typedef enum
@@ -69,21 +75,14 @@ typedef enum
     IDLE,
     WAIT_QUEUE_STATE,
     DESC,
-    DESC_WRAP_DELAY_0,
-    DESC_WRAP_DELAY_1,
     DESC_WRAP,
-    DONE_DELAY_0,
-    DONE_DELAY_1,
-    DONE,
-    WAIT
+    DONE
 } state_t;
 
 state_t state;
 
 logic [PDU_AWIDTH-1:0]  dma_size;
 logic [PDU_AWIDTH-1:0]  dma_base_addr;
-// logic                   dma_done;
-logic [7:0] descriptor_id;
 
 // CPU side addr
 assign cpu_data_addr = kmem_addr + 64*tail + 64; // the global reg
@@ -167,15 +166,21 @@ always @(posedge clk)begin
     frb_address_r2 <= frb_address_r1;
 end
 
+always @ (posedge clk) begin
+    // wrdm_desc_ready has a 3-cycle latency, wrdm_desc_ready_r2 is active, we
+    // can write in the following cycle
+    wrdm_desc_ready_r1 <= wrdm_desc_ready;
+    wrdm_desc_ready_r2 <= wrdm_desc_ready_r1;
+end
+
 // FSM
-always @ (posedge clk)begin
+always @ (posedge clk) begin
     wrdm_desc_valid <= 0;
-    if (rst)begin
+    if (rst) begin
         state <= IDLE;
         out_tail <= 0;
         dma_done <= 0;
-        descriptor_id <= 0;
-        // free_slot <= 0;
+        dma_queue_full_cnt <= 0;
     end else begin
         case (state)
             IDLE: begin
@@ -193,71 +198,47 @@ always @ (posedge clk)begin
             end
             DESC: begin
                 // Have enough space for this transfer.
-                if (wrdm_desc_ready && free_slot >= dma_size_r) begin
+                if (wrdm_desc_ready_r2 && free_slot >= dma_size_r) begin
                     // Need wrap around
                     if (wrap) begin
                         wrdm_desc_valid <= 1;
                         wrdm_desc_data <= data_desc_low;
-                        state <= DESC_WRAP_DELAY_0;
+                        state <= DESC_WRAP;
                     end else begin
                         wrdm_desc_valid <= 1;
                         wrdm_desc_data <= data_desc;
-                        state <= DONE_DELAY_0;
+                        state <= DONE;
                     end
                 end
-            end
-            // wrdm_desc_ready has a 3-cycle latency
-            DESC_WRAP_DELAY_0: begin
-                state <= DESC_WRAP_DELAY_1;
-            end
-            DESC_WRAP_DELAY_1: begin
-                state <= DESC_WRAP;
+                if (!wrdm_desc_ready_r2) begin
+                    dma_queue_full_cnt <= dma_queue_full_cnt + 1;
+                end
             end
             DESC_WRAP: begin
                 // the previous request is consumed.
-                if (wrdm_desc_ready) begin
+                if (wrdm_desc_ready_r2) begin
                     wrdm_desc_valid <= 1;
                     wrdm_desc_data <= data_desc_high;
-                    // $display("DESC_WRAP sending desc: %h", data_desc_high);
-                    state <= DONE_DELAY_0;
+                    state <= DONE;
+                end else begin
+                    dma_queue_full_cnt <= dma_queue_full_cnt + 1;
                 end
             end
-            // wrdm_desc_ready has a 3-cycle latency
-            DONE_DELAY_0: begin
-                state <= DONE_DELAY_1;
-            end
-            DONE_DELAY_1: begin
-                state <= DONE;
-            end
             DONE: begin
-                if (wrdm_desc_ready) begin
+                if (wrdm_desc_ready_r2) begin
                     wrdm_desc_valid <= 1;
                     wrdm_desc_data <= done_desc;
-                    state <= WAIT;
 
                     // update tail
                     out_tail <= new_tail;
-                end
-            end
-            WAIT: begin
-                // TODO(sadok) should we ensure that wrdm_desc_ready was 1 at
-                // some point before that?
-                // the last data is fetched
-                // if (wrdm_desc_ready) begin
-                //     wrdm_desc_valid <= 0;
-                // end
-                if (frb_readvalid & (frb_address_r2 ==
-                                    (dma_base_addr + dma_size_r - 1))) begin
                     dma_done <= 1;
                     state <= IDLE;
+                end else begin
+                    dma_queue_full_cnt <= dma_queue_full_cnt + 1;
                 end
             end
             default: state <= IDLE;
         endcase
-
-        if (wrdm_desc_valid) begin
-            descriptor_id <= descriptor_id + 1'b1;
-        end
     end
 end
 

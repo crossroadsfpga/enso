@@ -94,6 +94,8 @@ logic [31:0] dm_eth_pkt_cnt_status;
 logic [31:0] dma_pkt_cnt_status;
 logic [31:0] dma_request_cnt_status;
 logic [31:0] rule_set_cnt_status;
+logic [31:0] dma_queue_full_cnt_status;
+logic [31:0] max_dma_queue_occup_status;
 
 //Register I/O
 logic  [511:0]  out_data;
@@ -248,9 +250,6 @@ logic [31:0] status_readdata_top;
 logic status_readdata_valid_pcie;
 logic [31:0] status_readdata_pcie;
 
-`ifdef SIM
-logic [63:0] datamover_cycles;
-`endif
 logic [31:0] in_pkt_cnt;
 logic [31:0] in_pkt_cnt_r1;
 logic [31:0] in_pkt_cnt_r2;
@@ -320,6 +319,13 @@ logic [31:0] dma_request_cnt_r2;
 logic [31:0] rule_set_cnt;
 logic [31:0] rule_set_cnt_r1;
 logic [31:0] rule_set_cnt_r2;
+logic [31:0] dma_queue_full_cnt;
+logic [31:0] dma_queue_full_cnt_r1;
+logic [31:0] dma_queue_full_cnt_r2;
+logic [31:0] dma_queue_occup;
+logic [31:0] max_dma_queue_occup;
+logic [31:0] max_dma_queue_occup_r1;
+logic [31:0] max_dma_queue_occup_r2;
 
 ///////////////////////////
 //Read and Write registers
@@ -351,12 +357,9 @@ begin
     end
 end
 
-//datamover clock domain
+// datamover clock domain
 always @(posedge clk_datamover) begin
-    if(rst_datamover)begin
-        `ifdef SIM
-            datamover_cycles <= 0;
-        `endif
+    if (rst_datamover) begin
         in_pkt_cnt <= 0;
         out_pkt_cnt_incomp <= 0;
         out_pkt_cnt_parser <= 0;
@@ -372,14 +375,8 @@ always @(posedge clk_datamover) begin
         dm_pcie_meta_cnt <= 0;
         dm_eth_pkt_cnt <= 0;
     end else begin
-        `ifdef SIM
-            datamover_cycles <= datamover_cycles + 1;
-        `endif
         if(input_comp_eth_valid & input_comp_eth_eop)begin
             in_pkt_cnt <= in_pkt_cnt + 1;
-            // `ifdef SIM
-            //     $display("%d: PKT %d", datamover_cycles, in_pkt_cnt);
-            // `endif
         end
 
         if(input_comp_metadata_valid & input_comp_metadata_ready)begin
@@ -428,7 +425,7 @@ always @(posedge clk_datamover) begin
     end
 end
 
-//pcie clock domain
+// pcie clock domain
 always @(posedge clk_pcie) begin
     if (rst_pcie) begin
         pcie_pkt_cnt <= 0;
@@ -436,6 +433,8 @@ always @(posedge clk_pcie) begin
         dma_pkt_cnt <= 0;
         dma_request_cnt <= 0;
         rule_set_cnt <= 0;
+        dma_queue_occup <= 0;
+        max_dma_queue_occup <= 0;
     end else begin
         if (pcie_pkt_valid & pcie_pkt_ready & pcie_pkt_eop) begin
             pcie_pkt_cnt <= pcie_pkt_cnt + 1;
@@ -451,6 +450,15 @@ always @(posedge clk_pcie) begin
         end
         if (pdumeta_cpu_valid) begin
             rule_set_cnt <= rule_set_cnt + 1;
+        end
+        if (pcie_wrdm_desc_valid && !pcie_wrdm_tx_valid) begin
+            dma_queue_occup <= dma_queue_occup + 1'b1;
+        end
+        if (!pcie_wrdm_desc_valid && pcie_wrdm_tx_valid) begin
+            dma_queue_occup <= dma_queue_occup - 1'b1;
+        end
+        if (dma_queue_occup > max_dma_queue_occup) begin
+            max_dma_queue_occup <= dma_queue_occup;
         end
     end
 end
@@ -527,6 +535,12 @@ always @(posedge clk_status) begin
     rule_set_cnt_r1                 <= rule_set_cnt;
     rule_set_cnt_r2                 <= rule_set_cnt_r1;
     rule_set_cnt_status             <= rule_set_cnt_r2;
+    dma_queue_full_cnt_r1           <= dma_queue_full_cnt;
+    dma_queue_full_cnt_r2           <= dma_queue_full_cnt_r1;
+    dma_queue_full_cnt_status       <= dma_queue_full_cnt_r2;
+    max_dma_queue_occup_r1          <= max_dma_queue_occup;
+    max_dma_queue_occup_r2          <= max_dma_queue_occup_r1;
+    max_dma_queue_occup_status      <= max_dma_queue_occup_r2;
 end
 
 //registers
@@ -566,6 +580,8 @@ always @(posedge clk_status) begin
                 8'd20 : status_readdata_top <= dma_pkt_cnt_status;
                 8'd21 : status_readdata_top <= dma_request_cnt_status;
                 8'd22 : status_readdata_top <= rule_set_cnt_status;
+                8'd23 : status_readdata_top <= dma_queue_full_cnt;
+                8'd24 : status_readdata_top <= max_dma_queue_occup;
 
                 default : status_readdata_top <= 32'h345;
             endcase
@@ -1075,6 +1091,7 @@ pcie_top pcie (
     .pdumeta_cpu_data       (pdumeta_cpu_data),
     .pdumeta_cpu_valid      (pdumeta_cpu_valid),
     .pdumeta_cnt            (pdumeta_cnt),
+    .dma_queue_full_cnt     (dma_queue_full_cnt),
     .clk_status             (clk_status),
     .status_addr            (status_addr),
     .status_read            (status_read),

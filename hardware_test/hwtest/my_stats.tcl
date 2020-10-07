@@ -53,8 +53,10 @@ set DM_PCIE_PKT         17
 set DM_PCIE_META        18
 set DM_ETH_PKT          19
 set DMA_PKT             20
-set DMA_REQUEST           21
+set DMA_REQUEST         21
 set RULE_SET            22
+set DMA_QUEUE_FULL      23
+set MAX_DMA_QUEUE       24
 
 #PCIE reg
 set PCIE_CTRL_REG       0
@@ -462,6 +464,8 @@ proc get_top_stats {} {
     global DMA_PKT
     global DMA_REQUEST
     global RULE_SET
+    global DMA_QUEUE_FULL
+    global MAX_DMA_QUEUE
 
     set fp [open "top_stats.txt" w+]
     read_top_reg IN_PKT            $IN_PKT            $fp
@@ -487,6 +491,8 @@ proc get_top_stats {} {
     read_top_reg DMA_PKT           $DMA_PKT           $fp
     read_top_reg DMA_REQUEST       $DMA_REQUEST       $fp
     read_top_reg RULE_SET          $RULE_SET          $fp
+    read_top_reg DMA_QUEUE_FULL    $DMA_QUEUE_FULL    $fp
+    read_top_reg MAX_DMA_QUEUE     $MAX_DMA_QUEUE     $fp
 
     close $fp
 }

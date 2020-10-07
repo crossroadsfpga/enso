@@ -199,7 +199,9 @@ typedef enum{
     DM_ETH_PKT,
     DMA_PKT,
     DMA_REQUEST,
-    RULE_SET
+    RULE_SET,
+    DMA_QUEUE_FULL,
+    MAX_DMA_QUEUE
 } c_state_t;
 
 c_state_t conf_state;
@@ -828,6 +830,24 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("RULE_SET:\t\t%d",top_readdata);
+                    conf_state <= DMA_QUEUE_FULL;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0017;
+                end
+            end
+            DMA_QUEUE_FULL: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("DMA_QUEUE_FULL:\t%d",top_readdata);
+                    conf_state <= MAX_DMA_QUEUE;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0018;
+                end
+            end
+            MAX_DMA_QUEUE: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("MAX_DMA_QUEUE:\t%d",top_readdata);
                     $display("done");
                     $finish;
                 end

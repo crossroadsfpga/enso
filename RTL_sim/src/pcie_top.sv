@@ -45,7 +45,8 @@ module pcie_top (
     output logic                  disable_pcie,
     output pdu_metadata_t         pdumeta_cpu_data,
     output logic                  pdumeta_cpu_valid,
-    input  logic   [9:0]          pdumeta_cnt,
+    input  logic [9:0]            pdumeta_cnt,
+    output logic [31:0]           dma_queue_full_cnt,
 
     // status register bus
     input  logic        clk_status,
@@ -601,7 +602,8 @@ fpga2cpu_pcie f2c_inst (
     .frb_readdata   (frb_readdata),
     .frb_readvalid  (frb_readvalid),
     .frb_address    (frb_address),
-    .frb_read       (frb_read)
+    .frb_read       (frb_read),
+    .dma_queue_full_cnt(dma_queue_full_cnt)
 );
 
 cpu2fpga_pcie c2f_inst (
