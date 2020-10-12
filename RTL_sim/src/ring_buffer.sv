@@ -33,6 +33,8 @@ parameter PDU_AWIDTH = ($clog2(PDU_DEPTH));
 localparam THRESHOLD = 64;
 localparam MAX_SLOT = PDU_DEPTH - THRESHOLD;
 
+logic [PDU_AWIDTH-1:0] next_base_addr;
+
 typedef enum
 {
     IDLE,
@@ -51,7 +53,6 @@ logic [PDU_AWIDTH-1:0] rd_addr_r1;
 logic [PDU_AWIDTH-1:0] rd_addr_r2;
 logic [PDU_AWIDTH-1:0] last_tail;
 logic wrap;
-
 
 localparam DESC_RBUF_DEPTH = PDU_DEPTH/2; // packets have a minimum of 2 flits
 
@@ -224,6 +225,7 @@ always @(posedge clk) begin
         dma_base_addr <= 0;
         desc_head <= 0;
         dma_queue <= 0;
+        next_base_addr <= 0;
     end else begin
         case (state)
             IDLE: begin
@@ -234,7 +236,8 @@ always @(posedge clk) begin
 
                     desc_head <= desc_head + 1'b1;
                     dma_start <= 1;
-                    dma_base_addr <= head;
+                    dma_base_addr <= next_base_addr;
+                    next_base_addr <= next_base_addr + current_desc.size;
                     state <= WAIT;
                 end
             end
