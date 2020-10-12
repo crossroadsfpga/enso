@@ -469,19 +469,6 @@ always@(posedge pcie_clk)begin
                     end
                 end
             end
-            WAIT_DMA: begin
-                if (dma_done) begin
-                    f2c_tail <= new_tail;
-                    $display("dma_done -- new_tail: %h", new_tail);
-
-                    // update the tail on BRAM
-                    q_table_tails_addr_a <= queue_id[APP_IDX_WIDTH-1:0];
-                    q_table_tails_wr_data_a <= new_tail;
-                    q_table_tails_wr_en_a <= 1;
-
-                    state <= IDLE;
-                end
-            end
             BRAM_DELAY_1: begin
                 state <= BRAM_DELAY_2;
             end
@@ -499,6 +486,19 @@ always@(posedge pcie_clk)begin
                 queue_id <= {1'b0, dma_queue_r};
 
                 state <= WAIT_DMA;
+            end
+            WAIT_DMA: begin
+                if (dma_done) begin
+                    f2c_tail <= new_tail;
+                    $display("dma_done -- new_tail: %h", new_tail);
+
+                    // update the tail on BRAM
+                    q_table_tails_addr_a <= queue_id[APP_IDX_WIDTH-1:0];
+                    q_table_tails_wr_data_a <= new_tail;
+                    q_table_tails_wr_en_a <= 1;
+
+                    state <= IDLE;
+                end
             end
             default: state <= IDLE;
         endcase

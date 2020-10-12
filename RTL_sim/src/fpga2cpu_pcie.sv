@@ -182,6 +182,7 @@ always @ (posedge clk) begin
         dma_done <= 0;
         dma_queue_full_cnt <= 0;
     end else begin
+        automatic logic dma_ctrl_ready = wrdm_desc_ready && wrdm_desc_ready_r2;
         case (state)
             IDLE: begin
                 dma_done <= 0;
@@ -198,7 +199,7 @@ always @ (posedge clk) begin
             end
             DESC: begin
                 // Have enough space for this transfer.
-                if (wrdm_desc_ready_r2 && free_slot >= dma_size_r) begin
+                if (dma_ctrl_ready && free_slot >= dma_size_r) begin
                     // Need wrap around
                     if (wrap) begin
                         wrdm_desc_valid <= 1;
@@ -210,13 +211,13 @@ always @ (posedge clk) begin
                         state <= DONE;
                     end
                 end
-                if (!wrdm_desc_ready_r2) begin
+                if (!dma_ctrl_ready) begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
                 end
             end
             DESC_WRAP: begin
                 // the previous request is consumed.
-                if (wrdm_desc_ready_r2) begin
+                if (dma_ctrl_ready) begin
                     wrdm_desc_valid <= 1;
                     wrdm_desc_data <= data_desc_high;
                     state <= DONE;
@@ -225,7 +226,7 @@ always @ (posedge clk) begin
                 end
             end
             DONE: begin
-                if (wrdm_desc_ready_r2) begin
+                if (dma_ctrl_ready) begin
                     wrdm_desc_valid <= 1;
                     wrdm_desc_data <= done_desc;
 

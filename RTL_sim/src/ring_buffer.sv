@@ -152,7 +152,7 @@ always @(posedge clk) begin
                     next_desc <= desc_wr_data;
                 end else begin
                     desc_rd_en <= 1;
-                    desc_rd_addr <= desc_head;
+                    desc_rd_addr <= desc_head + 1;
                 end
             end
         end
@@ -237,7 +237,11 @@ always @(posedge clk) begin
                     desc_head <= desc_head + 1'b1;
                     dma_start <= 1;
                     dma_base_addr <= next_base_addr;
-                    next_base_addr <= next_base_addr + current_desc.size;
+                    if ((next_base_addr + current_desc.size) >= MAX_SLOT) begin
+                        next_base_addr <= 0;
+                    end else begin
+                        next_base_addr <= next_base_addr + current_desc.size;
+                    end
                     state <= WAIT;
                 end
             end

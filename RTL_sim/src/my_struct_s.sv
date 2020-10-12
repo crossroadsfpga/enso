@@ -148,10 +148,10 @@ typedef struct packed
     logic [PADDING_WIDTH-1:0] padding;
 } metadata_t; //Metadata
 
-//PDU_DEPTH is number of 512 bits for fpga side f2c ring buffer 
+// PDU_DEPTH is the number of 512 bits for fpga side f2c ring buffer
+// (must be a power of two)
 localparam PDU_DEPTH = 4096;
 localparam PDU_AWIDTH = ($clog2(PDU_DEPTH));
-//PDU_ID_DEPTH is number of PDUs we buffer on FPGA side
 localparam PDU_NUM = 256;
 localparam PDUBUF_AWIDTH = ($clog2(PDU_NUM)+5);
 localparam PDUBUF_DEPTH = (32 * PDU_NUM);
