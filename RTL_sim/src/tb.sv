@@ -333,7 +333,7 @@ function print_pcie_desc(input pcie_desc_t pcie_desc);
     $display("");
 endfunction
 
-localparam DMA_DELAY = 64;
+localparam DMA_DELAY = 36;
 logic [7:0] pcie_delay_cnt;
 
 // DMA requests ring buffer
@@ -643,7 +643,8 @@ always @(posedge clk_status) begin
             READ_PCIE_START: begin
                 // can adjust this value to use read_pcie at different points
                 // right now we run at the end
-                if (cnt >= stop) begin
+                // make sure the last packets were read
+                if(cnt >= (stop + 1024 * DMA_DELAY)) begin
                     s_read <= 1;
                     conf_state <= READ_PCIE;
                     $display("read_pcie:");
@@ -663,11 +664,9 @@ always @(posedge clk_status) begin
             end
             IDLE: begin
                 s_write <= 0;
-                if(cnt>=stop)begin
-                    conf_state <= IN_PKT;
-                    s_read <= 1;
-                    s_addr <= 30'h2200_0000;
-                end
+                conf_state <= IN_PKT;
+                s_read <= 1;
+                s_addr <= 30'h2200_0000;
             end
             IN_PKT: begin
                 s_read <= 0;
