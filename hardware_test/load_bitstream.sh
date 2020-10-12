@@ -4,7 +4,9 @@ set -e
 VENDOR_ID="1172"
 DEVICE_ID="0000"
 
-quartus_pgm -c Intel\ Stratix\ 10\ MX\ FPGA\ Development\ Kit\ [1-12] ./load.cdf 
+FPGA_NB=${1:-"1-12"}
+
+quartus_pgm -c "Intel Stratix 10 MX FPGA Development Kit [$FPGA_NB]" ./load.cdf
 
 # remove device and force rescan, this will trigger the driver's probe function
 DEVICE_ADDR=$(lspci -nn | grep ${VENDOR_ID}:${DEVICE_ID} | awk '{print $1}')
