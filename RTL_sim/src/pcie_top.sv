@@ -105,9 +105,17 @@ logic [QUEUE_TABLE_HEADS_DWIDTH-1:0] q_table_heads_rd_data_b;
 logic [QUEUE_TABLE_L_ADDRS_DWIDTH-1:0] q_table_l_addrs_rd_data_b;
 logic [QUEUE_TABLE_H_ADDRS_DWIDTH-1:0] q_table_h_addrs_rd_data_b;
 logic q_table_tails_rd_en_a;
+logic q_table_tails_rd_en_a_r;
+logic q_table_tails_rd_en_a_r2;
 logic q_table_heads_rd_en_a;
+logic q_table_heads_rd_en_a_r;
+logic q_table_heads_rd_en_a_r2;
 logic q_table_l_addrs_rd_en_a;
+logic q_table_l_addrs_rd_en_a_r;
+logic q_table_l_addrs_rd_en_a_r2;
 logic q_table_h_addrs_rd_en_a;
+logic q_table_h_addrs_rd_en_a_r;
+logic q_table_h_addrs_rd_en_a_r2;
 logic q_table_tails_rd_en_b;
 logic q_table_heads_rd_en_b;
 logic q_table_l_addrs_rd_en_b;
@@ -446,21 +454,48 @@ always@(posedge pcie_clk)begin
             end
         end
 
+        q_table_tails_rd_en_a_r <= q_table_tails_rd_en_a;
+        q_table_tails_rd_en_a_r2 <= q_table_tails_rd_en_a_r;
+        q_table_heads_rd_en_a_r <= q_table_heads_rd_en_a;
+        q_table_heads_rd_en_a_r2 <= q_table_heads_rd_en_a_r;
+        q_table_l_addrs_rd_en_a_r <= q_table_l_addrs_rd_en_a;
+        q_table_l_addrs_rd_en_a_r2 <= q_table_l_addrs_rd_en_a_r;
+        q_table_h_addrs_rd_en_a_r <= q_table_h_addrs_rd_en_a;
+        q_table_h_addrs_rd_en_a_r2 <= q_table_h_addrs_rd_en_a_r;
+
         case (state)
             IDLE: begin
                 if (dma_start) begin
                     if (queue_id != {1'b0, dma_queue}) begin
-                        // TODO(sadok) We may be able to reduce the number of
-                        // cycles when switching queues by combinationally
-                        // assigning these signals
-                        q_table_tails_addr_a <= dma_queue;
-                        q_table_heads_addr_a <= dma_queue;
-                        q_table_l_addrs_addr_a <= dma_queue;
-                        q_table_h_addrs_addr_a <= dma_queue;
-                        q_table_tails_rd_en_a <= 1;
-                        q_table_heads_rd_en_a <= 1;
-                        q_table_l_addrs_rd_en_a <= 1;
-                        q_table_h_addrs_rd_en_a <= 1;
+                        // Intercept writes to the same address
+                        if ((q_table_tails_addr_b == dma_queue)
+                                && q_table_tails_wr_en_b) begin
+                            f2c_tail <= q_table_tails_wr_data_b;
+                        end else begin
+                            q_table_tails_addr_a <= dma_queue;
+                            q_table_tails_rd_en_a <= 1;
+                        end
+                        if ((q_table_heads_addr_b == dma_queue)
+                                && q_table_heads_wr_en_b) begin
+                            f2c_head <= q_table_heads_wr_data_b;
+                        end else begin
+                            q_table_heads_addr_a <= dma_queue;
+                            q_table_heads_rd_en_a <= 1;
+                        end
+                        if ((q_table_l_addrs_addr_b == dma_queue)
+                                && q_table_l_addrs_wr_en_b) begin
+                            f2c_kmem_addr[31:0] <= q_table_l_addrs_wr_data_b;
+                        end else begin
+                            q_table_l_addrs_addr_a <= dma_queue;
+                            q_table_l_addrs_rd_en_a <= 1;
+                        end
+                        if ((q_table_h_addrs_addr_b == dma_queue)
+                                && q_table_h_addrs_wr_en_b) begin
+                            f2c_kmem_addr[63:32] <= q_table_h_addrs_wr_data_b;
+                        end else begin
+                            q_table_h_addrs_addr_a <= dma_queue;
+                            q_table_h_addrs_rd_en_a <= 1;
+                        end
                         dma_queue_r <= dma_queue;
 
                         state <= BRAM_DELAY_1;
@@ -477,11 +512,18 @@ always@(posedge pcie_clk)begin
                 state <= SWITCH_QUEUE;
             end
             SWITCH_QUEUE: begin
-                f2c_tail <= q_table_tails_rd_data_a;
-                f2c_head <= q_table_heads_rd_data_a;
-                f2c_kmem_addr <= {
-                    q_table_h_addrs_rd_data_a, q_table_l_addrs_rd_data_a
-                };
+                if (q_table_tails_rd_en_a_r2) begin
+                    f2c_tail <= q_table_tails_rd_data_a;
+                end
+                if (q_table_heads_rd_en_a_r2) begin
+                    f2c_head <= q_table_heads_rd_data_a;
+                end
+                if (q_table_l_addrs_rd_en_a_r2) begin
+                    f2c_kmem_addr[31:0] <= q_table_l_addrs_rd_data_a;
+                end
+                if (q_table_h_addrs_rd_en_a_r2) begin
+                    f2c_kmem_addr[63:32] <= q_table_h_addrs_rd_data_a;
+                end
 
                 f2c_queue_ready <= 1;
                 queue_id <= {1'b0, dma_queue_r};
