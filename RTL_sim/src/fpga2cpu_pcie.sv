@@ -38,7 +38,8 @@ module fpga2cpu_pcie (
     input  logic                     frb_read,
 
     // counters
-    output logic [31:0]              dma_queue_full_cnt
+    output logic [31:0]              dma_queue_full_cnt,
+    output logic [31:0]              cpu_buf_full_cnt
 );
 
 localparam EP_BASE_ADDR = 32'h0004_0000;
@@ -181,6 +182,7 @@ always @ (posedge clk) begin
         out_tail <= 0;
         dma_done <= 0;
         dma_queue_full_cnt <= 0;
+        cpu_buf_full_cnt <= 0;
     end else begin
         automatic logic dma_ctrl_ready = wrdm_desc_ready && wrdm_desc_ready_r2;
         case (state)
@@ -213,6 +215,9 @@ always @ (posedge clk) begin
                 end
                 if (!dma_ctrl_ready) begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
+                end
+                if (free_slot < dma_size_r) begin
+                    cpu_buf_full_cnt <= cpu_buf_full_cnt + 1;
                 end
             end
             DESC_WRAP: begin

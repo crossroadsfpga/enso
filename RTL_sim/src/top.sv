@@ -95,6 +95,7 @@ logic [31:0] dma_pkt_cnt_status;
 logic [31:0] dma_request_cnt_status;
 logic [31:0] rule_set_cnt_status;
 logic [31:0] dma_queue_full_cnt_status;
+logic [31:0] cpu_buf_full_cnt_status;
 logic [31:0] max_dma_queue_occup_status;
 
 //Register I/O
@@ -322,6 +323,9 @@ logic [31:0] rule_set_cnt_r2;
 logic [31:0] dma_queue_full_cnt;
 logic [31:0] dma_queue_full_cnt_r1;
 logic [31:0] dma_queue_full_cnt_r2;
+logic [31:0] cpu_buf_full_cnt;
+logic [31:0] cpu_buf_full_cnt_r1;
+logic [31:0] cpu_buf_full_cnt_r2;
 logic [31:0] dma_queue_occup;
 logic [31:0] max_dma_queue_occup;
 logic [31:0] max_dma_queue_occup_r1;
@@ -540,6 +544,9 @@ always @(posedge clk_status) begin
     dma_queue_full_cnt_r1           <= dma_queue_full_cnt;
     dma_queue_full_cnt_r2           <= dma_queue_full_cnt_r1;
     dma_queue_full_cnt_status       <= dma_queue_full_cnt_r2;
+    cpu_buf_full_cnt_r1             <= cpu_buf_full_cnt;
+    cpu_buf_full_cnt_r2             <= cpu_buf_full_cnt_r1;
+    cpu_buf_full_cnt_status         <= cpu_buf_full_cnt_r2;
     max_dma_queue_occup_r1          <= max_dma_queue_occup;
     max_dma_queue_occup_r2          <= max_dma_queue_occup_r1;
     max_dma_queue_occup_status      <= max_dma_queue_occup_r2;
@@ -583,7 +590,8 @@ always @(posedge clk_status) begin
                 8'd21 : status_readdata_top <= dma_request_cnt_status;
                 8'd22 : status_readdata_top <= rule_set_cnt_status;
                 8'd23 : status_readdata_top <= dma_queue_full_cnt_status;
-                8'd24 : status_readdata_top <= max_dma_queue_occup_status;
+                8'd24 : status_readdata_top <= cpu_buf_full_cnt_status;
+                8'd25 : status_readdata_top <= max_dma_queue_occup_status;
 
                 default : status_readdata_top <= 32'h345;
             endcase
@@ -1094,6 +1102,7 @@ pcie_top pcie (
     .pdumeta_cpu_valid      (pdumeta_cpu_valid),
     .pdumeta_cnt            (pdumeta_cnt),
     .dma_queue_full_cnt     (dma_queue_full_cnt),
+    .cpu_buf_full_cnt       (cpu_buf_full_cnt),
     .clk_status             (clk_status),
     .status_addr            (status_addr),
     .status_read            (status_read),
