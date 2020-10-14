@@ -12,6 +12,8 @@ module tb;
 `define NB_QUEUES 4
 `endif
 
+localparam DMA_DELAY = 36;
+
 // duration for each bit = 20 * timescale = 20 * 1 ns  = 20ns
 localparam period = 10;
 localparam period_rx = 2.56;
@@ -23,7 +25,7 @@ localparam period_pcie = 4;
 localparam data_width = 528;
 localparam lo = 0;
 localparam hi = `PKT_FILE_NB_LINES;
-localparam stop = (hi*2*1.25+100000);
+localparam stop = (hi*2*1.25 + 100000 + 1024 * DMA_DELAY);
 localparam nb_queues = `NB_QUEUES;
 
 logic  clk_status;
@@ -334,7 +336,6 @@ function print_pcie_desc(input pcie_desc_t pcie_desc);
     $display("");
 endfunction
 
-localparam DMA_DELAY = 36;
 logic [7:0] pcie_delay_cnt;
 
 // DMA requests ring buffer
@@ -378,7 +379,7 @@ always @(posedge clk_pcie) begin
         if ((dma_buf_head != dma_buf_tail) || pcie_delay_cnt) begin
             pcie_delay_cnt <= pcie_delay_cnt + 1'b1;
             if (pcie_delay_cnt == 0) begin
-                delayed_pcie_wrdm_desc_data <= dma_buf[dma_buf_tail]; // pcie_wrdm_desc_data;
+                delayed_pcie_wrdm_desc_data <= dma_buf[dma_buf_tail];
                 dma_buf_tail <= dma_buf_tail + 1'b1;
             end else if (pcie_delay_cnt == DMA_DELAY-1) begin
                 delayed_pcie_wrdm_desc_valid <= 1;
@@ -391,8 +392,6 @@ always @(posedge clk_pcie) begin
     dma_buf_full_r3 <= dma_buf_full_r2;
 end
 
-logic [31:0] head;
-logic [31:0] tail;
 logic [31:0] cnt_delay;
 logic [PCIE_ADDR_WIDTH-1:0] cfg_queue;
 logic [63:0] nb_config_queues;
@@ -436,8 +435,6 @@ always @(posedge clk_pcie) begin
 
     if (rst) begin
         pcie_state <= PCIE_SET_F2C_QUEUE;
-        head <= 0;
-        tail <= 0;
         cfg_queue <= 0;
         cnt_delay <= 0;
         nb_config_queues <= 0;
@@ -555,19 +552,22 @@ always @(posedge clk_pcie) begin
 
                     if (pcie_desc.immediate) begin
                         automatic logic [7:0] queue;
+                        automatic logic [31:0] head;
+                        automatic logic [31:0] tail;
 
                         // update head using the tail we got from the descriptor
                         // to simulate reading the packets
-                        tail <= pcie_desc.saddr_data[31:0];
-                        head <= pcie_desc.saddr_data[31:0];
+                        tail = pcie_desc.saddr_data[31:0];
+                        head = tail;
                         queue = pcie_desc.dst_addr[31:24];
 
-                        $display("Receiving packet on queue %d (t=%h, h=%h)", queue, tail, head);
+                        $display("Receiving packet on queue %d (t=%h, h=%h)",
+                                 queue, tail, head);
 
                         // update head on the FPGA
                         pcie_write_0 <= 1;
                         pcie_address_0 <= queue << 12;
-                        pcie_writedata_0[63:32] <= pcie_desc.saddr_data[31:0];
+                        pcie_writedata_0[63:32] <= head;
                         pcie_byteenable_0[7:4] <= 8'hff;
 
                         pcie_wrdm_tx_valid <= 1;
@@ -645,7 +645,7 @@ always @(posedge clk_status) begin
                 // can adjust this value to use read_pcie at different points
                 // right now we run at the end
                 // make sure the last packets were read
-                if(cnt >= (stop + 1024 * DMA_DELAY)) begin
+                if(cnt >= stop) begin
                     s_read <= 1;
                     conf_state <= READ_PCIE;
                     $display("read_pcie:");
