@@ -500,6 +500,10 @@ proc get_top_stats {} {
     close $fp
 }
 
+proc s {} {
+    get_top_stats
+}
+
 proc read_top_reg {reg_name reg_index fp} {
     global TOP_REG_BASE
     set rdata [reg_read $TOP_REG_BASE $reg_index]
