@@ -10,13 +10,16 @@
 #define NB_RULES_IN_LINE (RULE_ID_LINE_LEN/RULE_ID_SIZE)
 
 // N * 512 bits, N * 16 dwords
-#define BUFFER_SIZE 8191
+#define BUFFER_SIZE 65535
 #define C2F_BUFFER_SIZE 512
+
+// (BUFFER_SIZE + 1) should be page aligned (in flits)
+#define PAGE_ALIGNED_BUFFER_SIZE ((BUFFER_SIZE / 64 + 1) * 64 - 1)
 
 // In terms of dwords. 1 means the first 16 dwords are global registers
 // the 1024 is the extra page for memory-copy
 // if changed, should also change the kernel
-#define C2F_BUFFER_OFFSET ((BUFFER_SIZE+1)*16 + 1024)
+#define C2F_BUFFER_OFFSET ((PAGE_ALIGNED_BUFFER_SIZE+1)*16 + 1024)
 
 // 4 bytes, 1 dword
 #define HEAD_OFFSET 4

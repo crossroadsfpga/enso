@@ -43,8 +43,8 @@
 // #include "intel_fpga_pcie_link_test.hpp"
 #include "pcie.h"
 
-// Add one more page for rounding pkts
-static const unsigned f2c_allocated_size = (BUFFER_SIZE + 1) * 64 + 4096;
+// C2F_BUFFER_OFFSET is in dwords
+static const unsigned f2c_allocated_size = C2F_BUFFER_OFFSET * 4;
 static const unsigned c2f_allocated_size = C2F_BUFFER_SIZE * 64;
 static const unsigned allocated_size = f2c_allocated_size + c2f_allocated_size;
 

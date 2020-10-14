@@ -627,7 +627,7 @@ always @(posedge clk_status) begin
     end else begin
         case(conf_state)
             CONFIGURE: begin
-                automatic logic [25:0] buf_size = 8191;
+                automatic logic [25:0] buf_size = 65535;
                 // automatic logic [25:0] buf_size = 31;
                 conf_state <= READ_PCIE_START;
                 s_addr <= 30'h2A00_0000;
