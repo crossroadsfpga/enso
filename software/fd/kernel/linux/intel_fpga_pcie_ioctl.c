@@ -83,8 +83,8 @@ static int get_queue(struct chr_dev_bookkeep *chr_dev_bk, long regfd);
 long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
                                     unsigned long uarg)
 {
-    struct chr_dev_bookkeep *chr_dev_bk;
-    struct dev_bookkeep *dev_bk;
+    struct chr_dev_bookkeep *chr_dev_bk = NULL;
+    struct dev_bookkeep *dev_bk = NULL;
     long retval = 0;
     int numvfs;
 
@@ -117,10 +117,10 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
     }
 
     // Retrieve bookkeeping information.
-    if (!filp) return -1;
-    chr_dev_bk = filp->private_data;
-    if (!chr_dev_bk) return -1;
-    dev_bk = chr_dev_bk->dev_bk;
+    if (filp)
+        chr_dev_bk = filp->private_data;
+    if (chr_dev_bk)
+        dev_bk = chr_dev_bk->dev_bk;
 
     // Determine access type.
     switch (cmd) {

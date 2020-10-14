@@ -62,6 +62,9 @@ int handle_event(int queue_id0)
     efd_file = fcheck_files(task->files, fd);
     rcu_read_unlock();
 
+    if (!efd_file)
+        return 0;
+
     efd_ctx = eventfd_ctx_fileget(efd_file);
     if (efd_ctx == 0) {
         spin_unlock_irqrestore(&event_lock, event_flags);

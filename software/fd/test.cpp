@@ -41,11 +41,11 @@ int main()
         int i;
 
         printf("lets start\n");
-        int timeout = 5;
+        int timeout = 500;
         int maxevents = 10;
         for(i = 0; i < 5; i++) {
             int waited = epoll_wait(epfd, &e_fd, maxevents, timeout);
-            printf("hi!\n");
+            printf("hi! pending: %d\n", waited);
             sleep(3);
         }
         printf("done\n");
