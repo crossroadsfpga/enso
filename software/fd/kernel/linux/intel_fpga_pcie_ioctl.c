@@ -45,6 +45,7 @@
 #include "intel_fpga_pcie_dma.h"
 #include "intel_fpga_pcie_ioctl.h"
 #include "intel_fpga_pcie_setup.h"
+#include "event_queue.h"
 
 //In bytes
 #define FPGA2CPU_OFFSET 8
@@ -63,6 +64,7 @@ static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg);
 static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg);
 static long get_ktimer(struct dev_bookkeep *dev_bk,
                        unsigned int __user *user_addr);
+static int get_queue(struct chr_dev_bookkeep *chr_dev_bk, long regfd);
 
 
 /******************************************************************************
@@ -115,7 +117,9 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
     }
 
     // Retrieve bookkeeping information.
+    if (!filp) return -1;
     chr_dev_bk = filp->private_data;
+    if (!chr_dev_bk) return -1;
     dev_bk = chr_dev_bk->dev_bk;
 
     // Determine access type.
@@ -161,6 +165,9 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
     case INTEL_FPGA_PCIE_IOCTL_GET_KTIMER:
         retval = get_ktimer(dev_bk, (unsigned int __user *)uarg);
         break;
+    case INTEL_FPGA_PCIE_IOCTL_GET_QUEUE:
+        retval = get_queue(chr_dev_bk, uarg);
+        break;
     default:
         retval = -ENOTTY;
     }
@@ -168,6 +175,22 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
     return retval;
 }
 
+/** creates a queue, associates regfd with it **/
+static int get_queue(struct chr_dev_bookkeep *chr_dev_bk, long regfd)
+{
+    int i;
+    printk(KERN_INFO "get_queue!\n");
+    // should probably validate regfd TODO
+    for (i = 0; i < QUEUE_COUNT; i++) {
+        if (queue_map[i] == 0) {
+            queue_map[i] = (int)regfd;
+            tasks[i] = current;
+            printk(KERN_INFO "currently getting queue: %lx\n", current);
+            break;
+        }
+    }
+    return i;
+}
 
 /******************************************************************************
  * Helper functions
@@ -538,7 +561,7 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
     iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET + core_id * PAGE_SIZE);
     iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4 + core_id * PAGE_SIZE);
 
-    // iowrite32(kmem_addr_l + C2F_BUFFER_OFFSET, ep_addr + CPU2FPGA_OFFSET + 
+    // iowrite32(kmem_addr_l + C2F_BUFFER_OFFSET, ep_addr + CPU2FPGA_OFFSET +
     //           core_id * 32);
     // iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4 + core_id * 32);
 

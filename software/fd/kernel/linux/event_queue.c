@@ -34,6 +34,11 @@
 #include "event_queue.h"
 #include "event_handler.h"
 
+DEFINE_SPINLOCK(event_lock);
+volatile int queue_map[QUEUE_COUNT] = {0};
+struct task_struct * volatile tasks[QUEUE_COUNT] = {0};
+unsigned long event_flags = 0;
+
 // HACK(sadok) number of queues should not be fixed
 #define NB_QUEUES 2
 

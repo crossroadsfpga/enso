@@ -44,6 +44,11 @@ typedef struct kthread_struct
 }
 event_kthread_data_t;
 
+extern spinlock_t event_lock;
+extern volatile int queue_map[QUEUE_COUNT];
+extern struct task_struct * volatile tasks[QUEUE_COUNT];
+extern unsigned long event_flags;
+
 int event_queue_loop(event_kthread_data_t* data);
 int launch_event_kthread(void);
 void stop_event_kthread(void);

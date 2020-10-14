@@ -31,36 +31,47 @@
  */
 
 #include <linux/printk.h>
+#include <linux/eventfd.h>
+#include <linux/fdtable.h>
 #include "event_handler.h"
+#include "event_queue.h"
 #include "intel_fpga_pcie_chr.h"
 
-extern spinlock_t event_lock;
-extern volatile int chr_events[128];
-extern volatile int queue_map[128];
-extern struct task_struct * volatile blocked_events[128];
-extern unsigned long event_flags;
-
-int handle_event(int queue_id)
+int handle_event(int queue_id0)
 {
-    int num_events;
-    struct task_struct *thread_struct;
-    int queue_id1 = -1;
+    int fd;
+    struct file *efd_file = NULL;
+    struct eventfd_ctx *efd_ctx = NULL;
+    struct task_struct * task = NULL;
 
     spin_lock_irqsave(&event_lock, event_flags);
 
-    queue_id1 = queue_map[queue_id]; // (soup) change to var size
-    if (queue_id1 <= 0) {
+    fd = queue_map[queue_id0]; // (soup) change to var size
+    if (fd <= 0) {
         spin_unlock_irqrestore(&event_lock, event_flags);
         return 0;
     }
 
-    num_events = ++chr_events[queue_id1];
-    thread_struct = blocked_events[queue_id1];
-    if (num_events > 0 && thread_struct) {
-        printk(KERN_INFO "Waking up queue %i: %i events\n",
-               queue_id1, num_events);
-        wake_up_process(thread_struct);
+    task = tasks[queue_id0];
+    if (!task) {
+        spin_unlock_irqrestore(&event_lock, event_flags);
+        return 0;
     }
+
+    rcu_read_lock();
+    efd_file = fcheck_files(task->files, fd);
+    rcu_read_unlock();
+
+    efd_ctx = eventfd_ctx_fileget(efd_file);
+    if (efd_ctx == 0) {
+        spin_unlock_irqrestore(&event_lock, event_flags);
+        printk(KERN_INFO "eventfd_ctx_fileget failed\n");
+        return -1;
+    }
+
+    printk(KERN_INFO "eventfd_signal begin\n");
+    eventfd_signal(efd_ctx, 1);
+    printk(KERN_INFO "evenfd_signal end\n");
 
     spin_unlock_irqrestore(&event_lock, event_flags);
 

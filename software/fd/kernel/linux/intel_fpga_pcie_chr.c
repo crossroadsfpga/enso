@@ -45,6 +45,7 @@
 #include "intel_fpga_pcie_chr.h"
 #include "intel_fpga_pcie_ioctl.h"
 #include "intel_fpga_pcie_setup.h"
+#include "event_queue.h"
 
 // #define FPGA_ATTACHED
 
@@ -58,7 +59,6 @@ static ssize_t chr_read(struct file *filp, char __user *buf,
 static ssize_t chr_write(struct file *filp, const char __user *buf,
                          size_t count, loff_t *offp);
 static loff_t chr_llseek(struct file *filp, loff_t off, int whence);
-static int chr_fsync(struct file *, loff_t, loff_t, int datasync);
 static int chr_mmap(struct file *filp, struct vm_area_struct *vma);
 static void chr_vma_close(struct vm_area_struct *vma);
 static ssize_t chr_access(struct file *filp, const char __user *buf,
@@ -100,7 +100,6 @@ const struct file_operations intel_fpga_pcie_fops = {
     .read           = chr_read,
     .write          = chr_write,
     .llseek         = chr_llseek,
-    .fsync          = chr_fsync,
     .unlocked_ioctl = intel_fpga_pcie_unlocked_ioctl,
     .mmap           = chr_mmap,
 };
@@ -108,53 +107,6 @@ const struct file_operations intel_fpga_pcie_fops = {
 const struct vm_operations_struct intel_fpga_vm_ops = {
     .close  = chr_vma_close,
 };
-
-DEFINE_SPINLOCK(event_lock);
-volatile int chr_events[QUEUE_COUNT] = {0}; // app queue -> # events, semaphore-like
-volatile int queue_map[QUEUE_COUNT] = {0};
-struct task_struct * volatile blocked_events[QUEUE_COUNT] = {0}; // app queue -> tid map
-unsigned long event_flags = 0;
-
-/**
- * chr_flush()
- */
-static int chr_fsync(struct file *f, loff_t x, loff_t y, int datasync)
-{
-    int i = 0;
-    int queueid1 = -1;
-    int potential_queueid1 = -1;
-    printk(KERN_INFO "flush!!!\n");
-
-    // assign queueid1 if need be
-    spin_lock_irqsave(&event_lock, event_flags);
-    for (i = 1; i < QUEUE_COUNT; i++) {
-        if (blocked_events[i] == current) {
-            queueid1 = i;
-            break;
-        }
-        if ((blocked_events[i] == 0) && (potential_queueid1 == -1)) {
-            potential_queueid1 = i;
-        }
-    }
-    if (queueid1 == -1) {
-        blocked_events[potential_queueid1] = current;
-        queueid1 = potential_queueid1;
-    }
-
-    // fetch a queueid0
-    for (i = 0; i < QUEUE_COUNT; i++) {
-        if (queue_map[i] == 0) {
-            queue_map[i] = queueid1;
-            break;
-        }
-    }
-    spin_unlock_irqrestore(&event_lock, event_flags);
-
-    // do something with queueid0 (soup)
-    printk(KERN_INFO "queueid1: %d\n", queueid1);
-    printk(KERN_INFO "queueid0: %d\n", i);
-    return queueid1;
-}
 
 /**
  * chr_open() - Responds to the system call open(2). Opens the
@@ -177,7 +129,7 @@ static int chr_open(struct inode *inode, struct file *filp)
     struct dev_bookkeep *dev_bk;
     unsigned int num_dev_bks;
 
-    printk(KERN_INFO "open!!!");
+    printk(KERN_INFO "open!!! current: %lx\n", current);
 
 #ifdef FPGA_ATTACHED
 
@@ -249,7 +201,6 @@ static int chr_open(struct inode *inode, struct file *filp)
  */
 static int chr_release(struct inode *inode, struct file *filp)
 {
-
     printk(KERN_INFO "release!!!\n");
 
 #ifdef FPGA_ATTACHED
@@ -287,40 +238,7 @@ static int chr_release(struct inode *inode, struct file *filp)
 static ssize_t chr_read(struct file *filp, char __user *buf,
                         size_t count, loff_t *offp)
 {
-    int queueid1 = -1;
-    int num_events = 0;
-    int i = 0;
-
-    printk(KERN_INFO "read!!!\n");
-
-    set_current_state(TASK_INTERRUPTIBLE);
-
-    spin_lock_irqsave(&event_lock, event_flags);
-    for (i = 0; i < QUEUE_COUNT; i++) { // todo improve
-        if (blocked_events[i] == current) {
-            queueid1 = i;
-            break;
-        }
-    }
-    if (queueid1 == -1) {
-        spin_unlock_irqrestore(&event_lock, event_flags);
-        return -1;
-    }
-
-    chr_events[queueid1] -= count;
-    num_events = chr_events[queueid1];
-
-    if (num_events <= 0) {
-        spin_unlock_irqrestore(&event_lock, event_flags);
-        schedule();
-        spin_lock_irqsave(&event_lock, event_flags);
-    }
-
-    set_current_state(TASK_RUNNING);
-    num_events = chr_events[queueid1];
-
-    spin_unlock_irqrestore(&event_lock, event_flags);
-    return num_events;
+    return 0;
 }
 
 /**
