@@ -1,6 +1,12 @@
 CXX = g++
 LD = g++
+
+ifdef BUF_SIZE
+CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O2 -fPIC -D BUFFER_SIZE=$(BUF_SIZE)
+else
 CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O2 -fPIC
+endif
+
 LDFLAGS = -O2
 
 SRCS = fd.cpp pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp

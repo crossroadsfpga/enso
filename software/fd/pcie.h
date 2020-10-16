@@ -9,8 +9,11 @@
 #define RULE_ID_SIZE 2 // bytes
 #define NB_RULES_IN_LINE (RULE_ID_LINE_LEN/RULE_ID_SIZE)
 
-// N * 512 bits, N * 16 dwords
+#ifndef BUFFER_SIZE
+// This should be the max buffer supported by the hardware, we may override this
+// value when compiling. It is defined in number of flits (64 bytes)
 #define BUFFER_SIZE 65535
+#endif
 #define C2F_BUFFER_SIZE 512
 
 // (BUFFER_SIZE + 1) should be page aligned (in flits)
