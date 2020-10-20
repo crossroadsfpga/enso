@@ -9,7 +9,7 @@
 typedef unsigned short sa_family_t;
 typedef unsigned int socklen_t;
 
-#define MAX_NB_SOCKETS 100 // TODO(sadok) support more than 100
+#define MAX_NB_SOCKETS 1024
 
 int socket(int domain, int type, int protocol);
 
