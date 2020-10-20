@@ -150,7 +150,7 @@ typedef struct packed
 
 // PDU_DEPTH is the number of 512 bits for fpga side f2c ring buffer
 // (must be a power of two)
-localparam PDU_DEPTH = 4096;
+localparam PDU_DEPTH = 8192;
 localparam PDU_AWIDTH = ($clog2(PDU_DEPTH));
 localparam PDU_NUM = 256;
 localparam PDUBUF_AWIDTH = ($clog2(PDU_NUM)+5);
