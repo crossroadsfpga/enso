@@ -184,7 +184,8 @@ always @ (posedge clk) begin
         dma_queue_full_cnt <= 0;
         cpu_buf_full_cnt <= 0;
     end else begin
-        automatic logic dma_ctrl_ready = wrdm_desc_ready && wrdm_desc_ready_r2;
+        automatic logic dma_ctrl_ready = wrdm_desc_ready && wrdm_desc_ready_r1 
+                                         && wrdm_desc_ready_r2;
         case (state)
             IDLE: begin
                 dma_done <= 0;
