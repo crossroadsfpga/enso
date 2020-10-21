@@ -9,6 +9,7 @@ CUR_DIR=$(pwd)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 BITSTREAM_DESTINATION=${1:-$CUR_DIR}
 
+echo "BITSTREAM_DESTINATION: $BITSTREAM_DESTINATION"
 QUARTUS_STA_LOG_FILE="quartus_sta.log"
 
 # exit when error occurs
