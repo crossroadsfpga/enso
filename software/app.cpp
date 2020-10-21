@@ -72,7 +72,7 @@ int main(int argc, const char* argv[])
             addr.sin_addr.s_addr = inet_addr("10.0.0.2"); // htonl(INADDR_ANY);
             addr.sin_port = htons(port);
 
-            if (bind(socket_fd, (struct sockaddr*) &addr, nb_rules)) {
+            if (bind(socket_fd, (struct sockaddr*) &addr, nb_rules, nb_rules)) {
                 std::cerr << "Problem binding socket (" << errno << "): " << strerror(errno) <<  std::endl;
                 exit(3);
             }

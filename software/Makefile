@@ -8,16 +8,20 @@ SRCS = app.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
 EXEC = app
 
+DISPATCH_SRCS = dispatch.cpp
+DISPATCH_OBJS = $(subst .cpp,.o,$(DISPATCH_SRCS))
+DISPATCH_EXEC = dispatch
+
 # switch to use static or dynamic library
 # LIB = fd/libfd.a
 LIB = fd/libfd.so
 
-all: $(EXEC) .depend
+all: $(EXEC) $(DISPATCH_EXEC) .depend
 
 .cpp.o:
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-.depend: $(SRCS)
+.depend: $(SRCS) $(DISPATCH_SRCS)
 	$(RM) ./.depend
 	$(CXX) $(CXXFLAGS) -MM $^ >> ./.depend
 
@@ -32,6 +36,9 @@ fd/libfd.so:
 $(EXEC): $(LIB) $(OBJS)
 	$(LD) $(OBJS) $(LDFLAGS) -o $(EXEC)
 
+$(DISPATCH_EXEC): $(LIB) $(DISPATCH_OBJS)
+	$(LD) $(DISPATCH_OBJS) $(LDFLAGS) -o $(DISPATCH_EXEC)
+
 clean:
-	$(RM) $(EXEC) $(OBJS) .depend
+	$(RM) $(EXEC) $(OBJS) $(DISPATCH_OBJS) .depend
 	+$(MAKE) clean -C fd

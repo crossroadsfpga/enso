@@ -248,7 +248,8 @@ void advance_ring_buffer(socket_internal* socket_entry)
 }
 
 // FIXME(sadok) This should be in the kernel
-int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
+int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
+                         unsigned int nb_queues)
 {
     block_s block;
     pcie_block_t* global_block = (pcie_block_t *) socket_entry->kdata;
@@ -260,6 +261,7 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
     }
 
 #ifdef CONTROL_MSG
+    unsigned next_queue = 0;
     for (unsigned i = 0; i < nb_rules; ++i) {
         block.pdu_id = 0;
         block.dst_port = 80;
@@ -269,7 +271,9 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
         block.protocol = 0x11;
         block.pdu_size = 0x0;
         block.pdu_flit = 0x0;
-        block.queue_id = 1; // FIXME(sadok) specify the relevant queue
+        block.queue_id = next_queue; // FIXME(sadok) specify the relevant queue
+
+        next_queue = (next_queue + 1) % nb_queues;
 
         // std::cout << "Setting rule: " << nb_rules << std::endl;
         // print_block(&block);
@@ -279,8 +283,8 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules)
         asm volatile ("" : : : "memory"); // compiler memory barrier
         uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
 
-        asm volatile ("" : : : "memory"); // compiler memory barrier
-        print_pcie_block(uio_data_bar2);
+        // asm volatile ("" : : : "memory"); // compiler memory barrier
+        // print_pcie_block(uio_data_bar2);
     }
 #endif // CONTROL_MSG
 

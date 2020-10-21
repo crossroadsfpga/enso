@@ -115,7 +115,8 @@ typedef struct {
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues);
 int dma_run(socket_internal* socket_entry, void** buf, size_t len);
 void advance_ring_buffer(socket_internal* socket_entry);
-int send_control_message(socket_internal* socket_entry, unsigned int nb_rules);
+int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
+                         unsigned int nb_queues);
 int dma_finish(socket_internal* socket_entry);
 void print_pcie_block(pcie_block_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
@@ -123,6 +124,6 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev);
 void print_block(block_s *block);
 void fill_block(uint32_t *addr, block_s *block);
 uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
-         block_s *block, uint32_t *kdata);
+                       block_s *block, uint32_t *kdata);
 
 #endif // PCIE_H

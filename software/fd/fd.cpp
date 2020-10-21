@@ -53,10 +53,13 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
 int bind(
     int sockfd,
     const struct sockaddr *addr __attribute__((unused)),
-    socklen_t addrlen // HACK(sadok) specifying number of rules
+    socklen_t addrlen, // HACK(sadok) specifying number of rules
+    unsigned nb_queues // HACK(sadok) should not have this last argument in the
+                       //             bind call
 )
 {
     socket_internal* socket = &open_sockets[sockfd];
+    unsigned nb_rules = addrlen;
 
     // FIXME(sadok) we currently only bind sockets on app 0
     if (socket->app_id != 0) {
@@ -64,7 +67,7 @@ int bind(
         return 0;
     }
 
-    if (send_control_message(socket, addrlen)) {
+    if (send_control_message(socket, nb_rules, nb_queues)) {
         std::cerr << "Could not send control message" << std::endl;
         return -1;
     }
