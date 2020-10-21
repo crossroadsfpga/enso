@@ -106,6 +106,7 @@ typedef struct {
     uint32_t last_flits;
     uint32_t* tail_ptr;
     uint32_t* head_ptr;
+    uint32_t cpu_tail;
     uint32_t cpu_head;
     uint32_t c2f_cpu_tail;
     uint32_t nb_head_updates;

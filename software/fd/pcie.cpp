@@ -123,14 +123,20 @@ static std::chrono::time_point<std::chrono::high_resolution_clock> start;
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
     unsigned int cpu_head = socket_entry->cpu_head;
-    unsigned int cpu_tail;
+    unsigned int cpu_tail = socket_entry->cpu_tail;
     int free_slot; // number of free slots in ring buffer
     unsigned int copy_size;
     uint32_t* kdata = socket_entry->kdata;
     uint32_t pdu_flit;
     block_s pdu; //current PDU block
 
-    cpu_tail = *(socket_entry->tail_ptr);
+    // avoid reading tail by only looking at it once we have no packet left
+    // this prevents cache misses
+    if (cpu_tail == cpu_head) {
+        cpu_tail = *(socket_entry->tail_ptr);
+        socket_entry->cpu_tail = cpu_tail;
+    }
+    
     if (unlikely(cpu_tail == cpu_head)) {
         socket_entry->last_flits = 0;
         return 0;
