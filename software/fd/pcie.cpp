@@ -54,23 +54,6 @@ static inline uint32_t get_block_payload(uint32_t *addr, void** payload_ptr,
     uint32_t len = addr[PDU_SIZE_OFFSET];
     *pdu_flit = addr[PDU_FLIT_OFFSET];
     *payload_ptr = (void*) &addr[16];
-    // *payload_ptr = (void*) (((uint8_t*) &addr[16]) + 14 + 20 + 8);
-    // // use IPv4 total length and decrement the IPv4 and UDP header sizes
-    // uint32_t len = ntohs(*((uint16_t*) (((uint8_t*) &addr[16]) + 14 + 2)));
-    // // for (uint32_t i = 0; i < 42; i++) {
-    // //     printf("%02x ", ((uint8_t*) &addr[16])[i]);
-    // //     if ((i + 1) % 8 == 0) {
-    // //         printf(" ");
-    // //     }
-    // //     if ((i + 1) % 16 == 0) {
-    // //         printf("\n");
-    // //     }
-    // // }
-    // if (unlikely(len < 28 || len > 1500)) {
-    //     std::cerr << "IPv4 length is weird: " << len << std::endl;
-    //     exit(1);
-    // }
-    // len -= 28; // decrement the IPv4 and UDP headers
     return len;
 }
 
@@ -145,6 +128,7 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     unsigned int copy_size;
     uint32_t* kdata = socket_entry->kdata;
     uint32_t pdu_flit;
+    block_s pdu; //current PDU block
 
     cpu_tail = *(socket_entry->tail_ptr);
     if (unlikely(cpu_tail == cpu_head)) {
@@ -173,16 +157,14 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
         return -1;
     }
 
-    block_s pdu; //current PDU block
-
     // make sure we are reading the packet
     fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
     // print_block(&pdu);
 
-    // fill in the pdu hdr
-    // fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
     uint32_t payload_size = get_block_payload(&kdata[(cpu_head + 1) * 16], buf,
         &pdu_flit);
+    // TODO(sadok) when writing a stream, we may cut the stream instead of
+    // reporting an error
     if (unlikely(payload_size > len)) {
         std::cerr << "Buffer is too short to fit a packet (" << payload_size << ")" << std::endl;
         return 0;
