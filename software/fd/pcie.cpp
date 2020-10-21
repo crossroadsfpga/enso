@@ -81,6 +81,9 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     int app_id;
     intel_fpga_pcie_dev *dev = socket_entry->dev;
 
+    printf("Running with HEAD_UPDATE_PERIOD: %i\n", HEAD_UPDATE_PERIOD);
+    printf("Running with BUFFER_SIZE: %i\n", BUFFER_SIZE);
+
     // FIXME(sadok) should find a better identifier than core id
     app_id = sched_getcpu() * nb_queues + socket_id;
     if (app_id < 0) {
@@ -233,9 +236,8 @@ void advance_ring_buffer(socket_internal* socket_entry)
 
     // HACK(sadok) there seems to be a limitation to the rate of updates we
     // can issue to the MMIO region. This ensures that we reduce this number.
-    // However, it is not yet clear what the threshhold should be here, 10 seems
-    // to work for now
-    if (socket_entry->nb_head_updates > 10){
+    // However, it is not yet clear what the threshhold should be here
+    if (socket_entry->nb_head_updates > HEAD_UPDATE_PERIOD) {
         asm volatile ("" : : : "memory"); // compiler memory barrier
         *(socket_entry->head_ptr) = cpu_head;
         socket_entry->nb_head_updates = 0;

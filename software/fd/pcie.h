@@ -9,6 +9,12 @@
 #define RULE_ID_SIZE 2 // bytes
 #define NB_RULES_IN_LINE (RULE_ID_LINE_LEN/RULE_ID_SIZE)
 
+#ifndef HEAD_UPDATE_PERIOD
+// Number of packets to wait until we update the header pointer on the FPGA.
+// We may override this value when compiling
+#define HEAD_UPDATE_PERIOD 64
+#endif
+
 #ifndef BUFFER_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes)

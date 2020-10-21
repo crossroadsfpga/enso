@@ -1,10 +1,14 @@
 CXX = g++
 LD = g++
 
-ifdef BUF_SIZE
-CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O2 -fPIC -D BUFFER_SIZE=$(BUF_SIZE)
-else
-CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O2 -fPIC
+CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O2 -g -fPIC
+
+ifdef BUFFER_SIZE
+CXXFLAGS += -D BUFFER_SIZE=$(BUFFER_SIZE)
+endif
+
+ifdef HEAD_UPDATE_PERIOD
+CXXFLAGS += -D HEAD_UPDATE_PERIOD=$(HEAD_UPDATE_PERIOD)
 endif
 
 LDFLAGS = -O2
