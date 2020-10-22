@@ -121,8 +121,8 @@ always @(posedge clk) begin
                     next_desc.size <= pdu_hdr.pdu_flit;
                 end else if (nb_descs == 2) begin
                     last_desc.queue_id <= pdu_hdr.queue_id;
-                    last_desc.size <= pdu_hdr.pdu_flit;      
-                end else if (pdu_hdr.queue_id == last_desc.queue_id && 
+                    last_desc.size <= pdu_hdr.pdu_flit;
+                end else if (pdu_hdr.queue_id == last_desc.queue_id &&
                              last_sop_wr_addr < wr_addr) begin
                     // merge descriptors
                     last_desc.size <= last_desc.size + pdu_hdr.pdu_flit;
