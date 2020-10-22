@@ -202,8 +202,8 @@ always @ (posedge clk) begin
             end
             DESC: begin
                 // Have enough space for this transfer.
-                // if (dma_ctrl_ready && free_slot >= dma_size_r) begin
-                if (dma_ctrl_ready) begin
+                if (dma_ctrl_ready && free_slot >= dma_size_r) begin 
+                // if (dma_ctrl_ready) begin
                     // Need wrap around
                     if (wrap) begin
                         wrdm_desc_valid <= 1;
