@@ -185,7 +185,6 @@ logic                     f2c_queue_ready;
 logic                     dma_done;
 logic                     dma_start;
 logic [APP_IDX_WIDTH-1:0] dma_queue;
-logic [APP_IDX_WIDTH-1:0] dma_queue_r;
 logic [APP_IDX_WIDTH:0]   queue_id; // extra bit for invalid queue
 logic [RB_AWIDTH-1:0]     new_tail;
 
@@ -404,8 +403,6 @@ typedef enum
 } state_t;
 state_t state;
 
-// assign c2f_tail = 0;
-// assign c2f_kmem_addr = 0;
 // the first slot in f2c_kmem_addr is used as the "global reg" includes the
 // C2F_head
 assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
@@ -433,28 +430,8 @@ always@(posedge pcie_clk)begin
         queue_id <= ~0; // invalid queue (all 1s)
         state <= IDLE;
     end else begin
-        // ensure that queue updates are applied when the queue is active
-        // this is particularly important in the beginning: when there is only
-        // one queue and it is not set
-        if (pcie_write_0 && ({1'b0, page_idx} == queue_id)) begin
-            if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE]
-                    == {REG_SIZE{1'b1}}) begin
-                f2c_tail <= pcie_writedata_0[0*32 +: 32];
-            end
-            if (pcie_byteenable_0[1*REG_SIZE +:REG_SIZE]
-                    == {REG_SIZE{1'b1}}) begin
-                f2c_head <= pcie_writedata_0[1*32 +: 32];
-            end
-            if (pcie_byteenable_0[2*REG_SIZE +:REG_SIZE]
-                    == {REG_SIZE{1'b1}}) begin
-                f2c_kmem_addr[31:0] <= pcie_writedata_0[2*32 +: 32];
-            end
-            if (pcie_byteenable_0[3*REG_SIZE +:REG_SIZE]
-                    == {REG_SIZE{1'b1}}) begin
-                f2c_kmem_addr[63:32] <= pcie_writedata_0[3*32 +: 32];
-            end
-        end
-
+        // These are used as ready signals. They can be overriden if an external
+        // write comes and we intercept it. (see the block after the case)
         q_table_tails_rd_en_a_r <= q_table_tails_rd_en_a;
         q_table_tails_rd_en_a_r2 <= q_table_tails_rd_en_a_r;
         q_table_heads_rd_en_a_r <= q_table_heads_rd_en_a;
@@ -468,7 +445,8 @@ always@(posedge pcie_clk)begin
             IDLE: begin
                 if (dma_start) begin
                     if (queue_id != {1'b0, dma_queue}) begin
-                        // Intercept writes to the same address
+                        // Intercept writes to the same address that happened
+                        // in the previous clock cycle
                         if ((q_table_tails_addr_b == dma_queue)
                                 && q_table_tails_wr_en_b) begin
                             f2c_tail <= q_table_tails_wr_data_b;
@@ -497,7 +475,7 @@ always@(posedge pcie_clk)begin
                             q_table_h_addrs_addr_a <= dma_queue;
                             q_table_h_addrs_rd_en_a <= 1;
                         end
-                        dma_queue_r <= dma_queue;
+                        queue_id <= {1'b0, dma_queue};
 
                         state <= BRAM_DELAY_1;
                     end else begin
@@ -527,7 +505,6 @@ always@(posedge pcie_clk)begin
                 end
 
                 f2c_queue_ready <= 1;
-                queue_id <= {1'b0, dma_queue_r};
 
                 state <= WAIT_DMA;
             end
@@ -546,6 +523,43 @@ always@(posedge pcie_clk)begin
             end
             default: state <= IDLE;
         endcase
+
+        // Ensure that queue updates are applied when the queue is active.
+        // This is particularly important in the beginning: when there is only
+        // one queue and it is not set. But it is also useful to intercept
+        // writes in the middle of a queue transition. In such case, we also
+        // need to intercept the ready signals (*en_a, *en_a_r, *en_a_r2) to
+        // ensure that values are not overriden with outdated ones from BRAM.
+        if (pcie_write_0 && ({1'b0, page_idx} == dma_queue)) begin
+            if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE]
+                    == {REG_SIZE{1'b1}}) begin
+                f2c_tail <= pcie_writedata_0[0*32 +: 32];
+                q_table_tails_rd_en_a <= 0;
+                q_table_tails_rd_en_a_r <= 0;
+                q_table_tails_rd_en_a_r2 <= 0;
+            end
+            if (pcie_byteenable_0[1*REG_SIZE +:REG_SIZE]
+                    == {REG_SIZE{1'b1}}) begin
+                f2c_head <= pcie_writedata_0[1*32 +: 32];
+                q_table_heads_rd_en_a <= 0;
+                q_table_heads_rd_en_a_r <= 0;
+                q_table_heads_rd_en_a_r2 <= 0;
+            end
+            if (pcie_byteenable_0[2*REG_SIZE +:REG_SIZE]
+                    == {REG_SIZE{1'b1}}) begin
+                f2c_kmem_addr[31:0] <= pcie_writedata_0[2*32 +: 32];
+                q_table_l_addrs_rd_en_a <= 0;
+                q_table_l_addrs_rd_en_a_r <= 0;
+                q_table_l_addrs_rd_en_a_r2 <= 0;
+            end
+            if (pcie_byteenable_0[3*REG_SIZE +:REG_SIZE]
+                    == {REG_SIZE{1'b1}}) begin
+                f2c_kmem_addr[63:32] <= pcie_writedata_0[3*32 +: 32];
+                q_table_h_addrs_rd_en_a <= 0;
+                q_table_h_addrs_rd_en_a_r <= 0;
+                q_table_h_addrs_rd_en_a_r2 <= 0;
+            end
+        end
     end
 end
 
