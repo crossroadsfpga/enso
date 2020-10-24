@@ -348,7 +348,6 @@ logic [DMA_BUF_AWIDTH-1:0] dma_buf_tail;
 logic dma_buf_full;
 logic dma_buf_full_r1;
 logic dma_buf_full_r2;
-logic dma_buf_full_r3;
 assign dma_buf_full = dma_buf_head + 1'b1 == dma_buf_tail;
 assign pcie_wrdm_desc_ready = !dma_buf_full;
 
@@ -364,14 +363,20 @@ always @(posedge clk_pcie) begin
         pcie_delay_cnt <= 0;
     end else begin
         automatic logic [DMA_BUF_AWIDTH-1:0] next_head;
-        if (!dma_buf_full && !dma_buf_full_r3 && pcie_wrdm_desc_valid) begin
+        if (!dma_buf_full && !dma_buf_full_r1 && !dma_buf_full_r2 &&
+            pcie_wrdm_desc_valid)
+        begin
+            // automatic pcie_desc_t pcie_desc = pcie_wrdm_desc_data;
+            // $display("pcie_desc.immediate: %b", pcie_desc.immediate);
             dma_buf[dma_buf_head] <= pcie_wrdm_desc_data;
             next_head = dma_buf_head + 1'b1;
         end else begin
             next_head = dma_buf_head;
         end
 
-        if (dma_buf_full_r3 && pcie_wrdm_desc_valid) begin
+        if ((dma_buf_full_r2 || dma_buf_full_r1 || dma_buf_full) &&
+            pcie_wrdm_desc_valid)
+        begin
             $display("Warning: DMA Write while not ready");
         end
 
@@ -390,7 +395,6 @@ always @(posedge clk_pcie) begin
     end
     dma_buf_full_r1 <= dma_buf_full;
     dma_buf_full_r2 <= dma_buf_full_r1;
-    dma_buf_full_r3 <= dma_buf_full_r2;
 end
 
 logic [31:0] cnt_delay;

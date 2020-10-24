@@ -172,25 +172,45 @@ always @ (posedge clk) begin
     // wrdm_desc_ready has a 3-cycle latency, wrdm_desc_ready_r2 is active, we
     // can write in the following cycle
     wrdm_desc_ready_r1 <= wrdm_desc_ready;
-    wrdm_desc_ready_r2 <= wrdm_desc_ready_r1;
+    wrdm_desc_ready_r2 <= wrdm_desc_ready_r1 && wrdm_desc_ready;
 end
+
+logic dma_ctrl_ready;
+logic desc_valid;
+logic ready_for_new_transfers;
+logic pending_transfer;
+
+// wrdm_desc_ready has a 3-cycle latency. If wrdm_desc_ready_r2 is active, we
+// can write in the following cycle
+assign dma_ctrl_ready = wrdm_desc_ready && wrdm_desc_ready_r2;
+
+// We are not allowed to set wrdm_desc_valid when wrdm_desc_ready is not set.
+// This creates the possibility that wrdm_desc_ready becomes 0 at the same time
+// as we initiate a transfer. To make sure this never happens we do this
+// assignment combinationally. This also means that if we start a write
+// (desc_valid=1) and wrdm_desc_ready becomes 0 at the same time, we must hold
+// back new transfers and retry sending once it becomes available again
+assign wrdm_desc_valid = desc_valid & wrdm_desc_ready;
+
+// we are only ready for new transfers if we are ready to write and there is no
+// pending transfer
+assign ready_for_new_transfers = dma_ctrl_ready && !pending_transfer;
 
 // FSM
 always @ (posedge clk) begin
-    wrdm_desc_valid <= 0;
+    desc_valid <= 0;
     if (rst) begin
         state <= IDLE;
         out_tail <= 0;
         dma_done <= 0;
         dma_queue_full_cnt <= 0;
         cpu_buf_full_cnt <= 0;
+        pending_transfer <= 0;
     end else begin
-        automatic logic dma_ctrl_ready = wrdm_desc_ready && wrdm_desc_ready_r1 
-                                         && wrdm_desc_ready_r2;
         case (state)
             IDLE: begin
                 dma_done <= 0;
-                wrdm_desc_valid <= 0;
+                desc_valid <= 0;
                 if (dma_start) begin
                     state <= WAIT_QUEUE_STATE;
                     dma_size_r <= dma_size;
@@ -203,20 +223,19 @@ always @ (posedge clk) begin
             end
             DESC: begin
                 // Have enough space for this transfer.
-                if (dma_ctrl_ready && free_slot >= dma_size_r) begin 
-                // if (dma_ctrl_ready) begin
+                if (ready_for_new_transfers && (free_slot >= dma_size_r)) begin
                     // Need wrap around
                     if (wrap) begin
-                        wrdm_desc_valid <= 1;
+                        desc_valid <= 1;
                         wrdm_desc_data <= data_desc_low;
                         state <= DESC_WRAP;
                     end else begin
-                        wrdm_desc_valid <= 1;
+                        desc_valid <= 1;
                         wrdm_desc_data <= data_desc;
                         state <= DONE;
                     end
                 end
-                if (!dma_ctrl_ready) begin
+                if (!ready_for_new_transfers) begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
                 end
                 if (free_slot < dma_size_r) begin
@@ -225,8 +244,8 @@ always @ (posedge clk) begin
             end
             DESC_WRAP: begin
                 // the previous request is consumed.
-                if (dma_ctrl_ready) begin
-                    wrdm_desc_valid <= 1;
+                if (ready_for_new_transfers) begin
+                    desc_valid <= 1;
                     wrdm_desc_data <= data_desc_high;
                     state <= DONE;
                 end else begin
@@ -234,8 +253,8 @@ always @ (posedge clk) begin
                 end
             end
             DONE: begin
-                if (dma_ctrl_ready) begin
-                    wrdm_desc_valid <= 1;
+                if (ready_for_new_transfers) begin
+                    desc_valid <= 1;
                     wrdm_desc_data <= done_desc;
 
                     // update tail
@@ -248,6 +267,18 @@ always @ (posedge clk) begin
             end
             default: state <= IDLE;
         endcase
+
+        if (desc_valid && !wrdm_desc_ready) begin
+            // DMA desc became unavailable while trying to write
+            pending_transfer <= 1;
+        end
+
+        // retry sending pending transfer, wrdm_desc_data should be already set
+        // to the right value
+        if (dma_ctrl_ready && pending_transfer) begin
+            desc_valid <= 1;
+            pending_transfer <= 0;
+        end
     end
 end
 
