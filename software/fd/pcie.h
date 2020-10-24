@@ -10,9 +10,9 @@
 #define NB_RULES_IN_LINE (RULE_ID_LINE_LEN/RULE_ID_SIZE)
 
 #ifndef HEAD_UPDATE_PERIOD
-// Number of packets to wait until we update the header pointer on the FPGA.
-// We may override this value when compiling
-#define HEAD_UPDATE_PERIOD 64
+// Number of batches to wait until we update the header pointer on the FPGA.
+// We may override this value when compiling TODO(sadok) remove?
+#define HEAD_UPDATE_PERIOD 0
 #endif
 
 #ifndef BUFFER_SIZE
@@ -103,7 +103,6 @@ typedef struct {
     intel_fpga_pcie_dev* dev;
     uint32_t* kdata;
     pcie_block_t* uio_data_bar2;
-    uint32_t last_flits;
     uint32_t* tail_ptr;
     uint32_t* head_ptr;
     uint32_t cpu_tail;

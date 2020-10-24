@@ -54,7 +54,7 @@ assign in_ready = (state == WRITE);
 assign pdu_hdr.padding = 0;
 assign pdu_hdr.queue_id = in_meta_data.queue_id;
 assign pdu_hdr.action = 0;
-assign pdu_hdr.pdu_flit = pdu_flit + 1;//one more flit for head
+assign pdu_hdr.pdu_flit = pdu_flit;
 assign pdu_hdr.pdu_size = pdu_size;
 assign pdu_hdr.prot = in_meta_data.prot;
 assign pdu_hdr.tuple = in_meta_data.tuple;
@@ -169,7 +169,7 @@ always@(posedge clk)begin
                     // regular flit
                     if (!in_eop) begin
                         if (in_sop) begin
-                            pdu_addr_r <= pcie_rb_wr_base_addr + 1;
+                            pdu_addr_r <= pcie_rb_wr_base_addr;
                             pdu_size <= 64;
                         end else begin
                             pdu_addr_r <= pdu_addr_r + 1;
@@ -178,7 +178,7 @@ always@(posedge clk)begin
                     end else begin
                         if (in_sop) begin // only one flit
                             pdu_size <= 64 - in_empty;
-                            pdu_addr_r <= pcie_rb_wr_base_addr + 1;
+                            pdu_addr_r <= pcie_rb_wr_base_addr;
                         end else begin
                             pdu_size <= pdu_size + (64 - in_empty);
                             pdu_addr_r <= pdu_addr_r + 1;
@@ -193,13 +193,15 @@ always@(posedge clk)begin
             WRITE_HEAD: begin
                 swap <= 0;
                 pdu_wren_r <= 1;
+                // since pdu_sop_r is set pdu_addr_r should contain the address
+                // of the first flit
                 pdu_addr_r <= pcie_rb_wr_base_addr;
                 pdu_data_r <= pdu_hdr;
                 pdu_sop_r <= 1;
                 pdu_eop_r <= 0;
                 in_meta_ready <= 1;
                 pcie_rb_update_valid <= 1;
-                pcie_rb_update_size <= pdu_flit + 1; // one more flit for head
+                pcie_rb_update_size <= pdu_flit;
 
                 state <= WAIT;
 

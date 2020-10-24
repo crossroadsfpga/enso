@@ -21,7 +21,7 @@
 
 #include "app.h"
 
-#define BUF_LEN 10000
+#define BUF_LEN 100000
 
 #define likely(x)       __builtin_expect((x),1)
 #define unlikely(x)     __builtin_expect((x),0)
@@ -37,7 +37,7 @@ int main(int argc, const char* argv[])
 {
     int result;
     uint64_t recv_bytes = 0;
-    uint64_t nb_pkts = 0;
+    uint64_t nb_batches = 0;
 
     if (argc != 5) {
         std::cerr << "Usage: " << argv[0] << " core port nb_rules nb_queues"
@@ -51,7 +51,9 @@ int main(int argc, const char* argv[])
 
     std::cout << "running test with " << nb_rules << " rules" << std::endl;
     
-    std::thread socket_thread = std::thread([&recv_bytes, port, nb_rules, nb_queues, &nb_pkts] {
+    std::thread socket_thread = std::thread([&recv_bytes, port, nb_rules, 
+        nb_queues, &nb_batches]
+    {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
@@ -61,7 +63,8 @@ int main(int argc, const char* argv[])
             int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
 
             if (socket_fd == -1) {
-                std::cerr << "Problem creating socket (" << errno << "): " << strerror(errno) << std::endl;
+                std::cerr << "Problem creating socket (" << errno << "): "
+                          << strerror(errno) << std::endl;
                 exit(2);
             }
 
@@ -73,7 +76,8 @@ int main(int argc, const char* argv[])
             addr.sin_port = htons(port);
 
             if (bind(socket_fd, (struct sockaddr*) &addr, nb_rules, nb_rules)) {
-                std::cerr << "Problem binding socket (" << errno << "): " << strerror(errno) <<  std::endl;
+                std::cerr << "Problem binding socket (" << errno << "): "
+                          << strerror(errno) <<  std::endl;
                 exit(3);
             }
         }
@@ -98,14 +102,10 @@ int main(int argc, const char* argv[])
                     exit(4);
                 }
                 if (recv_len > 0) {
-                    ++nb_pkts;
+                    ++nb_batches;
                     #ifdef ZERO_COPY
                     free_pkt_buf(socket_fd);
                     #endif
-                    // for (int i = 0; i < recv_len; i++) {
-                    //     printf("%02X ", buf[i]);
-                    // }
-                    // printf("\n");
                 }
                 recv_bytes += recv_len;
             }
@@ -133,7 +133,8 @@ int main(int argc, const char* argv[])
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::cout << std::dec << "Goodput: " << 
             ((double) recv_bytes - recv_bytes_before) * 8. /1e6
-            << " Mbps  #pkts: " << nb_pkts << std::endl;
+            << " Mbps  #bytes: " << recv_bytes << "  #batches: " << nb_batches
+            << std::endl;
     }
 
     socket_thread.join();

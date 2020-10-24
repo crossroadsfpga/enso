@@ -35,6 +35,10 @@ localparam THRESHOLD = 64;
 localparam MAX_SLOT = PDU_DEPTH - THRESHOLD;
 
 logic [PDU_AWIDTH-1:0] next_base_addr;
+logic wr_en_if_not_hdr;
+
+// We use the PDU header to get packet metadata but we don't write it to BRAM
+assign wr_en_if_not_hdr = !wr_data.sop && wr_en;
 
 typedef enum
 {
@@ -55,7 +59,7 @@ logic [PDU_AWIDTH-1:0] rd_addr_r2;
 logic [PDU_AWIDTH-1:0] last_tail;
 logic wrap;
 
-localparam DESC_RBUF_DEPTH = PDU_DEPTH/2; // packets have a minimum of 2 flits
+localparam DESC_RBUF_DEPTH = PDU_DEPTH; // worst case: one descriptor per packet
 
 // for every packet inserted in the ring buffer, we keep its queue id and size
 typedef struct packed {
@@ -103,43 +107,40 @@ always @(posedge clk) begin
         desc_rd_en_r2 <= 0;
         last_sop_wr_addr <= 0;
     end else begin
-        if (wr_en) begin
-            automatic flit_lite_t flit_lite = wr_data;
-            if (flit_lite.sop) begin
-                automatic pdu_hdr_t pdu_hdr = flit_lite.data;
+        if (wr_en && wr_data.sop) begin
+            automatic pdu_hdr_t pdu_hdr = wr_data.data;
 
-                desc_tail <= desc_tail + 1'b1;
+            desc_tail <= desc_tail + 1'b1;
 
-                // We merge DMAs to the same queue when we already have at least
-                // three packets in the queue. This avoids that we modify a
-                // request that is being consumed. We also only merge requests
-                // when they do not wrap around in the buffer
-                if (nb_descs == 0) begin
-                    current_desc.queue_id <= pdu_hdr.queue_id;
-                    current_desc.size <= pdu_hdr.pdu_flit;
-                end else if (nb_descs == 1) begin
-                    next_desc.queue_id <= pdu_hdr.queue_id;
-                    next_desc.size <= pdu_hdr.pdu_flit;
-                end else if (nb_descs == 2) begin
-                    last_desc.queue_id <= pdu_hdr.queue_id;
-                    last_desc.size <= pdu_hdr.pdu_flit;
-                end else if (pdu_hdr.queue_id == last_desc.queue_id &&
-                             last_sop_wr_addr < wr_addr) begin
-                    // merge descriptors
-                    last_desc.size <= last_desc.size + pdu_hdr.pdu_flit;
-                    desc_tail <= desc_tail; // avoid incrementing the tail
-                end else begin
-                    // save last_desc to bram
-                    desc_wr_data <= last_desc;
-                    desc_wr_addr <= desc_tail - 1;
-                    desc_wr_en <= 1;
+            // We merge DMAs to the same queue when we already have at least
+            // three packets in the queue. This avoids that we modify a request
+            // that is being consumed. We also only merge requests when they do
+            // not wrap around in the buffer
+            if (nb_descs == 0) begin
+                current_desc.queue_id <= pdu_hdr.queue_id;
+                current_desc.size <= pdu_hdr.pdu_flit;
+            end else if (nb_descs == 1) begin
+                next_desc.queue_id <= pdu_hdr.queue_id;
+                next_desc.size <= pdu_hdr.pdu_flit;
+            end else if (nb_descs == 2) begin
+                last_desc.queue_id <= pdu_hdr.queue_id;
+                last_desc.size <= pdu_hdr.pdu_flit;
+            end else if (pdu_hdr.queue_id == last_desc.queue_id &&
+                         last_sop_wr_addr < wr_addr) begin
+                // merge descriptors
+                last_desc.size <= last_desc.size + pdu_hdr.pdu_flit;
+                desc_tail <= desc_tail; // avoid incrementing the tail
+            end else begin
+                // save last_desc to bram
+                desc_wr_data <= last_desc;
+                desc_wr_addr <= desc_tail - 1;
+                desc_wr_en <= 1;
 
-                    last_desc.queue_id <= pdu_hdr.queue_id;
-                    last_desc.size <= pdu_hdr.pdu_flit;
-                end
-                
-                last_sop_wr_addr <= wr_addr;
+                last_desc.queue_id <= pdu_hdr.queue_id;
+                last_desc.size <= pdu_hdr.pdu_flit;
             end
+            
+            last_sop_wr_addr <= wr_addr;
         end
 
         // update current_desc and next_desc or read next_desc from BRAM
@@ -284,7 +285,7 @@ pdu_buffer (
     .rdaddress  (rd_addr),
     .rden       (rd_en),
     .wraddress  (wr_addr),
-    .wren       (wr_en),
+    .wren       (wr_en_if_not_hdr),
     .q          (rd_flit_lite)
 );
 

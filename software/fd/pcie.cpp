@@ -16,24 +16,19 @@
 // logic devices manufactured by Intel and sold by Intel or its authorized
 // distributors. Please refer to the applicable agreement for further details.
 
-// Uncomment the following when debugging to check the packet rate
-// #define CHECK_PACKET_RATE
-
 #include <termios.h>
 #include <time.h>
+#include <cassert>
 #include <cerrno>
 #include <cstdlib>
 #include <ctime>
+#include <endian.h>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <system_error>
 #include <string.h>
-
-#ifdef CHECK_PACKET_RATE
-#include <chrono>
-#endif
 
 #include <sched.h>
 #include <netinet/in.h>
@@ -48,13 +43,12 @@ static const unsigned f2c_allocated_size = C2F_BUFFER_OFFSET * 4;
 static const unsigned c2f_allocated_size = C2F_BUFFER_SIZE * 64;
 static const unsigned allocated_size = f2c_allocated_size + c2f_allocated_size;
 
-static inline uint32_t get_block_payload(uint32_t *addr, void** payload_ptr,
-    uint32_t* pdu_flit)
-{
-    uint32_t len = addr[PDU_SIZE_OFFSET];
-    *pdu_flit = addr[PDU_FLIT_OFFSET];
-    *payload_ptr = (void*) &addr[16];
-    return len;
+
+static inline uint16_t get_pkt_size(uint8_t *addr) {
+    uint16_t l2_len = 14 + 4;
+    uint16_t l3_len = be16toh(*((uint16_t*) (addr+14+2))); // ipv4 total length
+    uint16_t total_len = l2_len + l3_len;
+    return total_len;
 }
 
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues)
@@ -108,46 +102,28 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     socket_entry->app_id = app_id;
     socket_entry->c2f_cpu_tail = 0;
     socket_entry->cpu_head = *(socket_entry->head_ptr);
+    socket_entry->cpu_tail = *(socket_entry->tail_ptr);
 
     socket_entry->nb_head_updates = 0;
 
     return 0;
 }
 
-#ifdef CHECK_PACKET_RATE
-static uint64_t nb_packets = 0;
-static std::chrono::time_point<std::chrono::high_resolution_clock> start;
-#define NB_EXPECTED_PKTS 1000000
-#endif // CHECK_PACKET_RATE
-
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
     unsigned int cpu_head = socket_entry->cpu_head;
-    unsigned int cpu_tail = socket_entry->cpu_tail;
+    unsigned int cpu_tail;
     int free_slot; // number of free slots in ring buffer
     unsigned int copy_size;
     uint32_t* kdata = socket_entry->kdata;
-    uint32_t pdu_flit;
-    block_s pdu; //current PDU block
 
-    // avoid reading tail by only looking at it once we have no packet left
-    // this prevents cache misses
-    if (cpu_tail == cpu_head) {
-        cpu_tail = *(socket_entry->tail_ptr);
-        socket_entry->cpu_tail = cpu_tail;
-    }
-    
+
+    cpu_tail = *(socket_entry->tail_ptr);
+    socket_entry->cpu_tail = cpu_tail;
+
     if (unlikely(cpu_tail == cpu_head)) {
-        socket_entry->last_flits = 0;
         return 0;
     }
-
-#ifdef CHECK_PACKET_RATE
-    if (unlikely(nb_packets == 0)) {
-        start = std::chrono::high_resolution_clock::now();
-    }
-    nb_packets++;
-#endif // CHECK_PACKET_RATE
 
     // calculate free_slot
     if (cpu_tail <= cpu_head) {
@@ -159,80 +135,73 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     // printf("CPU head = %d; CPU tail = %d; free_slot = %d \n", 
     //         cpu_head, cpu_tail, free_slot);
     if (unlikely(free_slot < 1)) {
+        printf("cpu_tail: %i cpu_head: %i\n", cpu_tail, cpu_head);
         printf("FPGA breaks free_slot assumption!\n");
         return -1;
     }
 
-    // make sure we are reading the packet
-    fill_block(&kdata[(cpu_head + 1) * 16], &pdu);
-    // print_block(&pdu);
+    *buf = &kdata[(cpu_head + 1) * 16];
+    uint8_t* my_buf = (uint8_t*) *buf;
 
-    uint32_t payload_size = get_block_payload(&kdata[(cpu_head + 1) * 16], buf,
-        &pdu_flit);
-    // TODO(sadok) when writing a stream, we may cut the stream instead of
-    // reporting an error
-    if (unlikely(payload_size > len)) {
-        std::cerr << "Buffer is too short to fit a packet (" << payload_size << ")" << std::endl;
-        return 0;
-    }
+    uint32_t total_size = 0;
+    uint32_t total_flits = 0;
+    
+    // TODO(sadok) does it make sense to limit the number of packets we retrieve
+    // at once?
+    while (cpu_head != cpu_tail) {
+        uint32_t pkt_size = get_pkt_size(my_buf);
+        uint32_t pdu_flit = ((pkt_size-1) >> 6) + 1; // number of 64-byte blocks
+        uint32_t flit_aligned_size = pdu_flit * 64;
 
-    // check transfer_flit
-    if (unlikely(pdu_flit == 0)) {
-        printf("transfer_flit has to be bigger than 0!\n");
-        return -1;
-    }
-
-    // TODO(sadok) this may be a performance problem
-    // We need to copy the begining of the ring buffer to the last page
-    if ((cpu_head + pdu_flit) > BUFFER_SIZE) {
-        // printf("memcpy, cpu.head = %d, pdu_flit = %d \n",
-        //     cpu_head,pdu_flit);
-        if ((cpu_head + pdu_flit) != BUFFER_SIZE) {
-            copy_size = cpu_head + pdu_flit - BUFFER_SIZE;
-            memcpy(&kdata[(BUFFER_SIZE + 1) * 16], &kdata[1 * 16],
-                    copy_size * 16 * 4);
+        // check transfer_flit
+        if (unlikely(pdu_flit == 0)) {
+            printf("transfer_flit has to be bigger than 0!\n");
+            return -1;
         }
+
+        // reached the buffer limit
+        if (unlikely((total_size + flit_aligned_size) > len)) {
+            socket_entry->cpu_head = cpu_head;
+            return total_size;
+        }
+
+        // TODO(sadok) Handle packets that are not flit-aligned? There will be a
+        // gap, what should we do?
+        total_size += flit_aligned_size;
+        total_flits += pdu_flit;
+
+        // TODO(sadok) this may be a performance problem
+        // We need to copy the begining of the ring buffer to the last page
+        if ((cpu_head + pdu_flit) >= BUFFER_SIZE) {
+            if ((cpu_head + pdu_flit) != BUFFER_SIZE) {
+                copy_size = cpu_head + pdu_flit - BUFFER_SIZE;
+                memcpy(&kdata[(BUFFER_SIZE + 1) * 16], &kdata[1 * 16],
+                       copy_size * 16 * 4);
+            }
+            socket_entry->cpu_head = cpu_head + pdu_flit - BUFFER_SIZE;
+            return total_size;
+        }
+        my_buf += flit_aligned_size;
+        cpu_head += pdu_flit;
     }
 
-    socket_entry->last_flits = pdu_flit;
-
-#ifdef CHECK_PACKET_RATE
-    if (unlikely(nb_packets == NB_EXPECTED_PKTS)) {
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> diff = end - start;
-        double packet_rate = ((double) NB_EXPECTED_PKTS) / diff.count() * 1e-6;
-        std::cout << "Packet rate: " << packet_rate << " Mpps" << std::endl;
-        nb_packets = 0;
-    }
-#endif // CHECK_PACKET_RATE
-
-    return payload_size;
+    socket_entry->cpu_head = cpu_head;
+    return total_size;
 }
 
 void advance_ring_buffer(socket_internal* socket_entry)
 {
-    uint32_t pdu_flit = socket_entry->last_flits;
-    unsigned int cpu_head = socket_entry->cpu_head;
-    if ((cpu_head + pdu_flit) < BUFFER_SIZE) {
-        cpu_head = cpu_head + pdu_flit;
-    } else {
-        cpu_head = cpu_head + pdu_flit - BUFFER_SIZE;
-    }
 
-    // method using syscall
-    // dev->write32(2, reinterpret_cast<void *>(HEAD_OFFSET), cpu_head);
-
-    // HACK(sadok) there seems to be a limitation to the rate of updates we
-    // can issue to the MMIO region. This ensures that we reduce this number.
-    // However, it is not yet clear what the threshhold should be here
+    // We don't really need this now that we are using batch.
+    // Worse, it can actually cause the host buffer to be "full" forever, as we
+    // may never update the head pointer if we only call advance_ring_buffer
+    // once after dma_run. Therefore it is now disabled by default
     if (socket_entry->nb_head_updates > HEAD_UPDATE_PERIOD) {
         asm volatile ("" : : : "memory"); // compiler memory barrier
-        *(socket_entry->head_ptr) = cpu_head;
+        *(socket_entry->head_ptr) = socket_entry->cpu_head;
         socket_entry->nb_head_updates = 0;
     }
     ++(socket_entry->nb_head_updates);
-
-    socket_entry->cpu_head = cpu_head;
 }
 
 // FIXME(sadok) This should be in the kernel
@@ -337,22 +306,6 @@ void print_pcie_block(pcie_block_t * pb)
     printf("pb->c2f_kmem_low = 0x%08x \n", pb->c2f_kmem_low);
     printf("pb->c2f_kmem_high = 0x%08x \n", pb->c2f_kmem_high);
     #endif // CONTROL_MSG
-}
-
-void fill_block(uint32_t *addr, block_s *block) {
-    // Header
-    block->pdu_id = addr[0];
-    block->dst_port = addr[1] & 0xFFFF;
-    block->src_port = (addr[1] >> 16) & 0xFFFF;
-    block->dst_ip = addr[2];
-    block->src_ip = addr[3];
-    block->protocol = addr[4];
-    block->pdu_size = addr[5];
-    block->pdu_flit = addr[6];
-    block->queue_id = (((uint64_t) addr[7]) << 32) | addr[8];
-
-    // Payload
-    block->pdu_payload = (uint8_t*) &addr[16];
 }
 
 void print_block(block_s *block) {
