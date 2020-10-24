@@ -10,6 +10,7 @@ module ring_buffer(
     output logic [PDU_AWIDTH-1:0] wr_base_addr,
     output logic                  wr_base_addr_valid,
     output logic                  almost_full,
+    output logic [31:0]           max_rb,
     input  logic                  update_valid,
     input  logic [PDU_AWIDTH-1:0] update_size,
 
@@ -180,6 +181,7 @@ always @(posedge clk) begin
         almost_full <= 0;
         last_tail <= 0;
         wr_base_addr_valid <= 0;
+        max_rb <= 0;
     end else begin
         if (update_valid) begin
             if (tail + update_size < MAX_SLOT) begin
@@ -195,6 +197,10 @@ always @(posedge clk) begin
             almost_full <= 0;
         end else begin
             almost_full <= 1;
+        end
+
+        if (occupied_slot > max_rb) begin
+            max_rb <= occupied_slot;
         end
     end
 end

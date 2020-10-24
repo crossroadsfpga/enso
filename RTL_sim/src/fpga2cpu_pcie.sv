@@ -12,6 +12,7 @@ module fpga2cpu_pcie (
     output logic [PDU_AWIDTH-1:0]    wr_base_addr,
     output logic                     wr_base_addr_valid,
     output logic                     almost_full,
+    output logic [31:0]              max_rb,
     input  logic                     update_valid,
     input  logic [PDU_AWIDTH-1:0]    update_size,
 
@@ -263,6 +264,7 @@ ring_buffer_inst (
     .wr_base_addr   (wr_base_addr),
     .wr_base_addr_valid(wr_base_addr_valid),
     .almost_full    (almost_full),
+    .max_rb         (max_rb),
     .update_valid   (update_valid),
     .update_size    (update_size),
     .rd_addr        (frb_address),

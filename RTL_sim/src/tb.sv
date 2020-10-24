@@ -204,6 +204,7 @@ typedef enum{
     RULE_SET,
     DMA_QUEUE_FULL,
     CPU_BUF_FULL,
+    MAX_PCIE_RB,
     MAX_DMA_QUEUE
 } c_state_t;
 
@@ -891,9 +892,18 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("CPU_BUF_FULL:\t\t%d",top_readdata);
-                    conf_state <= MAX_DMA_QUEUE;
+                    conf_state <= MAX_PCIE_RB;
                     s_read <= 1;
                     s_addr <= 30'h2200_0019;
+                end
+            end
+            MAX_PCIE_RB: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("MAX_PCIE_RB:\t\t%d",top_readdata);
+                    conf_state <= MAX_DMA_QUEUE;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_001A;
                 end
             end
             MAX_DMA_QUEUE: begin

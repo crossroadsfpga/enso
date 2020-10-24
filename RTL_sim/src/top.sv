@@ -96,6 +96,7 @@ logic [31:0] dma_request_cnt_status;
 logic [31:0] rule_set_cnt_status;
 logic [31:0] dma_queue_full_cnt_status;
 logic [31:0] cpu_buf_full_cnt_status;
+logic [31:0] max_pcie_rb_status;
 logic [31:0] max_dma_queue_occup_status;
 
 //Register I/O
@@ -231,13 +232,13 @@ logic [PDU_AWIDTH-1:0]   pcie_rb_wr_addr;
 logic                    pcie_rb_wr_en;  
 logic [PDU_AWIDTH-1:0]   pcie_rb_wr_base_addr;
 logic                    pcie_rb_wr_base_addr_valid;
-logic                    pcie_rb_almost_full;          
+logic                    pcie_rb_almost_full;
 logic                    pcie_rb_update_valid;
 logic [PDU_AWIDTH-1:0]   pcie_rb_update_size;
 logic                    disable_pcie;
 pdu_metadata_t           pdumeta_cpu_data;
 logic                    pdumeta_cpu_valid;
-logic   [9:0]            pdumeta_cnt;
+logic [9:0]              pdumeta_cnt;
 
 
 logic [7:0] status_addr_r;
@@ -327,6 +328,9 @@ logic [31:0] cpu_buf_full_cnt;
 logic [31:0] cpu_buf_full_cnt_r1;
 logic [31:0] cpu_buf_full_cnt_r2;
 logic [31:0] dma_queue_occup;
+logic [31:0] max_pcie_rb;
+logic [31:0] max_pcie_rb_r1;
+logic [31:0] max_pcie_rb_r2;
 logic [31:0] max_dma_queue_occup;
 logic [31:0] max_dma_queue_occup_r1;
 logic [31:0] max_dma_queue_occup_r2;
@@ -547,6 +551,9 @@ always @(posedge clk_status) begin
     cpu_buf_full_cnt_r1             <= cpu_buf_full_cnt;
     cpu_buf_full_cnt_r2             <= cpu_buf_full_cnt_r1;
     cpu_buf_full_cnt_status         <= cpu_buf_full_cnt_r2;
+    max_pcie_rb_r1                  <= max_pcie_rb;
+    max_pcie_rb_r2                  <= max_pcie_rb_r1;
+    max_pcie_rb_status              <= max_pcie_rb_r2;
     max_dma_queue_occup_r1          <= max_dma_queue_occup;
     max_dma_queue_occup_r2          <= max_dma_queue_occup_r1;
     max_dma_queue_occup_status      <= max_dma_queue_occup_r2;
@@ -591,7 +598,8 @@ always @(posedge clk_status) begin
                 8'd22 : status_readdata_top <= rule_set_cnt_status;
                 8'd23 : status_readdata_top <= dma_queue_full_cnt_status;
                 8'd24 : status_readdata_top <= cpu_buf_full_cnt_status;
-                8'd25 : status_readdata_top <= max_dma_queue_occup_status;
+                8'd25 : status_readdata_top <= max_pcie_rb_status;
+                8'd26 : status_readdata_top <= max_dma_queue_occup_status;
 
                 default : status_readdata_top <= 32'h345;
             endcase
@@ -1094,7 +1102,8 @@ pcie_top pcie (
     .pcie_rb_wr_en          (pcie_rb_wr_en),  
     .pcie_rb_wr_base_addr   (pcie_rb_wr_base_addr),  
     .pcie_rb_wr_base_addr_valid(pcie_rb_wr_base_addr_valid),
-    .pcie_rb_almost_full    (pcie_rb_almost_full),          
+    .pcie_rb_almost_full    (pcie_rb_almost_full),
+    .pcie_max_rb            (max_pcie_rb),
     .pcie_rb_update_valid   (pcie_rb_update_valid),
     .pcie_rb_update_size    (pcie_rb_update_size),
     .disable_pcie           (disable_pcie),
