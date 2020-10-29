@@ -1,5 +1,7 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python3.8
 
+import binascii
+import math
 import sys
 
 from itertools import cycle
@@ -9,10 +11,12 @@ from scapy.all import IP, TCP, UDP, wrpcap, Ether, Raw
 
 def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest):
     sample_pkts = []
+    ipv4_len = pkt_size - 14 - 4
+    counter_size = math.ceil(math.log2(nb_pkts))
     for i in range(nb_dest):
         pkt = (
             Ether() /
-            IP(dst='192.168.1.1', src=f'192.168.0.{i}') /
+            IP(dst='192.168.1.1', src=f'192.168.0.{i}', len=ipv4_len) /
             TCP(dport=80, sport=8080, flags='S')
         )
 
@@ -22,9 +26,13 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest):
 
     pkts = []
     for i, pkt in zip(range(nb_pkts), cycle(sample_pkts)):
-        missing_bytes = pkt_size - len(pkt) - 4  # does not include CRC
-        payload = str(i).zfill(missing_bytes)
+        payload = (i).to_bytes(counter_size, byteorder='big')
+        missing_bytes = pkt_size - len(pkt) - counter_size - 4  # no CRC
+        payload += binascii.unhexlify('00' * missing_bytes)
         pkt = pkt/Raw(load=payload)
+
+        if i == 0:
+            print(len(pkt), pkt)
         pkts.append(pkt)
 
     wrpcap(out_pcap, pkts)
