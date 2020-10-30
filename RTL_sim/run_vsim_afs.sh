@@ -1,28 +1,34 @@
 #!/usr/bin/env bash
-# Usage ./run_vsim_afs.sh [input.pkt]
-# Usage ./run_vsim_afs.sh nb_pkts pkt_size nb_dest
+# Usage ./run_vsim_afs.sh rate input.pkt nb_queues
+# Usage ./run_vsim_afs.sh rate nb_pkts pkt_size nb_queues
 
 # exit when error occurs
 set -e
 trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
 trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
-if [ "$#" -eq 3 ]; then
-    PKT_FILE="./input_gen/$1_$2_$3.pkt"
+RATE=${1:-"100"}
+
+if [ "$#" -eq 4 ]; then
+    NB_PKTS=$2
+    PKT_SIZE=$3
+    NB_QUEUES=$4
+    PKT_FILE="./input_gen/${NB_PKTS}_${PKT_SIZE}_${NB_QUEUES}.pkt"
     if [[ -f "$PKT_FILE" ]]; then
         echo "$PKT_FILE exists, using cache"
     else
         echo "Generating $PKT_FILE"
         cd "./input_gen"
-        ./generate_synthetic_trace.py $1 $2 $3 "$1_$2_$3.pcap"
-        ./run.sh "$1_$2_$3.pcap" "$1_$2_$3.pkt"
+        ./generate_synthetic_trace.py ${NB_PKTS} ${PKT_SIZE} ${NB_QUEUES} \
+            "${NB_PKTS}_${PKT_SIZE}_${NB_QUEUES}.pcap"
+        ./run.sh "${NB_PKTS}_${PKT_SIZE}_${NB_QUEUES}.pcap" \
+            "${NB_PKTS}_${PKT_SIZE}_${NB_QUEUES}.pkt"
         cd -
     fi
-    NB_QUEUES=$3
 else
     # if pkt file not specified, use the default
-    PKT_FILE=${1:-"./input_gen/small_pkt_100.pkt"}
-    NB_QUEUES=${2:-"1"}
+    PKT_FILE=${2:-"./input_gen/small_pkt_100.pkt"}
+    NB_QUEUES=${3:-"1"}
 fi
 
 echo "Using $NB_QUEUES queues"
@@ -34,7 +40,9 @@ rm -rf work
 rm -f vsim.wlf
 
 vlib work
-vlog +define+SIM +define+PKT_FILE=\"$PKT_FILE\" \
+vlog +define+SIM \
+     +define+RATE=$RATE \
+     +define+PKT_FILE=\"$PKT_FILE\" \
      +define+PKT_FILE_NB_LINES=$PKT_FILE_NB_LINES \
      +define+NB_QUEUES=$NB_QUEUES \
      ./src/*.sv -sv 

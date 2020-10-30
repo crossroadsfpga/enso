@@ -13,6 +13,8 @@ module tb;
 `endif
 
 localparam DMA_DELAY = 36;
+localparam RATE = 100; // in Gbps (not always exact)
+localparam PACE = 200/RATE; // assume 400MHz clock and 1 flit/cycle, max 200Gbps
 
 // duration for each bit = 20 * timescale = 20 * 1 ns  = 20ns
 localparam period = 10;
@@ -25,7 +27,7 @@ localparam period_pcie = 4;
 localparam data_width = 528;
 localparam lo = 0;
 localparam hi = `PKT_FILE_NB_LINES;
-localparam stop = (hi*2*1.25 + 100000 + 1024 * DMA_DELAY);
+localparam stop = (hi * PACE * 1.25 + 100000 + 1024 * DMA_DELAY);
 localparam nb_queues = `NB_QUEUES;
 
 logic  clk_status;
@@ -166,8 +168,6 @@ logic [3:0] rx_cnt;
 logic [31:0] pktID;
 logic [31:0] ft_pkt;
 
-logic [3:0] rate_cnt;
-
 typedef enum{
     READ,
     WAIT
@@ -227,7 +227,6 @@ initial error_termination = 0;
 
 initial rst = 1;
 initial cnt = 0;
-initial rate_cnt = 0;
 initial nb_cycles = 0;
 always #(period) clk_status = ~clk_status;
 always #(period_rx) clk_rxmac = ~clk_rxmac;
@@ -284,38 +283,26 @@ end
 
 always @(posedge clk_rxmac)
 begin
-    //$display("-----CYCLE %d-----", cnt);
     cnt <= cnt + 1;
-    if(rate_cnt == 9)begin
-        rate_cnt <= 0;
-    end else begin
-        rate_cnt <= rate_cnt + 1;
-    end
     if (cnt == 1) begin
         rst <= 1;
         addr <= 0;
         l8_rx_valid <= 0;
-        //output_V_READY <= 1;
     end else if (cnt == 35) begin
         rst <= 0;
-    //Make sure the stats reset is done.
-    end else if (cnt == 7000) begin
+    end else if (cnt == 7000) begin // Make sure the stats reset is done
         l8_rx_valid <= 1;
-    end else if (cnt >=7001 ) begin
-
-        //if(rate_cnt < 8)begin
-            if (cnt[1])begin
-            //if (cnt[2:0]==0)begin
-            //if (cnt %2)begin
-                if(addr<hi)begin
-                    addr <= addr + 1;
-                    l8_rx_valid <= 1;
-                end else begin
-                    l8_rx_valid <= 0;
-                end
+    end else if (cnt >= 7001) begin
+        if ((cnt % PACE) == 0) begin
+            if (addr < hi) begin
+                addr <= addr + 1;
+                l8_rx_valid <= 1;
             end else begin
-                l8_rx_valid <=0;
+                l8_rx_valid <= 0;
             end
+        end else begin
+            l8_rx_valid <= 0;
+        end
     end
 
     if (cnt == stop) begin
