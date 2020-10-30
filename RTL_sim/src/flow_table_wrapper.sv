@@ -361,8 +361,8 @@ always@(posedge clk) begin
                 end
 
                 // Debug
-                $display("Flow Table: Updated FTE with Flow ID=0x%h, Queue ID=0x%h",
-                         p_insert_fce_r.tuple, p_insert_fce_r.queue_id);
+                `hdisplay(("Flow Table: Updated FTE with Flow ID=0x%h, Queue ID=0x%h",
+                         p_insert_fce_r.tuple, p_insert_fce_r.queue_id));
 
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
@@ -388,8 +388,8 @@ always@(posedge clk) begin
                 end
 
                 // Debug
-                $display("Flow Table: Inserted FTE with Flow ID=0x%h, Queue ID=0x%h",
-                         p_insert_fce_r.tuple, p_insert_fce_r.queue_id);
+                `hdisplay(("Flow Table: Inserted FTE with Flow ID=0x%h, Queue ID=0x%h",
+                         p_insert_fce_r.tuple, p_insert_fce_r.queue_id));
 
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
@@ -399,7 +399,7 @@ always@(posedge clk) begin
             P_INSERT_EVIC: begin
                 // Unimplemented!
                 p_state <= P_INSERT_EVIC;
-                $display("Flow Table: Eviction!");
+                `hdisplay(("Flow Table: Eviction!"));
             end
         endcase
     end

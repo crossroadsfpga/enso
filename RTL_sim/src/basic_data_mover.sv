@@ -105,13 +105,12 @@ end
 //DEBUG
 always@(posedge clk)begin
     if(!emptylist_in_ready & emptylist_in_valid)begin
-        $display("PKT emptylist is full!");
-        $finish;
+        hterminate("PKT emptylist is full!");
     end
     `ifdef DEBUG
     if(meta_valid & meta_ready)begin
-        $display("pkt:%d,length:%d,flag:%d",
-            meta_data.pktID,meta_data.len,meta_data.pkt_flags);
+        `hdisplay(("pkt:%d,length:%d,flag:%d",
+            meta_data.pktID,meta_data.len,meta_data.pkt_flags));
     end
     `endif
 end

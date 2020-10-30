@@ -128,6 +128,7 @@ logic         pcie_readdatavalid_1;
 logic [511:0] pcie_readdata_1;
 logic [511:0] pcie_writedata_1;
 logic [63:0]  pcie_byteenable_1;
+logic         error_termination;
 
 //eSRAM signals
 logic esram_pll_lock;
@@ -222,6 +223,7 @@ initial l8_tx_ready = 0;
 initial tx_cnt = 0;
 initial rx_cnt = 0;
 
+initial error_termination = 0;
 
 initial rst = 1;
 initial cnt = 0;
@@ -325,16 +327,16 @@ begin
 end
 
 function print_pcie_desc(input pcie_desc_t pcie_desc);
-    $display("  func_nb:\t0x%h", pcie_desc.func_nb);
-    $display("  desc_id:\t0x%h", pcie_desc.desc_id);
-    $display("  app_spec:\t0x%h", pcie_desc.app_spec);
-    $display("  reserved:\t0x%h", pcie_desc.reserved);
-    $display("  single_src:\t0x%h", pcie_desc.single_src);
-    $display("  immediate:\t0x%h", pcie_desc.immediate);
-    $display("  nb_dwords:\t0x%h", pcie_desc.nb_dwords);
-    $display("  dst_addr:\t0x%h", pcie_desc.dst_addr);
-    $display("  saddr_data:\t0x%h", pcie_desc.saddr_data);
-    $display("");
+    `hdisplay(("  func_nb:\t0x%h", pcie_desc.func_nb));
+    `hdisplay(("  desc_id:\t0x%h", pcie_desc.desc_id));
+    `hdisplay(("  app_spec:\t0x%h", pcie_desc.app_spec));
+    `hdisplay(("  reserved:\t0x%h", pcie_desc.reserved));
+    `hdisplay(("  single_src:\t0x%h", pcie_desc.single_src));
+    `hdisplay(("  immediate:\t0x%h", pcie_desc.immediate));
+    `hdisplay(("  nb_dwords:\t0x%h", pcie_desc.nb_dwords));
+    `hdisplay(("  dst_addr:\t0x%h", pcie_desc.dst_addr));
+    `hdisplay(("  saddr_data:\t0x%h", pcie_desc.saddr_data));
+    `hdisplay((""));
 endfunction
 
 logic [7:0] pcie_delay_cnt;
@@ -367,7 +369,7 @@ always @(posedge clk_pcie) begin
             pcie_wrdm_desc_valid)
         begin
             // automatic pcie_desc_t pcie_desc = pcie_wrdm_desc_data;
-            // $display("pcie_desc.immediate: %b", pcie_desc.immediate);
+            // `hdisplay(("pcie_desc.immediate: %b", pcie_desc.immediate));
             dma_buf[dma_buf_head] <= pcie_wrdm_desc_data;
             next_head = dma_buf_head + 1'b1;
         end else begin
@@ -552,7 +554,7 @@ always @(posedge clk_pcie) begin
             PCIE_CONSUME_PKT_BUFFER: begin
                 if (delayed_pcie_wrdm_desc_valid) begin
                     automatic pcie_desc_t pcie_desc = delayed_pcie_wrdm_desc_data;
-                    $display("pcie_desc: %h", pcie_desc);
+                    // `hdisplay(("pcie_desc: %h", pcie_desc));
                     // print_pcie_desc(pcie_desc);
 
                     if (pcie_desc.immediate) begin
@@ -566,8 +568,8 @@ always @(posedge clk_pcie) begin
                         head = tail;
                         queue = pcie_desc.dst_addr[31:24];
 
-                        $display("Receiving packet on queue %d (t=%h, h=%h)",
-                                 queue, tail, head);
+                        // `hdisplay(("Receiving packet on queue %d (t=%h, h=%h)",
+                        //          queue, tail, head));
 
                         // update head on the FPGA
                         pcie_write_0 <= 1;
@@ -582,8 +584,8 @@ always @(posedge clk_pcie) begin
                         // read data from FPGA BRAM using the Avalon-MM address
                         // HACK(sadok) we are reading only the last pending flit
 
-                        $display("Receiving DMA batch with %d bytes",
-                                 pcie_desc.nb_dwords * 4);
+                        // `hdisplay(("Receiving DMA batch with %d bytes",
+                        //          pcie_desc.nb_dwords * 4));
 
                         // pcie_address_0 <= pcie_desc.saddr_data;
                         pcie_address_0 <= pcie_desc.saddr_data +
@@ -592,8 +594,8 @@ always @(posedge clk_pcie) begin
                         // end_dma_transfer_addr <= pcie_desc.saddr_data +
                         //                          pcie_desc.nb_dwords * 4;
 
-                        $display("Reading data to dest. memory address: %h",
-                                 pcie_desc.dst_addr);
+                        // `hdisplay(("Reading data to dest. memory address: %h",
+                        //          pcie_desc.dst_addr));
                         pcie_read_0 <= 1;
                     end
                 end
@@ -604,7 +606,7 @@ always @(posedge clk_pcie) begin
                 if (pcie_readdatavalid_0) begin
                     // TODO(sadok) simulate host memory so that we can check
                     // what has been written to it
-                    $display("Flit from PCIe: 0x%64h", pcie_readdata_0);
+                    // `hdisplay(("Flit from PCIe: 0x%64h", pcie_readdata_0));
 
                     // FIXME(sadok) this only works because we are reading the
                     // last data of the descriptor only, if we read all the data
@@ -650,7 +652,7 @@ always @(posedge clk_status) begin
                 // can adjust this value to use read_pcie at different points
                 // right now we run at the end
                 // make sure the last packets were read
-                if(cnt >= stop) begin
+                if (cnt >= stop || error_termination) begin
                     s_read <= 1;
                     conf_state <= READ_PCIE;
                     $display("read_pcie:");

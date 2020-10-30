@@ -217,4 +217,25 @@ typedef struct packed
     logic [63:0] queue_id;
 } pdu_metadata_t; //Metadata
 
+`ifdef SIM
+`define hdisplay(A) if (!tb.error_termination) $display("%s", $sformatf A );
+`define hwarning(A) if (!tb.error_termination) $warning("%s", $sformatf A );
+`define herror(A) if (!tb.error_termination) $error("%s", $sformatf A );
+
+function hterminate(string s);
+    `herror((s));
+    force tb.error_termination = 1;
+endfunction
+
+`else // not SIM
+
+`define hdisplay(A);
+`define hwarning(A);
+`define herror(A);
+
+function hterminate(string s);
+endfunction
+
+`endif // SIM
+
 `endif
