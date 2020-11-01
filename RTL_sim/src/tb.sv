@@ -12,9 +12,17 @@ module tb;
 `define NB_QUEUES 4
 `endif
 
+`ifndef RATE
+`define RATE 100; // in Gbps (not always exact)
+`endif
+localparam PACE = 200/`RATE; // assume 400MHz clock and 1 flit/cycle, max 200Gbps
+
+// size of the host buffer used by each queue (in flits)
+// localparam RAM_BUF_SIZE = 65535;
+localparam RAM_BUF_SIZE = 8191;
 localparam DMA_DELAY = 36;
-localparam RATE = 100; // in Gbps (not always exact)
-localparam PACE = 200/RATE; // assume 400MHz clock and 1 flit/cycle, max 200Gbps
+localparam DMA_BUF_SIZE = 64;
+localparam DMA_BUF_AWIDTH = ($clog2(DMA_BUF_SIZE));
 
 // duration for each bit = 20 * timescale = 20 * 1 ns  = 20ns
 localparam period = 10;
@@ -27,7 +35,7 @@ localparam period_pcie = 4;
 localparam data_width = 528;
 localparam lo = 0;
 localparam hi = `PKT_FILE_NB_LINES;
-localparam stop = (hi * PACE * 1.25 + 100000 + 1024 * DMA_DELAY);
+localparam stop = (hi * PACE * 1.25 + 100000 + 2 * DMA_BUF_SIZE * DMA_DELAY);
 localparam nb_queues = `NB_QUEUES;
 
 logic  clk_status;
@@ -100,6 +108,9 @@ logic           out_fifo0_in_csr_write;
 logic [31:0]    out_fifo0_in_csr_readdata;
 logic [31:0]    out_fifo0_in_csr_writedata;
 
+// Host RAM
+logic [511:0] ram[nb_queues][RAM_BUF_SIZE];
+
 //PCIe signals
 logic         pcie_rddm_desc_ready;
 logic         pcie_rddm_desc_valid;
@@ -108,7 +119,6 @@ logic         pcie_wrdm_desc_ready;
 logic         pcie_wrdm_desc_valid;
 logic         delayed_pcie_wrdm_desc_valid;
 logic [173:0] pcie_wrdm_desc_data;
-logic [173:0] delayed_pcie_wrdm_desc_data;
 logic         pcie_wrdm_prio_ready;
 logic         pcie_wrdm_prio_valid;
 logic [173:0] pcie_wrdm_prio_data;
@@ -177,6 +187,7 @@ state_t read_state;
 
 typedef enum{
     CONFIGURE,
+    READ_MEMORY,
     READ_PCIE_START,
     READ_PCIE,
     IDLE,
@@ -241,10 +252,10 @@ always #(period_pcie) clk_pcie = ~clk_pcie;
 initial
     begin : init_block
         integer i;          // temporary for generate reset value
-        for (i = lo; i <= hi; i = i + 1) begin
+        for (i = lo; i < hi; i = i + 1) begin
             arr[i] = {((data_width + 1)/2){2'b0}} ;//initial it as all zero(zzp 06.30.2015)
         end
-        $readmemh(`PKT_FILE, arr, lo, hi);//read data from rom
+        $readmemh(`PKT_FILE, arr, lo, hi-1); // read data from rom
     end // initial begin
 
 assign l8_rx_startofpacket = arr[addr][524];
@@ -294,7 +305,7 @@ begin
         l8_rx_valid <= 1;
     end else if (cnt >= 7001) begin
         if ((cnt % PACE) == 0) begin
-            if (addr < hi) begin
+            if (addr < hi && !error_termination) begin
                 addr <= addr + 1;
                 l8_rx_valid <= 1;
             end else begin
@@ -329,11 +340,10 @@ endfunction
 logic [7:0] pcie_delay_cnt;
 
 // DMA requests ring buffer
-localparam DMA_BUF_SIZE = 64;
-localparam DMA_BUF_AWIDTH = ($clog2(DMA_BUF_SIZE));
 pcie_desc_t dma_buf [DMA_BUF_SIZE-1:0];
 logic [DMA_BUF_AWIDTH-1:0] dma_buf_head;
 logic [DMA_BUF_AWIDTH-1:0] dma_buf_tail;
+logic [DMA_BUF_AWIDTH-1:0] delayed_dma_buf_head [DMA_DELAY];
 logic dma_buf_full;
 logic dma_buf_full_r1;
 logic dma_buf_full_r2;
@@ -341,15 +351,15 @@ assign dma_buf_full = dma_buf_head + 1'b1 == dma_buf_tail;
 assign pcie_wrdm_desc_ready = !dma_buf_full;
 
 // DMA Controller: receives DMA requests, inserts in the buffer and advances the
-// head pointer. It also consumes data from the ring buffer and place it in the 
-// delayed_pcie_wrdm_desc_data, waiting DMA_DELAY cycles to set 
-// delayed_pcie_wrdm_desc_valid
+// head pointer.
 always @(posedge clk_pcie) begin
-    delayed_pcie_wrdm_desc_valid <= 0;
+    integer i;
     if (rst) begin
         dma_buf_head <= 0;
-        dma_buf_tail <= 0;
         pcie_delay_cnt <= 0;
+        for (i = 0; i < DMA_DELAY; i = i + 1) begin
+            delayed_dma_buf_head[i] <= 0;
+        end
     end else begin
         automatic logic [DMA_BUF_AWIDTH-1:0] next_head;
         if (!dma_buf_full && !dma_buf_full_r1 && !dma_buf_full_r2 &&
@@ -366,25 +376,23 @@ always @(posedge clk_pcie) begin
         if ((dma_buf_full_r2 || dma_buf_full_r1 || dma_buf_full) &&
             pcie_wrdm_desc_valid)
         begin
-            $display("Warning: DMA Write while not ready");
+            hterminate("DMA Write while not ready");
         end
 
         dma_buf_head <= next_head;
 
-        if ((dma_buf_head != dma_buf_tail) || pcie_delay_cnt) begin
-            pcie_delay_cnt <= pcie_delay_cnt + 1'b1;
-            if (pcie_delay_cnt == 0) begin
-                delayed_pcie_wrdm_desc_data <= dma_buf[dma_buf_tail];
-                dma_buf_tail <= dma_buf_tail + 1'b1;
-            end else if (pcie_delay_cnt == DMA_DELAY-1) begin
-                delayed_pcie_wrdm_desc_valid <= 1;
-                pcie_delay_cnt <= 0;
-            end
+        delayed_dma_buf_head[0] <= dma_buf_head;
+
+        for (i = 0; i < DMA_DELAY-1; i = i + 1) begin
+            delayed_dma_buf_head[i+1] <= delayed_dma_buf_head[i];
         end
     end
     dma_buf_full_r1 <= dma_buf_full;
     dma_buf_full_r2 <= dma_buf_full_r1;
 end
+
+assign delayed_pcie_wrdm_desc_valid = 
+    delayed_dma_buf_head[DMA_DELAY-1] != dma_buf_tail;
 
 logic [31:0] cnt_delay;
 logic [PCIE_ADDR_WIDTH-1:0] cfg_queue;
@@ -399,19 +407,58 @@ typedef enum{
     PCIE_READ_C2F_QUEUE_WAIT,
     PCIE_RULE_INSERT,
     PCIE_RULE_UPDATE,
-    PCIE_CONSUME_PKT_BUFFER
+    PCIE_WAIT_DESC,
+    PCIE_READ_REMAINING_DESC
 } pcie_state_t;
 
+typedef struct packed
+{
+    logic [PCIE_ADDR_WIDTH-1:0] addr;
+} pcie_rd_req_t;
+
+typedef struct packed
+{
+    logic [PCIE_ADDR_WIDTH-1:0] addr;
+    logic [511:0] data;
+    logic [63:0] byteenable;
+} pcie_wr_req_t;
+
+// buffers holding PCIe read and write requests, so that they can be serialized
+pcie_rd_req_t pcie_rd_req_buf[DMA_BUF_SIZE-1:0];
+logic [DMA_BUF_AWIDTH-1:0] pcie_rd_req_buf_head;
+logic [DMA_BUF_AWIDTH-1:0] pcie_rd_req_buf_tail;
+pcie_wr_req_t pcie_wr_req_buf[DMA_BUF_SIZE-1:0];
+logic [DMA_BUF_AWIDTH-1:0] pcie_wr_req_buf_head;
+logic [DMA_BUF_AWIDTH-1:0] pcie_wr_req_buf_tail;
+
 pcie_state_t pcie_state;
+// ring buffer to keep track of descriptors with pending reads
+pcie_desc_t dma_pending_rd_buf[DMA_BUF_SIZE-1:0];
+logic [DMA_BUF_AWIDTH-1:0] dma_pending_rd_buf_head;
+logic [DMA_BUF_AWIDTH-1:0] dma_pending_rd_buf_tail;
+
+// number of dwords that have been requested (for the head descriptor)
+logic [31:0] cur_desc_reqs_dwords;
+
+// number of dwords that have completed a read (for the tail descriptor)
+logic [31:0] cur_desc_compl_dword_reads;
+
+// keep results from read requests so that they don't need to be consumed
+// immediately
+logic [511:0] read_return_buf [DMA_BUF_SIZE-1:0];
+logic [DMA_BUF_AWIDTH-1:0] read_return_buf_head;
+logic [DMA_BUF_AWIDTH-1:0] read_return_buf_tail;
+
+// number of flits missing in the last packet being received by the queue
+// this is used to verify the payload and ensure that the IPV4 total length
+// field matches the packets we are receiving
+logic [31:0] pkt_missing_flits[nb_queues];
+logic [31:0] expected_addr[nb_queues];
+
+logic setup_finished;
 
 // PCIe FPGA -> CPU
 always @(posedge clk_pcie) begin
-    pcie_address_0 <= 0;
-    pcie_write_0 <= 0;
-    pcie_read_0 <= 0;
-
-    pcie_writedata_0 <= 0;
-    pcie_byteenable_0 <= 0;
 
     pcie_address_1 <= 0;
     pcie_write_1 <= 0;
@@ -428,22 +475,46 @@ always @(posedge clk_pcie) begin
     pcie_wrdm_tx_data <= 0;
 
     if (rst) begin
+        integer i;
+
         pcie_state <= PCIE_SET_F2C_QUEUE;
         cfg_queue <= 0;
         cnt_delay <= 0;
         nb_config_queues <= 0;
         dma_buf_tail <= 0;
+
+        dma_pending_rd_buf_head <= 0;
+        dma_pending_rd_buf_tail <= 0;
+
+        cur_desc_reqs_dwords <= 0;
+        cur_desc_compl_dword_reads <= 0;
+
+        read_return_buf_head <= 0;
+        read_return_buf_tail <= 0;
+
+        pcie_rd_req_buf_head <= 0;
+        pcie_wr_req_buf_head <= 0;
+
+        setup_finished <= 0;
+
+        for (i = 0; i < nb_queues; i = i + 1) begin
+            pkt_missing_flits[i] <= 0;
+            expected_addr[i] <= 1; // skip the control flit
+        end
     end else begin
         case (pcie_state)
             PCIE_SET_F2C_QUEUE: begin
                 if (cnt >= 1000) begin
-                    pcie_write_0 <= 1;
+                    automatic pcie_wr_req_t wr_req;
+                    wr_req.addr = cfg_queue << 12;
+                    wr_req.data = 0;
+                    wr_req.data[127:64] = 64'hdeadbe0000000000 +
+                                          (cfg_queue << 32);
+                    wr_req.byteenable = 0;
+                    wr_req.byteenable[15:8] = 8'hff;
 
-                    // configure queue
-                    pcie_address_0 <= cfg_queue << 12;
-                    pcie_writedata_0[127:64] <= 64'hdeadbeef00000000 +
-                                                (cfg_queue << 24);
-                    pcie_byteenable_0[15:8] <= 8'hff;
+                    pcie_wr_req_buf[pcie_wr_req_buf_head] <= wr_req;
+                    pcie_wr_req_buf_head <= pcie_wr_req_buf_head + 1;
 
                     if (cfg_queue == nb_queues - 1) begin
                         pcie_state <= PCIE_READ_F2C_QUEUE;
@@ -456,16 +527,19 @@ always @(posedge clk_pcie) begin
             end
             PCIE_READ_F2C_QUEUE: begin
                 if (cnt >= cnt_delay) begin
+                    automatic pcie_rd_req_t rd_req;
 
                     // read queue 0
-                    pcie_address_0 <= 0 << 12;
-                    pcie_read_0 <= 1;
+                    rd_req.addr = 0 << 12;
+                    pcie_rd_req_buf[pcie_rd_req_buf_head] <= rd_req;
+                    pcie_rd_req_buf_head <= pcie_rd_req_buf_head + 1;
+
                     pcie_state <= PCIE_READ_F2C_QUEUE_WAIT;
                 end
             end
             PCIE_READ_F2C_QUEUE_WAIT: begin
                 if (pcie_readdatavalid_0) begin
-                    assert(pcie_readdata_0[127:64] == 64'hdeadbeef00000000);
+                    assert(pcie_readdata_0[127:64] == 64'hdeadbe0000000000);
 
                     pcie_state <= PCIE_SET_C2F_QUEUE;
                     cnt_delay <= cnt + 10;
@@ -473,15 +547,15 @@ always @(posedge clk_pcie) begin
             end
             PCIE_SET_C2F_QUEUE: begin
                 if (cnt >= cnt_delay) begin
-                    pcie_write_0 <= 1;
+                    automatic pcie_wr_req_t wr_req;
+                    wr_req.addr = 0 << 12;
+                    wr_req.data = 0;
+                    wr_req.data[255:192] = 64'h0123456789abcdef;
+                    wr_req.byteenable = 0;
+                    wr_req.byteenable[31:24] = 8'hff;
 
-                    // configure queue 0
-                    pcie_address_0 <= 0 << 12;
-
-                    // addr
-                    pcie_writedata_0[255:192] <= 64'h0123456789abcdef;
-                    // enable
-                    pcie_byteenable_0[31:24] <= 8'hff;
+                    pcie_wr_req_buf[pcie_wr_req_buf_head] <= wr_req;
+                    pcie_wr_req_buf_head <= pcie_wr_req_buf_head + 1;
 
                     pcie_state <= PCIE_READ_C2F_QUEUE;
                     cnt_delay <= cnt + 10;
@@ -489,9 +563,13 @@ always @(posedge clk_pcie) begin
             end
             PCIE_READ_C2F_QUEUE: begin
                 if (cnt >= cnt_delay) begin
+                    automatic pcie_rd_req_t rd_req;
+
                     // read queue 0
-                    pcie_address_0 <= 0 << 12;
-                    pcie_read_0 <= 1;
+                    rd_req.addr = 0 << 12;
+                    pcie_rd_req_buf[pcie_rd_req_buf_head] <= rd_req;
+                    pcie_rd_req_buf_head <= pcie_rd_req_buf_head + 1;
+
                     pcie_state <= PCIE_READ_C2F_QUEUE_WAIT;
                 end
             end
@@ -534,77 +612,218 @@ always @(posedge clk_pcie) begin
                     // pcie_writedata_1 <= pdu_hdr;
                     // pcie_write_1 <= 1;
 
-                    pcie_state <= PCIE_CONSUME_PKT_BUFFER;
+                    pcie_state <= PCIE_WAIT_DESC;
+                    setup_finished <= 1;
                 end
             end
-            // TODO(sadok) assert that RULE_SET == 2
-            PCIE_CONSUME_PKT_BUFFER: begin
-                if (delayed_pcie_wrdm_desc_valid) begin
-                    automatic pcie_desc_t pcie_desc = delayed_pcie_wrdm_desc_data;
-                    // `hdisplay(("pcie_desc: %h", pcie_desc));
-                    // print_pcie_desc(pcie_desc);
+            PCIE_WAIT_DESC: begin
+                if (delayed_pcie_wrdm_desc_valid && 
+                    ((dma_pending_rd_buf_head + 1) != dma_pending_rd_buf_tail))
+                begin
+                    automatic pcie_desc_t pcie_desc = dma_buf[dma_buf_tail];
 
-                    if (pcie_desc.immediate) begin
-                        automatic logic [7:0] queue;
-                        automatic logic [31:0] head;
-                        automatic logic [31:0] tail;
+                    dma_buf_tail <= dma_buf_tail + 1'b1;
+                    dma_pending_rd_buf[dma_pending_rd_buf_head] <= pcie_desc;
+                    dma_pending_rd_buf_head <= dma_pending_rd_buf_head + 1'b1;
 
-                        // update head using the tail we got from the descriptor
-                        // to simulate reading the packets
-                        tail = pcie_desc.saddr_data[31:0];
-                        head = tail;
-                        queue = pcie_desc.dst_addr[31:24];
-
-                        // `hdisplay(("Receiving packet on queue %d (t=%h, h=%h)",
-                        //          queue, tail, head));
-
-                        // update head on the FPGA
-                        pcie_write_0 <= 1;
-                        pcie_address_0 <= queue << 12;
-                        pcie_writedata_0[63:32] <= head;
-                        pcie_byteenable_0[7:4] <= 8'hff;
-
-                        pcie_wrdm_tx_valid <= 1;
-                        // TODO(sadok) Fill tx_data (table 17 of the manual)
-                        pcie_wrdm_tx_data <= 0;
-                    end else begin
+                    if (!pcie_desc.immediate) begin
                         // read data from FPGA BRAM using the Avalon-MM address
-                        // HACK(sadok) we are reading only the last pending flit
+                        automatic pcie_rd_req_t rd_req;
+
+                        rd_req.addr = pcie_desc.saddr_data;
+
+                        if (pcie_rd_req_buf_head + 1 == pcie_rd_req_buf_tail) begin
+                            $error("Not enough space to keep read requests");
+                            $finish();
+                        end
+                        pcie_rd_req_buf[pcie_rd_req_buf_head] <= rd_req;
+                        pcie_rd_req_buf_head <= pcie_rd_req_buf_head + 1;
 
                         // `hdisplay(("Receiving DMA batch with %d bytes",
                         //          pcie_desc.nb_dwords * 4));
 
-                        // pcie_address_0 <= pcie_desc.saddr_data;
-                        pcie_address_0 <= pcie_desc.saddr_data +
-                                          pcie_desc.nb_dwords * 4 - 64;
-                        // last_dma_transfer_addr <= pcie_desc.saddr_data;
-                        // end_dma_transfer_addr <= pcie_desc.saddr_data +
-                        //                          pcie_desc.nb_dwords * 4;
-
-                        // `hdisplay(("Reading data to dest. memory address: %h",
-                        //          pcie_desc.dst_addr));
-                        pcie_read_0 <= 1;
+                        if (pcie_desc.nb_dwords > 16) begin
+                            pcie_state <= PCIE_READ_REMAINING_DESC;
+                            cur_desc_reqs_dwords <= 16;
+                        end
                     end
                 end
-                // if (pending_flits_to_dma) begin
-                //     pcie_address_0 <= pcie_desc.saddr_data +
-                //                           pcie_desc.nb_dwords * 4 - 64;
-                // end
-                if (pcie_readdatavalid_0) begin
-                    // TODO(sadok) simulate host memory so that we can check
-                    // what has been written to it
-                    // `hdisplay(("Flit from PCIe: 0x%64h", pcie_readdata_0));
+            end
+            // when a DMA descriptor has multiple flits associated with it, we
+            // need to request the remaining
+            PCIE_READ_REMAINING_DESC: begin
+                automatic pcie_rd_req_t rd_req;
+                automatic pcie_desc_t pcie_desc = 
+                    dma_pending_rd_buf[dma_pending_rd_buf_head-1];
 
-                    // FIXME(sadok) this only works because we are reading the
-                    // last data of the descriptor only, if we read all the data
-                    // we would need to check if it is over
-                    pcie_wrdm_tx_valid <= 1;
+                if ((cur_desc_reqs_dwords + 16) >= pcie_desc.nb_dwords) begin
+                    pcie_state <= PCIE_WAIT_DESC;
+                    cur_desc_reqs_dwords <= 0;
+                end else begin
+                    cur_desc_reqs_dwords <= cur_desc_reqs_dwords + 16;
+                end
+
+                rd_req.addr = pcie_desc.saddr_data + cur_desc_reqs_dwords*4;
+
+                if (pcie_rd_req_buf_head + 1 == pcie_rd_req_buf_tail) begin
+                    $error("Not enough space to keep read requests");
+                    $finish();
+                end
+                pcie_rd_req_buf[pcie_rd_req_buf_head] <= rd_req;
+                pcie_rd_req_buf_head <= pcie_rd_req_buf_head + 1;
+            end
+        endcase
+
+        if (setup_finished && pcie_readdatavalid_0) begin
+            if (read_return_buf_head + 1 == read_return_buf_tail) begin
+                $error("Not enough space to keep read results");
+                $finish();
+            end
+            read_return_buf[read_return_buf_head] <= pcie_readdata_0;
+            read_return_buf_head <= read_return_buf_head + 1;
+        end
+
+        // at least one pending read
+        if (dma_pending_rd_buf_head != dma_pending_rd_buf_tail) begin
+            automatic pcie_desc_t pcie_desc = 
+                    dma_pending_rd_buf[dma_pending_rd_buf_tail];
+            automatic logic [7:0] queue = pcie_desc.dst_addr[39:32];
+
+            if (pcie_desc.immediate) begin
+                automatic pcie_wr_req_t wr_req;
+                automatic logic [31:0] ram_addr;
+                automatic logic [31:0] head;
+                automatic logic [31:0] tail;
+
+                dma_pending_rd_buf_tail <= dma_pending_rd_buf_tail + 1'b1;
+
+                // update head using the tail we got from the descriptor
+                // to simulate reading the packets
+                tail = pcie_desc.saddr_data[31:0];
+                head = tail;
+                ram_addr = pcie_desc.dst_addr[31:6];
+
+                if (ram_addr != 0) begin
+                    `herror(("Unexpected address. Expected: 0x0, got: 0x%h",
+                             ram_addr));
+                    error_termination <= 1;
+                end
+
+                ram[queue][ram_addr][pcie_desc.dst_addr[5:3] +: 64] <= pcie_desc.saddr_data;
+
+                // `hdisplay(("Receiving packet on queue %d (t=%h, h=%h)",
+                //          queue, tail, head));
+
+                // update head on the FPGA                
+                wr_req.addr = queue << 12;
+                wr_req.data = 0;
+                wr_req.data[63:32] = head;
+                wr_req.byteenable = 0;
+                wr_req.byteenable[7:4] = 8'hff;
+
+                if (pcie_wr_req_buf_head + 1 == pcie_wr_req_buf_tail) begin
+                    $error("Not enough space to keep write requests");
+                    $finish();
+                end
+
+                pcie_wr_req_buf[pcie_wr_req_buf_head] <= wr_req;
+                pcie_wr_req_buf_head <= pcie_wr_req_buf_head + 1;
+                
+
+                // TODO(sadok) Fill tx_data (table 17 of the manual)
+                pcie_wrdm_tx_data <= 0;
+                pcie_wrdm_tx_valid <= 1;
+            end else if (read_return_buf_head != read_return_buf_tail) begin
+                // RAM address in #flits
+                automatic logic [31:0] ram_addr = (pcie_desc.dst_addr[31:0] + 
+                    cur_desc_compl_dword_reads * 4)/64;
+                automatic logic [15:0] ipv4_total_len =
+                    read_return_buf[read_return_buf_tail][143:136] +
+                    (read_return_buf[read_return_buf_tail][135:128] << 8);
+
+                ram[queue][ram_addr] <= read_return_buf[read_return_buf_tail];
+
+                // HACK(sadok) assumes that all packets have zero payload
+                if (pkt_missing_flits[queue] == 0) begin
+                    pkt_missing_flits[queue] <= (ipv4_total_len + 18 - 1) >> 6;
+                    if (ipv4_total_len == 0) begin
+                        `herror(("Received malformed packet"));
+                        error_termination <= 1;
+                    end
+                end else begin
+                    pkt_missing_flits[queue] <= pkt_missing_flits[queue] - 1;
+                    if (ipv4_total_len != 0) begin
+                        `herror(("Received malformed packet"));
+                        error_termination <= 1;
+                    end
+                end
+
+                // `hdisplay(("queue: %d, Expected: 0x%h, got: 0x%h", queue,
+                //           expected_addr[queue], ram_addr));
+
+                if (expected_addr[queue] != ram_addr) begin
+                    `herror(("Unexpected address. Expected: 0x%h, got: 0x%h",
+                             expected_addr[queue], ram_addr));
+                    error_termination <= 1;
+                end
+
+                if (expected_addr[queue] == RAM_BUF_SIZE) begin
+                    expected_addr[queue] <= 1; // skip the control flit
+                end else begin
+                    expected_addr[queue] <= expected_addr[queue] + 1;
+                end 
+
+                read_return_buf_tail <= read_return_buf_tail + 1'b1;
+                cur_desc_compl_dword_reads <= cur_desc_compl_dword_reads + 16;
+
+                if ((cur_desc_compl_dword_reads + 16) >= pcie_desc.nb_dwords)
+                begin
+                    dma_pending_rd_buf_tail <= dma_pending_rd_buf_tail + 1'b1;
+                    cur_desc_compl_dword_reads <= 0;
 
                     // TODO(sadok) Fill tx_data (table 17 of the manual)
                     pcie_wrdm_tx_data <= 0;
+                    pcie_wrdm_tx_valid <= 1;
                 end
             end
-        endcase
+        end
+
+        // // dummy software side (advances ring buffer and may print memory)
+        // for (i = 0; i < nb_queues; i = i + 1) begin
+            
+        // end
+
+    end
+end
+
+// pcie arbiter -- serializes read and write requests
+always @(posedge clk_pcie) begin
+    pcie_read_0 <= 0;
+    pcie_write_0 <= 0;
+    pcie_address_0 <= 0;
+    pcie_writedata_0 <= 0;
+    pcie_byteenable_0 <= 0;
+
+    if (rst) begin
+        pcie_rd_req_buf_tail <= 0;
+        pcie_wr_req_buf_tail <= 0;
+    end else begin
+        // priority to writes
+        if (pcie_wr_req_buf_head != pcie_wr_req_buf_tail) begin
+            automatic pcie_wr_req_t wr_req = pcie_wr_req_buf[pcie_wr_req_buf_tail];
+            pcie_wr_req_buf_tail <= pcie_wr_req_buf_tail + 1;
+
+            pcie_write_0 <= 1;
+            pcie_address_0 <= wr_req.addr;
+            pcie_writedata_0 <= wr_req.data;
+            pcie_byteenable_0 <= wr_req.byteenable;
+        end else if (pcie_rd_req_buf_head != pcie_rd_req_buf_tail) begin
+            automatic pcie_rd_req_t rd_req = pcie_rd_req_buf[pcie_rd_req_buf_tail];
+            pcie_rd_req_buf_tail <= pcie_rd_req_buf_tail + 1;
+
+            pcie_read_0 <= 1;
+            pcie_address_0 <= rd_req.addr;
+        end
     end
 end
 
@@ -621,9 +840,8 @@ always @(posedge clk_status) begin
     end else begin
         case(conf_state)
             CONFIGURE: begin
-                automatic logic [25:0] buf_size = 65535;
-                // automatic logic [25:0] buf_size = 31;
-                conf_state <= READ_PCIE_START;
+                automatic logic [25:0] buf_size = RAM_BUF_SIZE;
+                conf_state <= READ_MEMORY;
                 s_addr <= 30'h2A00_0000;
                 s_write <= 1;
 
@@ -635,15 +853,34 @@ always @(posedge clk_status) begin
                     s_writedata <= {5'(nb_queues), buf_size, 1'b0};
                 `endif
             end
-            READ_PCIE_START: begin
-                // can adjust this value to use read_pcie at different points
-                // right now we run at the end
-                // make sure the last packets were read
+            READ_MEMORY: begin
                 if (cnt >= stop || error_termination) begin
-                    s_read <= 1;
-                    conf_state <= READ_PCIE;
-                    $display("read_pcie:");
+                    integer queue;
+                    integer i;
+                    integer j;
+                    integer k;
+                    for (queue = 0; queue < nb_queues; queue = queue + 1) begin
+                        $display("Queue %d", queue);
+                        // printing only the beginning of the RAM buffer,
+                        // may print the entire thing instead:
+                        for (i = 0; i < 25; i = i + 1) begin
+                        // for (i = 0; i < RAM_BUF_SIZE; i = i + 1) begin
+                            for (j = 0; j < 8; j = j + 1) begin
+                                $write("%h:", i*64+j*8);
+                                for (k = 0; k < 8; k = k + 1) begin
+                                    $write(" %h", ram[queue][i][j*64+k*8 +: 8]);
+                                end
+                                $write("\n");
+                            end
+                        end
+                    end
+                    conf_state <= READ_PCIE_START;
                 end
+            end
+            READ_PCIE_START: begin
+                s_read <= 1;
+                conf_state <= READ_PCIE;
+                $display("read_pcie:");
             end
             READ_PCIE: begin
                 if (top_readdata_valid) begin
