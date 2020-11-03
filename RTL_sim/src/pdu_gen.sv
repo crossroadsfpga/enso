@@ -165,22 +165,25 @@ always@(posedge clk)begin
                 if (in_valid) begin
                     pdu_wren_r <= 1;
                     swap <= 1;
-                    pdu_flit <= pdu_flit + 1;
                     // regular flit
                     if (!in_eop) begin
                         if (in_sop) begin
                             pdu_addr_r <= pcie_rb_wr_base_addr;
                             pdu_size <= 64;
+                            pdu_flit <= 1;
                         end else begin
                             pdu_addr_r <= pdu_addr_r + 1;
                             pdu_size <= pdu_size + 64;
+                            pdu_flit <= pdu_flit + 1;
                         end
                     end else begin
                         if (in_sop) begin // only one flit
                             pdu_size <= 64 - in_empty;
+                            pdu_flit <= 1;
                             pdu_addr_r <= pcie_rb_wr_base_addr;
                         end else begin
                             pdu_size <= pdu_size + (64 - in_empty);
+                            pdu_flit <= pdu_flit + 1;
                             pdu_addr_r <= pdu_addr_r + 1;
                         end
                         // set the eop here since we don't have rule anymore
