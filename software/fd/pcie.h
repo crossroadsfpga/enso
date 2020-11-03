@@ -15,6 +15,11 @@
 #define HEAD_UPDATE_PERIOD 0
 #endif
 
+#ifndef BATCH_SIZE
+// Maximum number of packets to process in call to dma_run
+#define BATCH_SIZE 64
+#endif
+
 #ifndef BUFFER_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes)

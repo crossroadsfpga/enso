@@ -59,6 +59,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     intel_fpga_pcie_dev *dev = socket_entry->dev;
 
     printf("Running with HEAD_UPDATE_PERIOD: %i\n", HEAD_UPDATE_PERIOD);
+    printf("Running with BATCH_SIZE: %i\n", BATCH_SIZE);
     printf("Running with BUFFER_SIZE: %i\n", BUFFER_SIZE);
 
     // FIXME(sadok) should find a better identifier than core id
@@ -148,7 +149,7 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     
     // TODO(sadok) does it make sense to limit the number of packets we retrieve
     // at once?
-    while (cpu_head != cpu_tail) {
+    for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
         uint32_t pkt_size = get_pkt_size(my_buf);
         uint32_t pdu_flit = ((pkt_size-1) >> 6) + 1; // number of 64-byte blocks
         uint32_t flit_aligned_size = pdu_flit * 64;
@@ -178,11 +179,15 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
                 memcpy(&kdata[(BUFFER_SIZE + 1) * 16], &kdata[1 * 16],
                        copy_size * 16 * 4);
             }
-            socket_entry->cpu_head = cpu_head + pdu_flit - BUFFER_SIZE;
-            return total_size;
+            cpu_head = cpu_head + pdu_flit - BUFFER_SIZE;
+            break;
         }
         my_buf += flit_aligned_size;
         cpu_head += pdu_flit;
+
+        if (cpu_head == cpu_tail) {
+            break;
+        }
     }
 
     socket_entry->cpu_head = cpu_head;

@@ -11,7 +11,11 @@ ifdef HEAD_UPDATE_PERIOD
 CXXFLAGS += -D HEAD_UPDATE_PERIOD=$(HEAD_UPDATE_PERIOD)
 endif
 
-LDFLAGS = -O2
+ifdef BATCH_SIZE
+CXXFLAGS += -D BATCH_SIZE=$(BATCH_SIZE)
+endif
+
+LDFLAGS = -g -O2
 
 SRCS = fd.cpp pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
