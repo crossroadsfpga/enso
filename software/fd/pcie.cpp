@@ -110,88 +110,31 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     return 0;
 }
 
+static uint64_t nb_runs = 0;
+
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
-    unsigned int cpu_head = socket_entry->cpu_head;
     unsigned int cpu_tail;
-    int free_slot; // number of free slots in ring buffer
-    unsigned int copy_size;
     uint32_t* kdata = socket_entry->kdata;
 
+    if (++nb_runs >= 1e9) {
+        nb_runs = 0;
+        cpu_tail = *(socket_entry->tail_ptr);
+        socket_entry->cpu_tail = cpu_tail;
 
-    cpu_tail = *(socket_entry->tail_ptr);
-    socket_entry->cpu_tail = cpu_tail;
-
-    if (unlikely(cpu_tail == cpu_head)) {
-        return 0;
-    }
-
-    // calculate free_slot
-    if (cpu_tail <= cpu_head) {
-        free_slot = cpu_head - cpu_tail;
-    } else {
-        free_slot = BUFFER_SIZE - cpu_tail + cpu_head;
-    }
-
-    // printf("CPU head = %d; CPU tail = %d; free_slot = %d \n", 
-    //         cpu_head, cpu_tail, free_slot);
-    if (unlikely(free_slot < 1)) {
-        printf("cpu_tail: %i cpu_head: %i\n", cpu_tail, cpu_head);
-        printf("FPGA breaks free_slot assumption!\n");
-        return -1;
-    }
-
-    *buf = &kdata[(cpu_head + 1) * 16];
-    uint8_t* my_buf = (uint8_t*) *buf;
-
-    uint32_t total_size = 0;
-    uint32_t total_flits = 0;
-    
-    // TODO(sadok) does it make sense to limit the number of packets we retrieve
-    // at once?
-    for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
-        uint32_t pkt_size = get_pkt_size(my_buf);
-        uint32_t pdu_flit = ((pkt_size-1) >> 6) + 1; // number of 64-byte blocks
-        uint32_t flit_aligned_size = pdu_flit * 64;
-
-        // check transfer_flit
-        if (unlikely(pdu_flit == 0)) {
-            printf("transfer_flit has to be bigger than 0!\n");
-            return -1;
-        }
-
-        // reached the buffer limit
-        if (unlikely((total_size + flit_aligned_size) > len)) {
-            socket_entry->cpu_head = cpu_head;
-            return total_size;
-        }
-
-        // TODO(sadok) Handle packets that are not flit-aligned? There will be a
-        // gap, what should we do?
-        total_size += flit_aligned_size;
-        total_flits += pdu_flit;
-
-        // TODO(sadok) this may be a performance problem
-        // We need to copy the begining of the ring buffer to the last page
-        if ((cpu_head + pdu_flit) >= BUFFER_SIZE) {
-            if ((cpu_head + pdu_flit) != BUFFER_SIZE) {
-                copy_size = cpu_head + pdu_flit - BUFFER_SIZE;
-                memcpy(&kdata[(BUFFER_SIZE + 1) * 16], &kdata[1 * 16],
-                       copy_size * 16 * 4);
+        printf("Buffer:\n");
+        for (int i = 0; i < 2; ++i) {
+            for (int j = 0; j < 8; ++j) {
+                for (int k = 0; k < 8; ++k) {
+                    printf("%02hhX ", ((uint8_t*) kdata)[i*64 + j*8 + k]);
+                }
+                printf("\n");
             }
-            cpu_head = cpu_head + pdu_flit - BUFFER_SIZE;
-            break;
-        }
-        my_buf += flit_aligned_size;
-        cpu_head += pdu_flit;
-
-        if (cpu_head == cpu_tail) {
-            break;
+            printf("\n");
         }
     }
 
-    socket_entry->cpu_head = cpu_head;
-    return total_size;
+    return 0;
 }
 
 void advance_ring_buffer(socket_internal* socket_entry)

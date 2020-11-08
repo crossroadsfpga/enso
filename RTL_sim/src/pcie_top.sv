@@ -69,7 +69,8 @@ logic         status_write_r;
 logic [31:0]  status_writedata_r;
 logic [STAT_AWIDTH-1:0] status_addr_sel_r;
 
-logic [31:0] control_reg;
+localparam NB_CONTROL_REGS = 3;
+logic [31:0] control_reg [NB_CONTROL_REGS];
 
 // internal signals
 pcie_block_t pcie_block;
@@ -188,8 +189,16 @@ logic [APP_IDX_WIDTH-1:0] dma_queue;
 logic [APP_IDX_WIDTH:0]   queue_id; // extra bit for invalid queue
 logic [RB_AWIDTH-1:0]     new_tail;
 
+logic [31:0] target_nb_requests;
+logic        write_pointer;
+logic        use_bram;
+logic [31:0] req_size;
+logic [31:0] transmit_cycles;
+
 // JTAG
 always@(posedge clk_status) begin
+    integer i;
+
     status_addr_r       <= status_addr;
     status_addr_sel_r   <= status_addr[29:30-STAT_AWIDTH];
 
@@ -201,7 +210,9 @@ always@(posedge clk_status) begin
     q_table_rd_en_jtag <= 0;
 
     if (!pcie_reset_n) begin
-        control_reg <= 0;
+        for (i = 0; i < NB_CONTROL_REGS; i = i + 1) begin
+            control_reg[i] <= 0;
+        end
     end
 
     if (q_table_rd_data_b_ready_from_jtag && q_table_rd_pending_from_jtag) begin
@@ -211,12 +222,15 @@ always@(posedge clk_status) begin
     end
 
     if (status_addr_sel_r == PCIE & status_read_r) begin
-        if (status_addr_r[0 +:JTAG_ADDR_WIDTH] == 0) begin
-            status_readdata <= control_reg;
+        if (status_addr_r[0 +:JTAG_ADDR_WIDTH] < NB_CONTROL_REGS) begin
+            status_readdata <= control_reg[status_addr_r[0 +:JTAG_ADDR_WIDTH]];
+            status_readdata_valid <= 1;
+        end else if (status_addr_r[0 +:JTAG_ADDR_WIDTH] == NB_CONTROL_REGS) begin
+            status_readdata <= transmit_cycles;
             status_readdata_valid <= 1;
         end else begin
-            q_table_jtag <= {status_addr_r[0 +:JTAG_ADDR_WIDTH]-1}[1:0];
-            q_table_addr_jtag <= {status_addr_r[0 +:JTAG_ADDR_WIDTH]-1}[
+            q_table_jtag <= {status_addr_r[0 +:JTAG_ADDR_WIDTH]-status_addr_r[0 +:JTAG_ADDR_WIDTH]}[1:0];
+            q_table_addr_jtag <= {status_addr_r[0 +:JTAG_ADDR_WIDTH]-NB_CONTROL_REGS-1}[
                 2 +:APP_IDX_WIDTH];
             q_table_rd_pending_from_jtag <= 1;
             q_table_rd_en_jtag <= 1;
@@ -224,14 +238,18 @@ always@(posedge clk_status) begin
     end
 
     if (status_addr_sel_r == PCIE & status_write_r) begin
-        if (status_addr_r[0 +:JTAG_ADDR_WIDTH] == 0) begin
-            control_reg <= status_writedata_r;
+        if (status_addr_r[0 +:JTAG_ADDR_WIDTH] < NB_CONTROL_REGS) begin
+            control_reg[status_addr_r[0 +:JTAG_ADDR_WIDTH]] <= status_writedata_r;
         end
     end
 end
 
-assign disable_pcie = control_reg[0];
-assign rb_size = control_reg[26:1];
+assign disable_pcie = control_reg[0][0];
+assign rb_size = control_reg[0][26:1];
+assign write_pointer = control_reg[1][0];
+assign use_bram = control_reg[1][1];
+assign req_size = control_reg[1][31:2];  // dwords
+assign target_nb_requests = control_reg[2];
 
 // we choose the right set of registers based on the page (the page's index LSB
 // is at bit 12 of the memory address, the MSB depends on the number of apps we
@@ -663,7 +681,12 @@ fpga2cpu_pcie f2c_inst (
     .frb_address        (frb_address),
     .frb_read           (frb_read),
     .dma_queue_full_cnt (dma_queue_full_cnt),
-    .cpu_buf_full_cnt   (cpu_buf_full_cnt)
+    .write_pointer      (write_pointer),
+    .use_bram           (use_bram),
+    .cpu_buf_full_cnt   (cpu_buf_full_cnt),
+    .target_nb_requests (target_nb_requests),
+    .req_size           (req_size),
+    .transmit_cycles    (transmit_cycles)
 );
 
 cpu2fpga_pcie c2f_inst (

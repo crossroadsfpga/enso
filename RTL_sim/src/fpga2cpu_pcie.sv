@@ -40,7 +40,14 @@ module fpga2cpu_pcie (
 
     // counters
     output logic [31:0]              dma_queue_full_cnt,
-    output logic [31:0]              cpu_buf_full_cnt
+    output logic [31:0]              cpu_buf_full_cnt,
+
+    // pcie profile
+    input logic                      write_pointer,
+    input logic                      use_bram,
+    input logic  [31:0]              target_nb_requests,
+    input logic  [31:0]              req_size,  // in dwords
+    output logic [31:0]              transmit_cycles
 );
 
 localparam EP_BASE_ADDR = 32'h0004_0000;
@@ -56,48 +63,40 @@ logic [63:0] cpu_data_addr_high;
 logic [31:0] ep_data_addr_high;
 logic [31:0] data_base_addr;
 
-logic [RB_AWIDTH-1:0] free_slot;
-logic [RB_AWIDTH-1:0] new_tail;
-
-logic [PDU_AWIDTH-1:0] dma_size_r; // in 512 bits, or 16 DWORD.
-logic [PDU_AWIDTH-1:0] dma_size_r_low; // in 512 bits, or 16 DWORD.
-logic [PDU_AWIDTH-1:0] dma_size_r_high; // in 512 bits, or 16 DWORD.
-// logic [31-PDU_AWIDTH-4:0] desc_padding; // 4 is for 16 DWORD
-logic [31-RB_AWIDTH:0] tail_padding; // 4 is for 16 DWORD
-logic [PDU_AWIDTH-1:0] frb_address_r1;
-logic [PDU_AWIDTH-1:0] frb_address_r2;
+logic [511:0]          my_wr_data;
+logic [PDU_AWIDTH-1:0] my_wr_addr;
+logic                  my_wr_en;
 
 logic wrdm_desc_ready_r1;
 logic wrdm_desc_ready_r2;
 
-assign tail_padding = 0;
+logic [31:0] nb_requests;
+logic bram_init;
 
 typedef enum
 {
     IDLE,
-    WAIT_QUEUE_STATE,
     DESC,
-    DESC_WRAP,
     DONE
 } state_t;
 
 state_t state;
 
-logic [PDU_AWIDTH-1:0]  dma_size;
 logic [PDU_AWIDTH-1:0]  dma_base_addr;
 
+assign dma_base_addr = 0;
+assign wr_base_addr = 0;
+assign wr_base_addr_valid = 0;
+assign almost_full = 0;
+assign max_rb = 0;
+assign dma_start = 0;
+assign dma_queue = 0;
+
 // CPU side addr
-assign cpu_data_addr = kmem_addr + 64*tail + 64; // the global reg
+assign cpu_data_addr = kmem_addr + 64; // the global reg
 
 // The base addr of fpga side ring buffer. BRAM starts with an offset
 assign data_base_addr = EP_BASE_ADDR + (RB_BRAM_OFFSET + dma_base_addr) << 6;
-
-// Rounding case
-assign dma_size_r_low = rb_size - tail;
-assign dma_size_r_high = dma_size_r - rb_size + tail; // dma_size_r - dma_size_r_low
-assign cpu_data_addr_low = cpu_data_addr;
-assign cpu_data_addr_high = kmem_addr + (1<<6); // always starts from the beginning
-assign ep_data_addr_high = data_base_addr + {dma_size_r_low, 6'b0};
 
 assign done_desc = '{
     func_nb: 0,
@@ -108,7 +107,7 @@ assign done_desc = '{
     immediate: 1,
     nb_dwords: 18'd1,
     dst_addr: kmem_addr,
-    saddr_data: {32'h0, tail_padding, new_tail} // data
+    saddr_data: {32'h0, nb_requests[31:0]} // data
 };
 
 assign data_desc = '{
@@ -118,55 +117,10 @@ assign data_desc = '{
     reserved: 0,
     single_src: 0,
     immediate: 0,
-    // dma_size_r is in #512-bit flits, we shift 4 bits to be in #dwords
-    nb_dwords: {dma_size_r, 4'h0},
+    nb_dwords: {req_size},
     dst_addr: cpu_data_addr,
     saddr_data: {32'h0, data_base_addr}
 };
-
-// When the data wraps around the ring buffer we use two DMAs: one for the first
-// part (until the end of the buffer) and the other for the second part. For
-// such case, we use the following two write data mover descriptors.
-assign data_desc_low = '{
-    func_nb: 0,
-    desc_id: 0,
-    app_spec: 0,
-    reserved: 0,
-    single_src: 0,
-    immediate: 0,
-    nb_dwords: {dma_size_r_low, 4'h0},
-    dst_addr: cpu_data_addr_low,
-    saddr_data: {32'h0, data_base_addr}
-};
-
-assign data_desc_high = '{
-    func_nb: 0,
-    desc_id: 0,
-    app_spec: 0,
-    reserved: 0,
-    single_src: 0,
-    immediate: 0,
-    nb_dwords: {dma_size_r_high, 4'h0},
-    dst_addr: cpu_data_addr_high,
-    saddr_data: {32'h0, ep_data_addr_high}
-};
-
-// Always have at least one slot not occupied
-assign free_slot = (tail >= head) ? (rb_size-tail+head-1) : (head-tail-1);
-
-// We need two transfers. If it is equal, we only need one transfer and to
-// round the fpga_tail
-assign wrap = tail + dma_size_r > rb_size;
-
-assign new_tail = (tail + dma_size_r >= rb_size) ? 
-                        (tail + dma_size_r - rb_size) :
-                        (tail + dma_size_r);
-
-// two cycle delay
-always @(posedge clk)begin
-    frb_address_r1 <= frb_address;
-    frb_address_r2 <= frb_address_r1;
-end
 
 always @ (posedge clk) begin
     // wrdm_desc_ready has a 3-cycle latency, wrdm_desc_ready_r2 is active, we
@@ -199,55 +153,52 @@ assign ready_for_new_transfers = dma_ctrl_ready && !pending_transfer;
 // FSM
 always @ (posedge clk) begin
     desc_valid <= 0;
+    dma_done <= 0;
+    my_wr_data <= 0;
+    my_wr_en <= 0;
+    my_wr_addr <= 0;
     if (rst) begin
         state <= IDLE;
         out_tail <= 0;
-        dma_done <= 0;
         dma_queue_full_cnt <= 0;
         cpu_buf_full_cnt <= 0;
         pending_transfer <= 0;
+        nb_requests <= 0;
+        bram_init <= 0;
+        transmit_cycles <= 0;
     end else begin
         case (state)
             IDLE: begin
-                dma_done <= 0;
-                desc_valid <= 0;
-                if (dma_start) begin
-                    state <= WAIT_QUEUE_STATE;
-                    dma_size_r <= dma_size;
-                end
-            end
-            WAIT_QUEUE_STATE: begin
-                if (queue_ready) begin
+                if (nb_requests < target_nb_requests) begin
                     state <= DESC;
+                end
+                if (!bram_init) begin
+                    // initialize BRAM
+                    my_wr_data <= {
+                        64'h0000babe0000face, 64'h0000babe0000face, 
+                        64'h0000babe0000face, 64'h0000babe0000face,
+                        64'h0000babe0000face, 64'h0000babe0000face, 
+                        64'h0000babe0000face, 64'h0000babe0000face
+                    };
+                    my_wr_en <= 1;
+                    my_wr_addr <= 0;
+                    bram_init <= 1;
                 end
             end
             DESC: begin
                 // Have enough space for this transfer.
-                if (ready_for_new_transfers && (free_slot >= dma_size_r)) begin
-                    // Need wrap around
-                    if (wrap) begin
-                        desc_valid <= 1;
-                        wrdm_desc_data <= data_desc_low;
-                        state <= DESC_WRAP;
-                    end else begin
-                        desc_valid <= 1;
-                        wrdm_desc_data <= data_desc;
-                        state <= DONE;
-                    end
-                end
-                if (!ready_for_new_transfers) begin
-                    dma_queue_full_cnt <= dma_queue_full_cnt + 1;
-                end
-                if (free_slot < dma_size_r) begin
-                    cpu_buf_full_cnt <= cpu_buf_full_cnt + 1;
-                end
-            end
-            DESC_WRAP: begin
-                // the previous request is consumed.
                 if (ready_for_new_transfers) begin
                     desc_valid <= 1;
-                    wrdm_desc_data <= data_desc_high;
-                    state <= DONE;
+                    nb_requests <= nb_requests + 1;
+                    wrdm_desc_data <= data_desc;
+                    
+                    if (write_pointer) begin
+                        state <= DONE;
+                    end else if ((nb_requests + 1) == target_nb_requests) begin
+                        state <= IDLE;
+                    end else begin
+                        state <= DESC;
+                    end
                 end else begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
                 end
@@ -258,11 +209,13 @@ always @ (posedge clk) begin
                     wrdm_desc_data <= done_desc;
 
                     // update tail
-                    out_tail <= new_tail;
                     dma_done <= 1;
-                    state <= IDLE;
+                    state <= DESC;
                 end else begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
+                end
+                if (nb_requests == target_nb_requests) begin
+                    state <= IDLE;
                 end
             end
             default: state <= IDLE;
@@ -279,33 +232,50 @@ always @ (posedge clk) begin
             desc_valid <= 1;
             pending_transfer <= 0;
         end
+
+        if (state != IDLE) begin
+            transmit_cycles <= transmit_cycles + 1;
+        end
     end
 end
 
-ring_buffer #(
-    .PDU_DEPTH(PDU_DEPTH),
-    .PDU_AWIDTH(PDU_AWIDTH)
+logic frb_read_r;
+logic [511:0] bram_data_out;
+
+always @(posedge clk) begin
+    if (use_bram) begin
+        frb_read_r <= frb_read;
+        frb_readvalid <= frb_read_r;
+    end else begin
+        frb_readvalid <= frb_read;
+    end
+end
+
+always_comb begin
+    if (use_bram) begin
+        frb_readdata <= bram_data_out;
+    end else begin
+        frb_readdata <= {
+            64'hdead0000beef0000, 64'hdead0000beef0000, 
+            64'hdead0000beef0000, 64'hdead0000beef0000,
+            64'hdead0000beef0000, 64'hdead0000beef0000, 
+            64'hdead0000beef0000, 64'hdead0000beef0000
+        };
+    end
+end
+
+bram_simple2port #(
+    .AWIDTH(PDU_AWIDTH),
+    .DWIDTH(512),
+    .DEPTH(PDU_DEPTH)
 )
-ring_buffer_inst (
-    .clk            (clk),
-    .rst            (rst),
-    .wr_data        (wr_data),
-    .wr_addr        (wr_addr),
-    .wr_en          (wr_en),
-    .wr_base_addr   (wr_base_addr),
-    .wr_base_addr_valid(wr_base_addr_valid),
-    .almost_full    (almost_full),
-    .max_rb         (max_rb),
-    .update_valid   (update_valid),
-    .update_size    (update_size),
-    .rd_addr        (frb_address),
-    .rd_en          (frb_read),
-    .rd_valid       (frb_readvalid),
-    .rd_data        (frb_readdata),
-    .dma_start      (dma_start),
-    .dma_size       (dma_size),
-    .dma_base_addr  (dma_base_addr),
-    .dma_queue      (dma_queue),
-    .dma_done       (dma_done)
+pdu_buffer (
+    .clock      (clk),
+    .data       (my_wr_data),
+    .rdaddress  (frb_address),
+    .rden       (frb_read),
+    .wraddress  (my_wr_addr),
+    .wren       (my_wr_en),
+    .q          (bram_data_out)
 );
 endmodule

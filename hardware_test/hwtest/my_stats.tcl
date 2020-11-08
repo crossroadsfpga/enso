@@ -631,7 +631,7 @@ proc sanity_check {} {
 
 ################## PCIE ##################
 
-proc read_pcie {{nb_bytes 65}} {
+proc read_pcie {{nb_bytes 16}} {
     global PCIE_BASE
 
     for { set a 0 } { $a < $nb_bytes } {incr a} {
@@ -666,6 +666,95 @@ proc enable_pcie {} {
     set_up
 }
 
+proc enable_write_pointer {} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+
+    set read_reg [expr $PCIE_CTRL_REG + 1]
+
+    set rdata [reg_read $PCIE_BASE $read_reg]
+    set wdata [expr ($rdata | 0x1)]
+
+    reg_write $PCIE_BASE $read_reg $wdata
+
+    set_clear
+    set_up
+}
+
+proc disable_write_pointer {} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+
+    set read_reg [expr $PCIE_CTRL_REG + 1]
+
+    set rdata [reg_read $PCIE_BASE $read_reg]
+    set wdata [expr ($rdata & 0xFFFFFFFE)]
+
+    reg_write $PCIE_BASE $read_reg $wdata
+
+    set_clear
+    set_up
+}
+
+proc enable_bram {} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+
+    set read_reg [expr $PCIE_CTRL_REG + 1]
+
+    set rdata [reg_read $PCIE_BASE $read_reg]
+    set wdata [expr ($rdata | 0x2)]
+
+    reg_write $PCIE_BASE $read_reg $wdata
+
+    set_clear
+    set_up
+}
+
+proc disable_bram {} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+
+    set read_reg [expr $PCIE_CTRL_REG + 1]
+
+    set rdata [reg_read $PCIE_BASE $read_reg]
+    set wdata [expr ($rdata & 0xFFFFFFFD)]
+
+    reg_write $PCIE_BASE $read_reg $wdata
+
+    set_clear
+    set_up
+}
+
+proc set_req_size {req_size} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+    global rdata
+    global wdata
+
+    set read_reg [expr $PCIE_CTRL_REG + 1]
+
+    set rdata [reg_read $PCIE_BASE $read_reg]
+    set wdata [expr ( ($req_size << 2) | ($rdata & 0x00000003) )]
+
+    reg_write $PCIE_BASE $read_reg $wdata
+
+    set_clear
+    set_up
+}
+
+proc set_nb_requests {nb_requests} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+
+    set read_reg [expr $PCIE_CTRL_REG + 2]
+
+    reg_write $PCIE_BASE $read_reg $nb_requests
+
+    set_clear
+    set_up
+}
+
 proc set_core_num {core_num} {
     global PCIE_BASE
     global PCIE_CTRL_REG
@@ -680,6 +769,7 @@ proc set_core_num {core_num} {
     set_clear
     set_up
 }
+
 proc set_buf_size {buf_size} {
     global PCIE_BASE
     global PCIE_CTRL_REG
