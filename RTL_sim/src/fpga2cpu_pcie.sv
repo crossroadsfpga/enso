@@ -62,6 +62,7 @@ logic [63:0] cpu_data_addr_low;
 logic [63:0] cpu_data_addr_high;
 logic [31:0] ep_data_addr_high;
 logic [31:0] data_base_addr;
+logic [31:0] last_target_nb_requests;
 
 logic [511:0]          my_wr_data;
 logic [PDU_AWIDTH-1:0] my_wr_addr;
@@ -83,6 +84,8 @@ typedef enum
 state_t state;
 
 logic [PDU_AWIDTH-1:0]  dma_base_addr;
+
+logic [63:0] page_offset;
 
 assign dma_base_addr = 0;
 assign wr_base_addr = 0;
@@ -106,8 +109,8 @@ assign done_desc = '{
     single_src: 0,
     immediate: 1,
     nb_dwords: 18'd1,
-    dst_addr: kmem_addr,
-    saddr_data: {32'h0, nb_requests[31:0]} // data
+    dst_addr: kmem_addr + page_offset,
+    saddr_data: {32'h0, nb_requests} // data
 };
 
 assign data_desc = '{
@@ -118,7 +121,7 @@ assign data_desc = '{
     single_src: 0,
     immediate: 0,
     nb_dwords: {req_size},
-    dst_addr: cpu_data_addr,
+    dst_addr: cpu_data_addr + page_offset,
     saddr_data: {32'h0, data_base_addr}
 };
 
@@ -157,6 +160,7 @@ always @ (posedge clk) begin
     my_wr_data <= 0;
     my_wr_en <= 0;
     my_wr_addr <= 0;
+    last_target_nb_requests <= target_nb_requests;
     if (rst) begin
         state <= IDLE;
         out_tail <= 0;
@@ -166,6 +170,8 @@ always @ (posedge clk) begin
         nb_requests <= 0;
         bram_init <= 0;
         transmit_cycles <= 0;
+        page_offset <= 0;
+        last_target_nb_requests <= 0;
     end else begin
         case (state)
             IDLE: begin
@@ -191,6 +197,11 @@ always @ (posedge clk) begin
                     desc_valid <= 1;
                     nb_requests <= nb_requests + 1;
                     wrdm_desc_data <= data_desc;
+                    if ((page_offset + 4096 + req_size * 4) > (rb_size * 64)) begin
+                        page_offset <= 0;
+                    end else begin
+                        page_offset <= page_offset + 4096;
+                    end
                     
                     if (write_pointer) begin
                         state <= DONE;
@@ -235,6 +246,12 @@ always @ (posedge clk) begin
 
         if (state != IDLE) begin
             transmit_cycles <= transmit_cycles + 1;
+        end
+
+        if (target_nb_requests != last_target_nb_requests) begin
+            nb_requests <= 0;
+            page_offset <= 0;
+            transmit_cycles <= 0;
         end
     end
 end
