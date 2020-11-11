@@ -23,7 +23,7 @@
 #ifndef BUFFER_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes)
-#define BUFFER_SIZE 65535
+#define BUFFER_SIZE 1048575
 #endif
 #define C2F_BUFFER_SIZE 512
 
