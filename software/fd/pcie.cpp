@@ -107,6 +107,11 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
     socket_entry->nb_head_updates = 0;
 
+    // fill buffer with 1s
+    for (uint64_t i = 0; i < allocated_size; ++i) {
+        ((uint8_t*) socket_entry->kdata)[i] = 0xff;
+    }
+
     return 0;
 }
 
@@ -122,15 +127,17 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
         cpu_tail = *(socket_entry->tail_ptr);
         socket_entry->cpu_tail = cpu_tail;
 
-        printf("Buffer:\n");
-        for (int i = 0; i < 2; ++i) {
-            for (int j = 0; j < 8; ++j) {
-                for (int k = 0; k < 8; ++k) {
-                    printf("%02hhX ", ((uint8_t*) kdata)[i*64 + j*8 + k]);
+        for (int page = 0; page < 2; ++page) {
+            printf("Page %i:\n", page);
+            for (int i = 0; i < 10; ++i) {
+                for (int j = 0; j < 8; ++j) {
+                    for (int k = 0; k < 8; ++k) {
+                        printf("%02hhX ", ((uint8_t*) kdata)[page*4096 + i*64 + j*8 + k]);
+                    }
+                    printf("\n");
                 }
                 printf("\n");
             }
-            printf("\n");
         }
     }
 
