@@ -5,19 +5,29 @@ module pcie_top (
     input logic pcie_clk,
     input logic pcie_reset_n,
 
-    input  logic                       pcie_rddm_desc_ready,
-    output logic                       pcie_rddm_desc_valid,
-    output logic [173:0]               pcie_rddm_desc_data,
-    input  logic                       pcie_wrdm_desc_ready,
-    output logic                       pcie_wrdm_desc_valid,
-    output logic [173:0]               pcie_wrdm_desc_data,
-    input  logic                       pcie_wrdm_prio_ready,
-    output logic                       pcie_wrdm_prio_valid,
-    output logic [173:0]               pcie_wrdm_prio_data,
-    input  logic                       pcie_rddm_tx_valid,
-    input  logic [31:0]                pcie_rddm_tx_data,
-    input  logic                       pcie_wrdm_tx_valid,
-    input  logic [31:0]                pcie_wrdm_tx_data,
+    // input  logic                       pcie_rddm_desc_ready,
+    // output logic                       pcie_rddm_desc_valid,
+    // output logic [173:0]               pcie_rddm_desc_data,
+    // input  logic                       pcie_wrdm_desc_ready,
+    // output logic                       pcie_wrdm_desc_valid,
+    // output logic [173:0]               pcie_wrdm_desc_data,
+    // input  logic                       pcie_wrdm_prio_ready,
+    // output logic                       pcie_wrdm_prio_valid,
+    // output logic [173:0]               pcie_wrdm_prio_data,
+    // input  logic                       pcie_rddm_tx_valid,
+    // input  logic [31:0]                pcie_rddm_tx_data,
+    // input  logic                       pcie_wrdm_tx_valid,
+    // input  logic [31:0]                pcie_wrdm_tx_data,
+    input  logic                       pcie_bas_waitrequest,
+    output logic [63:0]                pcie_bas_address,
+    output logic [63:0]                pcie_bas_byteenable,
+    output logic                       pcie_bas_read,
+    input  logic [511:0]               pcie_bas_readdata,
+    input  logic                       pcie_bas_readdatavalid,
+    output logic                       pcie_bas_write,
+    output logic [511:0]               pcie_bas_writedata,
+    output logic [3:0]                 pcie_bas_burstcount,
+    input  logic [1:0]                 pcie_bas_response,
     input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_0,
     input  logic                       pcie_write_0,
     input  logic                       pcie_read_0,
@@ -25,13 +35,13 @@ module pcie_top (
     output logic [511:0]               pcie_readdata_0,
     input  logic [511:0]               pcie_writedata_0,
     input  logic [63:0]                pcie_byteenable_0,
-    input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1,
-    input  logic                       pcie_write_1,
-    input  logic                       pcie_read_1,
-    output logic                       pcie_readdatavalid_1,
-    output logic [511:0]               pcie_readdata_1,
-    input  logic [511:0]               pcie_writedata_1,
-    input  logic [63:0]                pcie_byteenable_1,
+    // input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1,
+    // input  logic                       pcie_write_1,
+    // input  logic                       pcie_read_1,
+    // output logic                       pcie_readdatavalid_1,
+    // output logic [511:0]               pcie_readdata_1,
+    // input  logic [511:0]               pcie_writedata_1,
+    // input  logic [63:0]                pcie_byteenable_1,
 
     // internal signals
     input  flit_lite_t            pcie_rb_wr_data,
@@ -170,10 +180,10 @@ logic q_table_rd_data_b_ready_from_jtag;
 logic [RB_AWIDTH-1:0]    f2c_head;
 logic [RB_AWIDTH-1:0]    f2c_tail;
 logic [63:0]             f2c_kmem_addr;
-logic [511:0]            frb_readdata;
-logic                    frb_readvalid;
-logic [PDU_AWIDTH-1:0]   frb_address;
-logic                    frb_read;
+// logic [511:0]            frb_readdata;
+// logic                    frb_readvalid;
+// logic [PDU_AWIDTH-1:0]   frb_address;
+// logic                    frb_read;
 
 logic pcie_reg_read;
 
@@ -587,24 +597,25 @@ always@(posedge pcie_clk) begin
     if (!pcie_reset_n) begin
         pcie_readdata_0 <= 0;
         pcie_readdatavalid_0 <= 0;
-    end else if (cpu_reg_region_r2) begin
+    end else begin // if (cpu_reg_region_r2) begin
         pcie_readdata_0 <= {
             256'h0, c2f_kmem_addr, c2f_head, c2f_tail,
             q_table_h_addrs_rd_data_b, q_table_l_addrs_rd_data_b,
             q_table_heads_rd_data_b, q_table_tails_rd_data_b
         };
         pcie_readdatavalid_0 <= q_table_rd_data_b_pcie_ready;
-    end else begin
-        pcie_readdata_0 <= frb_readdata;
-        pcie_readdatavalid_0 <= frb_readvalid;
     end
+    // else begin
+    //     pcie_readdata_0 <= frb_readdata;
+    //     pcie_readdatavalid_0 <= frb_readvalid;
+    // end
 end
 
 assign cpu_reg_region = pcie_address_0[PCIE_ADDR_WIDTH-1:6] < RB_BRAM_OFFSET;
 
 assign pcie_reg_read = cpu_reg_region & pcie_read_0;
-assign frb_read = !cpu_reg_region & pcie_read_0;
-assign frb_address = pcie_address_0[PCIE_ADDR_WIDTH-1:6] - RB_BRAM_OFFSET;
+// assign frb_read = !cpu_reg_region & pcie_read_0;
+// assign frb_address = pcie_address_0[PCIE_ADDR_WIDTH-1:6] - RB_BRAM_OFFSET;
 
 // two cycle read delay
 always@(posedge pcie_clk) begin
@@ -673,13 +684,23 @@ fpga2cpu_pcie f2c_inst (
     .dma_queue          (dma_queue),
     .dma_start          (dma_start),
     .rb_size            ({5'b0, rb_size}),
-    .wrdm_desc_ready    (pcie_wrdm_desc_ready),
-    .wrdm_desc_valid    (pcie_wrdm_desc_valid),
-    .wrdm_desc_data     (pcie_wrdm_desc_data),
-    .frb_readdata       (frb_readdata),
-    .frb_readvalid      (frb_readvalid),
-    .frb_address        (frb_address),
-    .frb_read           (frb_read),
+    // .wrdm_desc_ready    (pcie_wrdm_desc_ready),
+    // .wrdm_desc_valid    (pcie_wrdm_desc_valid),
+    // .wrdm_desc_data     (pcie_wrdm_desc_data),
+    // .frb_readdata       (frb_readdata),
+    // .frb_readvalid      (frb_readvalid),
+    // .frb_address        (frb_address),
+    // .frb_read           (frb_read),
+    .pcie_bas_waitrequest   (pcie_bas_waitrequest),
+    .pcie_bas_address       (pcie_bas_address),
+    .pcie_bas_byteenable    (pcie_bas_byteenable),
+    .pcie_bas_read          (pcie_bas_read),
+    .pcie_bas_readdata      (pcie_bas_readdata),
+    .pcie_bas_readdatavalid (pcie_bas_readdatavalid),
+    .pcie_bas_write         (pcie_bas_write),
+    .pcie_bas_writedata     (pcie_bas_writedata),
+    .pcie_bas_burstcount    (pcie_bas_burstcount),
+    .pcie_bas_response      (pcie_bas_response),
     .dma_queue_full_cnt (dma_queue_full_cnt),
     .write_pointer      (write_pointer),
     .use_bram           (use_bram),
@@ -689,26 +710,26 @@ fpga2cpu_pcie f2c_inst (
     .transmit_cycles    (transmit_cycles)
 );
 
-cpu2fpga_pcie c2f_inst (
-    .clk                    (pcie_clk),
-    .rst                    (!pcie_reset_n),
-    .pdumeta_cpu_data       (pdumeta_cpu_data),
-    .pdumeta_cpu_valid      (pdumeta_cpu_valid),
-    .pdumeta_cnt            (pdumeta_cnt),
-    .head                   (c2f_head[C2F_RB_AWIDTH-1:0]),
-    .tail                   (c2f_tail[C2F_RB_AWIDTH-1:0]),
-    .kmem_addr              (c2f_kmem_addr),
-    .cpu_c2f_head_addr      (c2f_head_addr),
-    .wrdm_prio_ready        (pcie_wrdm_prio_ready),
-    .wrdm_prio_valid        (pcie_wrdm_prio_valid),
-    .wrdm_prio_data         (pcie_wrdm_prio_data),
-    .rddm_desc_ready        (pcie_rddm_desc_ready),
-    .rddm_desc_valid        (pcie_rddm_desc_valid),
-    .rddm_desc_data         (pcie_rddm_desc_data),
-    .c2f_writedata          (pcie_writedata_1),
-    .c2f_write              (pcie_write_1),
-    .c2f_address            (pcie_address_1[14:6])
-);
+// cpu2fpga_pcie c2f_inst (
+//     .clk                    (pcie_clk),
+//     .rst                    (!pcie_reset_n),
+//     .pdumeta_cpu_data       (pdumeta_cpu_data),
+//     .pdumeta_cpu_valid      (pdumeta_cpu_valid),
+//     .pdumeta_cnt            (pdumeta_cnt),
+//     .head                   (c2f_head[C2F_RB_AWIDTH-1:0]),
+//     .tail                   (c2f_tail[C2F_RB_AWIDTH-1:0]),
+//     .kmem_addr              (c2f_kmem_addr),
+//     .cpu_c2f_head_addr      (c2f_head_addr),
+//     .wrdm_prio_ready        (pcie_wrdm_prio_ready),
+//     .wrdm_prio_valid        (pcie_wrdm_prio_valid),
+//     .wrdm_prio_data         (pcie_wrdm_prio_data),
+//     .rddm_desc_ready        (pcie_rddm_desc_ready),
+//     .rddm_desc_valid        (pcie_rddm_desc_valid),
+//     .rddm_desc_data         (pcie_rddm_desc_data),
+//     .c2f_writedata          (pcie_writedata_1),
+//     .c2f_write              (pcie_write_1),
+//     .c2f_address            (pcie_address_1[14:6])
+// );
 
 bram_true2port #(
     .AWIDTH(QUEUE_TABLE_AWIDTH),

@@ -1,9 +1,17 @@
-`include "./my_struct_s.sv"
-
 module pcie_core (
         input  wire         refclk_clk,                              //         refclk.clk
         input  wire         pcie_rstn_npor,                          //      pcie_rstn.npor
-        input  wire         pcie_rstn_pin_perst,                     //               .pin_perst
+        input  wire         pcie_rstn_pin_perst,                     //               .pin_pers
+        output wire         bas_waitrequest,                       //                           dut_bas_slave.waitrequest
+        input  wire [63:0]  bas_address,                           //                                        .address
+        input  wire [63:0]  bas_byteenable,                        //                                        .byteenable
+        input  wire         bas_read,                              //                                        .read
+        output wire [511:0] bas_readdata,                          //                                        .readdata
+        output wire         bas_readdatavalid,                     //                                        .readdatavalid
+        input  wire         bas_write,                             //                                        .write
+        input  wire [511:0] bas_writedata,                         //                                        .writedata
+        input  wire [3:0]   bas_burstcount,                        //                                        .burstcount
+        output wire [1:0]   bas_response,                          //                                        .response
         input  wire         xcvr_rx_in0,                             //           xcvr.rx_in0
         input  wire         xcvr_rx_in1,                             //               .rx_in1
         input  wire         xcvr_rx_in2,                             //               .rx_in2
@@ -39,37 +47,13 @@ module pcie_core (
         output logic        pcie_clk,
         output logic        pcie_reset_n,
         //PCIe signals
-        output logic         rddm_desc_ready,
-        input  logic         rddm_desc_valid,
-        input  logic [173:0] rddm_desc_data,
-        
-        output logic         wrdm_desc_ready,
-        input  logic         wrdm_desc_valid,
-        input  logic [173:0] wrdm_desc_data,
-        
-        output logic         wrdm_prio_ready,
-        input  logic         wrdm_prio_valid,
-        input  logic [173:0] wrdm_prio_data,
-
-        output logic         rddm_tx_valid,
-        output logic [31:0]  rddm_tx_data,
-        output logic         wrdm_tx_valid,
-        output logic [31:0]  wrdm_tx_data,
-        
-        output logic [PCIE_ADDR_WIDTH-1:0] address_0,     //   input,    width = 9,     s1.address
+        output logic [18:0] address_0,     //   input,    width = 9,     s1.address
         output logic write_0,       //   input,    width = 1,       .write
         output logic read_0,       //   input,    width = 1,       .write
         input  logic readdatavalid_0,       //   input,    width = 1,       .write
         input  logic [511:0] readdata_0,    //  output,  width = 512,       .readdata
         output logic [511:0] writedata_0,   //   input,  width = 512,       .writedata
-        output logic [63:0] byteenable_0,  //   input,   width = 64,       .byteenable
-        output logic [PCIE_ADDR_WIDTH-1:0] address_1,    //   input,    width = 9,     s2.address
-        output logic write_1,      //   input,    width = 1,       .write
-        output logic read_1,      //   input,    width = 1,       .write
-        input  logic readdatavalid_1,      //   input,    width = 1,       .write
-        input  logic [511:0] readdata_1,   //  output,  width = 512,       .readdata
-        output logic [511:0] writedata_1,  //   input,  width = 512,       .writedata
-        output logic [63:0] byteenable_1 //   input,   width = 64,       .byteenable
+        output logic [63:0] byteenable_0  //   input,   width = 64,       .byteenable
     );
 logic         hip_ctrl_simu_mode_pipe;                 //       hip_ctrl.simu_mode_pipe
 logic [66:0]  hip_ctrl_test_in;                        //               .test_in
@@ -544,30 +528,22 @@ logic         pipe_sim_only_sim_pipe_mask_tx_pll_lock; //               .sim_pip
 
     
 
-    pcie_example_design pcie (
+    pcie_ed pcie (
         .refclk_clk                              (refclk_clk),                              //   input,    width = 1,         refclk.clk
         .pcie_rstn_npor                          (pcie_rstn_npor),                          //   input,    width = 1,      pcie_rstn.npor
         .pcie_rstn_pin_perst                     (pcie_rstn_pin_perst),                     //   input,    width = 1,               .pin_perst
+        .dut_bas_slave_waitrequest               (bas_waitrequest),                       //  output,    width = 1,                           dut_bas_slave.waitrequest
+        .dut_bas_slave_address                   (bas_address),                           //   input,   width = 64,                                        .address
+        .dut_bas_slave_byteenable                (bas_byteenable),                        //   input,   width = 64,                                        .byteenable
+        .dut_bas_slave_read                      (bas_read),                              //   input,    width = 1,                                        .read
+        .dut_bas_slave_readdata                  (bas_readdata),                          //  output,  width = 512,                                        .readdata
+        .dut_bas_slave_readdatavalid             (bas_readdatavalid),                     //  output,    width = 1,                                        .readdatavalid
+        .dut_bas_slave_write                     (bas_write),                             //   input,    width = 1,                                        .write
+        .dut_bas_slave_writedata                 (bas_writedata),                         //   input,  width = 512,                                        .writedata
+        .dut_bas_slave_burstcount                (bas_burstcount),                        //   input,    width = 4,                                        .burstcount
+        .dut_bas_slave_response                  (bas_response),                          //  output,    width = 2,                                        .response
         .hip_ctrl_simu_mode_pipe                 (hip_ctrl_simu_mode_pipe),                 //   input,    width = 1,       hip_ctrl.simu_mode_pipe
         .hip_ctrl_test_in                        (hip_ctrl_test_in),                        //   input,   width = 67,               .test_in
-        .dut_wrdm_conduit_pfnum                  (),                          //                        dut_wrdm_conduit.pfnum
-        .dut_wrdm_desc_ready                     (wrdm_desc_ready),                             //                           dut_wrdm_desc.ready
-        .dut_wrdm_desc_valid                     (wrdm_desc_valid),                             //                                        .valid
-        .dut_wrdm_desc_data                      (wrdm_desc_data),                              //                                        .data
-        .dut_wrdm_prio_ready                     (wrdm_prio_ready),                             //                           dut_wrdm_prio.ready
-        .dut_wrdm_prio_valid                     (wrdm_prio_valid),                             //                                        .valid
-        .dut_wrdm_prio_data                      (wrdm_prio_data),                              //                                        .data
-        .dut_wrdm_tx_valid                       (wrdm_tx_valid),                               //                             dut_wrdm_tx.valid
-        .dut_wrdm_tx_data                        (wrdm_tx_data),                                //                                        .data
-        .dut_rddm_conduit_pfnum                  (),                          //                        dut_rddm_conduit.pfnum
-        .dut_rddm_desc_ready                     (rddm_desc_ready),                             //                           dut_rddm_desc.ready
-        .dut_rddm_desc_valid                     (rddm_desc_valid),                             //                                        .valid
-        .dut_rddm_desc_data                      (rddm_desc_data),                              //                                        .data
-        .dut_rddm_prio_ready                     (),                             //                           dut_rddm_prio.ready
-        .dut_rddm_prio_valid                     (0),                             //                                        .valid
-        .dut_rddm_prio_data                      (0),                              //                                        .data
-        .dut_rddm_tx_valid                       (rddm_tx_valid),                               //                             dut_rddm_tx.valid
-        .dut_rddm_tx_data                        (rddm_tx_data),                                //                                        .data
         .pipe_sim_only_sim_pipe_pclk_in          (pipe_sim_only_sim_pipe_pclk_in),          //   input,    width = 1,  pipe_sim_only.sim_pipe_pclk_in
         .pipe_sim_only_sim_pipe_rate             (pipe_sim_only_sim_pipe_rate),             //  output,    width = 2,               .sim_pipe_rate
         .pipe_sim_only_sim_ltssmstate            (pipe_sim_only_sim_ltssmstate),            //  output,    width = 6,               .sim_ltssmstate
@@ -1079,16 +1055,6 @@ logic         pipe_sim_only_sim_pipe_mask_tx_pll_lock; //               .sim_pip
         .mm_bridge_0_m0_write                    (write_0),                    //  output,    width = 1,               .write
         .mm_bridge_0_m0_read                     (read_0),                     //  output,    width = 1,               .read
         .mm_bridge_0_m0_byteenable               (byteenable_0),               //  output,   width = 64,               .byteenable
-        .mm_bridge_0_m0_debugaccess              (),              //  output,    width = 1,               .debugaccess
-        .mm_bridge_1_m0_waitrequest              (1'b0),              //   input,    width = 1, mm_bridge_1_m0.waitrequest
-        .mm_bridge_1_m0_readdata                 (readdata_1),                 //   input,  width = 512,               .readdata
-        .mm_bridge_1_m0_readdatavalid            (readdatavalid_1),            //   input,    width = 1,               .readdatavalid
-        .mm_bridge_1_m0_burstcount               (),               //  output,    width = 1,               .burstcount
-        .mm_bridge_1_m0_writedata                (writedata_1),                //  output,  width = 512,               .writedata
-        .mm_bridge_1_m0_address                  (address_1),                  //  output,    width = 15,               .address
-        .mm_bridge_1_m0_write                    (write_1),                    //  output,    width = 1,               .write
-        .mm_bridge_1_m0_read                     (read_1),                     //  output,    width = 1,               .read
-        .mm_bridge_1_m0_byteenable               (byteenable_1),               //  output,   width = 64,               .byteenable
-        .mm_bridge_1_m0_debugaccess              ()               //  output,    width = 1,               .debugaccess
+        .mm_bridge_0_m0_debugaccess              ()              //  output,    width = 1,               .debugaccess
     );
 endmodule

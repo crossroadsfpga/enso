@@ -250,6 +250,8 @@ set_global_assignment -name FAST_PRESERVE AUTO -entity alt_ehipc2_hw
 set_global_assignment -name OPTIMIZATION_MODE BALANCED
 set_global_assignment -name ENABLE_SIGNALTAP OFF
 set_global_assignment -name USE_SIGNALTAP_FILE stp1.stp
+set_global_assignment -name QIP_FILE pcie/pcie_example_design/pcie_ed.qip
+set_global_assignment -name VERILOG_FILE pcie/pcie_example_design/synth/pcie_ed.v
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie_core.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_table_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/cpu2fpga_pcie.sv
@@ -316,9 +318,8 @@ set_global_assignment -name VERILOG_FILE src/common/bram_1port.v
 set_global_assignment -name VERILOG_FILE src/common/altera_std_synchronizer_nocut.v
 set_global_assignment -name VERILOG_FILE src/common/altera_dcfifo_synchronizer_bundle.v
 set_global_assignment -name VERILOG_FILE src/common/altera_avalon_st_pipeline_base.v
-set_global_assignment -name IP_FILE pcie/ip/pcie_example_design/pcie_example_design_mm_bridge_1.ip
-set_global_assignment -name IP_FILE pcie/ip/pcie_example_design/pcie_example_design_mm_bridge_0.ip
-set_global_assignment -name IP_FILE pcie/ip/pcie_example_design/pcie_example_design_BAR_INTERPRETER.ip
+set_global_assignment -name IP_FILE pcie/ip/pcie_example_design/pcie_ed_mm_bridge_0.ip
+set_global_assignment -name IP_FILE pcie/ip/pcie_example_design/pcie_ed_BAR_INTERPRETER.ip
 set_global_assignment -name IP_FILE pcie/ip/pcie_example_design/pcie_ed_DUT.ip
 set_global_assignment -name IP_FILE common/my_pll.ip
 set_global_assignment -name QSYS_FILE pcie/pcie_example_design.qsys

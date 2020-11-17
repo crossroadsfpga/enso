@@ -23,19 +23,31 @@ module top (
     input  logic         out_almost_full,       
     
     //PCIE
-    input  logic         pcie_rddm_desc_ready,
-    output logic         pcie_rddm_desc_valid,
-    output logic [173:0] pcie_rddm_desc_data,
-    input  logic         pcie_wrdm_desc_ready,
-    output logic         pcie_wrdm_desc_valid,
-    output logic [173:0] pcie_wrdm_desc_data,
-    input  logic         pcie_wrdm_prio_ready,
-    output logic         pcie_wrdm_prio_valid,
-    output logic [173:0] pcie_wrdm_prio_data,
-    input  logic         pcie_rddm_tx_valid,
-    input  logic [31:0]  pcie_rddm_tx_data,
-    input  logic         pcie_wrdm_tx_valid,
-    input  logic [31:0]  pcie_wrdm_tx_data,
+    // input  logic         pcie_rddm_desc_ready,
+    // output logic         pcie_rddm_desc_valid,
+    // output logic [173:0] pcie_rddm_desc_data,
+    // input  logic         pcie_wrdm_desc_ready,
+    // output logic         pcie_wrdm_desc_valid,
+    // output logic [173:0] pcie_wrdm_desc_data,
+    // input  logic         pcie_wrdm_prio_ready,
+    // output logic         pcie_wrdm_prio_valid,
+    // output logic [173:0] pcie_wrdm_prio_data,
+    // input  logic         pcie_rddm_tx_valid,
+    // input  logic [31:0]  pcie_rddm_tx_data,
+    // input  logic         pcie_wrdm_tx_valid,
+    // input  logic [31:0]  pcie_wrdm_tx_data,
+
+    input  logic         pcie_bas_waitrequest,
+    output logic [63:0]  pcie_bas_address,
+    output logic [63:0]  pcie_bas_byteenable,
+    output logic         pcie_bas_read,
+    input  logic [511:0] pcie_bas_readdata,
+    input  logic         pcie_bas_readdatavalid,
+    output logic         pcie_bas_write,
+    output logic [511:0] pcie_bas_writedata,
+    output logic [3:0]   pcie_bas_burstcount,
+    input  logic [1:0]   pcie_bas_response,
+
     input  logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_0,    
     input  logic         pcie_write_0,      
     input  logic         pcie_read_0,       
@@ -335,6 +347,8 @@ logic [31:0] max_dma_queue_occup;
 logic [31:0] max_dma_queue_occup_r1;
 logic [31:0] max_dma_queue_occup_r2;
 
+logic pcie_bas_write_r;
+
 ///////////////////////////
 //Read and Write registers
 //////////////////////////
@@ -443,9 +457,10 @@ always @(posedge clk_pcie) begin
         rule_set_cnt <= 0;
         dma_queue_occup <= 0;
         max_dma_queue_occup <= 0;
+        pcie_bas_write_r <= 0;
     end else begin
-        automatic logic non_prio_desc_cons = pcie_wrdm_tx_valid && 
-                                             !pcie_wrdm_tx_data[8]; // priority
+        // automatic logic non_prio_desc_cons = pcie_wrdm_tx_valid &&
+        //                                      !pcie_wrdm_tx_data[8]; // priority
         if (pcie_pkt_valid & pcie_pkt_ready & pcie_pkt_eop) begin
             pcie_pkt_cnt <= pcie_pkt_cnt + 1;
         end
@@ -455,21 +470,23 @@ always @(posedge clk_pcie) begin
         if (pcie_rb_update_valid) begin
             dma_pkt_cnt <= dma_pkt_cnt + 1;
         end
-        if (pcie_wrdm_desc_valid) begin
+        if (!pcie_bas_waitrequest && pcie_bas_write_r) begin
             dma_request_cnt <= dma_request_cnt + 1;
         end
         if (pdumeta_cpu_valid) begin
             rule_set_cnt <= rule_set_cnt + 1;
         end
-        if (pcie_wrdm_desc_valid && !non_prio_desc_cons) begin
-            dma_queue_occup <= dma_queue_occup + 1'b1;
-        end
-        if (!pcie_wrdm_desc_valid && non_prio_desc_cons) begin
-            dma_queue_occup <= dma_queue_occup - 1'b1;
-        end
+        // if (pcie_wrdm_desc_valid && !non_prio_desc_cons) begin
+        //     dma_queue_occup <= dma_queue_occup + 1'b1;
+        // end
+        // if (!pcie_wrdm_desc_valid && non_prio_desc_cons) begin
+        //     dma_queue_occup <= dma_queue_occup - 1'b1;
+        // end
         if (dma_queue_occup > max_dma_queue_occup) begin
             max_dma_queue_occup <= dma_queue_occup;
         end
+
+        pcie_bas_write_r <= pcie_bas_write;
     end
 end
 
@@ -1070,19 +1087,29 @@ pktbuf_emptylist (
 pcie_top pcie (
     .pcie_clk               (clk_pcie),
     .pcie_reset_n           (!rst),
-    .pcie_rddm_desc_ready   (pcie_rddm_desc_ready),
-    .pcie_rddm_desc_valid   (pcie_rddm_desc_valid),
-    .pcie_rddm_desc_data    (pcie_rddm_desc_data),
-    .pcie_wrdm_desc_ready   (pcie_wrdm_desc_ready),
-    .pcie_wrdm_desc_valid   (pcie_wrdm_desc_valid),
-    .pcie_wrdm_desc_data    (pcie_wrdm_desc_data),
-    .pcie_wrdm_prio_ready   (pcie_wrdm_prio_ready),
-    .pcie_wrdm_prio_valid   (pcie_wrdm_prio_valid),
-    .pcie_wrdm_prio_data    (pcie_wrdm_prio_data),
-    .pcie_rddm_tx_valid     (pcie_rddm_tx_valid),
-    .pcie_rddm_tx_data      (pcie_rddm_tx_data),
-    .pcie_wrdm_tx_valid     (pcie_wrdm_tx_valid),
-    .pcie_wrdm_tx_data      (pcie_wrdm_tx_data),
+    // .pcie_rddm_desc_ready   (pcie_rddm_desc_ready),
+    // .pcie_rddm_desc_valid   (pcie_rddm_desc_valid),
+    // .pcie_rddm_desc_data    (pcie_rddm_desc_data),
+    // .pcie_wrdm_desc_ready   (pcie_wrdm_desc_ready),
+    // .pcie_wrdm_desc_valid   (pcie_wrdm_desc_valid),
+    // .pcie_wrdm_desc_data    (pcie_wrdm_desc_data),
+    // .pcie_wrdm_prio_ready   (pcie_wrdm_prio_ready),
+    // .pcie_wrdm_prio_valid   (pcie_wrdm_prio_valid),
+    // .pcie_wrdm_prio_data    (pcie_wrdm_prio_data),
+    // .pcie_rddm_tx_valid     (pcie_rddm_tx_valid),
+    // .pcie_rddm_tx_data      (pcie_rddm_tx_data),
+    // .pcie_wrdm_tx_valid     (pcie_wrdm_tx_valid),
+    // .pcie_wrdm_tx_data      (pcie_wrdm_tx_data),
+    .pcie_bas_waitrequest   (pcie_bas_waitrequest),
+    .pcie_bas_address       (pcie_bas_address),
+    .pcie_bas_byteenable    (pcie_bas_byteenable),
+    .pcie_bas_read          (pcie_bas_read),
+    .pcie_bas_readdata      (pcie_bas_readdata),
+    .pcie_bas_readdatavalid (pcie_bas_readdatavalid),
+    .pcie_bas_write         (pcie_bas_write),
+    .pcie_bas_writedata     (pcie_bas_writedata),
+    .pcie_bas_burstcount    (pcie_bas_burstcount),
+    .pcie_bas_response      (pcie_bas_response),
     .pcie_address_0         (pcie_address_0), 
     .pcie_write_0           (pcie_write_0), 
     .pcie_read_0            (pcie_read_0), 
@@ -1090,13 +1117,13 @@ pcie_top pcie (
     .pcie_readdata_0        (pcie_readdata_0), 
     .pcie_writedata_0       (pcie_writedata_0), 
     .pcie_byteenable_0      (pcie_byteenable_0), 
-    .pcie_address_1         (pcie_address_1), 
-    .pcie_write_1           (pcie_write_1), 
-    .pcie_read_1            (pcie_read_1), 
-    .pcie_readdatavalid_1   (pcie_readdatavalid_1), 
-    .pcie_readdata_1        (pcie_readdata_1), 
-    .pcie_writedata_1       (pcie_writedata_1), 
-    .pcie_byteenable_1      (pcie_byteenable_1),  
+    // .pcie_address_1         (pcie_address_1), 
+    // .pcie_write_1           (pcie_write_1), 
+    // .pcie_read_1            (pcie_read_1), 
+    // .pcie_readdatavalid_1   (pcie_readdatavalid_1), 
+    // .pcie_readdata_1        (pcie_readdata_1), 
+    // .pcie_writedata_1       (pcie_writedata_1), 
+    // .pcie_byteenable_1      (pcie_byteenable_1),  
     .pcie_rb_wr_data        (pcie_rb_wr_data),           
     .pcie_rb_wr_addr        (pcie_rb_wr_addr),          
     .pcie_rb_wr_en          (pcie_rb_wr_en),  
