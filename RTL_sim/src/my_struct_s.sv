@@ -222,7 +222,7 @@ typedef struct packed
 `define hwarning(A) if (!tb.error_termination) $warning("%s", $sformatf A );
 `define herror(A) if (!tb.error_termination) $error("%s", $sformatf A );
 
-function hterminate(string s);
+function void hterminate(string s);
     `herror((s));
     force tb.error_termination = 1;
 endfunction
@@ -233,7 +233,7 @@ endfunction
 `define hwarning(A);
 `define herror(A);
 
-function hterminate(string s);
+function void hterminate(string s);
 endfunction
 
 `endif // SIM
