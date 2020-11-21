@@ -48,7 +48,7 @@ module fpga2cpu_pcie (
     // output logic [511:0]             frb_readdata,
     // output logic                     frb_readvalid,
     // input  logic [PDU_AWIDTH-1:0]    frb_address,
-    input  logic                     frb_read,
+    // input  logic                     frb_read,
 
     // counters
     output logic [31:0]              dma_queue_full_cnt,
@@ -70,15 +70,11 @@ pcie_desc_t data_desc_low;
 pcie_desc_t data_desc_high;
 pcie_desc_t done_desc;
 logic [63:0] cpu_data_addr;
-logic [63:0] cpu_data_addr_low;
-logic [63:0] cpu_data_addr_high;
-logic [31:0] ep_data_addr_high;
-logic [31:0] data_base_addr;
 logic [31:0] last_target_nb_requests;
 
-// logic [511:0]          my_wr_data;
-// logic [PDU_AWIDTH-1:0] my_wr_addr;
-// logic                  my_wr_en;
+logic [RB_AWIDTH-1:0] new_tail;
+
+logic [31-RB_AWIDTH:0] tail_padding; // 4 is for 16 DWORD
 
 logic wrdm_desc_ready_r1;
 logic wrdm_desc_ready_r2;
@@ -90,129 +86,88 @@ typedef enum
     IDLE,
     START_BURST,
     COMPLETE_BURST,
-    DONE,
-    WAIT_DONE
+    DONE
 } state_t;
 
 state_t state;
 
-logic [PDU_AWIDTH-1:0]  dma_base_addr;
-
 logic [63:0] page_offset;
 
-assign dma_base_addr = 0;
 assign wr_base_addr = 0;
 assign wr_base_addr_valid = 0;
 assign almost_full = 0;
-assign max_rb = 0;
-assign dma_start = 0;
-assign dma_queue = 0;
 
 // CPU side addr
 assign cpu_data_addr = kmem_addr + 64; // the global reg
 
-// The base addr of fpga side ring buffer. BRAM starts with an offset
-assign data_base_addr = EP_BASE_ADDR + (RB_BRAM_OFFSET + dma_base_addr) << 6;
+flit_lite_t            intern_wr_data;
+logic                  intern_wr_en;
 
-// assign done_desc = '{
-//     func_nb: 0,
-//     desc_id: DONE_ID,
-//     app_spec: 0,
-//     reserved: 0,
-//     single_src: 0,
-//     immediate: 1,
-//     nb_dwords: 18'd1,
-//     dst_addr: kmem_addr + page_offset,
-//     saddr_data: {32'h0, nb_requests} // data
-// };
+flit_lite_t            intern_rd_data;
+logic                  intern_rd_en;
 
-// assign data_desc = '{
-//     func_nb: 0,
-//     desc_id: 0,
-//     app_spec: 0,
-//     reserved: 0,
-//     single_src: 0,
-//     immediate: 0,
-//     nb_dwords: {req_size},
-//     dst_addr: cpu_data_addr + page_offset,
-//     saddr_data: {32'h0, data_base_addr}
-// };
-
-// always @ (posedge clk) begin
-//     // wrdm_desc_ready has a 3-cycle latency, wrdm_desc_ready_r2 is active, we
-//     // can write in the following cycle
-//     wrdm_desc_ready_r1 <= wrdm_desc_ready;
-//     wrdm_desc_ready_r2 <= wrdm_desc_ready_r1 && wrdm_desc_ready;
-// end
+logic [PDU_AWIDTH-1:0] occup;
 
 logic dma_ctrl_ready;
 logic desc_valid;
 logic ready_for_new_transfers;
-logic pending_transfer;
-
-// wrdm_desc_ready has a 3-cycle latency. If wrdm_desc_ready_r2 is active, we
-// can write in the following cycle
-// assign dma_ctrl_ready = wrdm_desc_ready && wrdm_desc_ready_r2;
-
-// We are not allowed to set wrdm_desc_valid when wrdm_desc_ready is not set.
-// This creates the possibility that wrdm_desc_ready becomes 0 at the same time
-// as we initiate a transfer. To make sure this never happens we do this
-// assignment combinationally. This also means that if we start a write
-// (desc_valid=1) and wrdm_desc_ready becomes 0 at the same time, we must hold
-// back new transfers and retry sending once it becomes available again
-// assign wrdm_desc_valid = desc_valid & wrdm_desc_ready;
-
-// we are only ready for new transfers if we are ready to write and there is no
-// pending transfer
-// assign ready_for_new_transfers = dma_ctrl_ready && !pending_transfer;
-
 
 logic [31:0] nb_flits;
 logic [31:0] missing_flits;
 logic [3:0] missing_flits_in_transfer;
+logic hold_queue_ready;
 
-assign nb_flits = (req_size + 15) / 16;
+assign new_tail = (tail + nb_flits >= rb_size) ? 
+                        (tail + nb_flits - rb_size) :
+                        (tail + nb_flits);
 
 assign pcie_bas_read = 0;
 
+logic [63:0] queue_id;
+
 // FSM
-always @ (posedge clk) begin
+always @(posedge clk) begin
     desc_valid <= 0;
     dma_done <= 0;
-    // my_wr_data <= 0;
-    // my_wr_en <= 0;
-    // my_wr_addr <= 0;
-    last_target_nb_requests <= target_nb_requests;
+    dma_start <= 0;
+    intern_rd_en <= 0;
     if (rst) begin
         state <= IDLE;
         out_tail <= 0;
         dma_queue_full_cnt <= 0;
         cpu_buf_full_cnt <= 0;
-        pending_transfer <= 0;
-        nb_requests <= 0;
-        transmit_cycles <= 0;
         page_offset <= 0;
-        last_target_nb_requests <= 0;
         missing_flits <= 0;
         missing_flits_in_transfer <= 0;
-        
-        // bas
+        dma_queue <= 0;
+        nb_flits <= 0;
+        queue_id <= 0;
+        hold_queue_ready <= 0;
         pcie_bas_write <= 0;
-
-        // my_wr_data <= {
-        //     64'h0000babe0000face, 64'h0000babe0000face, 
-        //     64'h0000babe0000face, 64'h0000babe0000face,
-        //     64'h0000babe0000face, 64'h0000babe0000face, 
-        //     64'h0000babe0000face, 64'h0000babe0000face
-        // };
-        // my_wr_en <= 1;
-        // my_wr_addr <= 0;
     end else begin
         case (state)
             IDLE: begin
-                if (nb_requests < target_nb_requests) begin
+                if (occup > 0) begin
+                    automatic pdu_hdr_t hdr = intern_rd_data.data;
+                    assert(intern_rd_data.sop);
+                    missing_flits <= hdr.pdu_flit;
+                    nb_flits <= hdr.pdu_flit;
+                    dma_queue <= hdr.queue_id;
+                    page_offset <= queue_id * 4096; // TODO adjust to reflect actual host rb size
+                    intern_rd_en <= 1;
+                    hold_queue_ready <= 0;
+                    dma_start <= 1;
+
                     state <= START_BURST;
-                    missing_flits <= nb_flits;
+                end
+
+                // a pending DMA may have been completed, zero signals
+                if (!pcie_bas_waitrequest) begin
+                    pcie_bas_address <= 0;
+                    pcie_bas_byteenable <= 0;
+                    pcie_bas_writedata <= 0;
+                    pcie_bas_write <= 0;
+                    pcie_bas_burstcount <= 0;
                 end
             end
             START_BURST: begin
@@ -221,9 +176,12 @@ always @ (posedge clk) begin
                 // pcie_bas_waitrequest is unset. So we are checking this signal
                 // not to ensure that we are able to write but instead to make
                 // sure that any write request in the previous cycle is complete
-                if (!pcie_bas_waitrequest) begin
-                    logic [3:0] flits_in_transfer;
-                    logic [63:0] req_offset = (nb_flits - missing_flits) * 64;
+                if (!pcie_bas_waitrequest && 
+                        (queue_ready || hold_queue_ready)) begin
+                    automatic logic [3:0] flits_in_transfer;
+                    automatic logic [63:0] req_offset = (
+                        nb_flits - missing_flits) * 64;
+                    hold_queue_ready <= 1;
 
                     // max 8 flits per burst
                     if (missing_flits > 8) begin
@@ -234,12 +192,8 @@ always @ (posedge clk) begin
 
                     pcie_bas_address <= cpu_data_addr + page_offset + req_offset;
                     pcie_bas_byteenable <= 64'hffffffffffffffff;
-                    pcie_bas_writedata <= {
-                        missing_flits, 32'hbeef0000, 64'hdead0000beef0000, 
-                        64'hdead0000beef0000, 64'hdead0000beef0000,
-                        64'hdead0000beef0000, 64'hdead0000beef0000, 
-                        64'hdead0000beef0000, 64'hdead0000beef0000
-                    };
+                    pcie_bas_writedata <= intern_rd_data.data;
+                    intern_rd_en <= 1;
                     pcie_bas_write <= 1;
                     pcie_bas_burstcount <= flits_in_transfer; // number of flits in this transfer (max 8)
 
@@ -250,6 +204,7 @@ always @ (posedge clk) begin
                     end else begin
                         // pcie_bas_byteenable <= ; // TODO(sadok) handle unaligned cases here
                         state <= DONE;
+                        assert(intern_rd_data.eop);
                     end
                 end else begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
@@ -264,12 +219,8 @@ always @ (posedge clk) begin
                     // set the address
                     pcie_bas_address <= 0;
                     pcie_bas_byteenable <= 64'hffffffffffffffff;
-                    pcie_bas_writedata <= {
-                        missing_flits, 32'hbeef0000, 64'hdead0000beef0000, 
-                        64'hdead0000beef0000, 64'hdead0000beef0000,
-                        64'hdead0000beef0000, 64'hdead0000beef0000, 
-                        64'hdead0000beef0000, 64'hdead0000beef0000
-                    };
+                    pcie_bas_writedata <= intern_rd_data.data;
+                    intern_rd_en <= 1;
                     pcie_bas_write <= 1;
                     pcie_bas_burstcount <= 0;
 
@@ -279,6 +230,7 @@ always @ (posedge clk) begin
                         end else begin
                             // pcie_bas_byteenable <= ; // TODO(sadok) handle unaligned cases here
                             state <= DONE;
+                            assert(intern_rd_data.eop);
                         end
                     end
                 end else begin
@@ -287,21 +239,13 @@ always @ (posedge clk) begin
             end
             DONE: begin
                 if (!pcie_bas_waitrequest) begin // done with previous transfer
-                    nb_requests <= nb_requests + 1;
-
-                    if ((page_offset + 4096 + req_size * 4) > (rb_size * 64)) begin
-                        page_offset <= 0;
-                    end else begin
-                        page_offset <= page_offset + 4096;
-                    end
-
                     if (write_pointer) begin
                         //
                         // Send done descriptor
                         //
                         pcie_bas_address <= kmem_addr + page_offset;
                         pcie_bas_byteenable <= 64'h000000000000000f;
-                        pcie_bas_writedata <= {480'h0, nb_requests}; // data
+                        pcie_bas_writedata <= {480'h0, tail}; // TODO(sadok) make sure tail is being written to the right location
                         pcie_bas_write <= 1;
                         pcie_bas_burstcount <= 1;
                     end else begin
@@ -312,24 +256,10 @@ always @ (posedge clk) begin
                         pcie_bas_burstcount <= 0;
                     end
 
-                    if ((nb_requests + 1) == target_nb_requests) begin
-                        state <= WAIT_DONE;
-                    end else begin
-                        missing_flits <= nb_flits;
-                        state <= START_BURST;
-                    end
-                end else begin
-                    dma_queue_full_cnt <= dma_queue_full_cnt + 1;
-                end
-            end
-            WAIT_DONE: begin
-                // wait for previous requests to complete
-                if (!pcie_bas_waitrequest) begin
-                    pcie_bas_address <= 0;
-                    pcie_bas_byteenable <= 0;
-                    pcie_bas_writedata <= 0;
-                    pcie_bas_write <= 0;
-                    pcie_bas_burstcount <= 0;
+                    // update tail
+                    out_tail <= new_tail;
+                    dma_done <= 1;
+
                     state <= IDLE;
                 end else begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
@@ -337,68 +267,128 @@ always @ (posedge clk) begin
             end
             default: state <= IDLE;
         endcase
+    end
+end
 
-        // if (desc_valid && !wrdm_desc_ready) begin
-        //     // DMA desc became unavailable while trying to write
-        //     pending_transfer <= 1;
-        // end
+always @(posedge clk) begin
+    if (rst) begin
+        max_rb <= 0;
+    end else begin
+        if (occup > max_rb) begin
+            max_rb <= occup;
+        end
+    end
+end
 
-        // // retry sending pending transfer, wrdm_desc_data should be already set
-        // // to the right value
-        // if (dma_ctrl_ready && pending_transfer) begin
-        //     desc_valid <= 1;
-        //     pending_transfer <= 0;
-        // end
+logic [PDU_AWIDTH-1:0] flits_written;
+pdu_hdr_t pdu_hdr;
 
-        if (state != IDLE) begin
+typedef enum
+{
+    GEN_IDLE,
+    GEN_DESC,
+    GEN_DONE
+} gen_state_t;
+
+gen_state_t gen_state;
+
+assign pdu_hdr.padding = 0;
+assign pdu_hdr.queue_id = queue_id;
+assign pdu_hdr.action = 0;
+assign pdu_hdr.pdu_flit = (req_size + (16 - 1))/16;
+assign pdu_hdr.pdu_size = req_size * 4;
+assign pdu_hdr.prot = 0;
+assign pdu_hdr.tuple = 0;
+assign pdu_hdr.pdu_id = nb_requests;
+
+always @(posedge clk) begin
+    intern_wr_en <= 0;
+    intern_wr_data <= 0;
+    last_target_nb_requests <= target_nb_requests;
+    if (rst) begin
+        gen_state <= GEN_IDLE;
+        flits_written <= 0;
+        queue_id <= 0;
+        nb_requests <= 0;
+        transmit_cycles <= 0;
+        last_target_nb_requests <= 0;
+    end else begin
+        case (gen_state)
+            GEN_IDLE: begin
+                if (nb_requests < target_nb_requests) begin
+                    gen_state <= GEN_DESC;
+                end
+            end
+            GEN_DESC: begin
+                if (occup < (PDU_DEPTH - 2)) begin
+                    intern_wr_en <= 1;
+                    intern_wr_data.sop <= 0;
+                    intern_wr_data.data <= {
+                        nb_requests, 32'h00000000, 64'h0000babe0000face, 
+                        64'h0000babe0000face, 64'h0000babe0000face,
+                        64'h0000babe0000face, 64'h0000babe0000face, 
+                        64'h0000babe0000face, 64'h0000babe0000face
+                    };
+
+                    flits_written <= flits_written + 1;
+
+                    if ((flits_written + 1) * 16 >= req_size) begin
+                        gen_state <= GEN_DONE;
+                        intern_wr_data.eop <= 1; // last block
+                    end else begin
+                        intern_wr_data.eop <= 0;
+                    end
+                end
+            end
+            GEN_DONE: begin
+                // write PDU header
+                if (occup < (PDU_DEPTH - 2)) begin
+                    intern_wr_en <= 1;
+                    intern_wr_data.sop <= 1;
+                    intern_wr_data.data <= pdu_hdr;
+                    intern_wr_data.eop <= 0;
+                    flits_written <= 0;
+                    nb_requests <= nb_requests + 1;
+                    if (((queue_id + 1) * 4096 + req_size * 4) > (rb_size * 64)) begin
+                        queue_id <= 0;
+                    end else begin
+                        queue_id <= queue_id + 1;
+                    end
+                    if (nb_requests + 1 == target_nb_requests) begin
+                        gen_state <= GEN_IDLE;
+                    end else begin
+                        gen_state <= GEN_DESC;
+                    end
+                end
+            end
+            default: gen_state <= GEN_IDLE;
+        endcase
+
+        // count cycles until we go back to the IDLE state and there are no more
+        // pending packets in the ring buffer
+        if (gen_state != GEN_IDLE || occup != 0) begin
             transmit_cycles <= transmit_cycles + 1;
         end
 
         if (target_nb_requests != last_target_nb_requests) begin
             nb_requests <= 0;
-            page_offset <= 0;
             transmit_cycles <= 0;
         end
     end
 end
 
-logic frb_read_r;
-logic [511:0] bram_data_out;
-
-// always @(posedge clk) begin
-//     if (use_bram) begin
-//         frb_read_r <= frb_read;
-//         frb_readvalid <= frb_read_r;
-//     end else begin
-//         frb_readvalid <= frb_read;
-//     end
-// end
-
-// always_comb begin
-//     if (use_bram) begin
-//         frb_readdata <= bram_data_out;
-//     end else begin
-//         frb_readdata <= {
-//             64'hdead0000beef0000, 64'hdead0000beef0000, 
-//             64'hdead0000beef0000, 64'hdead0000beef0000,
-//             64'hdead0000beef0000, 64'hdead0000beef0000, 
-//             64'hdead0000beef0000, 64'hdead0000beef0000
-//         };
-//     end
-// end
-
-// bram_simple2port #(
-//     .AWIDTH(PDU_AWIDTH),
-//     .DWIDTH(512),
-//     .DEPTH(PDU_DEPTH)
-// )
-// pdu_buffer (
-//     .clock      (clk),
-//     .data       (my_wr_data),
-//     .rdaddress  (frb_address), // MISSING!!!!
-//     .rden       (frb_read),    // MISSING!!!!
-//     .wraddress  (my_wr_addr),
-//     .wren       (my_wr_en),
-//     .q          (bram_data_out)
-// );
+prefetch_rb #(
+    .DEPTH(PDU_DEPTH),
+    .AWIDTH(PDU_AWIDTH),
+    .DWIDTH($bits(flit_lite_t))
+)
+prefetch_rb_inst (
+    .clk     (clk),
+    .rst     (rst),
+    .wr_data (intern_wr_data),
+    .wr_en   (intern_wr_en),
+    .rd_data (intern_rd_data),
+    .rd_en   (intern_rd_en),
+    .occup   (occup)
+);
 endmodule

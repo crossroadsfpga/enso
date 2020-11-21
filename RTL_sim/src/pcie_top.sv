@@ -472,44 +472,45 @@ always@(posedge pcie_clk)begin
         case (state)
             IDLE: begin
                 if (dma_start) begin
-                    if (queue_id != {1'b0, dma_queue}) begin
-                        // Intercept writes to the same address that happened
-                        // in the previous clock cycle
-                        if ((q_table_tails_addr_b == dma_queue)
-                                && q_table_tails_wr_en_b) begin
-                            f2c_tail <= q_table_tails_wr_data_b;
-                        end else begin
-                            q_table_tails_addr_a <= dma_queue;
-                            q_table_tails_rd_en_a <= 1;
-                        end
-                        if ((q_table_heads_addr_b == dma_queue)
-                                && q_table_heads_wr_en_b) begin
-                            f2c_head <= q_table_heads_wr_data_b;
-                        end else begin
-                            q_table_heads_addr_a <= dma_queue;
-                            q_table_heads_rd_en_a <= 1;
-                        end
-                        if ((q_table_l_addrs_addr_b == dma_queue)
-                                && q_table_l_addrs_wr_en_b) begin
-                            f2c_kmem_addr[31:0] <= q_table_l_addrs_wr_data_b;
-                        end else begin
-                            q_table_l_addrs_addr_a <= dma_queue;
-                            q_table_l_addrs_rd_en_a <= 1;
-                        end
-                        if ((q_table_h_addrs_addr_b == dma_queue)
-                                && q_table_h_addrs_wr_en_b) begin
-                            f2c_kmem_addr[63:32] <= q_table_h_addrs_wr_data_b;
-                        end else begin
-                            q_table_h_addrs_addr_a <= dma_queue;
-                            q_table_h_addrs_rd_en_a <= 1;
-                        end
-                        queue_id <= {1'b0, dma_queue};
-
-                        state <= BRAM_DELAY_1;
+                    // Always lookup queue
+                    // if (queue_id != {1'b0, dma_queue}) begin
+                    // Intercept writes to the same address that happened
+                    // in the previous clock cycle
+                    if ((q_table_tails_addr_b == dma_queue)
+                            && q_table_tails_wr_en_b) begin
+                        f2c_tail <= q_table_tails_wr_data_b;
                     end else begin
-                        f2c_queue_ready <= 1;
-                        state <= WAIT_DMA;
+                        q_table_tails_addr_a <= dma_queue;
+                        q_table_tails_rd_en_a <= 1;
                     end
+                    if ((q_table_heads_addr_b == dma_queue)
+                            && q_table_heads_wr_en_b) begin
+                        f2c_head <= q_table_heads_wr_data_b;
+                    end else begin
+                        q_table_heads_addr_a <= dma_queue;
+                        q_table_heads_rd_en_a <= 1;
+                    end
+                    if ((q_table_l_addrs_addr_b == dma_queue)
+                            && q_table_l_addrs_wr_en_b) begin
+                        f2c_kmem_addr[31:0] <= q_table_l_addrs_wr_data_b;
+                    end else begin
+                        q_table_l_addrs_addr_a <= dma_queue;
+                        q_table_l_addrs_rd_en_a <= 1;
+                    end
+                    if ((q_table_h_addrs_addr_b == dma_queue)
+                            && q_table_h_addrs_wr_en_b) begin
+                        f2c_kmem_addr[63:32] <= q_table_h_addrs_wr_data_b;
+                    end else begin
+                        q_table_h_addrs_addr_a <= dma_queue;
+                        q_table_h_addrs_rd_en_a <= 1;
+                    end
+                    queue_id <= {1'b0, dma_queue};
+
+                    state <= BRAM_DELAY_1;
+                    // end else begin
+                    //     f2c_queue_ready <= 1;
+                    //     state <= WAIT_DMA;
+                    // end
                 end
             end
             BRAM_DELAY_1: begin
@@ -663,6 +664,9 @@ dc_fifo_reg_core  pcie_to_jtag_fifo (
     .avalonst_source_data  (q_table_rd_data_b_jtag)
 );
 
+// always get queue 0
+assign dma_queue = 0;
+
 fpga2cpu_pcie f2c_inst (
     .clk                (pcie_clk),
     .rst                (!pcie_reset_n),
@@ -681,7 +685,7 @@ fpga2cpu_pcie f2c_inst (
     .queue_ready        (f2c_queue_ready),
     .out_tail           (new_tail),
     .dma_done           (dma_done),
-    .dma_queue          (dma_queue),
+    .dma_queue          (),
     .dma_start          (dma_start),
     .rb_size            ({5'b0, rb_size}),
     // .wrdm_desc_ready    (pcie_wrdm_desc_ready),
