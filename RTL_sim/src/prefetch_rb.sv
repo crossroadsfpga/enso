@@ -69,8 +69,6 @@ always @(posedge clk) begin
     bram_wr_en <= 0;
     bram_rd_en <= 0;
 
-    $display("%d, %d, %d, %d, %d", pending_rd_data[0], pending_rd_data[1],
-             pending_rd_data[2], pending_rd_data[3], pending_rd_data[4]);
     if (rst) begin
         head <= 0;
         tail <= 0;
@@ -82,10 +80,6 @@ always @(posedge clk) begin
         automatic logic [AWIDTH-1:0] next_occup = real_occup + valid_wr_en -
                                                   valid_rd_en;
 
-        $display("rd_en: %b  wr_en: %b", rd_en, wr_en);
-        $display("next_occup: %d  real_occup: %d valid_wr_en: %b valid_rd_en: %b",
-            next_occup, real_occup, valid_wr_en, valid_rd_en);
-        $display("head: %d  tail: %d", head, tail);
         if (valid_rd_en) begin
             integer i;
             for (i = 0; i < NB_PREFETCH_REGS - 1; i = i + 1) begin
@@ -103,22 +97,18 @@ always @(posedge clk) begin
         bram_rd_en_r <= bram_rd_en;
         bram_rd_valid <= bram_rd_en_r;
 
-        $display("pending_reads: %d next_pending_reads: %d", pending_reads,
-                 next_pending_reads);
-
         // We store the value read from BRAM is a different register depending
         // on the number of pending reads
         if (bram_rd_valid) begin
-            $display("bram_rd_valid data: %d ", bram_rd_data);
             assert (pending_reads > 0);
             next_pending_reads = next_pending_reads - 1;
             if (next_occup <= NB_PREFETCH_REGS) begin
-                pending_rd_data[next_pending_reads + NB_PREFETCH_REGS
-                                - next_occup] <= bram_rd_data;
+                pending_rd_data[
+                    next_pending_reads + NB_PREFETCH_REGS - next_occup
+                ] <= bram_rd_data;
             end else begin
                 pending_rd_data[next_pending_reads] <= bram_rd_data;
             end
-            $display("next_pending_reads: %d", next_pending_reads);
         end
 
         if (valid_wr_en) begin
@@ -132,8 +122,6 @@ always @(posedge clk) begin
             end
             head <= head + 1;
         end
-
-        // FIXME(sadok) handle concurrent write and read to the same address
 
         pending_reads <= next_pending_reads;
     end
