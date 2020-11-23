@@ -100,13 +100,12 @@ assign almost_full = 0;
 // CPU side addr
 assign cpu_data_addr = kmem_addr + 64; // the global reg
 
-flit_lite_t            intern_wr_data;
-logic                  intern_wr_en;
+flit_lite_t            pkt_buf_wr_data;
+logic                  pkt_buf_wr_en;
+flit_lite_t            pkt_buf_rd_data;
+logic                  pkt_buf_rd_en;
+logic [PDU_AWIDTH-1:0] pkt_buf_occup;
 
-flit_lite_t            intern_rd_data;
-logic                  intern_rd_en;
-
-logic [PDU_AWIDTH-1:0] occup;
 
 logic dma_ctrl_ready;
 logic desc_valid;
@@ -124,14 +123,17 @@ assign new_tail = (tail + nb_flits >= rb_size) ?
 assign pcie_bas_read = 0;
 
 logic [63:0] queue_id;
+logic rst_r;
 
 // FSM
 always @(posedge clk) begin
     desc_valid <= 0;
     dma_done <= 0;
     dma_start <= 0;
-    intern_rd_en <= 0;
-    if (rst) begin
+    pkt_buf_rd_en <= 0;
+
+    rst_r <= rst;
+    if (rst_r) begin
         state <= IDLE;
         out_tail <= 0;
         dma_queue_full_cnt <= 0;
@@ -147,14 +149,14 @@ always @(posedge clk) begin
     end else begin
         case (state)
             IDLE: begin
-                if (occup > 0) begin
-                    automatic pdu_hdr_t hdr = intern_rd_data.data;
-                    assert(intern_rd_data.sop);
+                if (pkt_buf_occup > 0) begin
+                    automatic pdu_hdr_t hdr = pkt_buf_rd_data.data;
+                    assert(pkt_buf_rd_data.sop);
                     missing_flits <= hdr.pdu_flit;
                     nb_flits <= hdr.pdu_flit;
                     dma_queue <= hdr.queue_id;
                     page_offset <= queue_id * 4096; // TODO adjust to reflect actual host rb size
-                    intern_rd_en <= 1;
+                    pkt_buf_rd_en <= 1;
                     hold_queue_ready <= 0;
                     dma_start <= 1;
 
@@ -192,8 +194,8 @@ always @(posedge clk) begin
 
                     pcie_bas_address <= cpu_data_addr + page_offset + req_offset;
                     pcie_bas_byteenable <= 64'hffffffffffffffff;
-                    pcie_bas_writedata <= intern_rd_data.data;
-                    intern_rd_en <= 1;
+                    pcie_bas_writedata <= pkt_buf_rd_data.data;
+                    pkt_buf_rd_en <= 1;
                     pcie_bas_write <= 1;
                     pcie_bas_burstcount <= flits_in_transfer; // number of flits in this transfer (max 8)
 
@@ -204,7 +206,7 @@ always @(posedge clk) begin
                     end else begin
                         // pcie_bas_byteenable <= ; // TODO(sadok) handle unaligned cases here
                         state <= DONE;
-                        assert(intern_rd_data.eop);
+                        assert(pkt_buf_rd_data.eop);
                     end
                 end else begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
@@ -219,18 +221,19 @@ always @(posedge clk) begin
                     // set the address
                     pcie_bas_address <= 0;
                     pcie_bas_byteenable <= 64'hffffffffffffffff;
-                    pcie_bas_writedata <= intern_rd_data.data;
-                    intern_rd_en <= 1;
+                    pcie_bas_writedata <= pkt_buf_rd_data.data;
+                    pkt_buf_rd_en <= 1;
                     pcie_bas_write <= 1;
                     pcie_bas_burstcount <= 0;
 
                     if (missing_flits_in_transfer == 1) begin
                         if (missing_flits > 1) begin
                             state <= START_BURST;
+                            assert(!pkt_buf_rd_data.eop);
                         end else begin
                             // pcie_bas_byteenable <= ; // TODO(sadok) handle unaligned cases here
                             state <= DONE;
-                            assert(intern_rd_data.eop);
+                            assert(pkt_buf_rd_data.eop);
                         end
                     end
                 end else begin
@@ -274,8 +277,8 @@ always @(posedge clk) begin
     if (rst) begin
         max_rb <= 0;
     end else begin
-        if (occup > max_rb) begin
-            max_rb <= occup;
+        if (pkt_buf_occup > max_rb) begin
+            max_rb <= pkt_buf_occup;
         end
     end
 end
@@ -286,8 +289,8 @@ pdu_hdr_t pdu_hdr;
 typedef enum
 {
     GEN_IDLE,
-    GEN_DESC,
-    GEN_DONE
+    GEN_HEAD,
+    GEN_DATA
 } gen_state_t;
 
 gen_state_t gen_state;
@@ -302,8 +305,8 @@ assign pdu_hdr.tuple = 0;
 assign pdu_hdr.pdu_id = nb_requests;
 
 always @(posedge clk) begin
-    intern_wr_en <= 0;
-    intern_wr_data <= 0;
+    pkt_buf_wr_en <= 0;
+    pkt_buf_wr_data <= 0;
     last_target_nb_requests <= target_nb_requests;
     if (rst) begin
         gen_state <= GEN_IDLE;
@@ -313,17 +316,30 @@ always @(posedge clk) begin
         transmit_cycles <= 0;
         last_target_nb_requests <= 0;
     end else begin
+        automatic logic can_insert_pkt = (pkt_buf_occup < (PDU_DEPTH - 2));
         case (gen_state)
             GEN_IDLE: begin
                 if (nb_requests < target_nb_requests) begin
-                    gen_state <= GEN_DESC;
+                    queue_id <= 0;
+                    gen_state <= GEN_HEAD;
                 end
             end
-            GEN_DESC: begin
-                if (occup < (PDU_DEPTH - 2)) begin
-                    intern_wr_en <= 1;
-                    intern_wr_data.sop <= 0;
-                    intern_wr_data.data <= {
+            GEN_HEAD: begin
+                // write PDU header
+                if (can_insert_pkt) begin
+                    pkt_buf_wr_en <= 1;
+                    pkt_buf_wr_data.sop <= 1;
+                    pkt_buf_wr_data.data <= pdu_hdr;
+                    pkt_buf_wr_data.eop <= 0;
+                    flits_written <= 0;
+                    gen_state <= GEN_DATA;
+                end
+            end
+            GEN_DATA: begin
+                if (can_insert_pkt) begin
+                    pkt_buf_wr_en <= 1;
+                    pkt_buf_wr_data.sop <= 0;
+                    pkt_buf_wr_data.data <= {
                         nb_requests, 32'h00000000, 64'h0000babe0000face, 
                         64'h0000babe0000face, 64'h0000babe0000face,
                         64'h0000babe0000face, 64'h0000babe0000face, 
@@ -333,31 +349,21 @@ always @(posedge clk) begin
                     flits_written <= flits_written + 1;
 
                     if ((flits_written + 1) * 16 >= req_size) begin
-                        gen_state <= GEN_DONE;
-                        intern_wr_data.eop <= 1; // last block
+                        pkt_buf_wr_data.eop <= 1; // last block
+                        nb_requests <= nb_requests + 1;
+                        if (nb_requests + 1 == target_nb_requests) begin
+                            gen_state <= GEN_IDLE;
+                        end else begin
+                            gen_state <= GEN_HEAD;
+                            if (((queue_id + 1) * 4096 + req_size * 4) > 
+                                    (rb_size * 64)) begin
+                                queue_id <= 0;
+                            end else begin
+                                queue_id <= queue_id + 1;
+                            end
+                        end
                     end else begin
-                        intern_wr_data.eop <= 0;
-                    end
-                end
-            end
-            GEN_DONE: begin
-                // write PDU header
-                if (occup < (PDU_DEPTH - 2)) begin
-                    intern_wr_en <= 1;
-                    intern_wr_data.sop <= 1;
-                    intern_wr_data.data <= pdu_hdr;
-                    intern_wr_data.eop <= 0;
-                    flits_written <= 0;
-                    nb_requests <= nb_requests + 1;
-                    if (((queue_id + 1) * 4096 + req_size * 4) > (rb_size * 64)) begin
-                        queue_id <= 0;
-                    end else begin
-                        queue_id <= queue_id + 1;
-                    end
-                    if (nb_requests + 1 == target_nb_requests) begin
-                        gen_state <= GEN_IDLE;
-                    end else begin
-                        gen_state <= GEN_DESC;
+                        pkt_buf_wr_data.eop <= 0;
                     end
                 end
             end
@@ -366,7 +372,7 @@ always @(posedge clk) begin
 
         // count cycles until we go back to the IDLE state and there are no more
         // pending packets in the ring buffer
-        if (gen_state != GEN_IDLE || occup != 0) begin
+        if (gen_state != GEN_IDLE || pkt_buf_occup != 0) begin
             transmit_cycles <= transmit_cycles + 1;
         end
 
@@ -382,13 +388,14 @@ prefetch_rb #(
     .AWIDTH(PDU_AWIDTH),
     .DWIDTH($bits(flit_lite_t))
 )
-prefetch_rb_inst (
+pkt_buf (
     .clk     (clk),
     .rst     (rst),
-    .wr_data (intern_wr_data),
-    .wr_en   (intern_wr_en),
-    .rd_data (intern_rd_data),
-    .rd_en   (intern_rd_en),
-    .occup   (occup)
+    .wr_data (pkt_buf_wr_data),
+    .wr_en   (pkt_buf_wr_en),
+    .rd_data (pkt_buf_rd_data),
+    .rd_en   (pkt_buf_rd_en),
+    .occup   (pkt_buf_occup)
 );
+
 endmodule
