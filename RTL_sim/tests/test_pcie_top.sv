@@ -132,10 +132,10 @@ always @(posedge clk) begin
         end
     end
 
-    // if (!stop) begin
-    //     $display("cnt: %d", cnt);
-    //     $display("------------------------------------------------");
-    // end
+    if (!stop) begin
+        $display("cnt: %d", cnt);
+        $display("------------------------------------------------");
+    end
 end
 
 
@@ -226,7 +226,7 @@ always @(posedge clk_status) begin
                 if (status_readdata_valid) begin
                     $display("%d: 0x%8h", status_addr[6:0], status_readdata);
 
-                    if (status_addr == (30'h2A00_0000 + 30'd2 + 30'd4 * nb_queues)) begin
+                    if (status_addr == (30'h2A00_0000 + 30'd3 + 30'd4 * nb_queues)) begin
                         $display("done");
                         $finish;
                     end else begin
