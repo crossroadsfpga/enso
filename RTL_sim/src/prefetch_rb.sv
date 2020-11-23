@@ -48,7 +48,7 @@ logic [AWIDTH-1:0] tail; // advance when reading
 // pending_rd_data[0] ->  ... -> pending_rd_data[NB_PREFETCH_REGS-1] = rd_data
 logic [DWIDTH-1:0] pending_rd_data [NB_PREFETCH_REGS];
 
-logic [2:0] pending_reads;
+logic [$clog2(NB_PREFETCH_REGS)-1:0] pending_reads;
 
 logic valid_wr_en;
 logic valid_rd_en;
@@ -58,25 +58,27 @@ logic bram_rd_valid;
 
 logic [AWIDTH-1:0] real_occup;
 
+logic rst_r;
+
 assign real_occup = head - tail;
 assign valid_rd_en = rd_en && real_occup > 0;
 assign valid_wr_en = wr_en && real_occup < MAX_OCCUP;
 assign occup = real_occup - valid_rd_en; // consume right away
 
-assign rd_data = valid_rd_en ? pending_rd_data[3] : pending_rd_data[4];
+assign rd_data = pending_rd_data[NB_PREFETCH_REGS - valid_rd_en - 1];
 
 always @(posedge clk) begin
     bram_wr_en <= 0;
     bram_rd_en <= 0;
 
-    if (rst) begin
+    rst_r <= rst;
+    if (rst_r) begin
         head <= 0;
         tail <= 0;
-        bram_rd_en_r <= 0;
-        bram_rd_valid <= 0;
         pending_reads <= 0;
     end else begin
-        automatic logic [2:0]        next_pending_reads = pending_reads;
+        automatic logic [$clog2(NB_PREFETCH_REGS)-1:0] next_pending_reads = 
+            pending_reads;
         automatic logic [AWIDTH-1:0] next_occup = real_occup + valid_wr_en -
                                                   valid_rd_en;
 
