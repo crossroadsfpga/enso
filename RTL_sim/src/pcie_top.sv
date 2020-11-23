@@ -81,6 +81,7 @@ logic [STAT_AWIDTH-1:0] status_addr_sel_r;
 
 localparam NB_CONTROL_REGS = 3;
 logic [31:0] control_reg [NB_CONTROL_REGS];
+logic [31:0] control_reg_r [NB_CONTROL_REGS];
 
 // internal signals
 pcie_block_t pcie_block;
@@ -204,6 +205,7 @@ logic        write_pointer;
 logic        use_bram;
 logic [31:0] req_size;
 logic [31:0] transmit_cycles;
+logic [31:0] transmit_cycles_r;
 
 // JTAG
 always@(posedge clk_status) begin
@@ -236,7 +238,7 @@ always@(posedge clk_status) begin
             status_readdata <= control_reg[status_addr_r[0 +:JTAG_ADDR_WIDTH]];
             status_readdata_valid <= 1;
         end else if (status_addr_r[0 +:JTAG_ADDR_WIDTH] == NB_CONTROL_REGS) begin
-            status_readdata <= transmit_cycles;
+            status_readdata <= transmit_cycles_r;
             status_readdata_valid <= 1;
         end else begin
             q_table_jtag <= {status_addr_r[0 +:JTAG_ADDR_WIDTH]-status_addr_r[0 +:JTAG_ADDR_WIDTH]}[1:0];
@@ -254,12 +256,23 @@ always@(posedge clk_status) begin
     end
 end
 
-assign disable_pcie = control_reg[0][0];
-assign rb_size = control_reg[0][26:1];
-assign write_pointer = control_reg[1][0];
-assign use_bram = control_reg[1][1];
-assign req_size = control_reg[1][31:2];  // dwords
-assign target_nb_requests = control_reg[2];
+assign disable_pcie = control_reg_r[0][0];
+assign rb_size = control_reg_r[0][26:1];
+assign write_pointer = control_reg_r[1][0];
+assign use_bram = control_reg_r[1][1];
+assign req_size = control_reg_r[1][31:2];  // dwords
+assign target_nb_requests = control_reg_r[2];
+
+
+// Avoid short path/long path timing problem.
+always @(posedge pcie_clk) begin
+    integer i;
+    for (i = 0; i < NB_CONTROL_REGS; i = i + 1) begin
+        control_reg_r[i] <= control_reg[i];
+    end
+
+    transmit_cycles_r <= transmit_cycles;
+end
 
 // we choose the right set of registers based on the page (the page's index LSB
 // is at bit 12 of the memory address, the MSB depends on the number of apps we
