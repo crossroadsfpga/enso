@@ -74,6 +74,8 @@ logic [31:0] stop_cnt;
 logic [511:0] ram[nb_queues][RAM_BUF_SIZE];
 
 logic [63:0] rx_cnt;
+logic [63:0] req_cnt;
+logic [$clog2(MAX_PKT_SIZE)-1:0] pdu_flit_cnt;
 
 initial cnt = 0;
 initial clk = 0;
@@ -99,7 +101,9 @@ always @(posedge clk) begin
         pcie_writedata_0 <= 0;
         pcie_byteenable_0 <= 0;
         rx_cnt <= 0;
+        req_cnt <= 0;
         stop_cnt <= 0;
+        pdu_flit_cnt <= 0;
     end else if (cnt == 10) begin
         rst <= 0;
     end else if (cnt == 11) begin
@@ -117,12 +121,23 @@ always @(posedge clk) begin
 
         if (pcie_bas_write) begin
             rx_cnt <= rx_cnt + 1;
+            pdu_flit_cnt <= pdu_flit_cnt + 1;
+            if ((pdu_flit_cnt + 1) == (req_size + (16 - 1))/16 + write_pointer)
+            begin
+                req_cnt <= req_cnt + 1;
+                pdu_flit_cnt <= 0;
+            end else begin
+                if (req_cnt != pcie_bas_writedata[511:480] 
+                        && !error_termination) begin
+                    assert(req_cnt == pcie_bas_writedata[511:480]);
+                    error_termination <= 1;
+                end
+            end
         end
 
         // TODO(sadok) check address
         // TODO(sadok) write to memory
         // TODO(sadok) set pcie_bas_waitrequest sometimes
-        // TODO(sadok) keep track of bursts
     end
 
     if (stop_cnt != 0) begin
@@ -132,7 +147,7 @@ always @(posedge clk) begin
         end
     end
 
-    if (!stop) begin
+    if (!stop && !error_termination) begin
         $display("cnt: %d", cnt);
         $display("------------------------------------------------");
     end
