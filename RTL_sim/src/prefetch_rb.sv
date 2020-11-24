@@ -2,7 +2,11 @@
 
 /*
  * Ring buffer stored in BRAM that automatically prefetches the next entry.
- * Reads return in the next cycle.
+ * Can write and read in all cycles. But writes take a cycle to update occup.
+ * Therefore it is not safe to write if occup >= DEPTH-2.
+ * Can use the value in rd_data in the same cycle, as long as occup > 0.
+ * Setting rd_en to 1 consumes the value and makes a new value available in the
+ * following cycle.
  */
 
 module prefetch_rb #(
