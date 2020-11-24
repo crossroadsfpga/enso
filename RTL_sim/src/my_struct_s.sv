@@ -187,6 +187,8 @@ localparam RB_AWIDTH = ($clog2(MAX_RB_DEPTH));
 localparam C2F_RB_DEPTH = 512; // in 512 bits.
 localparam C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
 
+localparam MAX_PKT_SIZE = 24; // in 512 bits
+
 localparam MAX_NB_APPS = 1024;
 localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
 localparam FLITS_PER_PAGE = 64;
