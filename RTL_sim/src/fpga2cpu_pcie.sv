@@ -17,14 +17,14 @@ module fpga2cpu_pcie (
     input  logic [PDU_AWIDTH-1:0]    update_size,
 
     // CPU ring buffer signals
-    input  logic [RB_AWIDTH-1:0]     head,
-    input  logic [RB_AWIDTH-1:0]     tail,
-    input  logic [63:0]              kmem_addr,
+    input  logic [RB_AWIDTH-1:0]     in_head,
+    input  logic [RB_AWIDTH-1:0]     in_tail,
+    input  logic [63:0]              in_kmem_addr,
     input  logic                     queue_ready,
     output logic [RB_AWIDTH-1:0]     out_tail,
-    output logic                     dma_done,
     output logic [APP_IDX_WIDTH-1:0] dma_queue,
-    output logic                     dma_start,
+    output logic                     queue_rd_en,
+    output logic                     tail_wr_en,
     input  logic [30:0]              rb_size,
 
     // PCIe BAS
@@ -62,24 +62,61 @@ module fpga2cpu_pcie (
     output logic [31:0]              transmit_cycles
 );
 
-localparam EP_BASE_ADDR = 32'h0004_0000;
-localparam DONE_ID = 8'hFE;
+assign wr_base_addr = 0;
+assign wr_base_addr_valid = 0;
+assign almost_full = 0;
+assign pcie_bas_read = 0;
 
-pcie_desc_t data_desc;
-pcie_desc_t data_desc_low;
-pcie_desc_t data_desc_high;
-pcie_desc_t done_desc;
-logic [63:0] cpu_data_addr;
-logic [31:0] last_target_nb_requests;
+flit_lite_t            pkt_buf_wr_data;
+logic                  pkt_buf_wr_en;
+flit_lite_t            pkt_buf_rd_data;
+logic                  pkt_buf_rd_en;
+logic [PDU_AWIDTH-1:0] pkt_buf_occup;
+
+typedef struct packed {
+    logic [APP_IDX_WIDTH-1:0] queue_id;
+    logic [16:0] size; // in number of flits TODO(sadok) this is much bigger
+                       // than the MTU, consider using the expression below:
+    // logic [$clog2(MAX_PKT_SIZE)-1:0] size; // in number of flits
+} pkt_desc_t;
+
+pkt_desc_t             desc_buf_wr_data;
+logic                  desc_buf_wr_en;
+pkt_desc_t             desc_buf_rd_data;
+logic                  desc_buf_rd_en;
+logic [PDU_AWIDTH-1:0] desc_buf_occup;
+
+pkt_desc_t            cur_desc;
+logic [RB_AWIDTH-1:0] cur_head;
+logic [RB_AWIDTH-1:0] cur_tail;
+logic [63:0]          cur_kmem_addr;
+logic                 cur_desc_valid;
+
+pkt_desc_t            pref_desc;
+logic [RB_AWIDTH-1:0] pref_head;
+logic [RB_AWIDTH-1:0] pref_tail;
+logic [63:0]          pref_kmem_addr;
+logic                 pref_desc_valid;
+
+logic                 wait_for_pref_desc;
 
 logic [RB_AWIDTH-1:0] new_tail;
 
-logic [31-RB_AWIDTH:0] tail_padding; // 4 is for 16 DWORD
+logic [31:0] nb_flits;
+logic [31:0] missing_flits;
+logic [3:0]  missing_flits_in_transfer;
 
-logic wrdm_desc_ready_r1;
-logic wrdm_desc_ready_r2;
+assign new_tail = (cur_tail + nb_flits >= rb_size) ? 
+                        (cur_tail + nb_flits - rb_size) :
+                        (cur_tail + nb_flits);
 
-logic [31:0] nb_requests;
+// CPU side addr
+logic [63:0] cpu_data_addr;
+assign cpu_data_addr = cur_kmem_addr + 64; // the global reg
+
+logic [63:0] page_offset;
+
+logic rst_r;
 
 typedef enum
 {
@@ -91,105 +128,104 @@ typedef enum
 
 state_t state;
 
-logic [63:0] page_offset;
+function void try_prefetch();
+    if (!pref_desc_valid && !wait_for_pref_desc && (desc_buf_occup > 0)) begin
+        pref_desc <= desc_buf_rd_data;
+        desc_buf_rd_en <= 1;
+        if (cur_desc_valid && cur_desc.queue_id == desc_buf_rd_data.queue_id) begin
+            // same as current queue, no need to read state
+            pref_desc_valid <= 1;
+            pref_head <= cur_head;
+            pref_tail <= cur_tail;
+            pref_kmem_addr <= cur_kmem_addr;
+        end else begin
+            // prefetch next descriptor's queue state
+            wait_for_pref_desc <= 1;
+            dma_queue <= desc_buf_rd_data.queue_id;
+            queue_rd_en <= 1;
+        end
+    end
+endfunction
 
-assign wr_base_addr = 0;
-assign wr_base_addr_valid = 0;
-assign almost_full = 0;
+// TODO(sadok) adjust to reflect actual host rb size
+assign page_offset = cur_desc.queue_id * 4096;
+assign nb_flits = cur_desc.size;
 
-// CPU side addr
-assign cpu_data_addr = kmem_addr + 64; // the global reg
-
-flit_lite_t            pkt_buf_wr_data;
-logic                  pkt_buf_wr_en;
-flit_lite_t            pkt_buf_rd_data;
-logic                  pkt_buf_rd_en;
-logic [PDU_AWIDTH-1:0] pkt_buf_occup;
-
-
-logic dma_ctrl_ready;
-logic desc_valid;
-logic ready_for_new_transfers;
-
-logic [31:0] nb_flits;
-logic [31:0] missing_flits;
-logic [3:0] missing_flits_in_transfer;
-logic hold_queue_ready;
-
-assign new_tail = (tail + nb_flits >= rb_size) ? 
-                        (tail + nb_flits - rb_size) :
-                        (tail + nb_flits);
-
-assign pcie_bas_read = 0;
-
-logic [63:0] queue_id;
-logic rst_r;
-
-// FSM
+// Consume requests and issue DMAs
 always @(posedge clk) begin
-    desc_valid <= 0;
-    dma_done <= 0;
-    dma_start <= 0;
+    tail_wr_en <= 0;
+    queue_rd_en <= 0;
     pkt_buf_rd_en <= 0;
+    desc_buf_rd_en <= 0;
 
     rst_r <= rst;
     if (rst_r) begin
         state <= IDLE;
-        out_tail <= 0;
         dma_queue_full_cnt <= 0;
         cpu_buf_full_cnt <= 0;
-        page_offset <= 0;
-        missing_flits <= 0;
-        missing_flits_in_transfer <= 0;
-        dma_queue <= 0;
-        nb_flits <= 0;
-        queue_id <= 0;
-        hold_queue_ready <= 0;
         pcie_bas_write <= 0;
+        cur_desc_valid <= 0;
+        pref_desc_valid <= 0;
+        wait_for_pref_desc <= 0;
     end else begin
+        // done prefetching
+        if (wait_for_pref_desc && queue_ready) begin
+            wait_for_pref_desc <= 0;
+            pref_desc_valid <= 1;
+            pref_head <= in_head;
+            pref_tail <= in_tail;
+            pref_kmem_addr <= in_kmem_addr;
+        end
+
         case (state)
             IDLE: begin
-                if (pkt_buf_occup > 0) begin
-                    automatic pdu_hdr_t hdr = pkt_buf_rd_data.data;
-                    assert(pkt_buf_rd_data.sop);
-                    missing_flits <= hdr.pdu_flit;
-                    nb_flits <= hdr.pdu_flit;
-                    dma_queue <= hdr.queue_id;
-                    page_offset <= queue_id * 4096; // TODO adjust to reflect actual host rb size
-                    pkt_buf_rd_en <= 1;
-                    hold_queue_ready <= 0;
-                    dma_start <= 1;
+                // invariant: cur_desc_valid == 0
+                if (desc_buf_occup > 0) begin
+                    // fetch next queue state
+                    wait_for_pref_desc <= 0; // regular fetch
+                    dma_queue <= desc_buf_rd_data.queue_id;
+                    cur_desc <= desc_buf_rd_data;
+                    desc_buf_rd_en <= 1;
+                    queue_rd_en <= 1;
 
                     state <= START_BURST;
                 end
 
-                // a pending DMA may have been completed, zero signals
+                // a DMA may have finished, ensure write is unset
                 if (!pcie_bas_waitrequest) begin
-                    pcie_bas_address <= 0;
-                    pcie_bas_byteenable <= 0;
-                    pcie_bas_writedata <= 0;
                     pcie_bas_write <= 0;
-                    pcie_bas_burstcount <= 0;
                 end
             end
             START_BURST: begin
+                // pending fetch arrived
+                if (!cur_desc_valid && queue_ready) begin
+                    cur_desc_valid <= 1;
+                    cur_head <= in_head;
+                    cur_tail <= in_tail;
+                    cur_kmem_addr <= in_kmem_addr;
+                    missing_flits <= cur_desc.size;
+                end
+
                 // We may set the writing signals even when pcie_bas_waitrequest
                 // is set, but we must make sure that they remain active until
                 // pcie_bas_waitrequest is unset. So we are checking this signal
                 // not to ensure that we are able to write but instead to make
                 // sure that any write request in the previous cycle is complete
-                if (!pcie_bas_waitrequest && 
-                        (queue_ready || hold_queue_ready)) begin
+                if (!pcie_bas_waitrequest && (pkt_buf_occup > 0)
+                        && cur_desc_valid) begin
                     automatic logic [3:0] flits_in_transfer;
                     automatic logic [63:0] req_offset = (
                         nb_flits - missing_flits) * 64;
-                    hold_queue_ready <= 1;
 
                     // max 8 flits per burst
                     if (missing_flits > 8) begin
                         flits_in_transfer = 8;
                     end else begin
                         flits_in_transfer = missing_flits;
+                    end
+
+                    if (missing_flits == nb_flits) begin
+                        assert(pkt_buf_rd_data.sop);
                     end
 
                     pcie_bas_address <= cpu_data_addr + page_offset + req_offset;
@@ -210,16 +246,23 @@ always @(posedge clk) begin
                     end
                 end else begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
+
+                    // a DMA may have finished, ensure write is unset
+                    if (!pcie_bas_waitrequest) begin
+                        pcie_bas_write <= 0;
+                    end
                 end
+
+                try_prefetch();
             end
             COMPLETE_BURST: begin
-                if (!pcie_bas_waitrequest) begin // done with previous transfer
+                if (!pcie_bas_waitrequest && (pkt_buf_occup > 0)) begin
                     missing_flits <= missing_flits - 1;
                     missing_flits_in_transfer <= missing_flits_in_transfer - 1;
 
                     // subsequent bursts from the same transfer do not need to
                     // set the address
-                    pcie_bas_address <= 0;
+                    // pcie_bas_address <= 0;
                     pcie_bas_byteenable <= 64'hffffffffffffffff;
                     pcie_bas_writedata <= pkt_buf_rd_data.data;
                     pkt_buf_rd_en <= 1;
@@ -238,17 +281,22 @@ always @(posedge clk) begin
                     end
                 end else begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
+
+                    // a DMA may have finished, ensure write is unset
+                    if (!pcie_bas_waitrequest) begin
+                        pcie_bas_write <= 0;
+                    end
                 end
+
+                try_prefetch();
             end
             DONE: begin
                 if (!pcie_bas_waitrequest) begin // done with previous transfer
                     if (write_pointer) begin
-                        //
                         // Send done descriptor
-                        //
-                        pcie_bas_address <= kmem_addr + page_offset;
+                        pcie_bas_address <= cur_kmem_addr + page_offset;
                         pcie_bas_byteenable <= 64'h000000000000000f;
-                        pcie_bas_writedata <= {480'h0, tail}; // TODO(sadok) make sure tail is being written to the right location
+                        pcie_bas_writedata <= {480'h0, cur_tail}; // TODO(sadok) make sure tail is being written to the right location
                         pcie_bas_write <= 1;
                         pcie_bas_burstcount <= 1;
                     end else begin
@@ -261,9 +309,43 @@ always @(posedge clk) begin
 
                     // update tail
                     out_tail <= new_tail;
-                    dma_done <= 1;
+                    tail_wr_en <= 1;
 
-                    state <= IDLE;
+                    // if we have already prefetched the next descriptor, we can
+                    // start the next transfer in the following cycle
+                    if (pref_desc_valid) begin
+                        // consume prefetch
+                        cur_desc <= pref_desc;
+                        cur_head <= pref_head;
+                        cur_tail <= pref_tail;
+                        cur_kmem_addr <= pref_kmem_addr;
+                        pref_desc_valid <= 0;
+                        cur_desc_valid <= 1;
+                        missing_flits <= pref_desc.size;
+                        state <= START_BURST;
+                    end else if (wait_for_pref_desc) begin
+                        if (queue_ready) begin
+                            // prefetch completed this cycle, use it now
+                            pref_desc_valid <= 0; // override value set above
+                            wait_for_pref_desc <= 0;
+                            cur_desc_valid <= 1;
+                            cur_desc <= pref_desc;
+                            cur_head <= in_head;
+                            cur_tail <= in_tail;
+                            cur_kmem_addr <= in_kmem_addr;
+                            missing_flits <= pref_desc.size;
+                        end else begin
+                            // prefetch is in progress, make it a regular fetch
+                            wait_for_pref_desc <= 0;
+                            cur_desc_valid <= 0;
+                            cur_desc <= pref_desc;
+                        end
+                        state <= START_BURST;
+                    end else begin
+                        // no prefetch available or in progress
+                        cur_desc_valid <= 0;
+                        state <= IDLE;
+                    end
                 end else begin
                     dma_queue_full_cnt <= dma_queue_full_cnt + 1;
                 end
@@ -283,30 +365,22 @@ always @(posedge clk) begin
     end
 end
 
-logic [PDU_AWIDTH-1:0] flits_written;
-pdu_hdr_t pdu_hdr;
-
 typedef enum
 {
     GEN_IDLE,
-    GEN_HEAD,
     GEN_DATA
 } gen_state_t;
 
-gen_state_t gen_state;
+gen_state_t               gen_state;
+logic [APP_IDX_WIDTH-1:0] queue_id;
+logic [31:0]              nb_requests;
+logic [PDU_AWIDTH-1:0]    flits_written;
+logic [31:0]              last_target_nb_requests;
 
-assign pdu_hdr.padding = 0;
-assign pdu_hdr.queue_id = queue_id;
-assign pdu_hdr.action = 0;
-assign pdu_hdr.pdu_flit = (req_size + (16 - 1))/16;
-assign pdu_hdr.pdu_size = req_size * 4;
-assign pdu_hdr.prot = 0;
-assign pdu_hdr.tuple = 0;
-assign pdu_hdr.pdu_id = nb_requests;
-
+// Generate requests
 always @(posedge clk) begin
     pkt_buf_wr_en <= 0;
-    pkt_buf_wr_data <= 0;
+    desc_buf_wr_en <= 0;
     last_target_nb_requests <= target_nb_requests;
     if (rst) begin
         gen_state <= GEN_IDLE;
@@ -316,21 +390,12 @@ always @(posedge clk) begin
         transmit_cycles <= 0;
         last_target_nb_requests <= 0;
     end else begin
-        automatic logic can_insert_pkt = (pkt_buf_occup < (PDU_DEPTH - 2));
+        automatic logic can_insert_pkt = (pkt_buf_occup < (PDU_DEPTH - 2)) && 
+                                         (desc_buf_occup < (PDU_DEPTH - 2));
         case (gen_state)
             GEN_IDLE: begin
                 if (nb_requests < target_nb_requests) begin
                     queue_id <= 0;
-                    gen_state <= GEN_HEAD;
-                end
-            end
-            GEN_HEAD: begin
-                // write PDU header
-                if (can_insert_pkt) begin
-                    pkt_buf_wr_en <= 1;
-                    pkt_buf_wr_data.sop <= 1;
-                    pkt_buf_wr_data.data <= pdu_hdr;
-                    pkt_buf_wr_data.eop <= 0;
                     flits_written <= 0;
                     gen_state <= GEN_DATA;
                 end
@@ -338,7 +403,6 @@ always @(posedge clk) begin
             GEN_DATA: begin
                 if (can_insert_pkt) begin
                     pkt_buf_wr_en <= 1;
-                    pkt_buf_wr_data.sop <= 0;
                     pkt_buf_wr_data.data <= {
                         nb_requests, 32'h00000000, 64'h0000babe0000face, 
                         64'h0000babe0000face, 64'h0000babe0000face,
@@ -348,13 +412,21 @@ always @(posedge clk) begin
 
                     flits_written <= flits_written + 1;
 
+                    pkt_buf_wr_data.sop <= (flits_written == 0); // first block
+
                     if ((flits_written + 1) * 16 >= req_size) begin
                         pkt_buf_wr_data.eop <= 1; // last block
                         nb_requests <= nb_requests + 1;
+                        flits_written <= 0;
+
+                        // write descriptor
+                        desc_buf_wr_en <= 1;
+                        desc_buf_wr_data.queue_id <= queue_id;
+                        desc_buf_wr_data.size <= (req_size + (16 - 1))/16;
+
                         if (nb_requests + 1 == target_nb_requests) begin
                             gen_state <= GEN_IDLE;
                         end else begin
-                            gen_state <= GEN_HEAD;
                             if (((queue_id + 1) * 4096 + req_size * 4) > 
                                     (rb_size * 64)) begin
                                 queue_id <= 0;
@@ -396,6 +468,23 @@ pkt_buf (
     .rd_data (pkt_buf_rd_data),
     .rd_en   (pkt_buf_rd_en),
     .occup   (pkt_buf_occup)
+);
+
+// Descriptor buffer. This was sized considering the worst case -- where all
+// packets are min-sized. We may use a smaller buffer here to save BRAM.
+prefetch_rb #(
+    .DEPTH(PDU_DEPTH),
+    .AWIDTH(PDU_AWIDTH),
+    .DWIDTH($bits(pkt_desc_t))
+)
+desc_buf (
+    .clk     (clk),
+    .rst     (rst),
+    .wr_data (desc_buf_wr_data),
+    .wr_en   (desc_buf_wr_en),
+    .rd_data (desc_buf_rd_data),
+    .rd_en   (desc_buf_rd_en),
+    .occup   (desc_buf_occup)
 );
 
 endmodule

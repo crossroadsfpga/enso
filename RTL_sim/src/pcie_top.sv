@@ -194,10 +194,9 @@ logic [63:0]                c2f_kmem_addr;
 logic [63:0]                c2f_head_addr;
 
 logic                     f2c_queue_ready;
-logic                     dma_done;
-logic                     dma_start;
+logic                     tail_wr_en;
+logic                     queue_rd_en;
 logic [APP_IDX_WIDTH-1:0] dma_queue;
-logic [APP_IDX_WIDTH:0]   queue_id; // extra bit for invalid queue
 logic [RB_AWIDTH-1:0]     new_tail;
 
 logic [31:0] target_nb_requests;
@@ -448,9 +447,7 @@ state_t state;
 // C2F_head
 assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
 
-// assign c2f_head_addr = 0;
-// update tail pointer
-// CPU side read MUX, first RB_BRAM_OFFSET*512 bits are regs, the rest is BRAM
+// read queue state or write new tail
 always@(posedge pcie_clk)begin
     q_table_tails_wr_en_a <= 0;
     q_table_heads_wr_en_a <= 0;
@@ -464,143 +461,50 @@ always@(posedge pcie_clk)begin
 
     f2c_queue_ready <= 0;
 
+    q_table_tails_rd_en_a_r <= q_table_tails_rd_en_a;
+    q_table_tails_rd_en_a_r2 <= q_table_tails_rd_en_a_r;
+    q_table_heads_rd_en_a_r <= q_table_heads_rd_en_a;
+    q_table_heads_rd_en_a_r2 <= q_table_heads_rd_en_a_r;
+    q_table_l_addrs_rd_en_a_r <= q_table_l_addrs_rd_en_a;
+    q_table_l_addrs_rd_en_a_r2 <= q_table_l_addrs_rd_en_a_r;
+    q_table_h_addrs_rd_en_a_r <= q_table_h_addrs_rd_en_a;
+    q_table_h_addrs_rd_en_a_r2 <= q_table_h_addrs_rd_en_a_r;
+
     if(!pcie_reset_n) begin
-        f2c_tail <= 0;
-        f2c_head <= 0;
-        f2c_kmem_addr <= 0;
-        queue_id <= ~0; // invalid queue (all 1s)
-        state <= IDLE;
     end else begin
-        // These are used as ready signals. They can be overriden if an external
-        // write comes and we intercept it. (see the block after the case)
-        q_table_tails_rd_en_a_r <= q_table_tails_rd_en_a;
-        q_table_tails_rd_en_a_r2 <= q_table_tails_rd_en_a_r;
-        q_table_heads_rd_en_a_r <= q_table_heads_rd_en_a;
-        q_table_heads_rd_en_a_r2 <= q_table_heads_rd_en_a_r;
-        q_table_l_addrs_rd_en_a_r <= q_table_l_addrs_rd_en_a;
-        q_table_l_addrs_rd_en_a_r2 <= q_table_l_addrs_rd_en_a_r;
-        q_table_h_addrs_rd_en_a_r <= q_table_h_addrs_rd_en_a;
-        q_table_h_addrs_rd_en_a_r2 <= q_table_h_addrs_rd_en_a_r;
+        if (queue_rd_en) begin
+            q_table_tails_addr_a <= dma_queue;
+            q_table_tails_rd_en_a <= 1;
 
-        case (state)
-            IDLE: begin
-                if (dma_start) begin
-                    // Always lookup queue
-                    // if (queue_id != {1'b0, dma_queue}) begin
-                    // Intercept writes to the same address that happened
-                    // in the previous clock cycle
-                    if ((q_table_tails_addr_b == dma_queue)
-                            && q_table_tails_wr_en_b) begin
-                        f2c_tail <= q_table_tails_wr_data_b;
-                    end else begin
-                        q_table_tails_addr_a <= dma_queue;
-                        q_table_tails_rd_en_a <= 1;
-                    end
-                    if ((q_table_heads_addr_b == dma_queue)
-                            && q_table_heads_wr_en_b) begin
-                        f2c_head <= q_table_heads_wr_data_b;
-                    end else begin
-                        q_table_heads_addr_a <= dma_queue;
-                        q_table_heads_rd_en_a <= 1;
-                    end
-                    if ((q_table_l_addrs_addr_b == dma_queue)
-                            && q_table_l_addrs_wr_en_b) begin
-                        f2c_kmem_addr[31:0] <= q_table_l_addrs_wr_data_b;
-                    end else begin
-                        q_table_l_addrs_addr_a <= dma_queue;
-                        q_table_l_addrs_rd_en_a <= 1;
-                    end
-                    if ((q_table_h_addrs_addr_b == dma_queue)
-                            && q_table_h_addrs_wr_en_b) begin
-                        f2c_kmem_addr[63:32] <= q_table_h_addrs_wr_data_b;
-                    end else begin
-                        q_table_h_addrs_addr_a <= dma_queue;
-                        q_table_h_addrs_rd_en_a <= 1;
-                    end
-                    queue_id <= {1'b0, dma_queue};
+            q_table_heads_addr_a <= dma_queue;
+            q_table_heads_rd_en_a <= 1;
 
-                    state <= BRAM_DELAY_1;
-                    // end else begin
-                    //     f2c_queue_ready <= 1;
-                    //     state <= WAIT_DMA;
-                    // end
-                end
-            end
-            BRAM_DELAY_1: begin
-                state <= BRAM_DELAY_2;
-            end
-            BRAM_DELAY_2: begin
-                state <= SWITCH_QUEUE;
-            end
-            SWITCH_QUEUE: begin
-                if (q_table_tails_rd_en_a_r2) begin
-                    f2c_tail <= q_table_tails_rd_data_a;
-                end
-                if (q_table_heads_rd_en_a_r2) begin
-                    f2c_head <= q_table_heads_rd_data_a;
-                end
-                if (q_table_l_addrs_rd_en_a_r2) begin
-                    f2c_kmem_addr[31:0] <= q_table_l_addrs_rd_data_a;
-                end
-                if (q_table_h_addrs_rd_en_a_r2) begin
-                    f2c_kmem_addr[63:32] <= q_table_h_addrs_rd_data_a;
-                end
+            q_table_l_addrs_addr_a <= dma_queue;
+            q_table_l_addrs_rd_en_a <= 1;
 
-                f2c_queue_ready <= 1;
+            q_table_h_addrs_addr_a <= dma_queue;
+            q_table_h_addrs_rd_en_a <= 1;
+        end else if (tail_wr_en) begin
+            q_table_tails_addr_a <= dma_queue;
+            q_table_tails_wr_data_a <= new_tail;
+            q_table_tails_wr_en_a <= 1;
+        end
 
-                state <= WAIT_DMA;
-            end
-            WAIT_DMA: begin
-                if (dma_done) begin
-                    f2c_tail <= new_tail;
-                    $display("dma_done -- new_tail: %h", new_tail);
-
-                    // update the tail on BRAM
-                    q_table_tails_addr_a <= queue_id[APP_IDX_WIDTH-1:0];
-                    q_table_tails_wr_data_a <= new_tail;
-                    q_table_tails_wr_en_a <= 1;
-
-                    state <= IDLE;
-                end
-            end
-            default: state <= IDLE;
-        endcase
-
-        // Ensure that queue updates are applied when the queue is active.
-        // This is particularly important in the beginning: when there is only
-        // one queue and it is not set. But it is also useful to intercept
-        // writes in the middle of a queue transition. In such case, we also
-        // need to intercept the ready signals (*en_a, *en_a_r, *en_a_r2) to
-        // ensure that values are not overriden with outdated ones from BRAM.
-        if (pcie_write_0 && ({1'b0, page_idx} == dma_queue)) begin
-            if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE]
-                    == {REG_SIZE{1'b1}}) begin
-                f2c_tail <= pcie_writedata_0[0*32 +: 32];
-                q_table_tails_rd_en_a <= 0;
-                q_table_tails_rd_en_a_r <= 0;
-                q_table_tails_rd_en_a_r2 <= 0;
-            end
-            if (pcie_byteenable_0[1*REG_SIZE +:REG_SIZE]
-                    == {REG_SIZE{1'b1}}) begin
-                f2c_head <= pcie_writedata_0[1*32 +: 32];
-                q_table_heads_rd_en_a <= 0;
-                q_table_heads_rd_en_a_r <= 0;
-                q_table_heads_rd_en_a_r2 <= 0;
-            end
-            if (pcie_byteenable_0[2*REG_SIZE +:REG_SIZE]
-                    == {REG_SIZE{1'b1}}) begin
-                f2c_kmem_addr[31:0] <= pcie_writedata_0[2*32 +: 32];
-                q_table_l_addrs_rd_en_a <= 0;
-                q_table_l_addrs_rd_en_a_r <= 0;
-                q_table_l_addrs_rd_en_a_r2 <= 0;
-            end
-            if (pcie_byteenable_0[3*REG_SIZE +:REG_SIZE]
-                    == {REG_SIZE{1'b1}}) begin
-                f2c_kmem_addr[63:32] <= pcie_writedata_0[3*32 +: 32];
-                q_table_h_addrs_rd_en_a <= 0;
-                q_table_h_addrs_rd_en_a_r <= 0;
-                q_table_h_addrs_rd_en_a_r2 <= 0;
-            end
+        if (q_table_tails_rd_en_a_r2) begin
+            f2c_tail <= q_table_tails_rd_data_a;
+            f2c_queue_ready <= 1;
+        end
+        if (q_table_heads_rd_en_a_r2) begin
+            f2c_head <= q_table_heads_rd_data_a;
+            f2c_queue_ready <= 1;
+        end
+        if (q_table_l_addrs_rd_en_a_r2) begin
+            f2c_kmem_addr[31:0] <= q_table_l_addrs_rd_data_a;
+            f2c_queue_ready <= 1;
+        end
+        if (q_table_h_addrs_rd_en_a_r2) begin
+            f2c_kmem_addr[63:32] <= q_table_h_addrs_rd_data_a;
+            f2c_queue_ready <= 1;
         end
     end
 end
@@ -677,9 +581,6 @@ dc_fifo_reg_core  pcie_to_jtag_fifo (
     .avalonst_source_data  (q_table_rd_data_b_jtag)
 );
 
-// always get queue 0
-assign dma_queue = 0;
-
 fpga2cpu_pcie f2c_inst (
     .clk                (pcie_clk),
     .rst                (!pcie_reset_n),
@@ -692,14 +593,14 @@ fpga2cpu_pcie f2c_inst (
     .max_rb             (pcie_max_rb),
     .update_valid       (pcie_rb_update_valid),
     .update_size        (pcie_rb_update_size),
-    .head               (f2c_head),
-    .tail               (f2c_tail),
-    .kmem_addr          (f2c_kmem_addr),
+    .in_head            (f2c_head),
+    .in_tail            (f2c_tail),
+    .in_kmem_addr       (f2c_kmem_addr),
     .queue_ready        (f2c_queue_ready),
     .out_tail           (new_tail),
-    .dma_done           (dma_done),
-    .dma_queue          (),
-    .dma_start          (dma_start),
+    .dma_queue          (dma_queue),
+    .queue_rd_en        (queue_rd_en),
+    .tail_wr_en         (tail_wr_en),
     .rb_size            ({5'b0, rb_size}),
     // .wrdm_desc_ready    (pcie_wrdm_desc_ready),
     // .wrdm_desc_valid    (pcie_wrdm_desc_valid),
