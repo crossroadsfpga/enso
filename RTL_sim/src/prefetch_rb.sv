@@ -88,7 +88,7 @@ always @(posedge clk) begin
                 pending_rd_data[i+1] <= pending_rd_data[i];
             end
 
-            if (next_occup >= NB_PREFETCH_REGS) begin
+            if (real_occup > NB_PREFETCH_REGS) begin
                 bram_rd_addr <= tail + NB_PREFETCH_REGS;
                 bram_rd_en <= 1;
                 next_pending_reads = next_pending_reads + 1;
@@ -105,9 +105,8 @@ always @(posedge clk) begin
             assert (pending_reads > 0);
             next_pending_reads = next_pending_reads - 1;
             if (next_occup <= NB_PREFETCH_REGS) begin
-                pending_rd_data[
-                    next_pending_reads + NB_PREFETCH_REGS - next_occup
-                ] <= bram_rd_data;
+                pending_rd_data[next_pending_reads + NB_PREFETCH_REGS
+                    - real_occup + valid_rd_en] <= bram_rd_data;
             end else begin
                 pending_rd_data[next_pending_reads] <= bram_rd_data;
             end
