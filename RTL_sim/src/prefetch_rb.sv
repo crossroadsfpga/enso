@@ -99,7 +99,7 @@ always @(posedge clk) begin
         bram_rd_en_r <= bram_rd_en;
         bram_rd_valid <= bram_rd_en_r;
 
-        // We store the value read from BRAM is a different register depending
+        // We store the value read from BRAM in a different register depending
         // on the number of pending reads
         if (bram_rd_valid) begin
             assert (pending_reads > 0);
