@@ -138,22 +138,9 @@ function void try_prefetch();
     if (!pref_desc_valid && !wait_for_pref_desc && (desc_buf_occup > 0)) begin
         pref_desc = desc_buf_rd_data;
         desc_buf_rd_en <= 1;
-        if (cur_desc_valid
-                && cur_desc.queue_id == desc_buf_rd_data.queue_id) begin
-            // same as current queue, no need to read state
-            pref_desc_valid = 1;
-            pref_head = cur_head; // TODO(sadok) should still request an update
-                                   // eventually, to ensure that we get a new
-                                   // head. But must make sure that the tail is
-                                   // not overridden by such update
-            pref_tail = get_new_pointer(cur_tail, cur_desc.size);
-            pref_kmem_addr = cur_kmem_addr;
-        end else begin
-            // prefetch next descriptor's queue state
-            wait_for_pref_desc = 1;
-            rd_queue <= desc_buf_rd_data.queue_id;
-            queue_rd_en <= 1;
-        end
+        wait_for_pref_desc = 1;
+        rd_queue <= desc_buf_rd_data.queue_id;
+        queue_rd_en <= 1;
     end
 endfunction
 
@@ -336,10 +323,13 @@ always @(posedge clk) begin
                     // if we have already prefetched the next descriptor, we can
                     // start the next transfer in the following cycle
                     if (pref_desc_valid) begin
-                        // consume prefetch immediately
+                        // If the prefetched desc corresponds to the same queue,
+                        // we ignore the tail as it is still outdated.
+                        if (cur_desc.queue_id != pref_desc.queue_id) begin
+                            cur_tail = pref_tail;
+                        end
                         cur_desc = pref_desc;
                         cur_head = pref_head;
-                        cur_tail = pref_tail;
                         cur_kmem_addr = pref_kmem_addr;
                         pref_desc_valid = 0;
                         cur_desc_valid = 1;

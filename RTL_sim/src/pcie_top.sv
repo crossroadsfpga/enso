@@ -198,6 +198,7 @@ logic                     tail_wr_en;
 logic                     queue_rd_en;
 logic [APP_IDX_WIDTH-1:0] f2c_rd_queue;
 logic [APP_IDX_WIDTH-1:0] f2c_wr_queue;
+logic [RB_AWIDTH-1:0]     hold_tail;
 logic [RB_AWIDTH-1:0]     new_tail;
 
 logic [31:0] target_nb_requests;
@@ -457,6 +458,10 @@ always@(posedge pcie_clk)begin
     q_table_l_addrs_rd_en_a_r2 <= q_table_l_addrs_rd_en_a_r;
     q_table_h_addrs_rd_en_a_r <= q_table_h_addrs_rd_en_a;
     q_table_h_addrs_rd_en_a_r2 <= q_table_h_addrs_rd_en_a_r;
+
+    if (tail_wr_en) begin
+        hold_tail <= new_tail;
+    end
 end
 
 always_comb begin
@@ -478,7 +483,9 @@ always_comb begin
     q_table_tails_wr_data_a = new_tail;
 
     if (queue_rd_en) begin
-        q_table_tails_rd_en_a = 1;
+        // when reading and writing the same queue, we avoid reading the tail
+        // and instead hold its value in hold_tail
+        q_table_tails_rd_en_a = !tail_wr_en || (f2c_rd_queue != f2c_wr_queue);
         q_table_heads_rd_en_a = 1;
         q_table_l_addrs_rd_en_a = 1;
         q_table_h_addrs_rd_en_a = 1;
@@ -490,7 +497,11 @@ always_comb begin
     f2c_queue_ready = q_table_tails_rd_en_a_r2 || q_table_heads_rd_en_a_r2 
         || q_table_l_addrs_rd_en_a_r2 || q_table_h_addrs_rd_en_a_r2;
 
-    f2c_tail = q_table_tails_rd_data_a;
+    if (q_table_tails_rd_en_a_r2) begin
+        f2c_tail = q_table_tails_rd_data_a;
+    end else begin
+        f2c_tail = hold_tail;
+    end
     f2c_head = q_table_heads_rd_data_a;
     f2c_kmem_addr[31:0] = q_table_l_addrs_rd_data_a;
     f2c_kmem_addr[63:32] = q_table_h_addrs_rd_data_a;
