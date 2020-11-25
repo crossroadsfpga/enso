@@ -240,7 +240,7 @@ always@(posedge clk_status) begin
             status_readdata <= transmit_cycles_r;
             status_readdata_valid <= 1;
         end else begin
-            q_table_jtag <= {status_addr_r[0 +:JTAG_ADDR_WIDTH]-status_addr_r[0 +:JTAG_ADDR_WIDTH]}[1:0];
+            q_table_jtag <= {status_addr_r[0 +:JTAG_ADDR_WIDTH]-NB_CONTROL_REGS-1}[1:0];
             q_table_addr_jtag <= {status_addr_r[0 +:JTAG_ADDR_WIDTH]-NB_CONTROL_REGS-1}[
                 2 +:APP_IDX_WIDTH];
             q_table_rd_pending_from_jtag <= 1;
