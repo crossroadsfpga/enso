@@ -136,21 +136,21 @@ assign new_tail = get_new_pointer(cur_tail, nb_flits);
 
 function void try_prefetch();
     if (!pref_desc_valid && !wait_for_pref_desc && (desc_buf_occup > 0)) begin
-        pref_desc <= desc_buf_rd_data;
+        pref_desc = desc_buf_rd_data;
         desc_buf_rd_en <= 1;
         if (cur_desc_valid
                 && cur_desc.queue_id == desc_buf_rd_data.queue_id) begin
             // same as current queue, no need to read state
-            pref_desc_valid <= 1;
-            pref_head <= cur_head; // TODO(sadok) should still request an update
+            pref_desc_valid = 1;
+            pref_head = cur_head; // TODO(sadok) should still request an update
                                    // eventually, to ensure that we get a new
                                    // head. But must make sure that the tail is
                                    // not overridden by such update
-            pref_tail <= get_new_pointer(cur_tail, cur_desc.size);
-            pref_kmem_addr <= cur_kmem_addr;
+            pref_tail = get_new_pointer(cur_tail, cur_desc.size);
+            pref_kmem_addr = cur_kmem_addr;
         end else begin
             // prefetch next descriptor's queue state
-            wait_for_pref_desc <= 1;
+            wait_for_pref_desc = 1;
             rd_queue <= desc_buf_rd_data.queue_id;
             queue_rd_en <= 1;
         end
@@ -180,11 +180,11 @@ always @(posedge clk) begin
     end else begin
         // done prefetching
         if (wait_for_pref_desc && queue_ready) begin
-            wait_for_pref_desc <= 0;
-            pref_desc_valid <= 1;
-            pref_head <= in_head;
-            pref_tail <= in_tail;
-            pref_kmem_addr <= in_kmem_addr;
+            wait_for_pref_desc = 0;
+            pref_desc_valid = 1;
+            pref_head = in_head;
+            pref_tail = in_tail;
+            pref_kmem_addr = in_kmem_addr;
         end
 
         case (state)
@@ -351,26 +351,14 @@ always @(posedge clk) begin
                         try_prefetch();
                         state <= START_BURST;
                     end else if (wait_for_pref_desc) begin
-                        if (queue_ready) begin
-                            // prefetch completed this cycle, use it now
-                            pref_desc_valid <= 0; // override value set above
-                            wait_for_pref_desc <= 0;
-                            cur_desc_valid <= 1;
-                            cur_desc <= pref_desc;
-                            cur_head <= in_head;
-                            cur_tail <= in_tail;
-                            cur_kmem_addr <= in_kmem_addr;
-                            missing_flits <= pref_desc.size;
-                        end else begin
-                            // prefetch is in progress, make it a regular fetch
-                            wait_for_pref_desc <= 0;
-                            cur_desc_valid <= 0;
-                            cur_desc <= pref_desc;
-                        end
+                        // prefetch is in progress, make it a regular fetch
+                        wait_for_pref_desc = 0;
+                        cur_desc_valid = 0;
+                        cur_desc = pref_desc;
                         state <= START_BURST;
                     end else begin
                         // no prefetch available or in progress
-                        cur_desc_valid <= 0;
+                        cur_desc_valid = 0;
                         state <= IDLE;
                     end
                 end else begin
