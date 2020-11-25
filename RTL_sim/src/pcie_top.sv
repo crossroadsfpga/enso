@@ -196,7 +196,8 @@ logic [63:0]                c2f_head_addr;
 logic                     f2c_queue_ready;
 logic                     tail_wr_en;
 logic                     queue_rd_en;
-logic [APP_IDX_WIDTH-1:0] dma_queue;
+logic [APP_IDX_WIDTH-1:0] f2c_rd_queue;
+logic [APP_IDX_WIDTH-1:0] f2c_wr_queue;
 logic [RB_AWIDTH-1:0]     new_tail;
 
 logic [31:0] target_nb_requests;
@@ -447,20 +448,7 @@ state_t state;
 // C2F_head
 assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
 
-// read queue state or write new tail
 always@(posedge pcie_clk)begin
-    q_table_tails_wr_en_a <= 0;
-    q_table_heads_wr_en_a <= 0;
-    q_table_l_addrs_wr_en_a <= 0;
-    q_table_h_addrs_wr_en_a <= 0;
-
-    q_table_tails_rd_en_a <= 0;
-    q_table_heads_rd_en_a <= 0;
-    q_table_l_addrs_rd_en_a <= 0;
-    q_table_h_addrs_rd_en_a <= 0;
-
-    f2c_queue_ready <= 0;
-
     q_table_tails_rd_en_a_r <= q_table_tails_rd_en_a;
     q_table_tails_rd_en_a_r2 <= q_table_tails_rd_en_a_r;
     q_table_heads_rd_en_a_r <= q_table_heads_rd_en_a;
@@ -469,44 +457,43 @@ always@(posedge pcie_clk)begin
     q_table_l_addrs_rd_en_a_r2 <= q_table_l_addrs_rd_en_a_r;
     q_table_h_addrs_rd_en_a_r <= q_table_h_addrs_rd_en_a;
     q_table_h_addrs_rd_en_a_r2 <= q_table_h_addrs_rd_en_a_r;
+end
 
-    if(!pcie_reset_n) begin
-    end else begin
-        if (queue_rd_en) begin
-            q_table_tails_addr_a <= dma_queue;
-            q_table_tails_rd_en_a <= 1;
+always_comb begin
+    q_table_tails_addr_a = f2c_rd_queue;
+    q_table_heads_addr_a = f2c_rd_queue;
+    q_table_l_addrs_addr_a = f2c_rd_queue;
+    q_table_h_addrs_addr_a = f2c_rd_queue;
 
-            q_table_heads_addr_a <= dma_queue;
-            q_table_heads_rd_en_a <= 1;
+    q_table_tails_rd_en_a = 0;
+    q_table_heads_rd_en_a = 0;
+    q_table_l_addrs_rd_en_a = 0;
+    q_table_h_addrs_rd_en_a = 0;
 
-            q_table_l_addrs_addr_a <= dma_queue;
-            q_table_l_addrs_rd_en_a <= 1;
+    q_table_tails_wr_en_a = 0;
+    q_table_heads_wr_en_a = 0;
+    q_table_l_addrs_wr_en_a = 0;
+    q_table_h_addrs_wr_en_a = 0;
 
-            q_table_h_addrs_addr_a <= dma_queue;
-            q_table_h_addrs_rd_en_a <= 1;
-        end else if (tail_wr_en) begin
-            q_table_tails_addr_a <= dma_queue;
-            q_table_tails_wr_data_a <= new_tail;
-            q_table_tails_wr_en_a <= 1;
-        end
+    q_table_tails_wr_data_a = new_tail;
 
-        if (q_table_tails_rd_en_a_r2) begin
-            f2c_tail <= q_table_tails_rd_data_a;
-            f2c_queue_ready <= 1;
-        end
-        if (q_table_heads_rd_en_a_r2) begin
-            f2c_head <= q_table_heads_rd_data_a;
-            f2c_queue_ready <= 1;
-        end
-        if (q_table_l_addrs_rd_en_a_r2) begin
-            f2c_kmem_addr[31:0] <= q_table_l_addrs_rd_data_a;
-            f2c_queue_ready <= 1;
-        end
-        if (q_table_h_addrs_rd_en_a_r2) begin
-            f2c_kmem_addr[63:32] <= q_table_h_addrs_rd_data_a;
-            f2c_queue_ready <= 1;
-        end
+    if (queue_rd_en) begin
+        q_table_tails_rd_en_a = 1;
+        q_table_heads_rd_en_a = 1;
+        q_table_l_addrs_rd_en_a = 1;
+        q_table_h_addrs_rd_en_a = 1;
+    end else if (tail_wr_en) begin
+        q_table_tails_wr_en_a = 1;
+        q_table_tails_addr_a = f2c_wr_queue;
     end
+
+    f2c_queue_ready = q_table_tails_rd_en_a_r2 || q_table_heads_rd_en_a_r2 
+        || q_table_l_addrs_rd_en_a_r2 || q_table_h_addrs_rd_en_a_r2;
+
+    f2c_tail = q_table_tails_rd_data_a;
+    f2c_head = q_table_heads_rd_data_a;
+    f2c_kmem_addr[31:0] = q_table_l_addrs_rd_data_a;
+    f2c_kmem_addr[63:32] = q_table_h_addrs_rd_data_a;
 end
 
 // PDU_BUFFER
@@ -581,6 +568,11 @@ dc_fifo_reg_core  pcie_to_jtag_fifo (
     .avalonst_source_data  (q_table_rd_data_b_jtag)
 );
 
+/////////// HACK(sadok) ////////////////////
+// Must undo once we incorporate the queue manager back in the system
+assign f2c_rd_queue = 0;
+assign f2c_wr_queue = 0;
+
 fpga2cpu_pcie f2c_inst (
     .clk                (pcie_clk),
     .rst                (!pcie_reset_n),
@@ -596,9 +588,10 @@ fpga2cpu_pcie f2c_inst (
     .in_head            (f2c_head),
     .in_tail            (f2c_tail),
     .in_kmem_addr       (f2c_kmem_addr),
+    .rd_queue           (),
     .queue_ready        (f2c_queue_ready),
     .out_tail           (new_tail),
-    .dma_queue          (dma_queue),
+    .wr_queue           (),
     .queue_rd_en        (queue_rd_en),
     .tail_wr_en         (tail_wr_en),
     .rb_size            ({5'b0, rb_size}),

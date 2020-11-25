@@ -20,9 +20,10 @@ module fpga2cpu_pcie (
     input  logic [RB_AWIDTH-1:0]     in_head,
     input  logic [RB_AWIDTH-1:0]     in_tail,
     input  logic [63:0]              in_kmem_addr,
+    output logic [APP_IDX_WIDTH-1:0] rd_queue,
     input  logic                     queue_ready,
     output logic [RB_AWIDTH-1:0]     out_tail,
-    output logic [APP_IDX_WIDTH-1:0] dma_queue,
+    output logic [APP_IDX_WIDTH-1:0] wr_queue,
     output logic                     queue_rd_en,
     output logic                     tail_wr_en,
     input  logic [30:0]              rb_size,
@@ -106,14 +107,6 @@ logic [31:0] nb_flits;
 logic [31:0] missing_flits;
 logic [3:0]  missing_flits_in_transfer;
 
-assign new_tail = (cur_tail + nb_flits >= rb_size) ? 
-                        (cur_tail + nb_flits - rb_size) :
-                        (cur_tail + nb_flits);
-
-// CPU side addr
-logic [63:0] cpu_data_addr;
-assign cpu_data_addr = cur_kmem_addr + 64; // the global reg
-
 logic [63:0] page_offset;
 
 logic rst_r;
@@ -128,20 +121,37 @@ typedef enum
 
 state_t state;
 
+function logic [RB_AWIDTH-1:0] get_new_pointer(
+    logic [RB_AWIDTH-1:0] pointer, 
+    logic [RB_AWIDTH-1:0] upd_sz
+);
+    if (pointer + upd_sz >= rb_size) begin
+        return pointer + upd_sz - rb_size;
+    end else begin
+        return pointer + upd_sz;
+    end
+endfunction
+
+assign new_tail = get_new_pointer(cur_tail, nb_flits);
+
 function void try_prefetch();
     if (!pref_desc_valid && !wait_for_pref_desc && (desc_buf_occup > 0)) begin
         pref_desc <= desc_buf_rd_data;
         desc_buf_rd_en <= 1;
-        if (cur_desc_valid && cur_desc.queue_id == desc_buf_rd_data.queue_id) begin
+        if (cur_desc_valid
+                && cur_desc.queue_id == desc_buf_rd_data.queue_id) begin
             // same as current queue, no need to read state
             pref_desc_valid <= 1;
-            pref_head <= cur_head;
-            pref_tail <= cur_tail;
+            pref_head <= cur_head; // TODO(sadok) should still request an update
+                                   // eventually, to ensure that we get a new
+                                   // head. But must make sure that the tail is
+                                   // not overridden by such update
+            pref_tail <= get_new_pointer(cur_tail, cur_desc.size);
             pref_kmem_addr <= cur_kmem_addr;
         end else begin
             // prefetch next descriptor's queue state
             wait_for_pref_desc <= 1;
-            dma_queue <= desc_buf_rd_data.queue_id;
+            rd_queue <= desc_buf_rd_data.queue_id;
             queue_rd_en <= 1;
         end
     end
@@ -183,7 +193,7 @@ always @(posedge clk) begin
                 if (desc_buf_occup > 0) begin
                     // fetch next queue state
                     wait_for_pref_desc <= 0; // regular fetch
-                    dma_queue <= desc_buf_rd_data.queue_id;
+                    rd_queue <= desc_buf_rd_data.queue_id;
                     cur_desc <= desc_buf_rd_data;
                     desc_buf_rd_en <= 1;
                     queue_rd_en <= 1;
@@ -199,12 +209,15 @@ always @(posedge clk) begin
             START_BURST: begin
                 // pending fetch arrived
                 if (!cur_desc_valid && queue_ready) begin
-                    cur_desc_valid <= 1;
-                    cur_head <= in_head;
-                    cur_tail <= in_tail;
-                    cur_kmem_addr <= in_kmem_addr;
-                    missing_flits <= cur_desc.size;
+                    cur_desc_valid = 1;
+                    cur_head = in_head;
+                    cur_tail = in_tail;
+                    cur_kmem_addr = in_kmem_addr;
+                    missing_flits = cur_desc.size;
                 end
+
+                // TODO(sadok) must check head to ensure that there is enough
+                // space in the buffer in host memory
 
                 // We may set the writing signals even when pcie_bas_waitrequest
                 // is set, but we must make sure that they remain active until
@@ -228,19 +241,24 @@ always @(posedge clk) begin
                         assert(pkt_buf_rd_data.sop);
                     end
 
-                    pcie_bas_address <= cpu_data_addr + page_offset + req_offset;
+                    // skips the first block
+                    // TODO(sadok) remove page_offset
+                    pcie_bas_address <= cur_kmem_addr + 64 + page_offset 
+                        + req_offset;
+                    
                     pcie_bas_byteenable <= 64'hffffffffffffffff;
                     pcie_bas_writedata <= pkt_buf_rd_data.data;
                     pkt_buf_rd_en <= 1;
                     pcie_bas_write <= 1;
-                    pcie_bas_burstcount <= flits_in_transfer; // number of flits in this transfer (max 8)
+                    pcie_bas_burstcount <= flits_in_transfer;
 
                     if (missing_flits > 1) begin
                         state <= COMPLETE_BURST;
                         missing_flits <= missing_flits - 1;
                         missing_flits_in_transfer <= flits_in_transfer - 1;
                     end else begin
-                        // pcie_bas_byteenable <= ; // TODO(sadok) handle unaligned cases here
+                        // TODO(sadok) handle unaligned cases here
+                        // pcie_bas_byteenable <= ;
                         state <= DONE;
                         assert(pkt_buf_rd_data.eop);
                     end
@@ -274,7 +292,8 @@ always @(posedge clk) begin
                             state <= START_BURST;
                             assert(!pkt_buf_rd_data.eop);
                         end else begin
-                            // pcie_bas_byteenable <= ; // TODO(sadok) handle unaligned cases here
+                            // TODO(sadok) handle unaligned cases here
+                            // pcie_bas_byteenable <= ;
                             state <= DONE;
                             assert(pkt_buf_rd_data.eop);
                         end
@@ -294,9 +313,11 @@ always @(posedge clk) begin
                 if (!pcie_bas_waitrequest) begin // done with previous transfer
                     if (write_pointer) begin
                         // Send done descriptor
+                        // TODO(sadok) make sure tail is being written to the
+                        // right location
                         pcie_bas_address <= cur_kmem_addr + page_offset;
                         pcie_bas_byteenable <= 64'h000000000000000f;
-                        pcie_bas_writedata <= {480'h0, cur_tail}; // TODO(sadok) make sure tail is being written to the right location
+                        pcie_bas_writedata <= {480'h0, new_tail};
                         pcie_bas_write <= 1;
                         pcie_bas_burstcount <= 1;
                     end else begin
@@ -310,18 +331,24 @@ always @(posedge clk) begin
                     // update tail
                     out_tail <= new_tail;
                     tail_wr_en <= 1;
+                    wr_queue <= cur_desc.queue_id;
 
                     // if we have already prefetched the next descriptor, we can
                     // start the next transfer in the following cycle
                     if (pref_desc_valid) begin
-                        // consume prefetch
-                        cur_desc <= pref_desc;
-                        cur_head <= pref_head;
-                        cur_tail <= pref_tail;
-                        cur_kmem_addr <= pref_kmem_addr;
-                        pref_desc_valid <= 0;
-                        cur_desc_valid <= 1;
+                        // consume prefetch immediately
+                        cur_desc = pref_desc;
+                        cur_head = pref_head;
+                        cur_tail = pref_tail;
+                        cur_kmem_addr = pref_kmem_addr;
+                        pref_desc_valid = 0;
+                        cur_desc_valid = 1;
                         missing_flits <= pref_desc.size;
+                        
+                        // Prefetching will prevent the tail from being updated
+                        // in this cycle, we handle this after the case by
+                        // reattempting the write in the following cycle.
+                        try_prefetch();
                         state <= START_BURST;
                     end else if (wait_for_pref_desc) begin
                         if (queue_ready) begin
@@ -352,6 +379,11 @@ always @(posedge clk) begin
             end
             default: state <= IDLE;
         endcase
+
+        // Attempt to read and write at the same time. Try to write again.
+        if (tail_wr_en && queue_rd_en) begin
+            tail_wr_en <= 1;
+        end
     end
 end
 
