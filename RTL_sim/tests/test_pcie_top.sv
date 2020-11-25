@@ -12,13 +12,14 @@ localparam status_period = 10;
 localparam nb_queues = `NB_QUEUES;
 localparam use_bram = 1;
 localparam write_pointer = 1;
-localparam req_size = 128;
+localparam req_size = 16;
 
 localparam target_nb_requests = 10000;
 
 // size of the host buffer used by each queue (in flits)
 // localparam RAM_BUF_SIZE = 65535;
-localparam RAM_BUF_SIZE = 8191;
+// localparam RAM_BUF_SIZE = 8191;
+localparam RAM_BUF_SIZE = 128;
 
 logic [63:0] cnt;
 logic        clk;
@@ -111,7 +112,7 @@ always @(posedge clk) begin
         pcie_write_0 <= 1;
         pcie_address_0 <= 0;
         pcie_writedata_0 <= 0;
-        pcie_writedata_0[127:64] <= 64'hdeadbe0000000000;
+        pcie_writedata_0[127:64] <= 64'hdeadbeef00000000;
         pcie_byteenable_0 <= 0;
         pcie_byteenable_0[15:8] <= 8'hff;
     end else begin
@@ -147,10 +148,10 @@ always @(posedge clk) begin
         end
     end
 
-    if (!stop && !error_termination) begin
-        $display("cnt: %d", cnt);
-        $display("------------------------------------------------");
-    end
+    // if (!stop && !error_termination) begin
+    //     $display("cnt: %d", cnt);
+    //     $display("------------------------------------------------");
+    // end
 end
 
 
