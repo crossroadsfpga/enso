@@ -19,7 +19,7 @@ localparam target_nb_requests = 10000;
 // size of the host buffer used by each queue (in flits)
 // localparam RAM_BUF_SIZE = 65535;
 // localparam RAM_BUF_SIZE = 8191;
-localparam RAM_BUF_SIZE = 128;
+localparam RAM_BUF_SIZE = 262144;
 
 logic [63:0] cnt;
 logic        clk;
@@ -74,6 +74,7 @@ logic [31:0] stop_cnt;
 // Host RAM
 logic [511:0] ram[nb_queues][RAM_BUF_SIZE];
 
+logic [31:0] queue_id;
 logic [63:0] rx_cnt;
 logic [63:0] req_cnt;
 logic [$clog2(MAX_PKT_SIZE)-1:0] pdu_flit_cnt;
@@ -105,6 +106,7 @@ always @(posedge clk) begin
         req_cnt <= 0;
         stop_cnt <= 0;
         pdu_flit_cnt <= 0;
+        queue_id <= 0;
     end else if (cnt == 10) begin
         rst <= 0;
     end else if (cnt == 11) begin
@@ -127,11 +129,21 @@ always @(posedge clk) begin
             begin
                 req_cnt <= req_cnt + 1;
                 pdu_flit_cnt <= 0;
+                queue_id <= queue_id + 1 < RAM_BUF_SIZE/64 ? queue_id + 1 : 0;
             end else begin
                 if (req_cnt != pcie_bas_writedata[511:480] 
                         && !error_termination) begin
                     assert(req_cnt == pcie_bas_writedata[511:480]);
                     error_termination <= 1;
+                end
+                if (req_size == 16) begin
+                    automatic logic [31:0] this_queue_id;
+                    this_queue_id = (pcie_bas_address[31:0] - 64)/4096;
+                    $display("queue_id: %d, this_queue_id: %d", queue_id, this_queue_id);
+                    if (queue_id != this_queue_id) begin
+                        assert(queue_id == this_queue_id);
+                        error_termination <= 1;
+                    end
                 end
             end
         end
