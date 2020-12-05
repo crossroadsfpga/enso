@@ -67,8 +67,7 @@ always@(posedge clk)begin
     if(!rst)begin
         assert(!(!emptylist_out_valid & emptylist_out_ready))
         else begin
-            $error("Request from empty PKT_emptylsit");
-            $finish;
+            hterminate("Request from empty PKT_empty list");
         end
     end
     if(rst)begin
