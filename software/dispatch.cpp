@@ -21,7 +21,7 @@
 
 #include "app.h"
 
-#define BUF_LEN (128*128)
+#define BUF_LEN (1024*128)
 #define CACHE_LINE_SIZE 64
 
 #define likely(x)       __builtin_expect((x),1)
@@ -31,8 +31,8 @@ static volatile int keep_running = 1;
 
 struct rb_state {
     uint32_t head;
-    uint32_t tail;
-} __attribute__ ((aligned (CACHE_LINE_SIZE)));
+    uint32_t tail __attribute__((aligned(CACHE_LINE_SIZE)));
+};
 
 void int_handler(int signal __attribute__((unused)))
 {
@@ -130,6 +130,7 @@ int main(int argc, const char* argv[])
                     // SRC IP offset: 12 bytes
                     // Last byte of IP: 3 bytes
                     uint8_t buf_idx = ((uint8_t*) buf)[29];
+                    // FIXME(sadok) must do this for every packet
                     uint32_t occup_space;
                     uint32_t my_head = rb_states[buf_idx].head;
                     do {
@@ -138,10 +139,9 @@ int main(int argc, const char* argv[])
                     } while ((BUF_LEN - occup_space - 1) < (uint32_t) recv_len);
                     // must always have at least one empty spot
 
-                    // HACK(sadok) recv_len must be aligned to 64
-                    for (uint32_t i = 0; i < ((uint32_t) recv_len)/64; i++) {
-                        
-                        buffers[buf_idx][my_head/64+i] = *((uint64_t*) buf + i);
+                    // HACK(sadok) recv_len must be aligned to 8 bytes
+                    for (uint32_t i = 0; i < ((uint32_t) recv_len)/8; i++) {
+                        buffers[buf_idx][my_head/8+i] = *((uint64_t*) buf + i);
                     }
                     if (occup_space > 64*128) {
                         asm volatile ("" : : : "memory"); // compiler memory barrier

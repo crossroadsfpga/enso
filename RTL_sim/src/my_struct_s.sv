@@ -63,6 +63,43 @@ localparam LATENCY_HIST = 5'b10_100; // (5'b10100);
 localparam PCIE = 5'b10_101;
 localparam TX_TRACK = 5'b11_000; //(5'b11000);
 
+//Ring buffer 
+//Used for FPGA-CPU communication. Some fields are FPGA read only, used for
+//CPU indicatings FPGA info. Some fields are CPU read only, used for FPGA
+//indicating CPU info. 
+//The higher half is used for CPU ring buffer registers
+//The bottom half is used as PDU header for each PDU transfer.
+localparam MAX_RB_DEPTH = 1048575; // in 512 bits.
+localparam RB_AWIDTH = ($clog2(MAX_RB_DEPTH));
+
+localparam C2F_RB_DEPTH = 512; // in 512 bits.
+localparam C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
+
+localparam MAX_PKT_SIZE = 24; // in 512 bits
+
+localparam MAX_NB_APPS = 4096;
+localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
+localparam FLITS_PER_PAGE = 64;
+localparam RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
+
+localparam PCIE_ADDR_WIDTH = 30;
+
+localparam REG_SIZE = 4; // in bytes
+localparam REGS_PER_PAGE = 8;
+localparam NB_STATUS_REGS = MAX_NB_APPS * REGS_PER_PAGE;
+localparam STATS_REGS_WIDTH = ($clog2(NB_STATUS_REGS));
+localparam JTAG_ADDR_WIDTH = ($clog2(NB_STATUS_REGS+1)); // includes control reg
+
+// queue table that keeps state for every queue
+localparam QUEUE_TABLE_DEPTH = MAX_NB_APPS;
+localparam QUEUE_TABLE_AWIDTH = ($clog2(QUEUE_TABLE_DEPTH));
+// TODO(sadok) we may save space by only holding an offset to kmem address,
+// we also do not need 32 bits for the tail and head 
+localparam QUEUE_TABLE_TAILS_DWIDTH = 32;
+localparam QUEUE_TABLE_HEADS_DWIDTH = 32;
+localparam QUEUE_TABLE_L_ADDRS_DWIDTH = 32;
+localparam QUEUE_TABLE_H_ADDRS_DWIDTH = 32;
+
 typedef struct packed
 {
     logic sop;
@@ -80,6 +117,14 @@ typedef struct packed
 
 typedef struct packed
 {
+    logic [APP_IDX_WIDTH-1:0] queue_id;
+    logic [16:0] size; // in number of flits TODO(sadok) this is much bigger
+                       // than the MTU, consider using the expression below:
+    // logic [$clog2(MAX_PKT_SIZE)-1:0] size; // in number of flits
+} pkt_desc_t;
+
+typedef struct packed
+{
     logic sop;
     logic eop;
     logic [5:0] empty;
@@ -94,6 +139,8 @@ typedef struct packed
     logic [15:0] sPort; 
     logic [15:0] dPort; 
 } tuple_t;
+
+localparam PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 
 typedef struct packed
 {
@@ -175,44 +222,6 @@ typedef struct packed
     logic [63:0] f2c_kmem_addr;
 } queue_state_t;
 
-//Ring buffer 
-//Used for FPGA-CPU communication. Some fields are FPGA read only, used for
-//CPU indicatings FPGA info. Some fields are CPU read only, used for FPGA
-//indicating CPU info. 
-//The higher half is used for CPU ring buffer registers
-//The bottom half is used as PDU header for each PDU transfer.
-localparam MAX_RB_DEPTH = 1048575; // in 512 bits.
-localparam RB_AWIDTH = ($clog2(MAX_RB_DEPTH));
-
-localparam C2F_RB_DEPTH = 512; // in 512 bits.
-localparam C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
-
-localparam MAX_PKT_SIZE = 24; // in 512 bits
-
-localparam MAX_NB_APPS = 4096;
-localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
-localparam FLITS_PER_PAGE = 64;
-localparam RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
-
-localparam PCIE_ADDR_WIDTH = 30;
-
-localparam REG_SIZE = 4; // in bytes
-localparam REGS_PER_PAGE = 8;
-localparam NB_STATUS_REGS = MAX_NB_APPS * REGS_PER_PAGE;
-localparam STATS_REGS_WIDTH = ($clog2(NB_STATUS_REGS));
-localparam JTAG_ADDR_WIDTH = ($clog2(NB_STATUS_REGS+1)); // includes control reg
-
-// queue table that keeps state for every queue
-localparam QUEUE_TABLE_DEPTH = MAX_NB_APPS;
-localparam QUEUE_TABLE_AWIDTH = ($clog2(QUEUE_TABLE_DEPTH));
-// TODO(sadok) we may save space by only holding an offset to kmem address,
-// we also do not need 32 bits for the tail and head 
-localparam QUEUE_TABLE_TAILS_DWIDTH = 32;
-localparam QUEUE_TABLE_HEADS_DWIDTH = 32;
-localparam QUEUE_TABLE_L_ADDRS_DWIDTH = 32;
-localparam QUEUE_TABLE_H_ADDRS_DWIDTH = 32;
-
-localparam PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 typedef struct packed
 {
     tuple_t tuple;
@@ -220,9 +229,10 @@ typedef struct packed
 } pdu_metadata_t; //Metadata
 
 `ifdef SIM
-`define hdisplay(A) if (!tb.error_termination) $display("%s", $sformatf A );
-`define hwarning(A) if (!tb.error_termination) $warning("%s", $sformatf A );
-`define herror(A) if (!tb.error_termination) $error("%s", $sformatf A );
+// `define hdisplay(A) if (!tb.error_termination_r) $display("%s", $sformatf A );
+`define hdisplay(A);
+`define hwarning(A) if (!tb.error_termination_r) $warning("%s", $sformatf A );
+`define herror(A) if (!tb.error_termination_r) $error("%s", $sformatf A );
 
 function void hterminate(string s);
     `herror((s));

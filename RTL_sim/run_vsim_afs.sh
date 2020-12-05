@@ -45,6 +45,7 @@ vlog +define+SIM \
      +define+PKT_FILE=\"$PKT_FILE\" \
      +define+PKT_FILE_NB_LINES=$PKT_FILE_NB_LINES \
      +define+NB_QUEUES=$NB_QUEUES \
+     +define+PKT_SIZE=$PKT_SIZE \
      ./src/*.sv -sv 
 #vlog *.v
 vlog +define+SIM ./src/common/*.sv -sv

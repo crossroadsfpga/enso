@@ -107,56 +107,161 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
     socket_entry->nb_head_updates = 0;
 
-    // fill buffer with 1s
-    for (uint64_t i = 0; i < allocated_size; ++i) {
-        ((uint8_t*) socket_entry->kdata)[i] = 0xff;
-    }
-
     return 0;
 }
 
+static uint64_t total_occup = 0;
+static uint64_t nb_batches = 0;
 static uint64_t nb_runs = 0;
+static int max_occup = 0;
 
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
+    unsigned int cpu_head = socket_entry->cpu_head;
     unsigned int cpu_tail;
+    int free_slot; // number of free slots in ring buffer
+    unsigned int copy_size;
     uint32_t* kdata = socket_entry->kdata;
 
-    if (++nb_runs >= 1e9) {
-        nb_runs = 0;
-        cpu_tail = *(socket_entry->tail_ptr);
-        socket_entry->cpu_tail = cpu_tail;
+    cpu_tail = *(socket_entry->tail_ptr);
+    socket_entry->cpu_tail = cpu_tail;
 
-        for (int page = 0; page < 2; ++page) {
-            printf("Page %i:\n", page);
-            for (int i = 0; i < 10; ++i) {
-                for (int j = 0; j < 8; ++j) {
-                    for (int k = 0; k < 8; ++k) {
-                        printf("%02hhX ", ((uint8_t*) kdata)[page*4096 + i*64 + j*8 + k]);
-                    }
-                    printf("\n");
-                }
-                printf("\n");
-            }
+    if (++nb_runs >= 1e8) {
+        nb_runs = 0;
+
+        std::cout << "nb_batches: " << nb_batches << "  total_occup: " 
+                  << total_occup << "  max_occup: " << max_occup << std::endl;
+
+        nb_batches = 0;
+        total_occup = 0;
+
+        // for (int page = 0; page < 2; ++page) {
+        //     printf("Page %i:\n", page);
+        //     for (int i = 0; i < 10; ++i) {
+        //         for (int j = 0; j < 8; ++j) {
+        //             for (int k = 0; k < 8; ++k) {
+        //                 printf("%02hhX ", ((uint8_t*) kdata)[page*4096 + i*64 + j*8 + k]);
+        //             }
+        //             printf("\n");
+        //         }
+        //         printf("\n");
+        //     }
+        // }
+    }
+
+    if (unlikely(cpu_tail == cpu_head)) {
+        return 0;
+    }
+
+    // calculate free_slot
+    if (cpu_tail < cpu_head) {
+        free_slot = cpu_head - cpu_tail;
+    } else {
+        free_slot = BUFFER_SIZE - cpu_tail + cpu_head;
+    }
+
+    // printf("CPU head = %d; CPU tail = %d; free_slot = %d \n", 
+    //         cpu_head, cpu_tail, free_slot);
+    if (unlikely(free_slot < 1)) {
+        printf("cpu_tail: %i cpu_head: %i\n", cpu_tail, cpu_head);
+        printf("FPGA breaks free_slot assumption!\n");
+        return -1;
+    }
+
+    nb_batches++;
+    total_occup += BUFFER_SIZE - free_slot;
+    if ((BUFFER_SIZE - free_slot) > max_occup) {
+        max_occup = BUFFER_SIZE - free_slot;
+    }
+
+    *buf = &kdata[(cpu_head + 1) * 16];
+    uint8_t* my_buf = (uint8_t*) *buf;
+
+    uint32_t total_size = 0;
+    uint32_t total_flits = 0;
+    
+    // TODO(sadok) does it make sense to limit the number of packets we retrieve
+    // at once?
+    for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
+        uint32_t pkt_size = get_pkt_size(my_buf);
+        uint32_t pdu_flit = ((pkt_size-1) >> 6) + 1; // number of 64-byte blocks
+        uint32_t flit_aligned_size = pdu_flit * 64;
+
+        // check transfer_flit
+        if (unlikely(pdu_flit == 0)) {
+            printf("transfer_flit has to be bigger than 0!\n");
+            return -1;
+        }
+
+        // reached the buffer limit
+        if (unlikely((total_size + flit_aligned_size) > len)) {
+            break;
+        }
+
+        // TODO(sadok) Handle packets that are not flit-aligned? There will be a
+        // gap, what should we do?
+        total_size += flit_aligned_size;
+        total_flits += pdu_flit;
+
+        // TODO(sadok) this may be a performance problem
+        // We need to copy the beginning of the ring buffer to the last page
+        if ((cpu_head + pdu_flit) >= BUFFER_SIZE) {
+            // if ((cpu_head + pdu_flit) != BUFFER_SIZE) {
+            //     copy_size = cpu_head + pdu_flit - BUFFER_SIZE;
+            //     memcpy(&kdata[(BUFFER_SIZE + 1) * 16], &kdata[1 * 16],
+            //            copy_size * 16 * 4);
+            // }
+            cpu_head = 0;
+            break;
+        }
+        my_buf += flit_aligned_size;
+        cpu_head += pdu_flit;
+
+        if (cpu_head == cpu_tail) {
+            break;
         }
     }
 
-    return 0;
+    if (total_flits > (BUFFER_SIZE - free_slot)) {
+        printf("total_flits: %d occup: %d\n", BUFFER_SIZE - free_slot);
+    }
+
+    if (cpu_head != 0) {
+        if (total_flits > (BUFFER_SIZE - free_slot)) {
+            printf("total_flits: %u free_slot: %i\n", total_flits, free_slot);
+        }
+        assert(total_flits <= (BUFFER_SIZE - free_slot));
+    }
+
+    // socket_entry->cpu_head = cpu_head;
+    socket_entry->cpu_head = cpu_tail; /// HACK!!!!
+    return total_size;
 }
 
 void advance_ring_buffer(socket_internal* socket_entry)
 {
+    // int free_slot;
+    // if (socket_entry->cpu_tail < socket_entry->cpu_head) {
+    //     free_slot = socket_entry->cpu_head - socket_entry->cpu_tail;
+    // } else {
+    //     free_slot = BUFFER_SIZE - socket_entry->cpu_tail + socket_entry->cpu_head;
+    // }
 
     // We don't really need this now that we are using batch.
     // Worse, it can actually cause the host buffer to be "full" forever, as we
     // may never update the head pointer if we only call advance_ring_buffer
     // once after dma_run. Therefore it is now disabled by default
-    if (socket_entry->nb_head_updates > HEAD_UPDATE_PERIOD) {
+    // if (socket_entry->nb_head_updates > HEAD_UPDATE_PERIOD) {
+    // if (free_slot < BUFFER_SIZE/2) {
         asm volatile ("" : : : "memory"); // compiler memory barrier
         *(socket_entry->head_ptr) = socket_entry->cpu_head;
-        socket_entry->nb_head_updates = 0;
+        // socket_entry->nb_head_updates = 0;
+    // }
+    // ++(socket_entry->nb_head_updates);
+
+    if (nb_runs == 0) {
+        printf("cpu_head: %u\n", socket_entry->cpu_head);
     }
-    ++(socket_entry->nb_head_updates);
 }
 
 // FIXME(sadok) This should be in the kernel

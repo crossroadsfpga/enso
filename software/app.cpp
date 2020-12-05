@@ -97,17 +97,17 @@ int main(int argc, const char* argv[])
                 #else
                     int recv_len = recv(socket_fd, buf, BUF_LEN, 0);
                 #endif
-                // if (unlikely(recv_len < 0)) {
-                //     std::cerr << "Error receiving" << std::endl;
-                //     exit(4);
-                // }
-                // if (recv_len > 0) {
-                //     ++nb_batches;
-                //     #ifdef ZERO_COPY
-                //     free_pkt_buf(socket_fd);
-                //     #endif
-                // }
-                // recv_bytes += recv_len;
+                if (unlikely(recv_len < 0)) {
+                    std::cerr << "Error receiving" << std::endl;
+                    exit(4);
+                }
+                if (recv_len > 0) {
+                    ++nb_batches;
+                    #ifdef ZERO_COPY
+                    free_pkt_buf(socket_fd);
+                    #endif
+                }
+                recv_bytes += recv_len;
             }
         }
 
@@ -128,14 +128,14 @@ int main(int argc, const char* argv[])
         return 6;
     }
 
-    // while (keep_running) {
-    //     uint64_t recv_bytes_before = recv_bytes;
-    //     std::this_thread::sleep_for(std::chrono::seconds(1));
-    //     std::cout << std::dec << "Goodput: " << 
-    //         ((double) recv_bytes - recv_bytes_before) * 8. /1e6
-    //         << " Mbps  #bytes: " << recv_bytes << "  #batches: " << nb_batches
-    //         << std::endl;
-    // }
+    while (keep_running) {
+        uint64_t recv_bytes_before = recv_bytes;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::cout << std::dec << "Goodput: " << 
+            ((double) recv_bytes - recv_bytes_before) * 8. /1e6
+            << " Mbps  #bytes: " << recv_bytes << "  #batches: " << nb_batches
+            << std::endl;
+    }
 
     socket_thread.join();
 

@@ -12,6 +12,10 @@ module tb;
 `define NB_QUEUES 4
 `endif
 
+`ifndef PKT_SIZE
+`define PKT_SIZE 64
+`endif
+
 `ifndef RATE
 `define RATE 100; // in Gbps (not always exact)
 `endif
@@ -19,7 +23,10 @@ localparam PACE = 200/`RATE; // assume 400MHz clock and 1 flit/cycle, max 200Gbp
 
 // size of the host buffer used by each queue (in flits)
 // localparam RAM_BUF_SIZE = 65535;
-localparam RAM_BUF_SIZE = 8191;
+// localparam RAM_BUF_SIZE = 8191;
+localparam RAM_BUF_SIZE = 255;
+localparam ALLOC_RAM_BUF_SIZE = RAM_BUF_SIZE + 64; // we allocate an extra page
+localparam RAM_ADDR_LEN = $clog2(ALLOC_RAM_BUF_SIZE);
 localparam DMA_DELAY = 36;
 localparam DMA_BUF_SIZE = 64;
 localparam DMA_BUF_AWIDTH = ($clog2(DMA_BUF_SIZE));
@@ -109,23 +116,29 @@ logic [31:0]    out_fifo0_in_csr_readdata;
 logic [31:0]    out_fifo0_in_csr_writedata;
 
 // Host RAM
-logic [511:0] ram[nb_queues][RAM_BUF_SIZE];
+logic [511:0] ram[nb_queues][ALLOC_RAM_BUF_SIZE];
 
 //PCIe signals
-logic         pcie_rddm_desc_ready;
-logic         pcie_rddm_desc_valid;
-logic [173:0] pcie_rddm_desc_data;
-logic         pcie_wrdm_desc_ready;
-logic         pcie_wrdm_desc_valid;
-logic         delayed_pcie_wrdm_desc_valid;
-logic [173:0] pcie_wrdm_desc_data;
-logic         pcie_wrdm_prio_ready;
-logic         pcie_wrdm_prio_valid;
-logic [173:0] pcie_wrdm_prio_data;
-logic         pcie_rddm_tx_valid;
-logic [31:0]  pcie_rddm_tx_data;
-logic         pcie_wrdm_tx_valid;
-logic [31:0]  pcie_wrdm_tx_data;
+// logic         pcie_wrdm_desc_valid;
+// logic         delayed_pcie_wrdm_desc_valid;
+// logic [173:0] pcie_wrdm_desc_data;
+// logic         pcie_wrdm_prio_ready;
+// logic         pcie_wrdm_prio_valid;
+// logic [173:0] pcie_wrdm_prio_data;
+// logic         pcie_rddm_tx_valid;
+// logic [31:0]  pcie_rddm_tx_data;
+// logic         pcie_wrdm_tx_valid;
+// logic [31:0]  pcie_wrdm_tx_data;
+logic         pcie_bas_waitrequest;
+logic [63:0]  pcie_bas_address;
+logic [63:0]  pcie_bas_byteenable;
+logic         pcie_bas_read;
+logic [511:0] pcie_bas_readdata;
+logic         pcie_bas_readdatavalid;
+logic         pcie_bas_write;
+logic [511:0] pcie_bas_writedata;
+logic [3:0]   pcie_bas_burstcount;
+logic [1:0]   pcie_bas_response;
 logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_0;
 logic         pcie_write_0;
 logic         pcie_read_0;
@@ -141,6 +154,7 @@ logic [511:0] pcie_readdata_1;
 logic [511:0] pcie_writedata_1;
 logic [63:0]  pcie_byteenable_1;
 logic         error_termination;
+logic         error_termination_r;
 
 //eSRAM signals
 logic esram_pll_lock;
@@ -173,7 +187,6 @@ logic [31:0] dram_readdata;
 logic dram_readdata_valid;
 
 logic [3:0] tx_cnt;
-logic [3:0] rx_cnt;
 
 logic [31:0] pktID;
 logic [31:0] ft_pkt;
@@ -232,7 +245,6 @@ initial clk_pcie = 0;
 initial clk_status = 0;
 initial l8_tx_ready = 0;
 initial tx_cnt = 0;
-initial rx_cnt = 0;
 
 initial error_termination = 0;
 
@@ -245,7 +257,10 @@ always #(period_tx) clk_txmac = ~clk_txmac;
 always #(period_user) clk_user = ~clk_user;
 always #(period_esram_ref) clk_esram_ref = ~clk_esram_ref;
 always #(period_esram) clk_esram = ~clk_esram;
-always #(period_pcie) clk_pcie = ~clk_pcie;
+always #(period_pcie) begin
+    clk_pcie = ~clk_pcie;
+    `hdisplay(("-----------"));
+end
 
 //
 //read raw data
@@ -348,51 +363,51 @@ logic dma_buf_full;
 logic dma_buf_full_r1;
 logic dma_buf_full_r2;
 assign dma_buf_full = dma_buf_head + 1'b1 == dma_buf_tail;
-assign pcie_wrdm_desc_ready = !dma_buf_full;
+// assign pcie_wrdm_desc_ready = !dma_buf_full;
 
-// DMA Controller: receives DMA requests, inserts in the buffer and advances the
-// head pointer.
-always @(posedge clk_pcie) begin
-    integer i;
-    if (rst) begin
-        dma_buf_head <= 0;
-        pcie_delay_cnt <= 0;
-        for (i = 0; i < DMA_DELAY; i = i + 1) begin
-            delayed_dma_buf_head[i] <= 0;
-        end
-    end else begin
-        automatic logic [DMA_BUF_AWIDTH-1:0] next_head;
-        if (!dma_buf_full && !dma_buf_full_r1 && !dma_buf_full_r2 &&
-            pcie_wrdm_desc_valid)
-        begin
-            // automatic pcie_desc_t pcie_desc = pcie_wrdm_desc_data;
-            // `hdisplay(("pcie_desc.immediate: %b", pcie_desc.immediate));
-            dma_buf[dma_buf_head] <= pcie_wrdm_desc_data;
-            next_head = dma_buf_head + 1'b1;
-        end else begin
-            next_head = dma_buf_head;
-        end
+// // DMA Controller: receives DMA requests, inserts in the buffer and advances the
+// // head pointer.
+// always @(posedge clk_pcie) begin
+//     integer i;
+//     if (rst) begin
+//         dma_buf_head <= 0;
+//         pcie_delay_cnt <= 0;
+//         for (i = 0; i < DMA_DELAY; i = i + 1) begin
+//             delayed_dma_buf_head[i] <= 0;
+//         end
+//     end else begin
+//         automatic logic [DMA_BUF_AWIDTH-1:0] next_head;
+//         if (!dma_buf_full && !dma_buf_full_r1 && !dma_buf_full_r2 &&
+//             pcie_wrdm_desc_valid)
+//         begin
+//             // automatic pcie_desc_t pcie_desc = pcie_wrdm_desc_data;
+//             // `hdisplay(("pcie_desc.immediate: %b", pcie_desc.immediate));
+//             dma_buf[dma_buf_head] <= pcie_wrdm_desc_data;
+//             next_head = dma_buf_head + 1'b1;
+//         end else begin
+//             next_head = dma_buf_head;
+//         end
 
-        if ((dma_buf_full_r2 || dma_buf_full_r1 || dma_buf_full) &&
-            pcie_wrdm_desc_valid)
-        begin
-            hterminate("DMA Write while not ready");
-        end
+//         if ((dma_buf_full_r2 || dma_buf_full_r1 || dma_buf_full) &&
+//             pcie_wrdm_desc_valid)
+//         begin
+//             hterminate("DMA Write while not ready");
+//         end
 
-        dma_buf_head <= next_head;
+//         dma_buf_head <= next_head;
 
-        delayed_dma_buf_head[0] <= dma_buf_head;
+//         delayed_dma_buf_head[0] <= dma_buf_head;
 
-        for (i = 0; i < DMA_DELAY-1; i = i + 1) begin
-            delayed_dma_buf_head[i+1] <= delayed_dma_buf_head[i];
-        end
-    end
-    dma_buf_full_r1 <= dma_buf_full;
-    dma_buf_full_r2 <= dma_buf_full_r1;
-end
+//         for (i = 0; i < DMA_DELAY-1; i = i + 1) begin
+//             delayed_dma_buf_head[i+1] <= delayed_dma_buf_head[i];
+//         end
+//     end
+//     dma_buf_full_r1 <= dma_buf_full;
+//     dma_buf_full_r2 <= dma_buf_full_r1;
+// end
 
-assign delayed_pcie_wrdm_desc_valid = 
-    delayed_dma_buf_head[DMA_DELAY-1] != dma_buf_tail;
+// assign delayed_pcie_wrdm_desc_valid =
+//     delayed_dma_buf_head[DMA_DELAY-1] != dma_buf_tail;
 
 logic [31:0] cnt_delay;
 logic [PCIE_ADDR_WIDTH-1:0] cfg_queue;
@@ -457,8 +472,23 @@ logic [31:0] expected_addr[nb_queues];
 
 logic setup_finished;
 
+logic [APP_IDX_WIDTH-1:0] expected_queue;
+logic [$clog2(MAX_PKT_SIZE)-1:0] pdu_flit_cnt;
+
+logic [63:0] rx_cnt;
+logic [63:0] req_cnt;
+logic [2:0]  burst_offset; // max of 8 flits per burst
+logic [3:0]  burst_size;
+logic [63:0] head_update_delay;
+
 // PCIe FPGA -> CPU
 always @(posedge clk_pcie) begin
+
+    pcie_read_0 <= 0;
+    pcie_write_0 <= 0;
+    pcie_address_0 <= 0;
+    pcie_writedata_0 <= 0;
+    pcie_byteenable_0 <= 0;
 
     pcie_address_1 <= 0;
     pcie_write_1 <= 0;
@@ -466,13 +496,6 @@ always @(posedge clk_pcie) begin
 
     pcie_writedata_1 <= 0;
     pcie_byteenable_1 <= 0; // not used at the moment
-
-    // PCIe CPU -> FPGA
-    pcie_rddm_desc_ready <= 0;
-    pcie_wrdm_prio_ready <= 0;
-
-    pcie_wrdm_tx_valid <= 0;
-    pcie_wrdm_tx_data <= 0;
 
     if (rst) begin
         integer i;
@@ -495,7 +518,16 @@ always @(posedge clk_pcie) begin
         pcie_rd_req_buf_head <= 0;
         pcie_wr_req_buf_head <= 0;
 
+        pcie_bas_waitrequest <= 0;
+        rx_cnt <= 0;
+        req_cnt <= 0;
+        pdu_flit_cnt <= 0;
         setup_finished <= 0;
+        expected_queue <= 0;
+        burst_offset <= 0;
+        burst_size <= 0;
+
+        head_update_delay <= 0;
 
         for (i = 0; i < nb_queues; i = i + 1) begin
             pkt_missing_flits[i] <= 0;
@@ -505,16 +537,13 @@ always @(posedge clk_pcie) begin
         case (pcie_state)
             PCIE_SET_F2C_QUEUE: begin
                 if (cnt >= 1000) begin
-                    automatic pcie_wr_req_t wr_req;
-                    wr_req.addr = cfg_queue << 12;
-                    wr_req.data = 0;
-                    wr_req.data[127:64] = 64'hdeadbe0000000000 +
-                                          (cfg_queue << 32);
-                    wr_req.byteenable = 0;
-                    wr_req.byteenable[15:8] = 8'hff;
-
-                    pcie_wr_req_buf[pcie_wr_req_buf_head] <= wr_req;
-                    pcie_wr_req_buf_head <= pcie_wr_req_buf_head + 1;
+                    pcie_write_0 <= 1;
+                    pcie_address_0 <= cfg_queue << 12;
+                    pcie_writedata_0 <= 0;
+                    pcie_writedata_0[127:64] <= 64'habcd000000000000 +
+                                                (cfg_queue << 32);
+                    pcie_byteenable_0 <= 0;
+                    pcie_byteenable_0[15:8] <= 8'hff;
 
                     if (cfg_queue == nb_queues - 1) begin
                         pcie_state <= PCIE_READ_F2C_QUEUE;
@@ -530,300 +559,155 @@ always @(posedge clk_pcie) begin
                     automatic pcie_rd_req_t rd_req;
 
                     // read queue 0
-                    rd_req.addr = 0 << 12;
-                    pcie_rd_req_buf[pcie_rd_req_buf_head] <= rd_req;
-                    pcie_rd_req_buf_head <= pcie_rd_req_buf_head + 1;
+                    pcie_address_0 <= 0 << 12;
+                    pcie_read_0 <= 1;
 
                     pcie_state <= PCIE_READ_F2C_QUEUE_WAIT;
                 end
             end
             PCIE_READ_F2C_QUEUE_WAIT: begin
                 if (pcie_readdatavalid_0) begin
-                    assert(pcie_readdata_0[127:64] == 64'hdeadbe0000000000);
+                    assert(pcie_readdata_0[127:64] == 64'habcd000000000000);
 
-                    pcie_state <= PCIE_SET_C2F_QUEUE;
+                    // pcie_state <= PCIE_SET_C2F_QUEUE;
+                    pcie_state <= PCIE_RULE_UPDATE;
                     cnt_delay <= cnt + 10;
                 end
             end
-            PCIE_SET_C2F_QUEUE: begin
-                if (cnt >= cnt_delay) begin
-                    automatic pcie_wr_req_t wr_req;
-                    wr_req.addr = 0 << 12;
-                    wr_req.data = 0;
-                    wr_req.data[255:192] = 64'h0123456789abcdef;
-                    wr_req.byteenable = 0;
-                    wr_req.byteenable[31:24] = 8'hff;
+            // PCIE_SET_C2F_QUEUE: begin
+            //     if (cnt >= cnt_delay) begin
+            //         automatic pcie_wr_req_t wr_req;
+            //         wr_req.addr = 0 << 12;
+            //         wr_req.data = 0;
+            //         wr_req.data[255:192] = 64'h0123456789abcdef;
+            //         wr_req.byteenable = 0;
+            //         wr_req.byteenable[31:24] = 8'hff;
 
-                    pcie_wr_req_buf[pcie_wr_req_buf_head] <= wr_req;
-                    pcie_wr_req_buf_head <= pcie_wr_req_buf_head + 1;
+            //         pcie_wr_req_buf[pcie_wr_req_buf_head] <= wr_req;
+            //         pcie_wr_req_buf_head <= pcie_wr_req_buf_head + 1;
 
-                    pcie_state <= PCIE_READ_C2F_QUEUE;
-                    cnt_delay <= cnt + 10;
-                end
-            end
-            PCIE_READ_C2F_QUEUE: begin
-                if (cnt >= cnt_delay) begin
-                    automatic pcie_rd_req_t rd_req;
+            //         pcie_state <= PCIE_READ_C2F_QUEUE;
+            //         cnt_delay <= cnt + 10;
+            //     end
+            // end
+            // PCIE_READ_C2F_QUEUE: begin
+            //     if (cnt >= cnt_delay) begin
+            //         automatic pcie_rd_req_t rd_req;
 
-                    // read queue 0
-                    rd_req.addr = 0 << 12;
-                    pcie_rd_req_buf[pcie_rd_req_buf_head] <= rd_req;
-                    pcie_rd_req_buf_head <= pcie_rd_req_buf_head + 1;
+            //         // read queue 0
+            //         rd_req.addr = 0 << 12;
+            //         pcie_rd_req_buf[pcie_rd_req_buf_head] <= rd_req;
+            //         pcie_rd_req_buf_head <= pcie_rd_req_buf_head + 1;
 
-                    pcie_state <= PCIE_READ_C2F_QUEUE_WAIT;
-                end
-            end
-            PCIE_READ_C2F_QUEUE_WAIT: begin
-                if (pcie_readdatavalid_0) begin
-                    assert(pcie_readdata_0[255:192] == 64'h0123456789abcdef);
+            //         pcie_state <= PCIE_READ_C2F_QUEUE_WAIT;
+            //     end
+            // end
+            // PCIE_READ_C2F_QUEUE_WAIT: begin
+            //     if (pcie_readdatavalid_0) begin
+            //         assert(pcie_readdata_0[255:192] == 64'h0123456789abcdef);
 
-                    pcie_state <= PCIE_RULE_INSERT;
-                    cnt_delay <= cnt + 10;
-                end
-            end
-            PCIE_RULE_INSERT: begin
-                if (cnt >= cnt_delay) begin
-                    automatic pdu_hdr_t pdu_hdr = 0;
-                    pdu_hdr.queue_id = nb_config_queues;
-                    pdu_hdr.prot = 32'h11;
-                    pdu_hdr.tuple = {
-                        32'hc0a80000 + nb_config_queues[31:0],
-                        64'hc0a801011f900050
-                    };
-                    pcie_writedata_1 <= pdu_hdr;
-                    pcie_write_1 <= 1;
-                    
-                    cnt_delay <= cnt + 10;
-                    nb_config_queues <= nb_config_queues + 1;
+            //         pcie_state <= PCIE_RULE_INSERT;
+            //         cnt_delay <= cnt + 10;
+            //     end
+            // end
+            // PCIE_RULE_INSERT: begin
+            //     if (cnt >= cnt_delay) begin
+            //         automatic pdu_hdr_t pdu_hdr = 0;
+            //         pdu_hdr.queue_id = nb_config_queues;
+            //         pdu_hdr.prot = 32'h11;
+            //         pdu_hdr.tuple = {
+            //             32'hc0a80000 + nb_config_queues[31:0],
+            //             64'hc0a801011f900050
+            //         };
+            //         pcie_writedata_1 <= pdu_hdr;
+            //         pcie_write_1 <= 1;
 
-                    if (nb_config_queues + 1 == nb_queues) begin
-                        pcie_state <= PCIE_RULE_UPDATE;
-                    end
-                end
-            end
-            // TODO(sadok) assert that RULE_SET == 1
+            //         cnt_delay <= cnt + 10;
+            //         nb_config_queues <= nb_config_queues + 1;
+
+            //         if (nb_config_queues + 1 == nb_queues) begin
+            //             pcie_state <= PCIE_RULE_UPDATE;
+            //         end
+            //     end
+            // end
+            // // TODO(sadok) assert that RULE_SET == 1
             PCIE_RULE_UPDATE: begin
                 if (cnt >= cnt_delay) begin
-                    // // update previously added rule to use a different queue
-                    // automatic pdu_hdr_t pdu_hdr = 0;
-                    // pdu_hdr.queue_id = 64'h1;
-                    // pdu_hdr.prot = 32'h11;
-                    // pdu_hdr.tuple = 96'hc0a80000c0a801011f900050;
-                    // pcie_writedata_1 <= pdu_hdr;
-                    // pcie_write_1 <= 1;
+            //         // // update previously added rule to use a different queue
+            //         // automatic pdu_hdr_t pdu_hdr = 0;
+            //         // pdu_hdr.queue_id = 64'h1;
+            //         // pdu_hdr.prot = 32'h11;
+            //         // pdu_hdr.tuple = 96'hc0a80000c0a801011f900050;
+            //         // pcie_writedata_1 <= pdu_hdr;
+            //         // pcie_write_1 <= 1;
 
                     pcie_state <= PCIE_WAIT_DESC;
                     setup_finished <= 1;
                 end
             end
             PCIE_WAIT_DESC: begin
-                if (delayed_pcie_wrdm_desc_valid && 
-                    ((dma_pending_rd_buf_head + 1) != dma_pending_rd_buf_tail))
-                begin
-                    automatic pcie_desc_t pcie_desc = dma_buf[dma_buf_tail];
+                if (pcie_bas_write && !pcie_bas_waitrequest) begin
+                    automatic logic [31:0] cur_queue;
+                    automatic logic [31:0] cur_address;
 
-                    dma_buf_tail <= dma_buf_tail + 1'b1;
-                    dma_pending_rd_buf[dma_pending_rd_buf_head] <= pcie_desc;
-                    dma_pending_rd_buf_head <= dma_pending_rd_buf_head + 1'b1;
+                    if (pcie_bas_burstcount != 0) begin
+                        burst_offset = 0;
+                        burst_size <= pcie_bas_burstcount;
+                    end else if (burst_offset + 1 >= burst_size) begin
+                        $display("burst_offset: %d, burst_size: %d", burst_offset, burst_size);
+                        hterminate("Requests beyond burst size.");
+                    end else begin
+                        burst_offset = burst_offset + 1;
+                    end
 
-                    if (!pcie_desc.immediate) begin
-                        // read data from FPGA BRAM using the Avalon-MM address
-                        automatic pcie_rd_req_t rd_req;
+                    rx_cnt <= rx_cnt + 1;
+                    pdu_flit_cnt <= pdu_flit_cnt + 1;
+                    if ((pdu_flit_cnt + 1) == (`PKT_SIZE + (64 - 1))/64 + 1)
+                    begin
+                        req_cnt <= req_cnt + 1;
+                        pdu_flit_cnt <= 0;
+                        expected_queue <= expected_queue + 1 < nb_queues ?
+                                          expected_queue + 1 : 0;
+                    end
 
-                        rd_req.addr = pcie_desc.saddr_data;
+                    // check queue
+                    cur_queue = pcie_bas_address[32 +: APP_IDX_WIDTH];
+                    assert(expected_queue == cur_queue);
 
-                        if (pcie_rd_req_buf_head + 1 == pcie_rd_req_buf_tail) begin
-                            $error("Not enough space to keep read requests");
-                            $finish();
-                        end
-                        pcie_rd_req_buf[pcie_rd_req_buf_head] <= rd_req;
-                        pcie_rd_req_buf_head <= pcie_rd_req_buf_head + 1;
+                    cur_address = pcie_bas_address[RAM_ADDR_LEN-1:6] 
+                                  + burst_offset;
 
-                        // `hdisplay(("Receiving DMA batch with %d bytes",
-                        //          pcie_desc.nb_dwords * 4));
+                    // check if address out of bound
+                    if (cur_address > ALLOC_RAM_BUF_SIZE) begin
+                        $error("Address out of bound: 0x%h", cur_address);
+                        $finish;
+                    end else begin
+                        ram[cur_queue][cur_address] <= pcie_bas_writedata;
+                    end
 
-                        if (pcie_desc.nb_dwords > 16) begin
-                            pcie_state <= PCIE_READ_REMAINING_DESC;
-                            cur_desc_reqs_dwords <= 16;
-                        end
+                    // tail update
+                    // Adjust head_update_delay to simulate a DMA delay
+                    if (cur_address == 0 && head_update_delay == 5) begin
+                        // update head on the FPGA
+                        pcie_write_0 <= 1;
+                        pcie_address_0 <= cur_queue << 12;
+                        pcie_writedata_0 <= 0;
+                        pcie_writedata_0[63:32] <= pcie_bas_writedata[31:0];
+                        pcie_byteenable_0 <= 0;
+                        pcie_byteenable_0[7:4] <= 8'hff;
+
+                        head_update_delay <= 0;
+                    end else begin
+                        head_update_delay <= head_update_delay + 1;
                     end
                 end
-            end
-            // when a DMA descriptor has multiple flits associated with it, we
-            // need to request the remaining
-            PCIE_READ_REMAINING_DESC: begin
-                automatic pcie_rd_req_t rd_req;
-                automatic pcie_desc_t pcie_desc = 
-                    dma_pending_rd_buf[dma_pending_rd_buf_head-1];
-
-                if ((cur_desc_reqs_dwords + 16) >= pcie_desc.nb_dwords) begin
-                    pcie_state <= PCIE_WAIT_DESC;
-                    cur_desc_reqs_dwords <= 0;
-                end else begin
-                    cur_desc_reqs_dwords <= cur_desc_reqs_dwords + 16;
-                end
-
-                rd_req.addr = pcie_desc.saddr_data + cur_desc_reqs_dwords*4;
-
-                if (pcie_rd_req_buf_head + 1 == pcie_rd_req_buf_tail) begin
-                    $error("Not enough space to keep read requests");
-                    $finish();
-                end
-                pcie_rd_req_buf[pcie_rd_req_buf_head] <= rd_req;
-                pcie_rd_req_buf_head <= pcie_rd_req_buf_head + 1;
             end
         endcase
 
-        if (setup_finished && pcie_readdatavalid_0) begin
-            if (read_return_buf_head + 1 == read_return_buf_tail) begin
-                $error("Not enough space to keep read results");
-                $finish();
-            end
-            read_return_buf[read_return_buf_head] <= pcie_readdata_0;
-            read_return_buf_head <= read_return_buf_head + 1;
-        end
-
-        // at least one pending read
-        if (dma_pending_rd_buf_head != dma_pending_rd_buf_tail) begin
-            automatic pcie_desc_t pcie_desc = 
-                    dma_pending_rd_buf[dma_pending_rd_buf_tail];
-            automatic logic [7:0] queue = pcie_desc.dst_addr[39:32];
-
-            if (pcie_desc.immediate) begin
-                automatic pcie_wr_req_t wr_req;
-                automatic logic [31:0] ram_addr;
-                automatic logic [31:0] head;
-                automatic logic [31:0] tail;
-
-                dma_pending_rd_buf_tail <= dma_pending_rd_buf_tail + 1'b1;
-
-                // update head using the tail we got from the descriptor
-                // to simulate reading the packets
-                tail = pcie_desc.saddr_data[31:0];
-                head = tail;
-                ram_addr = pcie_desc.dst_addr[31:6];
-
-                if (ram_addr != 0) begin
-                    `herror(("Unexpected address. Expected: 0x0, got: 0x%h",
-                             ram_addr));
-                    error_termination <= 1;
-                end
-
-                ram[queue][ram_addr][pcie_desc.dst_addr[5:3] +: 64] <= pcie_desc.saddr_data;
-
-                // `hdisplay(("Receiving packet on queue %d (t=%h, h=%h)",
-                //          queue, tail, head));
-
-                // update head on the FPGA                
-                wr_req.addr = queue << 12;
-                wr_req.data = 0;
-                wr_req.data[63:32] = head;
-                wr_req.byteenable = 0;
-                wr_req.byteenable[7:4] = 8'hff;
-
-                if (pcie_wr_req_buf_head + 1 == pcie_wr_req_buf_tail) begin
-                    $error("Not enough space to keep write requests");
-                    $finish();
-                end
-
-                pcie_wr_req_buf[pcie_wr_req_buf_head] <= wr_req;
-                pcie_wr_req_buf_head <= pcie_wr_req_buf_head + 1;
-                
-
-                // TODO(sadok) Fill tx_data (table 17 of the manual)
-                pcie_wrdm_tx_data <= 0;
-                pcie_wrdm_tx_valid <= 1;
-            end else if (read_return_buf_head != read_return_buf_tail) begin
-                // RAM address in #flits
-                automatic logic [31:0] ram_addr = (pcie_desc.dst_addr[31:0] + 
-                    cur_desc_compl_dword_reads * 4)/64;
-                automatic logic [15:0] ipv4_total_len =
-                    read_return_buf[read_return_buf_tail][143:136] +
-                    (read_return_buf[read_return_buf_tail][135:128] << 8);
-
-                ram[queue][ram_addr] <= read_return_buf[read_return_buf_tail];
-
-                // HACK(sadok) assumes that all packets have zero payload
-                if (pkt_missing_flits[queue] == 0) begin
-                    pkt_missing_flits[queue] <= (ipv4_total_len + 18 - 1) >> 6;
-                    if (ipv4_total_len == 0) begin
-                        `herror(("Received malformed packet"));
-                        error_termination <= 1;
-                    end
-                end else begin
-                    pkt_missing_flits[queue] <= pkt_missing_flits[queue] - 1;
-                    if (ipv4_total_len != 0) begin
-                        `herror(("Received malformed packet"));
-                        error_termination <= 1;
-                    end
-                end
-
-                // `hdisplay(("queue: %d, Expected: 0x%h, got: 0x%h", queue,
-                //           expected_addr[queue], ram_addr));
-
-                if (expected_addr[queue] != ram_addr) begin
-                    `herror(("Unexpected address. Expected: 0x%h, got: 0x%h",
-                             expected_addr[queue], ram_addr));
-                    error_termination <= 1;
-                end
-
-                if (expected_addr[queue] == RAM_BUF_SIZE) begin
-                    expected_addr[queue] <= 1; // skip the control flit
-                end else begin
-                    expected_addr[queue] <= expected_addr[queue] + 1;
-                end 
-
-                read_return_buf_tail <= read_return_buf_tail + 1'b1;
-                cur_desc_compl_dword_reads <= cur_desc_compl_dword_reads + 16;
-
-                if ((cur_desc_compl_dword_reads + 16) >= pcie_desc.nb_dwords)
-                begin
-                    dma_pending_rd_buf_tail <= dma_pending_rd_buf_tail + 1'b1;
-                    cur_desc_compl_dword_reads <= 0;
-
-                    // TODO(sadok) Fill tx_data (table 17 of the manual)
-                    pcie_wrdm_tx_data <= 0;
-                    pcie_wrdm_tx_valid <= 1;
-                end
-            end
-        end
-
-        // // dummy software side (advances ring buffer and may print memory)
-        // for (i = 0; i < nb_queues; i = i + 1) begin
-            
+        // Emulate PCIe BAS wait
+        // if (cnt[8]) begin
+        //     pcie_bas_waitrequest <= !pcie_bas_waitrequest;
         // end
-
-    end
-end
-
-// pcie arbiter -- serializes read and write requests
-always @(posedge clk_pcie) begin
-    pcie_read_0 <= 0;
-    pcie_write_0 <= 0;
-    pcie_address_0 <= 0;
-    pcie_writedata_0 <= 0;
-    pcie_byteenable_0 <= 0;
-
-    if (rst) begin
-        pcie_rd_req_buf_tail <= 0;
-        pcie_wr_req_buf_tail <= 0;
-    end else begin
-        // priority to writes
-        if (pcie_wr_req_buf_head != pcie_wr_req_buf_tail) begin
-            automatic pcie_wr_req_t wr_req = pcie_wr_req_buf[pcie_wr_req_buf_tail];
-            pcie_wr_req_buf_tail <= pcie_wr_req_buf_tail + 1;
-
-            pcie_write_0 <= 1;
-            pcie_address_0 <= wr_req.addr;
-            pcie_writedata_0 <= wr_req.data;
-            pcie_byteenable_0 <= wr_req.byteenable;
-        end else if (pcie_rd_req_buf_head != pcie_rd_req_buf_tail) begin
-            automatic pcie_rd_req_t rd_req = pcie_rd_req_buf[pcie_rd_req_buf_tail];
-            pcie_rd_req_buf_tail <= pcie_rd_req_buf_tail + 1;
-
-            pcie_read_0 <= 1;
-            pcie_address_0 <= rd_req.addr;
-        end
     end
 end
 
@@ -833,6 +717,7 @@ always @(posedge clk_status) begin
     s_read <= 0;
     s_write <= 0;
     s_writedata <= 0;
+    error_termination_r <= error_termination;
     if(rst)begin
         s_cnt <= 0;
         s_addr <= 0;
@@ -864,7 +749,7 @@ always @(posedge clk_status) begin
                         // printing only the beginning of the RAM buffer,
                         // may print the entire thing instead:
                         for (i = 0; i < 25; i = i + 1) begin
-                        // for (i = 0; i < RAM_BUF_SIZE; i = i + 1) begin
+                        // for (i = 0; i < ALLOC_RAM_BUF_SIZE; i = i + 1) begin
                             for (j = 0; j < 8; j = j + 1) begin
                                 $write("%h:", i*64+j*8);
                                 for (k = 0; k < 8; k = k + 1) begin
@@ -1189,19 +1074,29 @@ top top_inst (
     .reg_out_eop                  (top_out_endofpacket),
     .reg_out_empty                (top_out_empty),
     //PCIe
-    .pcie_rddm_desc_ready         (pcie_rddm_desc_ready),
-    .pcie_rddm_desc_valid         (pcie_rddm_desc_valid),
-    .pcie_rddm_desc_data          (pcie_rddm_desc_data),
-    .pcie_wrdm_desc_ready         (pcie_wrdm_desc_ready),
-    .pcie_wrdm_desc_valid         (pcie_wrdm_desc_valid),
-    .pcie_wrdm_desc_data          (pcie_wrdm_desc_data),
-    .pcie_wrdm_prio_ready         (pcie_wrdm_prio_ready),
-    .pcie_wrdm_prio_valid         (pcie_wrdm_prio_valid),
-    .pcie_wrdm_prio_data          (pcie_wrdm_prio_data),
-    .pcie_rddm_tx_valid           (pcie_rddm_tx_valid),
-    .pcie_rddm_tx_data            (pcie_rddm_tx_data),
-    .pcie_wrdm_tx_valid           (pcie_wrdm_tx_valid),
-    .pcie_wrdm_tx_data            (pcie_wrdm_tx_data),
+    // .pcie_rddm_desc_ready         (pcie_rddm_desc_ready),
+    // .pcie_rddm_desc_valid         (pcie_rddm_desc_valid),
+    // .pcie_rddm_desc_data          (pcie_rddm_desc_data),
+    // .pcie_wrdm_desc_ready         (pcie_wrdm_desc_ready),
+    // .pcie_wrdm_desc_valid         (pcie_wrdm_desc_valid),
+    // .pcie_wrdm_desc_data          (pcie_wrdm_desc_data),
+    // .pcie_wrdm_prio_ready         (pcie_wrdm_prio_ready),
+    // .pcie_wrdm_prio_valid         (pcie_wrdm_prio_valid),
+    // .pcie_wrdm_prio_data          (pcie_wrdm_prio_data),
+    // .pcie_rddm_tx_valid           (pcie_rddm_tx_valid),
+    // .pcie_rddm_tx_data            (pcie_rddm_tx_data),
+    // .pcie_wrdm_tx_valid           (pcie_wrdm_tx_valid),
+    // .pcie_wrdm_tx_data            (pcie_wrdm_tx_data),
+    .pcie_bas_waitrequest         (pcie_bas_waitrequest),
+    .pcie_bas_address             (pcie_bas_address),
+    .pcie_bas_byteenable          (pcie_bas_byteenable),
+    .pcie_bas_read                (pcie_bas_read),
+    .pcie_bas_readdata            (pcie_bas_readdata),
+    .pcie_bas_readdatavalid       (pcie_bas_readdatavalid),
+    .pcie_bas_write               (pcie_bas_write),
+    .pcie_bas_writedata           (pcie_bas_writedata),
+    .pcie_bas_burstcount          (pcie_bas_burstcount),
+    .pcie_bas_response            (pcie_bas_response),
     .pcie_address_0               (pcie_address_0),
     .pcie_write_0                 (pcie_write_0),
     .pcie_read_0                  (pcie_read_0),
@@ -1356,56 +1251,66 @@ my_stats stats(
 
 `ifndef SIM
 pcie_core pcie (
-    .refclk_clk             (1'b0),                              //         refclk.clk
-    .pcie_rstn_npor         (1'b1),                          //      pcie_rstn.npor
-    .pcie_rstn_pin_perst    (1'b0),                     //               .pin_perst
-    .xcvr_rx_in0            (1'b0),                             //           xcvr.rx_in0
-    .xcvr_rx_in1            (1'b0),                             //               .rx_in1
-    .xcvr_rx_in2            (1'b0),                             //               .rx_in2
-    .xcvr_rx_in3            (1'b0),                             //               .rx_in3
-    .xcvr_rx_in4            (1'b0),                             //               .rx_in4
-    .xcvr_rx_in5            (1'b0),                             //               .rx_in5
-    .xcvr_rx_in6            (1'b0),                             //               .rx_in6
-    .xcvr_rx_in7            (1'b0),                             //               .rx_in7
-    .xcvr_rx_in8            (1'b0),                             //               .rx_in8
-    .xcvr_rx_in9            (1'b0),                             //               .rx_in9
-    .xcvr_rx_in10           (1'b0),                            //               .rx_in10
-    .xcvr_rx_in11           (1'b0),                            //               .rx_in11
-    .xcvr_rx_in12           (1'b0),                            //               .rx_in12
-    .xcvr_rx_in13           (1'b0),                            //               .rx_in13
-    .xcvr_rx_in14           (1'b0),                            //               .rx_in14
-    .xcvr_rx_in15           (1'b0),                            //               .rx_in15
-    .xcvr_tx_out0           (),                            //               .tx_out0
-    .xcvr_tx_out1           (),                            //               .tx_out1
-    .xcvr_tx_out2           (),                            //               .tx_out2
-    .xcvr_tx_out3           (),                            //               .tx_out3
-    .xcvr_tx_out4           (),                            //               .tx_out4
-    .xcvr_tx_out5           (),                            //               .tx_out5
-    .xcvr_tx_out6           (),                            //               .tx_out6
-    .xcvr_tx_out7           (),                            //               .tx_out7
-    .xcvr_tx_out8           (),                            //               .tx_out8
-    .xcvr_tx_out9           (),                            //               .tx_out9
-    .xcvr_tx_out10          (),                           //               .tx_out10
-    .xcvr_tx_out11          (),                           //               .tx_out11
-    .xcvr_tx_out12          (),                           //               .tx_out12
-    .xcvr_tx_out13          (),                           //               .tx_out13
-    .xcvr_tx_out14          (),                           //               .tx_out14
-    .xcvr_tx_out15          (),                           //               .tx_out15
+    .refclk_clk             (1'b0),
+    .pcie_rstn_npor         (1'b1),
+    .pcie_rstn_pin_perst    (1'b0),
+    .xcvr_rx_in0            (1'b0),
+    .bas_waitrequest        (pcie_bas_waitrequest),
+    .bas_address            (pcie_bas_address),
+    .bas_byteenable         (pcie_bas_byteenable),
+    .bas_read               (pcie_bas_read),
+    .bas_readdata           (pcie_bas_readdata),
+    .bas_readdatavalid      (pcie_bas_readdatavalid),
+    .bas_write              (pcie_bas_write),
+    .bas_writedata          (pcie_bas_writedata),
+    .bas_burstcount         (pcie_bas_burstcount),
+    .bas_response           (pcie_bas_response),
+    .xcvr_rx_in1            (1'b0),
+    .xcvr_rx_in2            (1'b0),
+    .xcvr_rx_in3            (1'b0),
+    .xcvr_rx_in4            (1'b0),
+    .xcvr_rx_in5            (1'b0),
+    .xcvr_rx_in6            (1'b0),
+    .xcvr_rx_in7            (1'b0),
+    .xcvr_rx_in8            (1'b0),
+    .xcvr_rx_in9            (1'b0),
+    .xcvr_rx_in10           (1'b0),
+    .xcvr_rx_in11           (1'b0),
+    .xcvr_rx_in12           (1'b0),
+    .xcvr_rx_in13           (1'b0),
+    .xcvr_rx_in14           (1'b0),
+    .xcvr_rx_in15           (1'b0),
+    .xcvr_tx_out0           (),
+    .xcvr_tx_out1           (),
+    .xcvr_tx_out2           (),
+    .xcvr_tx_out3           (),
+    .xcvr_tx_out4           (),
+    .xcvr_tx_out5           (),
+    .xcvr_tx_out6           (),
+    .xcvr_tx_out7           (),
+    .xcvr_tx_out8           (),
+    .xcvr_tx_out9           (),
+    .xcvr_tx_out10          (),
+    .xcvr_tx_out11          (),
+    .xcvr_tx_out12          (),
+    .xcvr_tx_out13          (),
+    .xcvr_tx_out14          (),
+    .xcvr_tx_out15          (),
     .pcie_clk               (clk_pcie),
     .pcie_reset_n           (!rst),
-    .rddm_desc_ready        (pcie_rddm_desc_ready),
-    .rddm_desc_valid        (pcie_rddm_desc_valid),
-    .rddm_desc_data         (pcie_rddm_desc_data),
-    .wrdm_desc_ready        (pcie_wrdm_desc_ready),
-    .wrdm_desc_valid        (pcie_wrdm_desc_valid),
-    .wrdm_desc_data         (pcie_wrdm_desc_data),
-    .wrdm_prio_ready        (pcie_wrdm_prio_ready),
-    .wrdm_prio_valid        (pcie_wrdm_prio_valid),
-    .wrdm_prio_data         (pcie_wrdm_prio_data),
-    .rddm_tx_valid          (pcie_rddm_tx_valid),
-    .rddm_tx_data           (pcie_rddm_tx_data),
-    .wrdm_tx_valid          (pcie_wrdm_tx_valid),
-    .wrdm_tx_data           (pcie_wrdm_tx_data),
+    // .rddm_desc_ready        (pcie_rddm_desc_ready),
+    // .rddm_desc_valid        (pcie_rddm_desc_valid),
+    // .rddm_desc_data         (pcie_rddm_desc_data),
+    // .wrdm_desc_ready        (pcie_wrdm_desc_ready),
+    // .wrdm_desc_valid        (pcie_wrdm_desc_valid),
+    // .wrdm_desc_data         (pcie_wrdm_desc_data),
+    // .wrdm_prio_ready        (pcie_wrdm_prio_ready),
+    // .wrdm_prio_valid        (pcie_wrdm_prio_valid),
+    // .wrdm_prio_data         (pcie_wrdm_prio_data),
+    // .rddm_tx_valid          (pcie_rddm_tx_valid),
+    // .rddm_tx_data           (pcie_rddm_tx_data),
+    // .wrdm_tx_valid          (pcie_wrdm_tx_valid),
+    // .wrdm_tx_data           (pcie_wrdm_tx_data),
     .address_0              (pcie_address_0),
     .write_0                (pcie_write_0),
     .read_0                 (pcie_read_0),

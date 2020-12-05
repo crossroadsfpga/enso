@@ -1,33 +1,29 @@
 `timescale 1 ps / 1 ps
 `include "./my_struct_s.sv"
 module pdu_gen(
-		input  logic         clk,
-		input  logic         rst,
-		input  logic         in_sop,
-		input  logic         in_eop,
-		input  logic [511:0] in_data,
-		input  logic [5:0]   in_empty,
-		input  logic         in_valid,
-		output  logic        in_ready,
-        input  logic         in_meta_valid,
-        input metadata_t     in_meta_data,
-        output logic         in_meta_ready,
-        output  flit_lite_t              pcie_rb_wr_data,
-        output  logic [PDU_AWIDTH-1:0]   pcie_rb_wr_addr,
-        output  logic                    pcie_rb_wr_en,
-        input   logic [PDU_AWIDTH-1:0]   pcie_rb_wr_base_addr,
-        input   logic                    pcie_rb_wr_base_addr_valid,
-        input   logic                    pcie_rb_almost_full,
-        output  logic                    pcie_rb_update_valid,
-        output  logic [PDU_AWIDTH-1:0]   pcie_rb_update_size
+		input  logic                  clk,
+		input  logic                  rst,
+		input  logic                  in_sop,
+		input  logic                  in_eop,
+		input  logic [511:0]          in_data,
+		input  logic [5:0]            in_empty,
+		input  logic                  in_valid,
+		output logic                  in_ready,
+        input  logic                  in_meta_valid,
+        input  metadata_t             in_meta_data,
+        output logic                  in_meta_ready,
+        output flit_lite_t            pcie_pkt_buf_wr_data,
+        output logic                  pcie_pkt_buf_wr_en,
+        input  logic [PDU_AWIDTH-1:0] pcie_pkt_buf_occup,
+        output pkt_desc_t             pcie_desc_buf_wr_data,
+        output logic                  pcie_desc_buf_wr_en,
+        input  logic [PDU_AWIDTH-1:0] pcie_desc_buf_occup
 	);
 
 typedef enum
 {
     START,
-    WRITE,
-    WRITE_HEAD,
-    WAIT
+    WRITE
 } state_t;
 
 state_t state;
@@ -35,30 +31,18 @@ logic         pdu_wren_r;
 logic [511:0] pdu_data_r;
 logic         pdu_sop_r;
 logic         pdu_eop_r;
+pkt_desc_t    pcie_desc_buf_wr_data_r;
 
-logic [PDU_AWIDTH-1:0]      pdu_addr_r;
-logic [511:0] last_flit;
 logic [511:0] pdu_data_swap;
 logic swap;
-logic [5:0] offset;
 logic [15:0] pdu_size;
 logic [15:0] pdu_flit;
-logic [PDU_AWIDTH-1:0]  rule_cnt;
 pdu_hdr_t pdu_hdr;
 tuple_t tuple;
 logic [31:0] prot;
 logic [PDUID_WIDTH-1:0] pdu_id;
 
 assign in_ready = (state == WRITE);
-
-assign pdu_hdr.padding = 0;
-assign pdu_hdr.queue_id = in_meta_data.queue_id;
-assign pdu_hdr.action = 0;
-assign pdu_hdr.pdu_flit = pdu_flit;
-assign pdu_hdr.pdu_size = pdu_size;
-assign pdu_hdr.prot = in_meta_data.prot;
-assign pdu_hdr.tuple = in_meta_data.tuple;
-assign pdu_hdr.pdu_id = pdu_id;
 
 assign pdu_data_swap = {
     pdu_data_r[7:0],
@@ -127,118 +111,77 @@ assign pdu_data_swap = {
     pdu_data_r[511:504]
 };
 
-always@(posedge clk)begin
-    if(rst)begin
+// It is only safe to write if we can fit a packet with the maximum size and
+// there are at least 3 slots available (due to pipeline delays).
+logic almost_full;
+assign almost_full = pcie_pkt_buf_occup >= (PDU_DEPTH - 2 - MAX_PKT_SIZE)
+                     || pcie_desc_buf_occup >= (PDU_DEPTH - 3);
+
+always @(posedge clk) begin
+    pdu_wren_r <= 0;
+    pdu_sop_r <= 0;
+    pdu_eop_r <= 0;
+    in_meta_ready <= 0;
+    swap <= 0;
+
+    if (rst) begin
         state <= START;
-        in_meta_ready <= 0;
-        pdu_wren_r <= 0;
-        pdu_sop_r <= 0;
-        pdu_eop_r <= 0;
-        pdu_addr_r <= 0;
-        swap <= 0;
-        pcie_rb_update_valid <= 0;
-        pcie_rb_update_size <= 0;
         pdu_flit <= 0;
         pdu_id <= 0;
     end else begin
-        case(state)
-            //only be called once.
+        case (state)
             START: begin
-                in_meta_ready <= 0;
-                pdu_wren_r <= 0;
-                pdu_sop_r <= 0;
-                pdu_eop_r <= 0;
-                pdu_addr_r <= 0;
-                swap <= 0;
-                pcie_rb_update_valid <= 0;
-                pcie_rb_update_size <= 0;
                 pdu_flit <= 0;
-                if (in_meta_valid & !in_meta_ready & !pcie_rb_almost_full) begin
+                pdu_size <= 0;
+                if (in_meta_valid & !in_meta_ready & !almost_full) begin
                     state <= WRITE;
                 end
             end
             WRITE: begin
-                pdu_wren_r <= 0;
-                pdu_sop_r <= 0;
-                pdu_eop_r <= 0;
-                pdu_data_r <= in_data;
                 if (in_valid) begin
                     pdu_wren_r <= 1;
                     swap <= 1;
-                    // regular flit
-                    if (!in_eop) begin
-                        if (in_sop) begin
-                            pdu_addr_r <= pcie_rb_wr_base_addr;
-                            pdu_size <= 64;
-                            pdu_flit <= 1;
-                        end else begin
-                            pdu_addr_r <= pdu_addr_r + 1;
-                            pdu_size <= pdu_size + 64;
-                            pdu_flit <= pdu_flit + 1;
-                        end
+                    pdu_data_r <= in_data;
+
+                    `hdisplay(("in_sop: %b in_eop: %b", in_sop, in_eop));
+
+                    if (in_sop) begin
+                        pdu_sop_r <= 1;
+                        assert(pdu_size == 0);
                     end else begin
-                        if (in_sop) begin // only one flit
-                            pdu_size <= 64 - in_empty;
-                            pdu_flit <= 1;
-                            pdu_addr_r <= pcie_rb_wr_base_addr;
-                        end else begin
-                            pdu_size <= pdu_size + (64 - in_empty);
-                            pdu_flit <= pdu_flit + 1;
-                            pdu_addr_r <= pdu_addr_r + 1;
-                        end
-                        // set the eop here since we don't have rule anymore
+                        assert(pdu_size != 0);
+                    end
+
+                    pdu_size = pdu_size + 64;
+                    pdu_flit = pdu_flit + 1;
+
+                    if (in_eop) begin
+                        pdu_size = pdu_size - in_empty;
                         pdu_eop_r <= 1;
 
-                        state <= WRITE_HEAD;
+                        // write descriptor
+                        pcie_desc_buf_wr_data_r.queue_id <=
+                            in_meta_data.queue_id;
+
+                        // TODO(sadok) specify size in bytes instead of flits
+                        pcie_desc_buf_wr_data_r.size <= pdu_flit;
+                        in_meta_ready <= 1;
+
+                        state <= START;
                     end
-                end
-            end
-            WRITE_HEAD: begin
-                swap <= 0;
-                pdu_wren_r <= 1;
-                // since pdu_sop_r is set pdu_addr_r should contain the address
-                // of the first flit
-                pdu_addr_r <= pcie_rb_wr_base_addr;
-                pdu_data_r <= pdu_hdr;
-                pdu_sop_r <= 1;
-                pdu_eop_r <= 0;
-                in_meta_ready <= 1;
-                pcie_rb_update_valid <= 1;
-                pcie_rb_update_size <= pdu_flit;
-
-                state <= WAIT;
-
-                //Just incremental id
-                pdu_id <= pdu_id + 1;
-            end
-            WAIT:begin
-                in_meta_ready <= 0;
-                pdu_wren_r <= 0;
-                pdu_sop_r <= 0;
-                pdu_eop_r <= 0;
-                pdu_addr_r <= 0;
-                swap <= 0;
-                pcie_rb_update_valid <= 0;
-                pcie_rb_update_size <= 0;
-                pdu_flit <= 0;
-                //wait until the new base_addr is ready.
-                if (pcie_rb_wr_base_addr_valid) begin
-                    state <= START;
                 end
             end
         endcase
     end
 end
 
-always@(posedge clk)begin
-    pcie_rb_wr_en <= pdu_wren_r;
-    if(swap)begin
-        pcie_rb_wr_data.data <= pdu_data_swap;
-    end else begin
-        pcie_rb_wr_data.data <= pdu_data_r;
-    end
-    pcie_rb_wr_data.sop <= pdu_sop_r;
-    pcie_rb_wr_data.eop <= pdu_eop_r;
-    pcie_rb_wr_addr <= pdu_addr_r;
+always @(posedge clk) begin
+    pcie_pkt_buf_wr_en <= pdu_wren_r;
+    pcie_pkt_buf_wr_data.data <= swap ? pdu_data_swap : pdu_data_r;
+    pcie_pkt_buf_wr_data.sop <= pdu_sop_r;
+    pcie_pkt_buf_wr_data.eop <= pdu_eop_r;
+
+    pcie_desc_buf_wr_en <= in_meta_ready;
+    pcie_desc_buf_wr_data <= pcie_desc_buf_wr_data_r;
 end
 endmodule

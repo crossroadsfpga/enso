@@ -238,15 +238,14 @@ logic          pdumeta_cpu_out_ready;
 logic          pdumeta_cpu_ready;
 logic [31:0]   pdumeta_cpu_csr_readdata;
 
-//PCIe internal
-flit_lite_t              pcie_rb_wr_data;
-logic [PDU_AWIDTH-1:0]   pcie_rb_wr_addr;          
-logic                    pcie_rb_wr_en;  
-logic [PDU_AWIDTH-1:0]   pcie_rb_wr_base_addr;
-logic                    pcie_rb_wr_base_addr_valid;
-logic                    pcie_rb_almost_full;
-logic                    pcie_rb_update_valid;
-logic [PDU_AWIDTH-1:0]   pcie_rb_update_size;
+flit_lite_t            pcie_pkt_buf_wr_data;
+logic                  pcie_pkt_buf_wr_en;
+logic [PDU_AWIDTH-1:0] pcie_pkt_buf_occup;
+
+pkt_desc_t             pcie_desc_buf_wr_data;
+logic                  pcie_desc_buf_wr_en;
+logic [PDU_AWIDTH-1:0] pcie_desc_buf_occup;
+
 logic                    disable_pcie;
 pdu_metadata_t           pdumeta_cpu_data;
 logic                    pdumeta_cpu_valid;
@@ -467,7 +466,7 @@ always @(posedge clk_pcie) begin
         if (pcie_meta_valid & pcie_meta_ready) begin
             pcie_meta_cnt <= pcie_meta_cnt + 1;
         end
-        if (pcie_rb_update_valid) begin
+        if (pcie_desc_buf_wr_en) begin
             dma_pkt_cnt <= dma_pkt_cnt + 1;
         end
         if (!pcie_bas_waitrequest && pcie_bas_write_r) begin
@@ -1008,14 +1007,12 @@ pdu_gen pdu_gen_inst(
     .in_meta_valid          (pcie_meta_valid),
     .in_meta_data           (pcie_meta_data),
     .in_meta_ready          (pcie_meta_ready),
-    .pcie_rb_wr_data        (pcie_rb_wr_data),           
-    .pcie_rb_wr_addr        (pcie_rb_wr_addr),          
-    .pcie_rb_wr_en          (pcie_rb_wr_en),  
-    .pcie_rb_wr_base_addr   (pcie_rb_wr_base_addr),  
-    .pcie_rb_wr_base_addr_valid   (pcie_rb_wr_base_addr_valid),  
-    .pcie_rb_almost_full    (pcie_rb_almost_full),          
-    .pcie_rb_update_valid   (pcie_rb_update_valid),
-    .pcie_rb_update_size    (pcie_rb_update_size)
+    .pcie_pkt_buf_wr_data   (pcie_pkt_buf_wr_data),
+    .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
+    .pcie_pkt_buf_occup     (pcie_pkt_buf_occup),
+    .pcie_desc_buf_wr_data  (pcie_desc_buf_wr_data),
+    .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
+    .pcie_desc_buf_occup    (pcie_desc_buf_occup)
 );
 
 //////////////////// To OUTPUT FIFO //////////////////////////////////
@@ -1087,19 +1084,6 @@ pktbuf_emptylist (
 pcie_top pcie (
     .pcie_clk               (clk_pcie),
     .pcie_reset_n           (!rst),
-    // .pcie_rddm_desc_ready   (pcie_rddm_desc_ready),
-    // .pcie_rddm_desc_valid   (pcie_rddm_desc_valid),
-    // .pcie_rddm_desc_data    (pcie_rddm_desc_data),
-    // .pcie_wrdm_desc_ready   (pcie_wrdm_desc_ready),
-    // .pcie_wrdm_desc_valid   (pcie_wrdm_desc_valid),
-    // .pcie_wrdm_desc_data    (pcie_wrdm_desc_data),
-    // .pcie_wrdm_prio_ready   (pcie_wrdm_prio_ready),
-    // .pcie_wrdm_prio_valid   (pcie_wrdm_prio_valid),
-    // .pcie_wrdm_prio_data    (pcie_wrdm_prio_data),
-    // .pcie_rddm_tx_valid     (pcie_rddm_tx_valid),
-    // .pcie_rddm_tx_data      (pcie_rddm_tx_data),
-    // .pcie_wrdm_tx_valid     (pcie_wrdm_tx_valid),
-    // .pcie_wrdm_tx_data      (pcie_wrdm_tx_data),
     .pcie_bas_waitrequest   (pcie_bas_waitrequest),
     .pcie_bas_address       (pcie_bas_address),
     .pcie_bas_byteenable    (pcie_bas_byteenable),
@@ -1116,29 +1100,20 @@ pcie_top pcie (
     .pcie_readdatavalid_0   (pcie_readdatavalid_0), 
     .pcie_readdata_0        (pcie_readdata_0), 
     .pcie_writedata_0       (pcie_writedata_0), 
-    .pcie_byteenable_0      (pcie_byteenable_0), 
-    // .pcie_address_1         (pcie_address_1), 
-    // .pcie_write_1           (pcie_write_1), 
-    // .pcie_read_1            (pcie_read_1), 
-    // .pcie_readdatavalid_1   (pcie_readdatavalid_1), 
-    // .pcie_readdata_1        (pcie_readdata_1), 
-    // .pcie_writedata_1       (pcie_writedata_1), 
-    // .pcie_byteenable_1      (pcie_byteenable_1),  
-    .pcie_rb_wr_data        (pcie_rb_wr_data),           
-    .pcie_rb_wr_addr        (pcie_rb_wr_addr),          
-    .pcie_rb_wr_en          (pcie_rb_wr_en),  
-    .pcie_rb_wr_base_addr   (pcie_rb_wr_base_addr),  
-    .pcie_rb_wr_base_addr_valid(pcie_rb_wr_base_addr_valid),
-    .pcie_rb_almost_full    (pcie_rb_almost_full),
-    .pcie_max_rb            (max_pcie_rb),
-    .pcie_rb_update_valid   (pcie_rb_update_valid),
-    .pcie_rb_update_size    (pcie_rb_update_size),
+    .pcie_byteenable_0      (pcie_byteenable_0),
+    .pcie_pkt_buf_wr_data   (pcie_pkt_buf_wr_data),
+    .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
+    .pcie_pkt_buf_occup     (pcie_pkt_buf_occup),
+    .pcie_desc_buf_wr_data  (pcie_desc_buf_wr_data),
+    .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
+    .pcie_desc_buf_occup    (pcie_desc_buf_occup),
     .disable_pcie           (disable_pcie),
     .pdumeta_cpu_data       (pdumeta_cpu_data),
     .pdumeta_cpu_valid      (pdumeta_cpu_valid),
     .pdumeta_cnt            (pdumeta_cnt),
     .dma_queue_full_cnt     (dma_queue_full_cnt),
     .cpu_buf_full_cnt       (cpu_buf_full_cnt),
+    .pcie_max_rb            (max_pcie_rb),
     .clk_status             (clk_status),
     .status_addr            (status_addr),
     .status_read            (status_read),
