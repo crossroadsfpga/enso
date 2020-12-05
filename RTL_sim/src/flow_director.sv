@@ -18,20 +18,24 @@ output logic out_meta_valid;
 input  out_meta_ready;
 
 always @(*) begin
-  in_meta_ready = out_meta_ready;
-  out_meta_data = in_meta_data;
-  out_meta_valid = in_meta_valid;
+    in_meta_ready = out_meta_ready;
+    out_meta_data = in_meta_data;
+    out_meta_valid = in_meta_valid;
 
-  out_meta_data.pkt_flags = PKT_PCIE;
+    out_meta_data.pkt_flags = PKT_PCIE;
 
-  if (in_meta_data.queue_id == '1) begin
-    out_meta_data.pkt_flags = PKT_DROP;
-  end
+    // if (in_meta_data.queue_id == '1) begin
+    //     out_meta_data.pkt_flags = PKT_DROP;
+    // end
 
-  // if (in_meta_valid) begin
-  //   $display("Flow Director: Flow ID=0x%h, Queue ID=0x%h",
-  //             in_meta_data.tuple, in_meta_data.queue_id);
-  // end
+    // HACK(sadok) determine queue using the src IP address. This is necessary
+    // as I temporarily removed the ability to populate the flow table.
+    out_meta_data.queue_id = {48'h0, in_meta_data.tuple.sIP[15:0]};
+
+    // if (in_meta_valid) begin
+    //   $display("Flow Director: Flow ID=0x%h, Queue ID=0x%h",
+    //             in_meta_data.tuple, in_meta_data.queue_id);
+    // end
 end
 
 endmodule
