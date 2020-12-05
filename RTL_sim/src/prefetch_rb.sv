@@ -42,7 +42,7 @@ logic [DWIDTH-1:0] bram_wr_data;
 logic              bram_wr_en;
 
 logic [AWIDTH-1:0] bram_rd_addr;
-logic [DWIDTH-1:0] bram_rd_data; // has always next data, use rd_en to consume
+logic [DWIDTH-1:0] bram_rd_data; // has next data, use rd_en to consume
 logic              bram_rd_en;
 
 logic [AWIDTH-1:0] head; // advance when writing
@@ -52,13 +52,14 @@ logic [AWIDTH-1:0] tail; // advance when reading
 // pending_rd_data[0] ->  ... -> pending_rd_data[NB_PREFETCH_REGS-1] = rd_data
 logic [DWIDTH-1:0] pending_rd_data [NB_PREFETCH_REGS];
 
-logic [$clog2(NB_PREFETCH_REGS)-1:0] pending_reads;
-
 logic valid_wr_en;
 logic valid_rd_en;
 
-logic bram_rd_en_r;
-logic bram_rd_valid;
+logic bram_rd_en_r1;
+logic bram_rd_en_r2;
+
+logic [AWIDTH-1:0] bram_rd_addr_r1;
+logic [AWIDTH-1:0] bram_rd_addr_r2;
 
 logic [AWIDTH-1:0] real_occup;
 
@@ -79,12 +80,8 @@ always @(posedge clk) begin
     if (rst_r) begin
         head <= 0;
         tail <= 0;
-        pending_reads <= 0;
     end else begin
-        automatic logic [$clog2(NB_PREFETCH_REGS)-1:0] next_pending_reads = 
-            pending_reads;
-        automatic logic [AWIDTH-1:0] next_occup = real_occup + valid_wr_en -
-                                                  valid_rd_en;
+        automatic logic [AWIDTH-1:0] next_occup = occup + valid_wr_en;
 
         if (valid_rd_en) begin
             integer i;
@@ -95,25 +92,20 @@ always @(posedge clk) begin
             if (real_occup > NB_PREFETCH_REGS) begin
                 bram_rd_addr <= tail + NB_PREFETCH_REGS;
                 bram_rd_en <= 1;
-                next_pending_reads = next_pending_reads + 1;
             end
-            tail <= tail + 1;
+            tail = tail + 1;
         end
 
-        bram_rd_en_r <= bram_rd_en;
-        bram_rd_valid <= bram_rd_en_r;
+        bram_rd_en_r1 <= bram_rd_en;
+        bram_rd_en_r2 <= bram_rd_en_r1;
+        bram_rd_addr_r1 <= bram_rd_addr;
+        bram_rd_addr_r2 <= bram_rd_addr_r1;
 
-        // We store the value read from BRAM in a different register depending
-        // on the number of pending reads
-        if (bram_rd_valid) begin
-            assert (pending_reads > 0);
-            next_pending_reads = next_pending_reads - 1;
-            if (next_occup <= NB_PREFETCH_REGS) begin
-                pending_rd_data[next_pending_reads + NB_PREFETCH_REGS
-                    - real_occup + valid_rd_en] <= bram_rd_data;
-            end else begin
-                pending_rd_data[next_pending_reads] <= bram_rd_data;
-            end
+        // Store result of a prefetch
+        if (bram_rd_en_r2) begin
+            automatic logic [AWIDTH-1:0] pref_dest = tail - bram_rd_addr_r2 +
+                (NB_PREFETCH_REGS - 1);
+            pending_rd_data[pref_dest] <= bram_rd_data;
         end
 
         if (valid_wr_en) begin
@@ -127,8 +119,6 @@ always @(posedge clk) begin
             end
             head <= head + 1;
         end
-
-        pending_reads <= next_pending_reads;
     end
 end
 
