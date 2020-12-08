@@ -39,10 +39,12 @@
 #include "pcie.h"
 
 // C2F_BUFFER_OFFSET is in dwords
-static const unsigned f2c_allocated_size = C2F_BUFFER_OFFSET * 4;
-static const unsigned c2f_allocated_size = C2F_BUFFER_SIZE * 64;
-static const unsigned allocated_size = f2c_allocated_size + c2f_allocated_size;
+static const unsigned f2c_allocated_size = ALIGNED_F2C_MEM_SIZE;
 
+// FIXME(sadok) find huge page aligned size, we are ignoring c2f for now though
+static const unsigned c2f_allocated_size = C2F_BUFFER_SIZE * 64;
+
+static const unsigned allocated_size = f2c_allocated_size + c2f_allocated_size;
 
 static inline uint16_t get_pkt_size(uint8_t *addr) {
     uint16_t l2_len = 14 + 4;
@@ -51,16 +53,109 @@ static inline uint16_t get_pkt_size(uint8_t *addr) {
     return total_len;
 }
 
+// adapted from ixy
+static void* virt_to_phys(void* virt) {
+	long pagesize = sysconf(_SC_PAGESIZE);
+    int fd = open("/proc/self/pagemap", O_RDONLY);
+    if (fd < 0) {
+        return NULL;
+    }
+	// pagemap is an array of pointers for each normal-sized page
+	if (lseek(fd, (uintptr_t) virt / pagesize * sizeof(uintptr_t),
+            SEEK_SET) < 0) {
+        close(fd);
+        return NULL;
+    }
+	
+    uintptr_t phy = 0;
+    if (read(fd, &phy, sizeof(phy)) < 0) {
+        close(fd);
+        return NULL;
+    }
+    close(fd);
+
+	if (!phy) {
+        return NULL;
+	}
+	// bits 0-54 are the page number
+	return (void*) ((phy & 0x7fffffffffffffULL) * pagesize 
+                    + ((uintptr_t) virt) % pagesize);
+}
+
+// adapted from ixy
+static void* get_huge_pages(int app_id, size_t size) {
+    int fd;
+    char huge_pages_path[128];
+
+    snprintf(huge_pages_path, 128, "/mnt/huge/fd:%i", app_id);
+
+    fd = open(huge_pages_path, O_CREAT | O_RDWR, S_IRWXU);
+    if (fd == -1) {
+        std::cerr << "(" << errno
+                  << ") Problem opening huge page file descriptor" << std::endl;
+        return NULL;
+    }
+
+    if (ftruncate(fd, (off_t) size)) {
+        std::cerr << "(" << errno << ") Could not truncate huge page to size: "
+                  << size << std::endl;
+        close(fd);
+        unlink(huge_pages_path);
+        return NULL;
+    }
+
+    printf("fd: %i\n", fd);
+    printf("size: %lu\n", size);
+
+    void* virt_addr = (void*) mmap(NULL, size,
+        PROT_READ | PROT_WRITE, MAP_SHARED | MAP_HUGETLB, fd, 0);
+
+    if (virt_addr == (void*) -1) {
+        std::cerr << "(" << errno << ") Could not mmap huge page" << std::endl;
+        close(fd);
+        unlink(huge_pages_path);
+        return NULL;
+    }
+    
+    if (mlock(virt_addr, size)) {
+        std::cerr << "(" << errno << ") Could not lock huge page" << std::endl;
+        munmap(virt_addr, size);
+        close(fd);
+        unlink(huge_pages_path);
+        return NULL;
+    }
+
+    // don't keep it around in the hugetlbfs
+    close(fd);
+    unlink(huge_pages_path);
+
+    return virt_addr;
+}
+
+// FIXME(sadok) use random value
+// FIXME(sadok) use 128 bit value
+// TODO(sadok) move it to socket struct
+static const uint32_t buf_sig = 0xbabeface;
+
+static inline void fill_buf_sigs(uint32_t* start, uint32_t nb_flits)
+{
+    // FIXME(sadok) use 128 bit instructions
+    for (uint32_t i = 0; i < nb_flits; i++) {
+        // We assign the beginning of every flit
+        start[i*64/sizeof(*start)] = buf_sig;
+    }
+}
+
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues)
 {
-    int result;
-    void *mmap_addr, *uio_mmap_bar2_addr;
+    void* uio_mmap_bar2_addr;
     int app_id;
     intel_fpga_pcie_dev *dev = socket_entry->dev;
 
     printf("Running with HEAD_UPDATE_PERIOD: %i\n", HEAD_UPDATE_PERIOD);
     printf("Running with BATCH_SIZE: %i\n", BATCH_SIZE);
     printf("Running with BUFFER_SIZE: %i\n", BUFFER_SIZE);
+    printf("Running with ALIGNED_F2C_MEM_SIZE: %lu\n", ALIGNED_F2C_MEM_SIZE);
 
     // FIXME(sadok) should find a better identifier than core id
     app_id = sched_getcpu() * nb_queues + socket_id;
@@ -69,18 +164,16 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         return -1;
     }
 
-    // Obtain kernel memory.
-    result = dev->set_kmem_size(f2c_allocated_size, c2f_allocated_size, app_id);
-    if (result != 1) {
-        std::cerr << "Could not get kernel memory!" << std::endl;
+    socket_entry->kdata = (uint32_t*) get_huge_pages(app_id, f2c_allocated_size);
+    if (socket_entry->kdata == NULL) {
+        std::cerr << "Could not get huge page" << std::endl;
         return -1;
     }
-    mmap_addr = dev->kmem_mmap(allocated_size, 0);
-    if (mmap_addr == MAP_FAILED) {
-        std::cerr << "Could not get mmap kernel memory!" << std::endl;
-        return -1;
-    }
-    socket_entry->kdata = reinterpret_cast<uint32_t *>(mmap_addr);
+    void* phys_addr = virt_to_phys(socket_entry->kdata);
+
+    // fill buffer with signatures so that we can identify when packets are
+    // written
+    fill_buf_sigs(socket_entry->kdata + 16, (f2c_allocated_size-1)/64);
 
     pcie_block_t *global_block; // The global 512-bit register array.
     global_block = (pcie_block_t *) socket_entry->kdata;
@@ -93,6 +186,9 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     socket_entry->uio_data_bar2 = (pcie_block_t *) (
         (uint8_t*) uio_mmap_bar2_addr + app_id * MEMORY_SPACE_PER_APP
     );
+    socket_entry->uio_data_bar2->kmem_low  = (uint32_t) (uint64_t) phys_addr;
+    socket_entry->uio_data_bar2->kmem_high = (uint32_t) (
+        (uint64_t) phys_addr >> 32);
 
     socket_entry->head_ptr = &socket_entry->uio_data_bar2->head;
 
@@ -103,6 +199,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     socket_entry->app_id = app_id;
     socket_entry->c2f_cpu_tail = 0;
     socket_entry->cpu_head = *(socket_entry->head_ptr);
+    socket_entry->last_cpu_head = socket_entry->cpu_head;
     socket_entry->cpu_tail = *(socket_entry->tail_ptr);
 
     socket_entry->nb_head_updates = 0;
@@ -110,68 +207,19 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     return 0;
 }
 
-static uint64_t total_occup = 0;
-static uint64_t nb_batches = 0;
-static uint64_t nb_runs = 0;
-static int max_occup = 0;
+// static uint64_t total_occup = 0;
+// static uint64_t nb_batches = 0;
+// static uint64_t nb_runs = 0;
+// static uint64_t max_occup = 0;
 
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
-    unsigned int cpu_head = socket_entry->cpu_head;
-    unsigned int cpu_tail;
-    int free_slot; // number of free slots in ring buffer
-    unsigned int copy_size;
+    uint32_t cpu_head = socket_entry->cpu_head;
     uint32_t* kdata = socket_entry->kdata;
 
-    cpu_tail = *(socket_entry->tail_ptr);
-    socket_entry->cpu_tail = cpu_tail;
-
-    if (++nb_runs >= 1e8) {
-        nb_runs = 0;
-
-        std::cout << "nb_batches: " << nb_batches << "  total_occup: " 
-                  << total_occup << "  max_occup: " << max_occup << std::endl;
-
-        nb_batches = 0;
-        total_occup = 0;
-
-        // for (int page = 0; page < 2; ++page) {
-        //     printf("Page %i:\n", page);
-        //     for (int i = 0; i < 10; ++i) {
-        //         for (int j = 0; j < 8; ++j) {
-        //             for (int k = 0; k < 8; ++k) {
-        //                 printf("%02hhX ", ((uint8_t*) kdata)[page*4096 + i*64 + j*8 + k]);
-        //             }
-        //             printf("\n");
-        //         }
-        //         printf("\n");
-        //     }
-        // }
-    }
-
-    if (unlikely(cpu_tail == cpu_head)) {
+    // no new packet
+    if (unlikely(kdata[(cpu_head + 1) * 16] == buf_sig)) {
         return 0;
-    }
-
-    // calculate free_slot
-    if (cpu_tail < cpu_head) {
-        free_slot = cpu_head - cpu_tail;
-    } else {
-        free_slot = BUFFER_SIZE - cpu_tail + cpu_head;
-    }
-
-    // printf("CPU head = %d; CPU tail = %d; free_slot = %d \n", 
-    //         cpu_head, cpu_tail, free_slot);
-    if (unlikely(free_slot < 1)) {
-        printf("cpu_tail: %i cpu_head: %i\n", cpu_tail, cpu_head);
-        printf("FPGA breaks free_slot assumption!\n");
-        return -1;
-    }
-
-    nb_batches++;
-    total_occup += BUFFER_SIZE - free_slot;
-    if ((BUFFER_SIZE - free_slot) > max_occup) {
-        max_occup = BUFFER_SIZE - free_slot;
     }
 
     *buf = &kdata[(cpu_head + 1) * 16];
@@ -183,102 +231,83 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     // TODO(sadok) does it make sense to limit the number of packets we retrieve
     // at once?
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
+        // check if first flit of the packet was written by the FPGA
+        if (unlikely(*((uint32_t*) my_buf) == buf_sig)) {
+            break;
+        }
+
         uint32_t pkt_size = get_pkt_size(my_buf);
         uint32_t pdu_flit = ((pkt_size-1) >> 6) + 1; // number of 64-byte blocks
         uint32_t flit_aligned_size = pdu_flit * 64;
-
-        // check transfer_flit
-        if (unlikely(pdu_flit == 0)) {
-            printf("transfer_flit has to be bigger than 0!\n");
-            return -1;
-        }
 
         // reached the buffer limit
         if (unlikely((total_size + flit_aligned_size) > len)) {
             break;
         }
 
+        // check if the last flit of the packet was written by the FPGA
+        if (unlikely(((uint32_t*) my_buf)[(pdu_flit - 1) * 16] == buf_sig)) {
+            break;
+        }
+
+        // If we reach this point, it's safe to return the packet to the user
+
         // TODO(sadok) Handle packets that are not flit-aligned? There will be a
         // gap, what should we do?
         total_size += flit_aligned_size;
         total_flits += pdu_flit;
 
-        // TODO(sadok) this may be a performance problem
-        // We need to copy the beginning of the ring buffer to the last page
+        // Packets may go beyond the buffer size, but the next packet is
+        // guaranteed to start at index zero. Also, since the next packet starts
+        // at the beginning of the buffer, we need to return immediately to
+        // ensure that we always return a contiguous set of packets.
         if ((cpu_head + pdu_flit) >= BUFFER_SIZE) {
-            // if ((cpu_head + pdu_flit) != BUFFER_SIZE) {
-            //     copy_size = cpu_head + pdu_flit - BUFFER_SIZE;
-            //     memcpy(&kdata[(BUFFER_SIZE + 1) * 16], &kdata[1 * 16],
-            //            copy_size * 16 * 4);
-            // }
             cpu_head = 0;
             break;
         }
         my_buf += flit_aligned_size;
         cpu_head += pdu_flit;
-
-        if (cpu_head == cpu_tail) {
-            break;
-        }
     }
 
-    if (total_flits > (BUFFER_SIZE - free_slot)) {
-        printf("total_flits: %d occup: %d\n", BUFFER_SIZE - free_slot);
-    }
-
-    if (cpu_head != 0) {
-        if (total_flits > (BUFFER_SIZE - free_slot)) {
-            printf("total_flits: %u free_slot: %i\n", total_flits, free_slot);
-        }
-        assert(total_flits <= (BUFFER_SIZE - free_slot));
-    }
-
-    // socket_entry->cpu_head = cpu_head;
-    socket_entry->cpu_head = cpu_tail; /// HACK!!!!
+    socket_entry->cpu_head = cpu_head;
     return total_size;
 }
 
 void advance_ring_buffer(socket_internal* socket_entry)
 {
-    // int free_slot;
-    // if (socket_entry->cpu_tail < socket_entry->cpu_head) {
-    //     free_slot = socket_entry->cpu_head - socket_entry->cpu_tail;
-    // } else {
-    //     free_slot = BUFFER_SIZE - socket_entry->cpu_tail + socket_entry->cpu_head;
-    // }
+    uint32_t cpu_head = socket_entry->cpu_head;
+    uint32_t last_cpu_head = socket_entry->last_cpu_head;
 
-    // We don't really need this now that we are using batch.
-    // Worse, it can actually cause the host buffer to be "full" forever, as we
-    // may never update the head pointer if we only call advance_ring_buffer
-    // once after dma_run. Therefore it is now disabled by default
-    // if (socket_entry->nb_head_updates > HEAD_UPDATE_PERIOD) {
-    // if (free_slot < BUFFER_SIZE/2) {
-        asm volatile ("" : : : "memory"); // compiler memory barrier
-        *(socket_entry->head_ptr) = socket_entry->cpu_head;
-        // socket_entry->nb_head_updates = 0;
-    // }
-    // ++(socket_entry->nb_head_updates);
-
-    if (nb_runs == 0) {
-        printf("cpu_head: %u\n", socket_entry->cpu_head);
+    // buffer wrapped, fill until the end
+    if (last_cpu_head > cpu_head) {
+        fill_buf_sigs(socket_entry->kdata + (last_cpu_head + 1) * 16,
+            (f2c_allocated_size)/64 - last_cpu_head - 1);
+        last_cpu_head = 0;
     }
+
+    fill_buf_sigs(socket_entry->kdata + (last_cpu_head + 1) * 16,
+        cpu_head - last_cpu_head);
+
+    asm volatile ("" : : : "memory"); // compiler memory barrier
+    *(socket_entry->head_ptr) = socket_entry->cpu_head;
+
+    socket_entry->last_cpu_head = cpu_head;
 }
 
 // FIXME(sadok) This should be in the kernel
 int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
                          unsigned int nb_queues)
 {
+    unsigned next_queue = 0;
     block_s block;
     pcie_block_t* global_block = (pcie_block_t *) socket_entry->kdata;
     pcie_block_t* uio_data_bar2 = socket_entry->uio_data_bar2;
-
+    
     if (socket_entry->app_id != 0) {
         std::cerr << "Can only send control messages from app 0" << std::endl;
         return -1;
     }
 
-#ifdef CONTROL_MSG
-    unsigned next_queue = 0;
     for (unsigned i = 0; i < nb_rules; ++i) {
         block.pdu_id = 0;
         block.dst_port = 80;
@@ -303,7 +332,6 @@ int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
         // asm volatile ("" : : : "memory"); // compiler memory barrier
         // print_pcie_block(uio_data_bar2);
     }
-#endif // CONTROL_MSG
 
     return 0;
 }
@@ -394,7 +422,6 @@ void print_block(block_s *block) {
 
 uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
         block_s *block, uint32_t *kdata) {
-#ifdef CONTROL_MSG
     // uint32_t pdu_flit;
     // uint32_t copy_flit;
     uint32_t free_slot;
@@ -452,7 +479,4 @@ uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
         c2f_tail += 1;
     }
     return c2f_tail;
-#else
-    return 0;
-#endif // CONTROL_MSG
 }

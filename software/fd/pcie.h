@@ -9,6 +9,8 @@
 #define RULE_ID_SIZE 2 // bytes
 #define NB_RULES_IN_LINE (RULE_ID_LINE_LEN/RULE_ID_SIZE)
 
+#define MAX_PKT_SIZE 24 // in flits, if changed, must also change hardware
+
 #ifndef HEAD_UPDATE_PERIOD
 // Number of batches to wait until we update the header pointer on the FPGA.
 // We may override this value when compiling TODO(sadok) remove?
@@ -25,15 +27,23 @@
 // value when compiling. It is defined in number of flits (64 bytes)
 #define BUFFER_SIZE 1048575
 #endif
+
 #define C2F_BUFFER_SIZE 512
 
-// (BUFFER_SIZE + 1) should be page aligned (in flits)
-#define PAGE_ALIGNED_BUFFER_SIZE ((BUFFER_SIZE / 64 + 1) * 64 - 1)
+#define BUF_PAGE_SIZE (1UL << 21) // using 2MB huge pages (size in bytes)
 
-// In terms of dwords. 1 means the first 16 dwords are global registers
-// the 1024 is the extra page for memory-copy
+// Total size needed in the f2c memory region (in flits). This include an extra
+// flit used to keep the global registers (+1) as well as space for packets that
+// go beyond the buffer limits (MAX_PKT_SIZE - 1).
+#define F2C_MEM_SIZE (BUFFER_SIZE + 1 + MAX_PKT_SIZE - 1)
+
+// Page align F2C_MEM_SIZE
+#define ALIGNED_F2C_MEM_SIZE (\
+    ((F2C_MEM_SIZE * 64 - 1) / BUF_PAGE_SIZE + BUF_PAGE_SIZE))
+
+// In dwords.
 // if changed, should also change the kernel
-#define C2F_BUFFER_OFFSET ((PAGE_ALIGNED_BUFFER_SIZE+1)*16 + 1024)
+#define C2F_BUFFER_OFFSET (ALIGNED_F2C_MEM_SIZE / 4)
 
 // 4 bytes, 1 dword
 #define HEAD_OFFSET 4
@@ -61,9 +71,9 @@
 #define likely(x)       __builtin_expect((x),1)
 #define unlikely(x)     __builtin_expect((x),0)
 
-// #define CONTROL_MSG
+// #define CONTROL_MSG // uncomment to enable control messages
 
-#ifdef CONTROL_MSG
+// #ifdef CONTROL_MSG
 
 #define REGISTERS_PER_APP 8
 typedef struct pcie_block {
@@ -78,17 +88,17 @@ typedef struct pcie_block {
     uint32_t padding[8];
 } pcie_block_t;
 
-#else
+// #else
 
-typedef struct pcie_block {
-    uint32_t tail;
-    uint32_t head;
-    uint32_t kmem_low;
-    uint32_t kmem_high;
-    uint32_t padding[12];
-} pcie_block_t;
+// typedef struct pcie_block {
+//     uint32_t tail;
+//     uint32_t head;
+//     uint32_t kmem_low;
+//     uint32_t kmem_high;
+//     uint32_t padding[12];
+// } pcie_block_t;
 
-#endif // CONTROL_MSG
+// #endif // CONTROL_MSG
 
 typedef struct block {
     uint32_t pdu_id;
@@ -112,6 +122,7 @@ typedef struct {
     uint32_t* head_ptr;
     uint32_t cpu_tail;
     uint32_t cpu_head;
+    uint32_t last_cpu_head;
     uint32_t c2f_cpu_tail;
     uint32_t nb_head_updates;
     int app_id;

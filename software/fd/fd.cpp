@@ -47,6 +47,7 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
         return -1;
     }
 
+    // FIXME(sadok) use __sync_fetch_and_add to update atomically
     return nb_open_sockets++;
 }
 
@@ -59,7 +60,6 @@ int bind(
 )
 {
     socket_internal* socket = &open_sockets[sockfd];
-    unsigned nb_rules = addrlen;
 
     // FIXME(sadok) we currently only bind sockets on app 0
     if (socket->app_id != 0) {
@@ -67,10 +67,16 @@ int bind(
         return 0;
     }
 
+    #ifdef CONTROL_MSG
+    unsigned nb_rules = addrlen;
     if (send_control_message(socket, nb_rules, nb_queues)) {
         std::cerr << "Could not send control message" << std::endl;
         return -1;
     }
+    #else 
+    (void) addrlen;// avoid unused parameter warning
+    (void) nb_queues;
+    #endif
 
     return 0;
 }
