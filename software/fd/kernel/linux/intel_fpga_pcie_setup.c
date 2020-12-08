@@ -431,7 +431,7 @@ static int map_bars_default(struct pci_dev *dev)
     }
 
     for (i = 0; i < 6; ++i) {
-        printk("Mapping BAR: %i", i);
+        printk("Mapping BAR: %i\n", i);
         len = pci_resource_len(dev, i);
         if (len != 0) {
             dev_bk->bar[i].len = (ssize_t) len;
