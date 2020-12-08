@@ -133,11 +133,11 @@ static void* get_huge_pages(int app_id, size_t size) {
 }
 
 // FIXME(sadok) use random value
-// FIXME(sadok) use 128 bit value
 // TODO(sadok) move it to socket struct
-static const uint32_t buf_sig = 0xbabeface;
+static uint128_t buf_sig = ((uint128_t) 0xbabefacebabeface << 64 |
+                            (uint128_t) 0xbabefacebabeface);
 
-static inline void fill_buf_sigs(uint32_t* start, uint32_t nb_flits)
+static inline void fill_buf_sigs(uint128_t* start, uint32_t nb_flits)
 {
     // FIXME(sadok) use 128 bit instructions
     for (uint32_t i = 0; i < nb_flits; i++) {
@@ -173,7 +173,8 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
     // fill buffer with signatures so that we can identify when packets are
     // written
-    fill_buf_sigs(socket_entry->kdata + 16, (f2c_allocated_size-1)/64);
+    fill_buf_sigs((uint128_t*) (socket_entry->kdata + 16),
+        (f2c_allocated_size-1)/64);
 
     pcie_block_t *global_block; // The global 512-bit register array.
     global_block = (pcie_block_t *) socket_entry->kdata;
@@ -218,9 +219,9 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     uint32_t* kdata = socket_entry->kdata;
 
     // no new packet
-    if (unlikely(kdata[(cpu_head + 1) * 16] == buf_sig)) {
-        return 0;
-    }
+    // if (unlikely(kdata[(cpu_head + 1) * 16] == buf_sig)) {
+    //     return 0;
+    // }
 
     *buf = &kdata[(cpu_head + 1) * 16];
     uint8_t* my_buf = (uint8_t*) *buf;
@@ -232,7 +233,7 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     // at once?
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
         // check if first flit of the packet was written by the FPGA
-        if (unlikely(*((uint32_t*) my_buf) == buf_sig)) {
+        if (unlikely(*((uint128_t*) my_buf) == buf_sig)) {
             break;
         }
 
@@ -280,12 +281,12 @@ void advance_ring_buffer(socket_internal* socket_entry)
 
     // buffer wrapped, fill until the end
     if (last_cpu_head > cpu_head) {
-        fill_buf_sigs(socket_entry->kdata + (last_cpu_head + 1) * 16,
+        fill_buf_sigs((uint128_t*) (socket_entry->kdata + (last_cpu_head + 1) * 16),
             (f2c_allocated_size)/64 - last_cpu_head - 1);
         last_cpu_head = 0;
     }
 
-    fill_buf_sigs(socket_entry->kdata + (last_cpu_head + 1) * 16,
+    fill_buf_sigs((uint128_t*) (socket_entry->kdata + (last_cpu_head + 1) * 16),
         cpu_head - last_cpu_head);
 
     asm volatile ("" : : : "memory"); // compiler memory barrier

@@ -142,4 +142,8 @@ void fill_block(uint32_t *addr, block_s *block);
 uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
                        block_s *block, uint32_t *kdata);
 
+// TODO(sadok) do we care about compiling on something other than gcc?
+typedef __int128 int128_t;
+typedef unsigned __int128 uint128_t;
+
 #endif // PCIE_H
