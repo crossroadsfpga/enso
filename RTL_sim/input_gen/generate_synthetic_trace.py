@@ -1,6 +1,7 @@
 #! /usr/bin/env python3.8
 
 import binascii
+import ipaddress
 import math
 import sys
 
@@ -14,9 +15,10 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest):
     ipv4_len = pkt_size - 14 - 4
     counter_size = math.ceil(math.log2(nb_pkts))
     for i in range(nb_dest):
+        src_ip = ipaddress.ip_address('192.168.0.0') + i
         pkt = (
             Ether() /
-            IP(dst='192.168.1.1', src=f'192.168.0.{i}', len=ipv4_len) /
+            IP(dst='192.168.1.1', src=str(src_ip), len=ipv4_len) /
             TCP(dport=80, sport=8080, flags='S')
         )
 
