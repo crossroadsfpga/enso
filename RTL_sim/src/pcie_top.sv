@@ -175,6 +175,8 @@ logic                     tail_wr_en;
 logic                     queue_rd_en;
 logic [APP_IDX_WIDTH-1:0] f2c_rd_queue;
 logic [APP_IDX_WIDTH-1:0] f2c_wr_queue;
+logic [RB_AWIDTH-1:0]     q_table_heads_wr_data_b_r;
+logic [RB_AWIDTH-1:0]     q_table_heads_wr_data_b_r2;
 logic [RB_AWIDTH-1:0]     hold_tail;
 logic [RB_AWIDTH-1:0]     new_tail;
 
@@ -412,6 +414,9 @@ always@(posedge pcie_clk)begin
     q_table_h_addrs_rd_en_a_r <= q_table_h_addrs_rd_en_a;
     q_table_h_addrs_rd_en_a_r2 <= q_table_h_addrs_rd_en_a_r;
 
+    q_table_heads_wr_data_b_r <= q_table_heads_wr_data_b;
+    q_table_heads_wr_data_b_r2 <= q_table_heads_wr_data_b;
+
     if (tail_wr_en) begin
         hold_tail <= new_tail;
     end
@@ -442,6 +447,14 @@ always_comb begin
         q_table_heads_rd_en_a = 1;
         q_table_l_addrs_rd_en_a = 1;
         q_table_h_addrs_rd_en_a = 1;
+
+        // Concurrent head write from PCIe or JTAG, we bypass the read and use
+        // the new written value instead. This is done to prevent concurrent
+        // read and write to the same address, which causes undefined behavior.
+        if ((q_table_heads_addr_a == q_table_heads_addr_b) 
+                && q_table_heads_wr_en_b) begin
+            q_table_heads_rd_en_a = 0;
+        end
     end else if (tail_wr_en) begin
         q_table_tails_wr_en_a = 1;
         q_table_tails_addr_a = f2c_wr_queue;
@@ -455,7 +468,14 @@ always_comb begin
     end else begin
         f2c_tail = hold_tail;
     end
-    f2c_head = q_table_heads_rd_data_a;
+
+    if (q_table_heads_rd_en_a_r2) begin
+        f2c_head = q_table_heads_rd_data_a;
+    end else begin
+        // return the delayed concurrent write
+        f2c_head = q_table_heads_wr_data_b_r2;
+    end
+
     f2c_kmem_addr[31:0] = q_table_l_addrs_rd_data_a;
     f2c_kmem_addr[63:32] = q_table_h_addrs_rd_data_a;
 end
