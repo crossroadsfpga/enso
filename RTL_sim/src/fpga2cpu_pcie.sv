@@ -85,6 +85,15 @@ logic                 hold_tail;
 logic [31:0] missing_flits;
 logic [3:0]  missing_flits_in_transfer;
 
+logic [31:0] dma_queue_full_cnt_r;
+logic [31:0] cpu_buf_full_cnt_r;
+
+logic [63:0]  pcie_bas_address_r;
+logic [63:0]  pcie_bas_byteenable_r;
+logic         pcie_bas_write_r;
+logic [511:0] pcie_bas_writedata_r;
+logic [3:0]   pcie_bas_burstcount_r;
+
 logic rst_r;
 
 typedef enum
@@ -131,13 +140,24 @@ always @(posedge clk) begin
     queue_rd_en <= 0;
     pkt_buf_rd_en <= 0;
     desc_buf_rd_en <= 0;
+    
+    dma_queue_full_cnt <= dma_queue_full_cnt_r;
+    cpu_buf_full_cnt <= cpu_buf_full_cnt_r;
+
+    if (!pcie_bas_waitrequest) begin
+        pcie_bas_address <= pcie_bas_address_r;
+        pcie_bas_byteenable <= pcie_bas_byteenable_r;
+        pcie_bas_write <= pcie_bas_write_r;
+        pcie_bas_writedata <= pcie_bas_writedata_r;
+        pcie_bas_burstcount <= pcie_bas_burstcount_r;
+    end
 
     rst_r <= rst;
     if (rst_r) begin
         state <= IDLE;
-        dma_queue_full_cnt <= 0;
-        cpu_buf_full_cnt <= 0;
-        pcie_bas_write <= 0;
+        dma_queue_full_cnt_r <= 0;
+        cpu_buf_full_cnt_r <= 0;
+        pcie_bas_write_r <= 0;
         cur_desc_valid <= 0;
         pref_desc_valid <= 0;
         wait_for_pref_desc <= 0;
@@ -168,7 +188,7 @@ always @(posedge clk) begin
 
                 // a DMA may have finished, ensure write is unset
                 if (!pcie_bas_waitrequest) begin
-                    pcie_bas_write <= 0;
+                    pcie_bas_write_r <= 0;
                 end
             end
             START_BURST: begin
@@ -219,14 +239,14 @@ always @(posedge clk) begin
                     end
 
                     // skips the first block
-                    pcie_bas_address <= cur_kmem_addr + 64 * (1 + cur_tail)
+                    pcie_bas_address_r <= cur_kmem_addr + 64 * (1 + cur_tail)
                                         + req_offset;
-                    
-                    pcie_bas_byteenable <= 64'hffffffffffffffff;
-                    pcie_bas_writedata <= pkt_buf_rd_data.data;
+
+                    pcie_bas_byteenable_r <= 64'hffffffffffffffff;
+                    pcie_bas_writedata_r <= pkt_buf_rd_data.data;
                     pkt_buf_rd_en <= 1;
-                    pcie_bas_write <= 1;
-                    pcie_bas_burstcount <= flits_in_transfer;
+                    pcie_bas_write_r <= 1;
+                    pcie_bas_burstcount_r <= flits_in_transfer;
 
                     if (missing_flits > 1) begin
                         state <= COMPLETE_BURST;
@@ -234,16 +254,18 @@ always @(posedge clk) begin
                         missing_flits_in_transfer <= flits_in_transfer - 1;
                     end else begin
                         // TODO(sadok) handle unaligned cases here
-                        // pcie_bas_byteenable <= ;
+                        // pcie_bas_byteenable_r <= ;
                         state <= DONE;
                         assert(pkt_buf_rd_data.eop);
                     end
                 end else begin
                     if (pcie_bas_waitrequest) begin
-                        dma_queue_full_cnt <= dma_queue_full_cnt + 1;
+                        dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
+                    end else begin
+                        pcie_bas_write_r <= 0;
                     end
                     if (free_slot < cur_desc.size) begin
-                        cpu_buf_full_cnt <= cpu_buf_full_cnt + 1;
+                        cpu_buf_full_cnt_r <= cpu_buf_full_cnt_r + 1;
                         
                         // TODO(sadok) Should we drop the packet instead of
                         // waiting?
@@ -254,11 +276,6 @@ always @(posedge clk) begin
                         cur_desc_valid = 0;
                         rd_queue <= cur_desc.queue_id;
                         queue_rd_en <= 1;
-                    end
-
-                    // a DMA may have finished, ensure write is unset
-                    if (!pcie_bas_waitrequest) begin
-                        pcie_bas_write <= 0;
                     end
                 end
 
@@ -271,12 +288,11 @@ always @(posedge clk) begin
 
                     // subsequent bursts from the same transfer do not need to
                     // set the address
-                    // pcie_bas_address <= 0;
-                    pcie_bas_byteenable <= 64'hffffffffffffffff;
-                    pcie_bas_writedata <= pkt_buf_rd_data.data;
+                    pcie_bas_byteenable_r <= 64'hffffffffffffffff;
+                    pcie_bas_writedata_r <= pkt_buf_rd_data.data;
                     pkt_buf_rd_en <= 1;
-                    pcie_bas_write <= 1;
-                    pcie_bas_burstcount <= 0;
+                    pcie_bas_write_r <= 1;
+                    pcie_bas_burstcount_r <= 0;
 
                     if (missing_flits_in_transfer == 1) begin
                         if (missing_flits > 1) begin
@@ -284,7 +300,7 @@ always @(posedge clk) begin
                             assert(!pkt_buf_rd_data.eop);
                         end else begin
                             // TODO(sadok) handle unaligned cases here
-                            // pcie_bas_byteenable <= ;
+                            // pcie_bas_byteenable_r <= ;
                             state <= DONE;
                             assert(pkt_buf_rd_data.eop);
                         end
@@ -294,9 +310,9 @@ always @(posedge clk) begin
 
                     // a DMA may have finished, ensure write is unset
                     if (!pcie_bas_waitrequest) begin
-                        pcie_bas_write <= 0;
+                        pcie_bas_write_r <= 0;
                     end else begin
-                        dma_queue_full_cnt <= dma_queue_full_cnt + 1;
+                        dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
                     end
                 end
 
@@ -306,11 +322,11 @@ always @(posedge clk) begin
                 if (!pcie_bas_waitrequest) begin // done with previous transfer
                     automatic logic [RB_AWIDTH-1:0] new_tail = get_new_pointer(
                         cur_tail, cur_desc.size);
-                    pcie_bas_address <= cur_kmem_addr;
-                    pcie_bas_byteenable <= 64'h000000000000000f;
-                    pcie_bas_writedata <= {480'h0, new_tail};
-                    pcie_bas_write <= 1;
-                    pcie_bas_burstcount <= 1;
+                    pcie_bas_address_r <= cur_kmem_addr;
+                    pcie_bas_byteenable_r <= 64'h000000000000000f;
+                    pcie_bas_writedata_r <= {480'h0, new_tail};
+                    pcie_bas_write_r <= 1;
+                    pcie_bas_burstcount_r <= 1;
 
                     // update tail
                     out_tail <= new_tail;
@@ -360,7 +376,7 @@ always @(posedge clk) begin
                         state <= IDLE;
                     end
                 end else begin
-                    dma_queue_full_cnt <= dma_queue_full_cnt + 1;
+                    dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
                 end
             end
             default: state <= IDLE;
