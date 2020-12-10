@@ -9,7 +9,7 @@
 typedef unsigned short sa_family_t;
 typedef unsigned int socklen_t;
 
-#define MAX_NB_SOCKETS 1024
+#define MAX_NB_SOCKETS 16384
 
 int socket(int domain, int type, int protocol);
 
