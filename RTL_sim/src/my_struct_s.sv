@@ -91,8 +91,15 @@ localparam STATS_REGS_WIDTH = ($clog2(NB_STATUS_REGS));
 localparam JTAG_ADDR_WIDTH = ($clog2(NB_STATUS_REGS+1)); // includes control reg
 
 // queue table that keeps state for every queue
-localparam QUEUE_TABLE_DEPTH = MAX_NB_APPS;
-localparam QUEUE_TABLE_AWIDTH = ($clog2(QUEUE_TABLE_DEPTH));
+localparam PKT_Q_TABLE_DEPTH = MAX_NB_APPS;
+localparam PKT_Q_TABLE_AWIDTH = ($clog2(PKT_Q_TABLE_DEPTH));
+// TODO(sadok) we may save space by only holding an offset to kmem address,
+// we also do not need 32 bits for the tail and head 
+localparam PKT_Q_TABLE_TAILS_DWIDTH = 32;
+localparam PKT_Q_TABLE_HEADS_DWIDTH = 32;
+localparam PKT_Q_TABLE_L_ADDRS_DWIDTH = 32;
+localparam PKT_Q_TABLE_H_ADDRS_DWIDTH = 32;
+
 // TODO(sadok) we may save space by only holding an offset to kmem address,
 // we also do not need 32 bits for the tail and head 
 localparam QUEUE_TABLE_TAILS_DWIDTH = 32;
