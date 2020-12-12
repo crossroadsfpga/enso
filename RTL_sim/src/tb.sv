@@ -24,7 +24,7 @@ localparam PACE = 200/`RATE; // assume 400MHz clock and 1 flit/cycle, max 200Gbp
 // size of the host buffer used by each queue (in flits)
 // localparam RAM_BUF_SIZE = 65535;
 // localparam RAM_BUF_SIZE = 8191;
-localparam RAM_BUF_SIZE = 255;
+localparam RAM_BUF_SIZE = 8167;
 localparam ALLOC_RAM_BUF_SIZE = RAM_BUF_SIZE + 64; // we allocate an extra page
 localparam RAM_ADDR_LEN = $clog2(ALLOC_RAM_BUF_SIZE);
 localparam DMA_DELAY = 36;
@@ -259,7 +259,11 @@ always #(period_esram_ref) clk_esram_ref = ~clk_esram_ref;
 always #(period_esram) clk_esram = ~clk_esram;
 always #(period_pcie) begin
     clk_pcie = ~clk_pcie;
-    `hdisplay(("-----------"));
+
+    // print two lines at every clock
+    // if (cnt >= 7000 && !(cnt >= stop || error_termination)) begin
+    //     `hdisplay(("-----------"));
+    // end
 end
 
 //
@@ -540,10 +544,10 @@ always @(posedge clk_pcie) begin
                     pcie_write_0 <= 1;
                     pcie_address_0 <= cfg_queue << 12;
                     pcie_writedata_0 <= 0;
-                    pcie_writedata_0[127:64] <= 64'habcd000000000000 +
-                                                (cfg_queue << 32);
+                    pcie_writedata_0[192 +: 64] <= 64'habcd000000000000 +
+                                                   (cfg_queue << 32);
                     pcie_byteenable_0 <= 0;
-                    pcie_byteenable_0[15:8] <= 8'hff;
+                    pcie_byteenable_0[24 +: 8] <= 8'hff;
 
                     if (cfg_queue == nb_queues - 1) begin
                         pcie_state <= PCIE_READ_F2C_QUEUE;
@@ -672,9 +676,13 @@ always @(posedge clk_pcie) begin
 
                     // check queue
                     cur_queue = pcie_bas_address[32 +: APP_IDX_WIDTH];
+                    // $display("expected_queue: %d  cur_queue: %d", expected_queue, cur_queue);
                     assert(expected_queue == cur_queue);
+                    if (expected_queue != cur_queue) begin
+                        hterminate("Unexpected queue");
+                    end
 
-                    cur_address = pcie_bas_address[RAM_ADDR_LEN-1:6] 
+                    cur_address = pcie_bas_address[6 +: RAM_ADDR_LEN] 
                                   + burst_offset;
 
                     // check if address out of bound
@@ -686,19 +694,18 @@ always @(posedge clk_pcie) begin
                     end
 
                     // tail update
-                    // Adjust head_update_delay to simulate a DMA delay
-                    if (cur_address == 0 && head_update_delay == 5) begin
+                    if (cur_address != 0 && cur_address < RAM_BUF_SIZE) begin
                         // update head on the FPGA
                         pcie_write_0 <= 1;
                         pcie_address_0 <= cur_queue << 12;
                         pcie_writedata_0 <= 0;
-                        pcie_writedata_0[63:32] <= pcie_bas_writedata[31:0];
+                        // pcie_writedata_0[63:32] <= pcie_bas_writedata[31:0];
+                        $display("cur_address: %h", cur_address);
+                        pcie_writedata_0[160 +: 32] <= cur_address;
                         pcie_byteenable_0 <= 0;
-                        pcie_byteenable_0[7:4] <= 8'hff;
+                        pcie_byteenable_0[20 +: 8] <= 8'hff;
 
                         head_update_delay <= 0;
-                    end else begin
-                        head_update_delay <= head_update_delay + 1;
                     end
                 end
             end
@@ -748,7 +755,7 @@ always @(posedge clk_status) begin
                         $display("Queue %d", queue);
                         // printing only the beginning of the RAM buffer,
                         // may print the entire thing instead:
-                        for (i = 0; i < 25; i = i + 1) begin
+                        for (i = 0; i < 8; i = i + 1) begin
                         // for (i = 0; i < ALLOC_RAM_BUF_SIZE; i = i + 1) begin
                             for (j = 0; j < 8; j = j + 1) begin
                                 $write("%h:", i*64+j*8);
@@ -771,7 +778,7 @@ always @(posedge clk_status) begin
                 if (top_readdata_valid) begin
                     $display("%d: 0x%8h", s_addr[6:0], top_readdata);
 
-                    if (s_addr == (30'h2A00_0000 + 30'd4 * nb_queues)) begin
+                    if (s_addr == (30'h2A00_0000 + 30'd8 * nb_queues)) begin
                         conf_state <= IDLE;
                     end else begin
                         s_addr <= s_addr + 1;

@@ -136,10 +136,10 @@ always @(posedge clk) begin
                     pcie_write_0 <= 1;
                     pcie_address_0 <= cfg_queue << 12;
                     pcie_writedata_0 <= 0;
-                    pcie_writedata_0[127:64] <= 64'habcd000000000000 +
-                                                (cfg_queue << 32);
+                    pcie_writedata_0[192 +: 64] <= 64'habcd000000000000 +
+                                                   (cfg_queue << 32);
                     pcie_byteenable_0 <= 0;
-                    pcie_byteenable_0[15:8] <= 8'hff;
+                    pcie_byteenable_0[24 +: 8] <= 8'hff;
 
                     if (cfg_queue == nb_queues - 1) begin
                         control_state <= WAIT;
@@ -195,7 +195,7 @@ always @(posedge clk) begin
                     cur_queue = pcie_bas_address[32 +: APP_IDX_WIDTH];
                     assert(expected_queue == cur_queue);
 
-                    cur_address = pcie_bas_address[RAM_ADDR_LEN-1:6] 
+                    cur_address = pcie_bas_address[6 +: RAM_ADDR_LEN] 
                                   + burst_offset;
 
                     // check if address out of bound
@@ -382,7 +382,7 @@ always @(posedge clk_status) begin
                 if (status_readdata_valid) begin
                     $display("%d: 0x%8h", status_addr[6:0], status_readdata);
                     if (status_addr == (
-                            30'h2A00_0000 + 30'd3 + 30'd4 * nb_queues)) begin
+                            30'h2A00_0000 + 30'd8 * nb_queues)) begin
                         $display("done");
                         $finish;
                     end else begin

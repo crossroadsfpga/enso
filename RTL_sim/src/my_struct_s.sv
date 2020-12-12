@@ -100,12 +100,18 @@ localparam PKT_Q_TABLE_HEADS_DWIDTH = 32;
 localparam PKT_Q_TABLE_L_ADDRS_DWIDTH = 32;
 localparam PKT_Q_TABLE_H_ADDRS_DWIDTH = 32;
 
+// TODO(sadok) For now every descriptor queue has only one associated packet
+// queue, this should change. There are also lots of tricks we can use to save
+// space, e.g., reduce number of bits for addresses given that they are aligned
+// to page size, group some queue addresses together and keep only an offset.
+localparam DSC_Q_TABLE_DEPTH = PKT_Q_TABLE_DEPTH;
+localparam DSC_Q_TABLE_AWIDTH = ($clog2(DSC_Q_TABLE_DEPTH));
 // TODO(sadok) we may save space by only holding an offset to kmem address,
 // we also do not need 32 bits for the tail and head 
-localparam QUEUE_TABLE_TAILS_DWIDTH = 32;
-localparam QUEUE_TABLE_HEADS_DWIDTH = 32;
-localparam QUEUE_TABLE_L_ADDRS_DWIDTH = 32;
-localparam QUEUE_TABLE_H_ADDRS_DWIDTH = 32;
+localparam DSC_Q_TABLE_TAILS_DWIDTH = 32;
+localparam DSC_Q_TABLE_HEADS_DWIDTH = 32;
+localparam DSC_Q_TABLE_L_ADDRS_DWIDTH = 32;
+localparam DSC_Q_TABLE_H_ADDRS_DWIDTH = 32;
 
 typedef struct packed
 {
