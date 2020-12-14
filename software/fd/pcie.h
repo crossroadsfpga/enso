@@ -51,7 +51,7 @@
 #define HEAD_OFFSET 4
 #define C2F_TAIL_OFFSET 16
 
-#define MAX_NB_APPS 4096 // If we change this, must also change hardware
+#define MAX_NB_APPS 16384 // If we change this, must also change hardware
 
 #define PDU_ID_OFFSET 0
 #define PDU_PORTS_OFFSET 1
