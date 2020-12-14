@@ -77,7 +77,7 @@ localparam C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
 
 localparam MAX_PKT_SIZE = 24; // in 512 bits
 
-localparam MAX_NB_APPS = 4096; // If we change this, must also change software
+localparam MAX_NB_APPS = 256; // If we change this, must also change software
 localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
 localparam FLITS_PER_PAGE = 64;
 localparam RB_BRAM_OFFSET = MAX_NB_APPS * FLITS_PER_PAGE; // in number of flits
@@ -157,16 +157,11 @@ localparam PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 
 typedef struct packed
 {
-    logic [13:0] func_nb; // function number
-    logic [7:0] desc_id; // descriptor ID (8 bits)
-    logic [2:0] app_spec; // application specific
-    logic reserved;
-    logic single_src; // single source
-    logic immediate;
-    logic [17:0] nb_dwords; // number of dwords up to 1MB
-    logic [63:0] dst_addr; // destination PCIe address
-    logic [63:0] saddr_data; // src addr, or data when `immediate` is set
-} pcie_desc_t;
+    logic [319:0] pad;
+    logic [63:0]  tail;
+    logic [63:0]  queue_id;
+    logic [63:0]  signal; // should always be 0x1
+} pcie_pkt_desc_t;
 
 typedef struct packed
 {

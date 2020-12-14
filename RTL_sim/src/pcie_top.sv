@@ -55,15 +55,18 @@ logic         status_write_r;
 logic [31:0]  status_writedata_r;
 logic [STAT_AWIDTH-1:0] status_addr_sel_r;
 
-logic [31:0] control_reg;
-logic [31:0] control_reg_r;
+localparam NB_CONTROL_REGS = 2;
+logic [31:0] control_regs    [NB_CONTROL_REGS];
+logic [31:0] control_regs_r  [NB_CONTROL_REGS];
+logic [31:0] control_regs_r2 [NB_CONTROL_REGS];
 
 // internal signals
 pcie_block_t pcie_block;
 logic cpu_reg_region;
 logic cpu_reg_region_r1;
 logic cpu_reg_region_r2;
-logic [25:0] rb_size;
+logic [25:0] dsc_rb_size;
+logic [25:0] pkt_rb_size;
 logic internal_update_valid;
 logic [APP_IDX_WIDTH-1:0] page_idx;
 
@@ -100,7 +103,7 @@ logic [APP_IDX_WIDTH-1:0] q_table_addr_pcie;
 logic [APP_IDX_WIDTH-1:0] q_table_addr_jtag_rd_pending;
 logic [APP_IDX_WIDTH-1:0] q_table_addr_pcie_rd_pending;
 
-localparam NB_TABLES = 8;
+localparam NB_TABLES = 8; // number of BRAM tables
 localparam AWIDTH_NB_TABLES = $clog2(NB_TABLES);
 localparam C2F_HEAD_OFFSET = (NB_TABLES + 1) * REG_SIZE;
 
@@ -135,13 +138,12 @@ logic q_table_rd_data_b_pcie_ready;
 logic q_table_rd_data_b_jtag_ready;
 logic q_table_rd_data_b_ready_from_jtag;
 
-logic [RB_AWIDTH-1:0]    f2c_head;
-logic [RB_AWIDTH-1:0]    f2c_tail;
-logic [63:0]             f2c_kmem_addr;
-// logic [511:0]            frb_readdata;
-// logic                    frb_readvalid;
-// logic [PDU_AWIDTH-1:0]   frb_address;
-// logic                    frb_read;
+logic [RB_AWIDTH-1:0]    f2c_dsc_head;
+logic [RB_AWIDTH-1:0]    f2c_dsc_tail;
+logic [63:0]             f2c_dsc_buf_addr;
+logic [RB_AWIDTH-1:0]    f2c_pkt_head;
+logic [RB_AWIDTH-1:0]    f2c_pkt_tail;
+logic [63:0]             f2c_pkt_buf_addr;
 
 logic pcie_reg_read;
 
@@ -155,11 +157,16 @@ logic                     tail_wr_en;
 logic                     queue_rd_en;
 logic [APP_IDX_WIDTH-1:0] f2c_rd_queue;
 logic [APP_IDX_WIDTH-1:0] f2c_wr_queue;
+logic [RB_AWIDTH-1:0]     dsc_q_table_heads_wr_data_b_r;
+logic [RB_AWIDTH-1:0]     dsc_q_table_heads_wr_data_b_r2;
+logic [RB_AWIDTH-1:0]     dsc_q_table_tails_wr_data_a_r;
+logic [RB_AWIDTH-1:0]     dsc_q_table_tails_wr_data_a_r2;
 logic [RB_AWIDTH-1:0]     pkt_q_table_heads_wr_data_b_r;
 logic [RB_AWIDTH-1:0]     pkt_q_table_heads_wr_data_b_r2;
 logic [RB_AWIDTH-1:0]     pkt_q_table_tails_wr_data_a_r;
 logic [RB_AWIDTH-1:0]     pkt_q_table_tails_wr_data_a_r2;
-logic [RB_AWIDTH-1:0]     new_tail;
+logic [RB_AWIDTH-1:0]     new_dsc_tail;
+logic [RB_AWIDTH-1:0]     new_pkt_tail;
 
 // JTAG
 always@(posedge clk_status) begin
@@ -177,7 +184,10 @@ always@(posedge clk_status) begin
     q_table_rd_en_jtag <= 0;
 
     if (!pcie_reset_n) begin
-        control_reg <= 0;
+        integer i;
+        for (i = 0; i < NB_CONTROL_REGS; i = i + 1) begin
+            control_regs[i] <= 0;
+        end
     end
 
     if (q_table_rd_data_b_ready_from_jtag && q_table_rd_pending_from_jtag) begin
@@ -187,30 +197,36 @@ always@(posedge clk_status) begin
     end
 
     if (status_addr_sel_r == PCIE & status_read_r) begin
-        if (jtag_reg == 0) begin
-            status_readdata <= control_reg;
+        if (jtag_reg < NB_CONTROL_REGS) begin
+            status_readdata <= control_regs[jtag_reg];
             status_readdata_valid <= 1;
         end else begin
-            q_table_jtag <= {jtag_reg-1}[AWIDTH_NB_TABLES-1:0];
-            q_table_addr_jtag <= {jtag_reg-1}[AWIDTH_NB_TABLES +:APP_IDX_WIDTH];
+            q_table_jtag <= {jtag_reg-NB_CONTROL_REGS}[AWIDTH_NB_TABLES-1:0];
+            q_table_addr_jtag <=
+                {jtag_reg - NB_CONTROL_REGS}[AWIDTH_NB_TABLES +:APP_IDX_WIDTH];
             q_table_rd_pending_from_jtag <= 1;
             q_table_rd_en_jtag <= 1;
         end
     end
 
     if (status_addr_sel_r == PCIE & status_write_r) begin
-        if (jtag_reg == 0) begin
-            control_reg <= status_writedata_r;
+        if (jtag_reg < NB_CONTROL_REGS) begin
+            control_regs[jtag_reg] <= status_writedata_r;
         end
     end
 end
 
-assign disable_pcie = control_reg_r[0];
-assign rb_size = control_reg_r[26:1];
+assign disable_pcie = control_regs_r2[0][0];
+assign pkt_rb_size = control_regs_r2[0][26:1];
+assign dsc_rb_size = control_regs_r2[1][25:0];
 
 // Avoid short path/long path timing problem.
 always @(posedge pcie_clk) begin
-    control_reg_r <= control_reg;
+    integer i;
+    for (i = 0; i < NB_CONTROL_REGS; i = i + 1) begin
+        control_regs_r[i] <= control_regs[i];
+        control_regs_r2[i] <= control_regs_r[i];
+    end
 end
 
 // we choose the right set of registers based on the page (the page's index LSB
@@ -276,8 +292,6 @@ always@(posedge pcie_clk) begin
         q_table_rd_data_b <= 0;
         c2f_kmem_addr <= 0;
     end else if (pcie_write_0) begin
-        $display("pcie_writedata_0: %h", pcie_writedata_0);
-        $display("pcie_byteenable_0: %h", pcie_byteenable_0);
         // update BRAMs
         // if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
         //     dsc_q_table_tails.wr_data_b <= pcie_writedata_0[0*32 +: 32];
@@ -295,7 +309,6 @@ always@(posedge pcie_clk) begin
             dsc_q_table_l_addrs.addr_b <= page_idx;
         end
         if (pcie_byteenable_0[3*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
-            $display("3: %h", pcie_writedata_0[3*32 +: 32]);
             dsc_q_table_h_addrs.wr_data_b <= pcie_writedata_0[3*32 +: 32];
             dsc_q_table_h_addrs.wr_en_b <= 1;
             dsc_q_table_h_addrs.addr_b <= page_idx;
@@ -458,11 +471,21 @@ typedef enum
 } state_t;
 state_t state;
 
-// the first slot in f2c_kmem_addr is used as the "global reg" includes the
+// FIXME(sadok) this is no longer the case...
+// the first slot in f2c_pkt_buf_addr is used as the "global reg" includes the
 // C2F_head
-assign c2f_head_addr = f2c_kmem_addr + C2F_HEAD_OFFSET;
+// assign c2f_head_addr = f2c_pkt_buf_addr + C2F_HEAD_OFFSET;
 
 always @(posedge pcie_clk)begin
+    dsc_q_table_tails.rd_en_a_r <= dsc_q_table_tails.rd_en_a;
+    dsc_q_table_tails.rd_en_a_r2 <= dsc_q_table_tails.rd_en_a_r;
+    dsc_q_table_heads.rd_en_a_r <= dsc_q_table_heads.rd_en_a;
+    dsc_q_table_heads.rd_en_a_r2 <= dsc_q_table_heads.rd_en_a_r;
+    dsc_q_table_l_addrs.rd_en_a_r <= dsc_q_table_l_addrs.rd_en_a;
+    dsc_q_table_l_addrs.rd_en_a_r2 <= dsc_q_table_l_addrs.rd_en_a_r;
+    dsc_q_table_h_addrs.rd_en_a_r <= dsc_q_table_h_addrs.rd_en_a;
+    dsc_q_table_h_addrs.rd_en_a_r2 <= dsc_q_table_h_addrs.rd_en_a_r;
+
     pkt_q_table_tails.rd_en_a_r <= pkt_q_table_tails.rd_en_a;
     pkt_q_table_tails.rd_en_a_r2 <= pkt_q_table_tails.rd_en_a_r;
     pkt_q_table_heads.rd_en_a_r <= pkt_q_table_heads.rd_en_a;
@@ -474,6 +497,11 @@ always @(posedge pcie_clk)begin
 
     // we used the delayed wr signals for head and tail to use when there are
     // concurrent reads
+    dsc_q_table_heads_wr_data_b_r <= dsc_q_table_heads.wr_data_b;
+    dsc_q_table_heads_wr_data_b_r2 <= dsc_q_table_heads_wr_data_b_r;
+    dsc_q_table_tails_wr_data_a_r <= dsc_q_table_tails.wr_data_a;
+    dsc_q_table_tails_wr_data_a_r2 <= dsc_q_table_tails_wr_data_a_r;
+    
     pkt_q_table_heads_wr_data_b_r <= pkt_q_table_heads.wr_data_b;
     pkt_q_table_heads_wr_data_b_r2 <= pkt_q_table_heads_wr_data_b_r;
     pkt_q_table_tails_wr_data_a_r <= pkt_q_table_tails.wr_data_a;
@@ -481,26 +509,43 @@ always @(posedge pcie_clk)begin
 end
 
 always_comb begin
+    dsc_q_table_tails.addr_a = f2c_rd_queue;
+    dsc_q_table_heads.addr_a = f2c_rd_queue;
+    dsc_q_table_l_addrs.addr_a = f2c_rd_queue;
+    dsc_q_table_h_addrs.addr_a = f2c_rd_queue;
     pkt_q_table_tails.addr_a = f2c_rd_queue;
     pkt_q_table_heads.addr_a = f2c_rd_queue;
     pkt_q_table_l_addrs.addr_a = f2c_rd_queue;
     pkt_q_table_h_addrs.addr_a = f2c_rd_queue;
 
+    dsc_q_table_tails.rd_en_a = 0;
+    dsc_q_table_heads.rd_en_a = 0;
+    dsc_q_table_l_addrs.rd_en_a = 0;
+    dsc_q_table_h_addrs.rd_en_a = 0;
     pkt_q_table_tails.rd_en_a = 0;
     pkt_q_table_heads.rd_en_a = 0;
     pkt_q_table_l_addrs.rd_en_a = 0;
     pkt_q_table_h_addrs.rd_en_a = 0;
 
+    dsc_q_table_tails.wr_en_a = 0;
+    dsc_q_table_heads.wr_en_a = 0;
+    dsc_q_table_l_addrs.wr_en_a = 0;
+    dsc_q_table_h_addrs.wr_en_a = 0;
     pkt_q_table_tails.wr_en_a = 0;
     pkt_q_table_heads.wr_en_a = 0;
     pkt_q_table_l_addrs.wr_en_a = 0;
     pkt_q_table_h_addrs.wr_en_a = 0;
 
-    pkt_q_table_tails.wr_data_a = new_tail;
+    dsc_q_table_tails.wr_data_a = new_dsc_tail;
+    pkt_q_table_tails.wr_data_a = new_pkt_tail;
 
     if (queue_rd_en) begin
         // when reading and writing the same queue, we avoid reading the tail
-        // and instead us the new written tail instead
+        // and use the new written tail instead
+        dsc_q_table_tails.rd_en_a = !tail_wr_en || (f2c_rd_queue != f2c_wr_queue);
+        dsc_q_table_heads.rd_en_a = 1;
+        dsc_q_table_l_addrs.rd_en_a = 1;
+        dsc_q_table_h_addrs.rd_en_a = 1;
         pkt_q_table_tails.rd_en_a = !tail_wr_en || (f2c_rd_queue != f2c_wr_queue);
         pkt_q_table_heads.rd_en_a = 1;
         pkt_q_table_l_addrs.rd_en_a = 1;
@@ -509,33 +554,55 @@ always_comb begin
         // Concurrent head write from PCIe or JTAG, we bypass the read and use
         // the new written value instead. This is done to prevent concurrent
         // read and write to the same address, which causes undefined behavior.
+        if ((dsc_q_table_heads.addr_a == dsc_q_table_heads.addr_b) 
+                && dsc_q_table_heads.wr_en_b) begin
+            dsc_q_table_heads.rd_en_a = 0;
+        end
         if ((pkt_q_table_heads.addr_a == pkt_q_table_heads.addr_b) 
                 && pkt_q_table_heads.wr_en_b) begin
             pkt_q_table_heads.rd_en_a = 0;
         end
     end else if (tail_wr_en) begin
+        dsc_q_table_tails.wr_en_a = 1;
+        dsc_q_table_tails.addr_a = f2c_wr_queue;
         pkt_q_table_tails.wr_en_a = 1;
         pkt_q_table_tails.addr_a = f2c_wr_queue;
     end
 
-    f2c_queue_ready = pkt_q_table_tails.rd_en_a_r2 || pkt_q_table_heads.rd_en_a_r2 
-        || pkt_q_table_l_addrs.rd_en_a_r2 || pkt_q_table_h_addrs.rd_en_a_r2;
+    f2c_queue_ready = 
+        dsc_q_table_tails.rd_en_a_r2   || dsc_q_table_heads.rd_en_a_r2   ||
+        dsc_q_table_l_addrs.rd_en_a_r2 || dsc_q_table_h_addrs.rd_en_a_r2 ||
+        pkt_q_table_tails.rd_en_a_r2   || pkt_q_table_heads.rd_en_a_r2   ||
+        pkt_q_table_l_addrs.rd_en_a_r2 || pkt_q_table_h_addrs.rd_en_a_r2;
 
-    if (pkt_q_table_tails.rd_en_a_r2) begin
-        f2c_tail = pkt_q_table_tails.rd_data_a;
+    if (dsc_q_table_tails.rd_en_a_r2) begin
+        f2c_dsc_tail = dsc_q_table_tails.rd_data_a;
     end else begin
-        f2c_tail = pkt_q_table_tails_wr_data_a_r2;
+        f2c_dsc_tail = dsc_q_table_tails_wr_data_a_r2;
+    end
+    if (pkt_q_table_tails.rd_en_a_r2) begin
+        f2c_pkt_tail = pkt_q_table_tails.rd_data_a;
+    end else begin
+        f2c_pkt_tail = pkt_q_table_tails_wr_data_a_r2;
     end
 
-    if (pkt_q_table_heads.rd_en_a_r2) begin
-        f2c_head = pkt_q_table_heads.rd_data_a;
+    if (dsc_q_table_heads.rd_en_a_r2) begin
+        f2c_dsc_head = dsc_q_table_heads.rd_data_a;
     end else begin
         // return the delayed concurrent write
-        f2c_head = pkt_q_table_heads_wr_data_b_r2;
+        f2c_dsc_head = dsc_q_table_heads_wr_data_b_r2;
+    end
+    if (pkt_q_table_heads.rd_en_a_r2) begin
+        f2c_pkt_head = pkt_q_table_heads.rd_data_a;
+    end else begin
+        // return the delayed concurrent write
+        f2c_pkt_head = pkt_q_table_heads_wr_data_b_r2;
     end
 
-    f2c_kmem_addr[31:0] = pkt_q_table_l_addrs.rd_data_a;
-    f2c_kmem_addr[63:32] = pkt_q_table_h_addrs.rd_data_a;
+    f2c_dsc_buf_addr[31:0] = dsc_q_table_l_addrs.rd_data_a;
+    f2c_dsc_buf_addr[63:32] = dsc_q_table_h_addrs.rd_data_a;
+    f2c_pkt_buf_addr[31:0] = pkt_q_table_l_addrs.rd_data_a;
+    f2c_pkt_buf_addr[63:32] = pkt_q_table_h_addrs.rd_data_a;
 end
 
 // PDU_BUFFER
@@ -546,9 +613,11 @@ always@(posedge pcie_clk) begin
         pcie_readdatavalid_0 <= 0;
     end else begin // if (cpu_reg_region_r2) begin
         pcie_readdata_0 <= {
-            256'h0, c2f_kmem_addr, c2f_head, c2f_tail,
+            128'h0, c2f_kmem_addr, c2f_head, c2f_tail,
             pkt_q_table_h_addrs.rd_data_b, pkt_q_table_l_addrs.rd_data_b,
-            pkt_q_table_heads.rd_data_b, pkt_q_table_tails.rd_data_b
+            pkt_q_table_heads.rd_data_b, pkt_q_table_tails.rd_data_b,
+            dsc_q_table_h_addrs.rd_data_b, dsc_q_table_l_addrs.rd_data_b,
+            dsc_q_table_heads.rd_data_b, dsc_q_table_tails.rd_data_b
         };
         pcie_readdatavalid_0 <= q_table_rd_data_b_pcie_ready;
     end
@@ -619,16 +688,21 @@ fpga2cpu_pcie f2c_inst (
     .desc_buf_wr_data       (pcie_desc_buf_wr_data),
     .desc_buf_wr_en         (pcie_desc_buf_wr_en),
     .desc_buf_occup         (pcie_desc_buf_occup),
-    .in_head                (f2c_head),
-    .in_tail                (f2c_tail),
-    .in_kmem_addr           (f2c_kmem_addr),
+    .in_dsc_head            (f2c_dsc_head),
+    .in_dsc_tail            (f2c_dsc_tail),
+    .in_dsc_buf_addr        (f2c_dsc_buf_addr),
+    .in_pkt_head            (f2c_pkt_head),
+    .in_pkt_tail            (f2c_pkt_tail),
+    .in_pkt_buf_addr        (f2c_pkt_buf_addr),
     .rd_queue               (f2c_rd_queue),
     .queue_ready            (f2c_queue_ready),
-    .out_tail               (new_tail),
+    .out_dsc_tail           (new_dsc_tail),
+    .out_pkt_tail           (new_pkt_tail),
     .wr_queue               (f2c_wr_queue),
     .queue_rd_en            (queue_rd_en),
     .tail_wr_en             (tail_wr_en),
-    .rb_size                ({5'b0, rb_size}),
+    .dsc_rb_size            ({5'b0, dsc_rb_size}),
+    .pkt_rb_size            ({5'b0, pkt_rb_size}),
     .pcie_bas_waitrequest   (pcie_bas_waitrequest),
     .pcie_bas_address       (pcie_bas_address),
     .pcie_bas_byteenable    (pcie_bas_byteenable),
