@@ -331,19 +331,19 @@ void advance_ring_buffer(socket_internal* socket_entry)
 
 int dma_finish(socket_internal* socket_entry)
 {
-    (void) socket_entry; // avoid unused parameter warning
-    // uint32_t* kdata = socket_entry->kdata;
+    pcie_block_t* uio_data_bar2 = socket_entry->uio_data_bar2;
 
-    // FIXME(sadok) deallocate huge page instead of kernel memory
+    uio_data_bar2->dsc_buf_mem_low = 0;
+    uio_data_bar2->dsc_buf_mem_high = 0;
+    uio_data_bar2->pkt_buf_mem_low = 0;
+    uio_data_bar2->pkt_buf_mem_high = 0;
 
-    // int result = socket_entry->dev->kmem_munmap(
-    //     reinterpret_cast<void*>(kdata),
-    //     allocated_size
-    // );
-    // if (result != 1) {
-    //     std::cerr << "Could not unmap kernel memory!" << std::endl;
-    //     return -1;
-    // }
+    if (alloc_single_buf) {
+        munmap(socket_entry->dsc_buf, ALIGNED_F2C_DSC_BUF_SIZE);
+        munmap(socket_entry->pkt_buf, ALIGNED_F2C_PKT_BUF_SIZE);
+    } else {
+        munmap(socket_entry->dsc_buf, BUF_PAGE_SIZE);
+    }
 
     return 0;
 }

@@ -49,6 +49,8 @@ int main(int argc, const char* argv[])
     unsigned nb_rules = atoi(argv[3]);
     int nb_queues = atoi(argv[4]);
 
+    signal(SIGINT, int_handler);
+
     std::cout << "running test with " << nb_rules << " rules" << std::endl;
     
     std::thread socket_thread = std::thread([&recv_bytes, port, nb_rules, 
