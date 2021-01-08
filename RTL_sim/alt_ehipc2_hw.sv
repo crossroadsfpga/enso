@@ -227,20 +227,13 @@ module alt_ehipc2_hw (
     logic [63:0]  pcie_byteenable_0;
 
     // eSRAM signals
-    logic         clk_datamover;
-    logic         rst_datamover;
-    logic         esram_pkt_buf_wren;
-`ifdef USE_BRAM
-    logic [14:0]  esram_pkt_buf_rdaddress;
-    logic [14:0]  esram_pkt_buf_wraddress;
-    logic [14:0]  reg_esram_pkt_buf_wraddress;
-    logic [14:0]  reg_esram_pkt_buf_rdaddress;
-`else
-    logic [16:0]  esram_pkt_buf_rdaddress;
-    logic [16:0]  esram_pkt_buf_wraddress;
-    logic [16:0]  reg_esram_pkt_buf_wraddress;
-    logic [16:0]  reg_esram_pkt_buf_rdaddress;
-`endif
+    logic                      clk_datamover;
+    logic                      rst_datamover;
+    logic                      esram_pkt_buf_wren;
+    logic [PKTBUF_AWIDTH-1:0]  esram_pkt_buf_rdaddress;
+    logic [PKTBUF_AWIDTH-1:0]  esram_pkt_buf_wraddress;
+    logic [PKTBUF_AWIDTH-1:0]  reg_esram_pkt_buf_wraddress;
+    logic [PKTBUF_AWIDTH-1:0]  reg_esram_pkt_buf_rdaddress;
 
     logic [519:0] esram_pkt_buf_wrdata;
     logic         esram_pkt_buf_rden;

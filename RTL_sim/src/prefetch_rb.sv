@@ -90,10 +90,10 @@ always @(posedge clk) begin
             end
 
             if (real_occup > NB_PREFETCH_REGS) begin
-                bram_rd_addr <= tail + NB_PREFETCH_REGS;
+                bram_rd_addr <= {tail + NB_PREFETCH_REGS}[AWIDTH-1:0];
                 bram_rd_en <= 1;
             end
-            tail = tail + 1;
+            tail = tail + 1'b1;
         end
 
         bram_rd_en_r1 <= bram_rd_en;
@@ -103,8 +103,8 @@ always @(posedge clk) begin
 
         // Store result of a prefetch
         if (bram_rd_en_r2) begin
-            automatic logic [AWIDTH-1:0] pref_dest = tail - bram_rd_addr_r2 +
-                (NB_PREFETCH_REGS - 1);
+            automatic logic [AWIDTH-1:0] pref_dest = {tail - bram_rd_addr_r2 +
+                (NB_PREFETCH_REGS - 1)}[AWIDTH-1:0];
             pending_rd_data[pref_dest] <= bram_rd_data;
         end
 
@@ -117,7 +117,7 @@ always @(posedge clk) begin
                 bram_wr_addr <= head;
                 bram_wr_en <= 1;
             end
-            head <= head + 1;
+            head <= head + 1'b1;
         end
     end
 end

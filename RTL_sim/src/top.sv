@@ -64,13 +64,13 @@ module top (
     input  logic [63:0]  pcie_byteenable_1,
 
     //eSRAM
-    output  logic                    reg_esram_pkt_buf_wren,
-    output  logic [16:0]             reg_esram_pkt_buf_wraddress,
-    output  logic [519:0]            reg_esram_pkt_buf_wrdata,
-    output  logic                    reg_esram_pkt_buf_rden,
-    output  logic [16:0]             reg_esram_pkt_buf_rdaddress,
-    input   logic                    esram_pkt_buf_rd_valid,
-    input   logic [519:0]            esram_pkt_buf_rddata,
+    output  logic                     reg_esram_pkt_buf_wren,
+    output  logic [PKTBUF_AWIDTH-1:0] reg_esram_pkt_buf_wraddress,
+    output  logic [519:0]             reg_esram_pkt_buf_wrdata,
+    output  logic                     reg_esram_pkt_buf_rden,
+    output  logic [PKTBUF_AWIDTH-1:0] reg_esram_pkt_buf_rdaddress,
+    input   logic                     esram_pkt_buf_rd_valid,
+    input   logic [519:0]             esram_pkt_buf_rddata,
 
     //JTAG
     input   logic                    clk_status,
@@ -129,13 +129,13 @@ logic           reg_out_almost_full;
 logic           dm_disable_pcie_r1;
 logic           dm_disable_pcie;
 
-logic           esram_pkt_buf_wren;
-logic [16:0]    esram_pkt_buf_wraddress;
-logic [519:0]   esram_pkt_buf_wrdata;
-logic           esram_pkt_buf_rden;
-logic [16:0]    esram_pkt_buf_rdaddress;
-logic           reg_esram_pkt_buf_rd_valid;
-logic [519:0]   reg_esram_pkt_buf_rddata;
+logic                     esram_pkt_buf_wren;
+logic [PKTBUF_AWIDTH-1:0] esram_pkt_buf_wraddress;
+logic [519:0]             esram_pkt_buf_wrdata;
+logic                     esram_pkt_buf_rden;
+logic [PKTBUF_AWIDTH-1:0] esram_pkt_buf_rdaddress;
+logic                     reg_esram_pkt_buf_rd_valid;
+logic [519:0]             reg_esram_pkt_buf_rddata;
 //end of Register I/O
 
 logic          input_comp_eth_valid;                        
@@ -769,7 +769,7 @@ parser_out_fifo (
     .in_reset_n        (!rst_datamover),      
     .out_clk           (clk),    
     .out_reset_n       (!rst),      
-    .in_csr_address    (0),
+    .in_csr_address    (1'b0),
     .in_csr_read       (1'b1),
     .in_csr_write      (1'b0),
     .in_csr_readdata   (parser_out_meta_csr_readdata),
@@ -825,7 +825,7 @@ flow_director_out_fifo (
     .in_reset_n        (!rst),      
     .out_clk           (clk_datamover),    
     .out_reset_n       (!rst_datamover),      
-    .in_csr_address    (0),
+    .in_csr_address    (1'b0),
     .in_csr_read       (1'b1),
     .in_csr_write      (1'b0),
     .in_csr_readdata   (fdw_out_meta_csr_readdata),
@@ -902,7 +902,7 @@ dm2pcie_fifo (
     .in_reset_n        (!rst_datamover),      
     .out_clk           (clk_pcie),    
     .out_reset_n       (!rst_pcie),      
-    .in_csr_address    (0),
+    .in_csr_address    (1'b0),
     .in_csr_read       (1'b1),
     .in_csr_write      (1'b0),
     .in_csr_readdata   (dm_pcie_pkt_in_csr_readdata),
@@ -931,7 +931,7 @@ dc_fifo_wrapper_infill #(
     .in_reset_n        (!rst_pcie),
     .out_clk           (clk),
     .out_reset_n       (!rst),
-    .in_csr_address    (0),
+    .in_csr_address    (1'b0),
     .in_csr_read       (1'b1),
     .in_csr_write      (1'b0),
     .in_csr_readdata   (pdumeta_cpu_csr_readdata),
@@ -975,7 +975,7 @@ dm2pcie_meta_fifo (
     .in_reset_n        (!rst_datamover),      
     .out_clk           (clk_pcie),    
     .out_reset_n       (!rst_pcie),      
-    .in_csr_address    (0),
+    .in_csr_address    (1'b0),
     .in_csr_read       (1'b1),
     .in_csr_write      (1'b0),
     .in_csr_readdata   (),
@@ -1021,9 +1021,9 @@ dc_fifo_wrapper_infill eth_out_pkt_fifo (
     .in_reset_n        (!rst_datamover),      
     .out_clk           (clk),    
     .out_reset_n       (!rst),      
-    .in_csr_address    (0),
-    .in_csr_read       (1),
-    .in_csr_write      (0),
+    .in_csr_address    (1'b0),
+    .in_csr_read       (1'b1),
+    .in_csr_write      (1'b0),
     .in_csr_readdata   (dm_eth_pkt_in_csr_readdata),
     .in_csr_writedata  (),
     .in_data           (dm_eth_pkt_data),           
@@ -1055,7 +1055,7 @@ dc_bp_output_pkt_fifo (
 );
 
 
-//////////////////// PKT BUFFER and It's Emptylist //////////////////////////////////
+//////////////////// PKT BUFFER and its Emptylist //////////////////////////////
 dc_fifo_wrapper #(
     .SYMBOLS_PER_BEAT(1),
     .BITS_PER_SYMBOL(PKT_AWIDTH),

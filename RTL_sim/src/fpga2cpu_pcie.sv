@@ -230,16 +230,16 @@ always @(posedge clk) begin
                 // Always have at least one slot not occupied in both the
                 // descriptor ring buffer and the packet ring buffer
                 if (cur_dsc_tail >= cur_dsc_head) begin
-                    dsc_free_slot =
-                        dsc_rb_size - cur_dsc_tail + cur_dsc_head - 1;
+                    dsc_free_slot = dsc_rb_size[RB_AWIDTH-1:0] - cur_dsc_tail
+                                    + cur_dsc_head - 1'b1;
                 end else begin
-                    dsc_free_slot = cur_dsc_head - cur_dsc_tail  - 1;
+                    dsc_free_slot = cur_dsc_head - cur_dsc_tail - 1'b1;
                 end
                 if (cur_pkt_tail >= cur_pkt_head) begin
-                    pkt_free_slot =
-                        pkt_rb_size - cur_pkt_tail + cur_pkt_head - 1;
+                    pkt_free_slot = pkt_rb_size[RB_AWIDTH-1:0] - cur_pkt_tail
+                                    + cur_pkt_head - 1'b1;
                 end else begin
-                    pkt_free_slot = cur_pkt_head - cur_pkt_tail - 1;
+                    pkt_free_slot = cur_pkt_head - cur_pkt_tail - 1'b1;
                 end
 
                 // TODO(sadok) Current design may cause head-of-line blocking.
@@ -261,7 +261,7 @@ always @(posedge clk) begin
                     if (missing_flits > 8) begin
                         flits_in_transfer = 8;
                     end else begin
-                        flits_in_transfer = missing_flits;
+                        flits_in_transfer = missing_flits[3:0];
                     end
 
                     if (missing_flits == cur_desc.size) begin
@@ -281,7 +281,7 @@ always @(posedge clk) begin
                     if (missing_flits > 1) begin
                         state <= COMPLETE_BURST;
                         missing_flits <= missing_flits - 1;
-                        missing_flits_in_transfer <= flits_in_transfer - 1;
+                        missing_flits_in_transfer <= flits_in_transfer - 1'b1;
                     end else begin
                         // TODO(sadok) handle unaligned cases here
                         // pcie_bas_byteenable_r <= ;
@@ -315,7 +315,8 @@ always @(posedge clk) begin
             COMPLETE_BURST: begin
                 if (!pcie_bas_waitrequest && (pkt_buf_occup > 0)) begin
                     missing_flits <= missing_flits - 1;
-                    missing_flits_in_transfer <= missing_flits_in_transfer - 1;
+                    missing_flits_in_transfer <= 
+                        missing_flits_in_transfer - 1'b1;
 
                     // subsequent bursts from the same transfer do not need to
                     // set the address

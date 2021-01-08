@@ -70,7 +70,7 @@ logic [2:0]  ip_flags;
 logic [12:0] ip_fo;
 logic [7:0]  ip_ttl;
 logic [7:0]  ip_prot;
-logic [7:0]  ip_chsm;
+logic [15:0] ip_chsm;
 logic [31:0] ip_sip;
 logic [15:0] ip_dip_high;
 //Third flit
@@ -152,7 +152,11 @@ assign tcp_urgp = in_pkt_data[95:80];      //16
 assign support = (eth_type == PROT_ETH) & (ip_version == IP_V4)
             & (ip_ihl == 5) & ((ip_prot == PROT_TCP) | (ip_prot == PROT_UDP));
 
-assign metadata.len = (ip_prot == PROT_TCP) ? (ip_len - (ip_ihl << 2) - (tcp_do << 2)) : (ip_len - (ip_ihl << 2) - 32'd8);
+assign metadata.len = {
+    (ip_prot == PROT_TCP) ? 
+          (ip_len - (ip_ihl << 2) - (tcp_do << 2)) 
+        : (ip_len - (ip_ihl << 2) - 32'd8)
+}[15:0];
 assign metadata.tuple.sIP = ip_sip;
 assign metadata.tuple.dIP = {ip_dip_high,ip_dip_low};
 assign metadata.tuple.sPort = tcp_sport;

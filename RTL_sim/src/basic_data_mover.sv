@@ -128,7 +128,7 @@ always@(posedge clk)begin
     end else begin
         case(state)
             WAIT_STATABLE:begin
-                statable_cnt <= statable_cnt + 1;
+                statable_cnt <= statable_cnt + 1'b1;
                 if(statable_cnt == 50)begin
                     state <= INIT;
                     emptylist_in_valid <= 1'b1;
@@ -141,7 +141,7 @@ always@(posedge clk)begin
                     if (emptylist_in_data == PKT_NUM-1)begin
                         emptylist_in_valid <= 1'b0;
                         state <= IDLE;
-                        $display("Finish PKT emptylist init");
+                        `hdisplay(("Finish PKT emptylist init"));
                     end
                 end
             end
@@ -183,7 +183,7 @@ always@(posedge clk)begin
                         end
                     end else begin
                         state <= MIDDLE;
-                        flits_cnt <= flits_cnt + 1;
+                        flits_cnt <= flits_cnt + 1'b1;
                     end
                 end
             end
@@ -191,7 +191,7 @@ always@(posedge clk)begin
                 emptylist_in_valid <= 1'b0;
                 //last flit
                 if(flits_cnt == flits - 1) begin
-                    pkt_buffer_address <= pkt_buffer_address + 1;
+                    pkt_buffer_address <= pkt_buffer_address + 1'b1;
                     flits_cnt <= 0;
 
                     emptylist_in_valid <= 1'b1;
@@ -205,8 +205,8 @@ always@(posedge clk)begin
                     end
                 end else begin
                     pkt_buffer_read <= 1;
-                    pkt_buffer_address <= pkt_buffer_address + 1;
-                    flits_cnt <= flits_cnt + 1;
+                    pkt_buffer_address <= pkt_buffer_address + 1'b1;
+                    flits_cnt <= flits_cnt + 1'b1;
                 end
             end
         endcase            

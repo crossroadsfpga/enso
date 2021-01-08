@@ -118,7 +118,7 @@ always@(posedge clk)begin
                 flits <= 1;
                 
             end else begin
-                flits <= flits + 1;
+                flits <= flits + 1'b1;
                 pkt_valid <= 0;
                 pkt_sop <= 0;
                 pkt_eop <= 0;

@@ -152,8 +152,8 @@ always @(posedge clk) begin
                         assert(pdu_size != 0);
                     end
 
-                    pdu_size = pdu_size + 64;
-                    pdu_flit = pdu_flit + 1;
+                    pdu_size = pdu_size + 16'd64;
+                    pdu_flit = pdu_flit + 1'b1;
 
                     if (in_eop) begin
                         pdu_size = pdu_size - in_empty;
@@ -161,7 +161,7 @@ always @(posedge clk) begin
 
                         // write descriptor
                         pcie_desc_buf_wr_data_r.queue_id <=
-                            in_meta_data.queue_id;
+                            in_meta_data.queue_id[APP_IDX_WIDTH-1:0];
 
                         // TODO(sadok) specify size in bytes instead of flits
                         pcie_desc_buf_wr_data_r.size <= pdu_flit;

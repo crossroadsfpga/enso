@@ -1,4 +1,5 @@
 `timescale 1 ps / 1 ps
+`include "./my_struct_s.sv"
 module hyper_pipe_root (
     //clk & rst   
     input  logic         clk,  
@@ -20,32 +21,32 @@ module hyper_pipe_root (
     input  logic         out_almost_full,       
     
     //eSRAM
-    input  logic                    esram_pkt_buf_wren,
-    input  logic [16:0]             esram_pkt_buf_wraddress,
-    input  logic [519:0]            esram_pkt_buf_wrdata,
-    input  logic                    esram_pkt_buf_rden,
-    input  logic [16:0]             esram_pkt_buf_rdaddress,
-    input  logic                    esram_pkt_buf_rd_valid,
-    input  logic [519:0]            esram_pkt_buf_rddata,
+    input  logic                     esram_pkt_buf_wren,
+    input  logic [PKTBUF_AWIDTH-1:0] esram_pkt_buf_wraddress,
+    input  logic [519:0]             esram_pkt_buf_wrdata,
+    input  logic                     esram_pkt_buf_rden,
+    input  logic [PKTBUF_AWIDTH-1:0] esram_pkt_buf_rdaddress,
+    input  logic                     esram_pkt_buf_rd_valid,
+    input  logic [519:0]             esram_pkt_buf_rddata,
 
-    output  logic                   reg_in_sop,          
-    output  logic                   reg_in_eop,            
-    output  logic [511:0]           reg_in_data,                    
-    output  logic [5:0]             reg_in_empty,                    
-    output  logic                   reg_in_valid, 
-    output  logic [511:0]           reg_out_data,       
-    output  logic                   reg_out_valid,       
-    output  logic                   reg_out_sop,       
-    output  logic                   reg_out_eop,       
-    output  logic [5:0]             reg_out_empty,       
-    output  logic                   reg_out_almost_full,       
-    output  logic                   reg_esram_pkt_buf_wren,
-    output  logic [16:0]            reg_esram_pkt_buf_wraddress,
-    output  logic [519:0]           reg_esram_pkt_buf_wrdata,
-    output  logic                   reg_esram_pkt_buf_rden,
-    output  logic [16:0]            reg_esram_pkt_buf_rdaddress,
-    output  logic                   reg_esram_pkt_buf_rd_valid,
-    output  logic [519:0]           reg_esram_pkt_buf_rddata
+    output  logic                     reg_in_sop,          
+    output  logic                     reg_in_eop,            
+    output  logic [511:0]             reg_in_data,                    
+    output  logic [5:0]               reg_in_empty,                    
+    output  logic                     reg_in_valid, 
+    output  logic [511:0]             reg_out_data,       
+    output  logic                     reg_out_valid,       
+    output  logic                     reg_out_sop,       
+    output  logic                     reg_out_eop,       
+    output  logic [5:0]               reg_out_empty,       
+    output  logic                     reg_out_almost_full,       
+    output  logic                     reg_esram_pkt_buf_wren,
+    output  logic [PKTBUF_AWIDTH-1:0] reg_esram_pkt_buf_wraddress,
+    output  logic [519:0]             reg_esram_pkt_buf_wrdata,
+    output  logic                     reg_esram_pkt_buf_rden,
+    output  logic [PKTBUF_AWIDTH-1:0] reg_esram_pkt_buf_rdaddress,
+    output  logic                     reg_esram_pkt_buf_rd_valid,
+    output  logic [519:0]             reg_esram_pkt_buf_rddata
 );
 localparam NUM_PIPES = 1;
 
@@ -154,7 +155,7 @@ hyper_pipe_rst #(
     .dout(reg_esram_pkt_buf_wren)
 );
 hyper_pipe #(
-    .WIDTH (17),
+    .WIDTH (PKTBUF_AWIDTH),
     .NUM_PIPES(NUM_PIPES)
 ) hp_esram_pkt_buf_wraddress (
     .clk(clk_datamover),
@@ -179,7 +180,7 @@ hyper_pipe_rst #(
     .dout(reg_esram_pkt_buf_rden)
 );
 hyper_pipe #(
-    .WIDTH (17),
+    .WIDTH (PKTBUF_AWIDTH),
     .NUM_PIPES(NUM_PIPES)
 ) hp_esram_pkt_buf_rdaddress (
     .clk(clk_datamover),

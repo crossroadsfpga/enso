@@ -241,7 +241,7 @@ assign q_table_rd_data_b_pcie_ready = rd_en_r2 & pcie_bram_rd_r2;
 // We serve simultaneous requests following this priority. That way, we only
 // serve PCIe reads when there are no PCIe writes and we only serve JTAG reads
 // when there are no PCIe writes or reads
-always@(posedge pcie_clk) begin
+always @(posedge pcie_clk) begin
     dsc_q_table_tails.wr_en_b <= 0;
     dsc_q_table_heads.wr_en_b <= 0;
     dsc_q_table_l_addrs.wr_en_b <= 0;
@@ -497,14 +497,14 @@ always @(posedge pcie_clk)begin
 
     // we used the delayed wr signals for head and tail to use when there are
     // concurrent reads
-    dsc_q_table_heads_wr_data_b_r <= dsc_q_table_heads.wr_data_b;
+    dsc_q_table_heads_wr_data_b_r <= dsc_q_table_heads.wr_data_b[RB_AWIDTH-1:0];
     dsc_q_table_heads_wr_data_b_r2 <= dsc_q_table_heads_wr_data_b_r;
-    dsc_q_table_tails_wr_data_a_r <= dsc_q_table_tails.wr_data_a;
+    dsc_q_table_tails_wr_data_a_r <= dsc_q_table_tails.wr_data_a[RB_AWIDTH-1:0];
     dsc_q_table_tails_wr_data_a_r2 <= dsc_q_table_tails_wr_data_a_r;
     
-    pkt_q_table_heads_wr_data_b_r <= pkt_q_table_heads.wr_data_b;
+    pkt_q_table_heads_wr_data_b_r <= pkt_q_table_heads.wr_data_b[RB_AWIDTH-1:0];
     pkt_q_table_heads_wr_data_b_r2 <= pkt_q_table_heads_wr_data_b_r;
-    pkt_q_table_tails_wr_data_a_r <= pkt_q_table_tails.wr_data_a;
+    pkt_q_table_tails_wr_data_a_r <= pkt_q_table_tails.wr_data_a[RB_AWIDTH-1:0];
     pkt_q_table_tails_wr_data_a_r2 <= pkt_q_table_tails_wr_data_a_r;
 end
 
@@ -576,24 +576,24 @@ always_comb begin
         pkt_q_table_l_addrs.rd_en_a_r2 || pkt_q_table_h_addrs.rd_en_a_r2;
 
     if (dsc_q_table_tails.rd_en_a_r2) begin
-        f2c_dsc_tail = dsc_q_table_tails.rd_data_a;
+        f2c_dsc_tail = dsc_q_table_tails.rd_data_a[RB_AWIDTH-1:0];
     end else begin
         f2c_dsc_tail = dsc_q_table_tails_wr_data_a_r2;
     end
     if (pkt_q_table_tails.rd_en_a_r2) begin
-        f2c_pkt_tail = pkt_q_table_tails.rd_data_a;
+        f2c_pkt_tail = pkt_q_table_tails.rd_data_a[RB_AWIDTH-1:0];
     end else begin
         f2c_pkt_tail = pkt_q_table_tails_wr_data_a_r2;
     end
 
     if (dsc_q_table_heads.rd_en_a_r2) begin
-        f2c_dsc_head = dsc_q_table_heads.rd_data_a;
+        f2c_dsc_head = dsc_q_table_heads.rd_data_a[RB_AWIDTH-1:0];
     end else begin
         // return the delayed concurrent write
         f2c_dsc_head = dsc_q_table_heads_wr_data_b_r2;
     end
     if (pkt_q_table_heads.rd_en_a_r2) begin
-        f2c_pkt_head = pkt_q_table_heads.rd_data_a;
+        f2c_pkt_head = pkt_q_table_heads.rd_data_a[RB_AWIDTH-1:0];
     end else begin
         // return the delayed concurrent write
         f2c_pkt_head = pkt_q_table_heads_wr_data_b_r2;

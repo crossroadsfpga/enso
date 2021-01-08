@@ -227,13 +227,13 @@ always@(posedge clk) begin
             //stage 0
             if (s_h0_hashed_valid) begin
                 ft0_rden_a <= 1'b1;
-                ft0_addr_a <= s_h0_hashed;
+                ft0_addr_a <= s_h0_hashed[FT_AWIDTH-1:0];
                 ft1_rden_a <= 1'b1;
-                ft1_addr_a <= s_h1_hashed;
+                ft1_addr_a <= s_h1_hashed[FT_AWIDTH-1:0];
                 ft2_rden_a <= 1'b1;
-                ft2_addr_a <= s_h2_hashed;
+                ft2_addr_a <= s_h2_hashed[FT_AWIDTH-1:0];
                 ft3_rden_a <= 1'b1;
-                ft3_addr_a <= s_h3_hashed;
+                ft3_addr_a <= s_h3_hashed[FT_AWIDTH-1:0];
 
                 s_meta_r <= s_m7;
                 s_lookup_tuple <= s_m7.tuple;
@@ -302,13 +302,13 @@ always@(posedge clk) begin
 
                 if (p_h0_hashed_valid) begin
                     ft0_rden_b <= 1'b1;
-                    ft0_addr_b <= p_h0_hashed;
+                    ft0_addr_b <= p_h0_hashed[FT_AWIDTH-1:0];
                     ft1_rden_b <= 1'b1;
-                    ft1_addr_b <= p_h1_hashed;
+                    ft1_addr_b <= p_h1_hashed[FT_AWIDTH-1:0];
                     ft2_rden_b <= 1'b1;
-                    ft2_addr_b <= p_h2_hashed;
+                    ft2_addr_b <= p_h2_hashed[FT_AWIDTH-1:0];
                     ft3_rden_b <= 1'b1;
-                    ft3_addr_b <= p_h3_hashed;
+                    ft3_addr_b <= p_h3_hashed[FT_AWIDTH-1:0];
 
                     p_busy <= 1'b1;
                     p_state <= P_LOOKUP;

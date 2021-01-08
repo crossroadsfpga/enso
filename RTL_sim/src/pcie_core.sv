@@ -1,3 +1,5 @@
+`include "./my_struct_s.sv"
+
 module pcie_core (
         input  wire         refclk_clk,                              //         refclk.clk
         input  wire         pcie_rstn_npor,                          //      pcie_rstn.npor
@@ -47,7 +49,7 @@ module pcie_core (
         output logic        pcie_clk,
         output logic        pcie_reset_n,
         //PCIe signals
-        output logic [18:0] address_0,     //   input,    width = 9,     s1.address
+        output logic [PCIE_ADDR_WIDTH-1:0] address_0,
         output logic write_0,       //   input,    width = 1,       .write
         output logic read_0,       //   input,    width = 1,       .write
         input  logic readdatavalid_0,       //   input,    width = 1,       .write
@@ -526,7 +528,172 @@ logic [5:0]   pipe_sim_only_dirfeedback14;             //               .dirfeed
 logic [5:0]   pipe_sim_only_dirfeedback15;             //               .dirfeedback15
 logic         pipe_sim_only_sim_pipe_mask_tx_pll_lock; //               .sim_pipe_mask_tx_pll_lock
 
-    
+// avoid Quartus "does not have a driver at" warning
+assign hip_ctrl_simu_mode_pipe = 0;
+assign hip_ctrl_test_in = 0;
+assign pipe_sim_only_sim_pipe_pclk_in = 0;
+assign pipe_sim_only_rxdata0 = 0;
+assign pipe_sim_only_rxdata1 = 0;
+assign pipe_sim_only_rxdata2 = 0;
+assign pipe_sim_only_rxdata3 = 0;
+assign pipe_sim_only_rxdata4 = 0;
+assign pipe_sim_only_rxdata5 = 0;
+assign pipe_sim_only_rxdata6 = 0;
+assign pipe_sim_only_rxdata7 = 0;
+assign pipe_sim_only_rxdata8 = 0;
+assign pipe_sim_only_rxdata9 = 0;
+assign pipe_sim_only_rxdata10 = 0;
+assign pipe_sim_only_rxdata11 = 0;
+assign pipe_sim_only_rxdata12 = 0;
+assign pipe_sim_only_rxdata13 = 0;
+assign pipe_sim_only_rxdata14 = 0;
+assign pipe_sim_only_rxdata15 = 0;
+assign pipe_sim_only_rxdatak0 = 0;
+assign pipe_sim_only_rxdatak1 = 0;
+assign pipe_sim_only_rxdatak2 = 0;
+assign pipe_sim_only_rxdatak3 = 0;
+assign pipe_sim_only_rxdatak4 = 0;
+assign pipe_sim_only_rxdatak5 = 0;
+assign pipe_sim_only_rxdatak6 = 0;
+assign pipe_sim_only_rxdatak7 = 0;
+assign pipe_sim_only_rxdatak8 = 0;
+assign pipe_sim_only_rxdatak9 = 0;
+assign pipe_sim_only_rxdatak10 = 0;
+assign pipe_sim_only_rxdatak11 = 0;
+assign pipe_sim_only_rxdatak12 = 0;
+assign pipe_sim_only_rxdatak13 = 0;
+assign pipe_sim_only_rxdatak14 = 0;
+assign pipe_sim_only_rxdatak15 = 0;
+assign pipe_sim_only_phystatus0 = 0;
+assign pipe_sim_only_phystatus1 = 0;
+assign pipe_sim_only_phystatus2 = 0;
+assign pipe_sim_only_phystatus3 = 0;
+assign pipe_sim_only_phystatus4 = 0;
+assign pipe_sim_only_phystatus5 = 0;
+assign pipe_sim_only_phystatus6 = 0;
+assign pipe_sim_only_phystatus7 = 0;
+assign pipe_sim_only_phystatus8 = 0;
+assign pipe_sim_only_phystatus9 = 0;
+assign pipe_sim_only_phystatus10 = 0;
+assign pipe_sim_only_phystatus11 = 0;
+assign pipe_sim_only_phystatus12 = 0;
+assign pipe_sim_only_phystatus13 = 0;
+assign pipe_sim_only_phystatus14 = 0;
+assign pipe_sim_only_phystatus15 = 0;
+assign pipe_sim_only_rxvalid0 = 0;
+assign pipe_sim_only_rxvalid1 = 0;
+assign pipe_sim_only_rxvalid2 = 0;
+assign pipe_sim_only_rxvalid3 = 0;
+assign pipe_sim_only_rxvalid4 = 0;
+assign pipe_sim_only_rxvalid5 = 0;
+assign pipe_sim_only_rxvalid6 = 0;
+assign pipe_sim_only_rxvalid7 = 0;
+assign pipe_sim_only_rxvalid8 = 0;
+assign pipe_sim_only_rxvalid9 = 0;
+assign pipe_sim_only_rxvalid10 = 0;
+assign pipe_sim_only_rxvalid11 = 0;
+assign pipe_sim_only_rxvalid12 = 0;
+assign pipe_sim_only_rxvalid13 = 0;
+assign pipe_sim_only_rxvalid14 = 0;
+assign pipe_sim_only_rxvalid15 = 0;
+assign pipe_sim_only_rxstatus0 = 0;
+assign pipe_sim_only_rxstatus1 = 0;
+assign pipe_sim_only_rxstatus2 = 0;
+assign pipe_sim_only_rxstatus3 = 0;
+assign pipe_sim_only_rxstatus4 = 0;
+assign pipe_sim_only_rxstatus5 = 0;
+assign pipe_sim_only_rxstatus6 = 0;
+assign pipe_sim_only_rxstatus7 = 0;
+assign pipe_sim_only_rxstatus8 = 0;
+assign pipe_sim_only_rxstatus9 = 0;
+assign pipe_sim_only_rxstatus10 = 0;
+assign pipe_sim_only_rxstatus11 = 0;
+assign pipe_sim_only_rxstatus12 = 0;
+assign pipe_sim_only_rxstatus13 = 0;
+assign pipe_sim_only_rxstatus14 = 0;
+assign pipe_sim_only_rxstatus15 = 0;
+assign pipe_sim_only_rxelecidle0 = 0;
+assign pipe_sim_only_rxelecidle1 = 0;
+assign pipe_sim_only_rxelecidle2 = 0;
+assign pipe_sim_only_rxelecidle3 = 0;
+assign pipe_sim_only_rxelecidle4 = 0;
+assign pipe_sim_only_rxelecidle5 = 0;
+assign pipe_sim_only_rxelecidle6 = 0;
+assign pipe_sim_only_rxelecidle7 = 0;
+assign pipe_sim_only_rxelecidle8 = 0;
+assign pipe_sim_only_rxelecidle9 = 0;
+assign pipe_sim_only_rxelecidle10 = 0;
+assign pipe_sim_only_rxelecidle11 = 0;
+assign pipe_sim_only_rxelecidle12 = 0;
+assign pipe_sim_only_rxelecidle13 = 0;
+assign pipe_sim_only_rxelecidle14 = 0;
+assign pipe_sim_only_rxelecidle15 = 0;
+assign pipe_sim_only_rxsynchd0 = 0;
+assign pipe_sim_only_rxsynchd1 = 0;
+assign pipe_sim_only_rxsynchd2 = 0;
+assign pipe_sim_only_rxsynchd3 = 0;
+assign pipe_sim_only_rxsynchd4 = 0;
+assign pipe_sim_only_rxsynchd5 = 0;
+assign pipe_sim_only_rxsynchd6 = 0;
+assign pipe_sim_only_rxsynchd7 = 0;
+assign pipe_sim_only_rxsynchd8 = 0;
+assign pipe_sim_only_rxsynchd9 = 0;
+assign pipe_sim_only_rxsynchd10 = 0;
+assign pipe_sim_only_rxsynchd11 = 0;
+assign pipe_sim_only_rxsynchd12 = 0;
+assign pipe_sim_only_rxsynchd13 = 0;
+assign pipe_sim_only_rxsynchd14 = 0;
+assign pipe_sim_only_rxsynchd15 = 0;
+assign pipe_sim_only_rxblkst0 = 0;
+assign pipe_sim_only_rxblkst1 = 0;
+assign pipe_sim_only_rxblkst2 = 0;
+assign pipe_sim_only_rxblkst3 = 0;
+assign pipe_sim_only_rxblkst4 = 0;
+assign pipe_sim_only_rxblkst5 = 0;
+assign pipe_sim_only_rxblkst6 = 0;
+assign pipe_sim_only_rxblkst7 = 0;
+assign pipe_sim_only_rxblkst8 = 0;
+assign pipe_sim_only_rxblkst9 = 0;
+assign pipe_sim_only_rxblkst10 = 0;
+assign pipe_sim_only_rxblkst11 = 0;
+assign pipe_sim_only_rxblkst12 = 0;
+assign pipe_sim_only_rxblkst13 = 0;
+assign pipe_sim_only_rxblkst14 = 0;
+assign pipe_sim_only_rxblkst15 = 0;
+assign pipe_sim_only_rxdataskip0 = 0;
+assign pipe_sim_only_rxdataskip1 = 0;
+assign pipe_sim_only_rxdataskip2 = 0;
+assign pipe_sim_only_rxdataskip3 = 0;
+assign pipe_sim_only_rxdataskip4 = 0;
+assign pipe_sim_only_rxdataskip5 = 0;
+assign pipe_sim_only_rxdataskip6 = 0;
+assign pipe_sim_only_rxdataskip7 = 0;
+assign pipe_sim_only_rxdataskip8 = 0;
+assign pipe_sim_only_rxdataskip9 = 0;
+assign pipe_sim_only_rxdataskip10 = 0;
+assign pipe_sim_only_rxdataskip11 = 0;
+assign pipe_sim_only_rxdataskip12 = 0;
+assign pipe_sim_only_rxdataskip13 = 0;
+assign pipe_sim_only_rxdataskip14 = 0;
+assign pipe_sim_only_rxdataskip15 = 0;
+assign pipe_sim_only_dirfeedback0 = 0;
+assign pipe_sim_only_dirfeedback1 = 0;
+assign pipe_sim_only_dirfeedback2 = 0;
+assign pipe_sim_only_dirfeedback3 = 0;
+assign pipe_sim_only_dirfeedback4 = 0;
+assign pipe_sim_only_dirfeedback5 = 0;
+assign pipe_sim_only_dirfeedback6 = 0;
+assign pipe_sim_only_dirfeedback7 = 0;
+assign pipe_sim_only_dirfeedback8 = 0;
+assign pipe_sim_only_dirfeedback9 = 0;
+assign pipe_sim_only_dirfeedback10 = 0;
+assign pipe_sim_only_dirfeedback11 = 0;
+assign pipe_sim_only_dirfeedback12 = 0;
+assign pipe_sim_only_dirfeedback13 = 0;
+assign pipe_sim_only_dirfeedback14 = 0;
+assign pipe_sim_only_dirfeedback15 = 0;
+assign pipe_sim_only_sim_pipe_mask_tx_pll_lock = 0;
+
 
     pcie_ed pcie (
         .refclk_clk                              (refclk_clk),                              //   input,    width = 1,         refclk.clk

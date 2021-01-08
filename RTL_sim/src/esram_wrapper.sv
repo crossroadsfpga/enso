@@ -9,10 +9,10 @@ module esram_wrapper(
     output logic clk_esram, //200 MHz
 `endif
     input  logic wren,
-    input  logic [16:0] wraddress,
+    input  logic [PKTBUF_AWIDTH-1:0] wraddress,
     input  logic [519:0] wrdata,
     input  logic rden,
-    input  logic [16:0] rdaddress,
+    input  logic [PKTBUF_AWIDTH-1:0] rdaddress,
     output logic rd_valid,
     output logic [519:0] rddata
 );
