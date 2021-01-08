@@ -56,8 +56,7 @@ module fpga2cpu_pcie (
 
     // counters
     output logic [31:0]              dma_queue_full_cnt,
-    output logic [31:0]              cpu_buf_full_cnt,
-    output logic [31:0]              max_rb // TODO(sadok) remove this, we can infer that using the occup signals from the top module
+    output logic [31:0]              cpu_buf_full_cnt
 );
 
 // assign wr_base_addr = 0;
@@ -445,16 +444,6 @@ always @(posedge clk) begin
         // Attempt to read and write at the same time. Try to write again.
         if (tail_wr_en && queue_rd_en) begin
             tail_wr_en <= 1;
-        end
-    end
-end
-
-always @(posedge clk) begin
-    if (rst) begin
-        max_rb <= 0;
-    end else begin
-        if (pkt_buf_occup > max_rb) begin
-            max_rb <= pkt_buf_occup;
         end
     end
 end

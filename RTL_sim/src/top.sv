@@ -455,8 +455,8 @@ always @(posedge clk_pcie) begin
         dma_request_cnt <= 0;
         rule_set_cnt <= 0;
         dma_queue_occup <= 0;
+        max_pcie_rb <= 0;
         max_dma_queue_occup <= 0;
-        pcie_bas_write_r <= 0;
     end else begin
         // automatic logic non_prio_desc_cons = pcie_wrdm_tx_valid &&
         //                                      !pcie_wrdm_tx_data[8]; // priority
@@ -475,18 +475,15 @@ always @(posedge clk_pcie) begin
         if (pdumeta_cpu_valid) begin
             rule_set_cnt <= rule_set_cnt + 1;
         end
-        // if (pcie_wrdm_desc_valid && !non_prio_desc_cons) begin
-        //     dma_queue_occup <= dma_queue_occup + 1'b1;
-        // end
-        // if (!pcie_wrdm_desc_valid && non_prio_desc_cons) begin
-        //     dma_queue_occup <= dma_queue_occup - 1'b1;
-        // end
+        if (pcie_pkt_buf_occup > max_pcie_rb) begin
+            max_pcie_rb <= pcie_pkt_buf_occup;
+        end
         if (dma_queue_occup > max_dma_queue_occup) begin
             max_dma_queue_occup <= dma_queue_occup;
         end
-
-        pcie_bas_write_r <= pcie_bas_write;
     end
+
+    pcie_bas_write_r <= pcie_bas_write;
 end
 
 
@@ -1113,7 +1110,6 @@ pcie_top pcie (
     .pdumeta_cnt            (pdumeta_cnt),
     .dma_queue_full_cnt     (dma_queue_full_cnt),
     .cpu_buf_full_cnt       (cpu_buf_full_cnt),
-    .pcie_max_rb            (max_pcie_rb),
     .clk_status             (clk_status),
     .status_addr            (status_addr),
     .status_read            (status_read),

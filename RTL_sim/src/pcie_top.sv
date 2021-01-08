@@ -36,7 +36,6 @@ module pcie_top (
     input  logic [9:0]            pdumeta_cnt,
     output logic [31:0]           dma_queue_full_cnt,
     output logic [31:0]           cpu_buf_full_cnt,
-    output logic [31:0]           pcie_max_rb,
 
     // status register bus
     input  logic        clk_status,
@@ -714,8 +713,7 @@ fpga2cpu_pcie f2c_inst (
     .pcie_bas_burstcount    (pcie_bas_burstcount),
     .pcie_bas_response      (pcie_bas_response),
     .dma_queue_full_cnt     (dma_queue_full_cnt),
-    .cpu_buf_full_cnt       (cpu_buf_full_cnt),
-    .max_rb                 (pcie_max_rb)
+    .cpu_buf_full_cnt       (cpu_buf_full_cnt)
 );
 
 // cpu2fpga_pcie c2f_inst (
