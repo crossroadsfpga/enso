@@ -3,6 +3,7 @@
 import binascii
 import ipaddress
 import math
+import os
 import sys
 
 from itertools import cycle
@@ -21,9 +22,6 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest):
             IP(dst='192.168.1.1', src=str(src_ip), len=ipv4_len) /
             TCP(dport=80, sport=8080, flags='S')
         )
-
-        # payload = '0' * missing_bytes
-        # pkt = pkt/Raw(load=payload)
         sample_pkts.append(pkt)
 
     pkts = []
@@ -53,8 +51,10 @@ def main():
     nb_dest = int(sys.argv[3])
     out_pcap = sys.argv[4]
 
-    if nb_dest > 256:
-        print('Can only support up to 256 destinations')
+    try:
+        os.remove(out_pcap)
+    except OSError:
+        pass
 
     generate_pcap(nb_pkts, out_pcap, pkt_size, nb_dest)
 
