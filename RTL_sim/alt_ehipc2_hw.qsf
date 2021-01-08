@@ -248,10 +248,8 @@ set_instance_assignment -name PARTITION_COLOUR 4285442303 -to auto_fab_0 -entity
 set_global_assignment -name ENABLE_INTERMEDIATE_SNAPSHOTS ON
 set_global_assignment -name FAST_PRESERVE AUTO -entity alt_ehipc2_hw
 set_global_assignment -name OPTIMIZATION_MODE BALANCED
-set_global_assignment -name ENABLE_SIGNALTAP OFF
-set_global_assignment -name USE_SIGNALTAP_FILE stp1.stp
-set_global_assignment -name QIP_FILE pcie/pcie_example_design/pcie_ed.qip
-set_global_assignment -name VERILOG_FILE pcie/pcie_example_design/synth/pcie_ed.v
+set_global_assignment -name ENABLE_SIGNALTAP ON
+set_global_assignment -name USE_SIGNALTAP_FILE stp4.stp
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie_core.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_table_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/cpu2fpga_pcie.sv
@@ -270,7 +268,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe_root.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hash_func.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/fpga2cpu_pcie.sv
-set_global_assignment -name SYSTEMVERILOG_FILE src/prefetch_rb.sv
+set_global_assignment -name VERILOG_FILE src/prefetch_rb.sv -hdl_version SystemVerilog_2009
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_director_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/esram_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/dc_back_pressure.sv
@@ -319,11 +317,7 @@ set_global_assignment -name VERILOG_FILE src/common/bram_1port.v
 set_global_assignment -name VERILOG_FILE src/common/altera_std_synchronizer_nocut.v
 set_global_assignment -name VERILOG_FILE src/common/altera_dcfifo_synchronizer_bundle.v
 set_global_assignment -name VERILOG_FILE src/common/altera_avalon_st_pipeline_base.v
-set_global_assignment -name IP_FILE pcie/ip/pcie_example_design/pcie_ed_mm_bridge_0.ip
-set_global_assignment -name IP_FILE pcie/ip/pcie_example_design/pcie_ed_BAR_INTERPRETER.ip
-set_global_assignment -name IP_FILE pcie/ip/pcie_example_design/pcie_ed_DUT.ip
 set_global_assignment -name IP_FILE common/my_pll.ip
-set_global_assignment -name QSYS_FILE pcie/pcie_example_design.qsys
 set_global_assignment -name VERILOG_FILE ./common/alt_aeuex_user_mode_det.v
 set_global_assignment -name VERILOG_FILE ./common/alt_aeuex_optics_control_i2c_workaround.v
 set_global_assignment -name VERILOG_FILE ./common/alt_aeuex_mdio_control.v
@@ -350,7 +344,12 @@ set_global_assignment -name QSYS_FILE common/alt_ehipc2_jtag_avalon.ip
 set_global_assignment -name QSYS_FILE common/alt_ehipc2_sys_pll.ip
 set_global_assignment -name QSYS_FILE common/probe8.ip
 set_global_assignment -name QSYS_FILE common/reset_ip.ip
+set_global_assignment -name IP_FILE pcie/pcie_example_design/ip/pcie_ed/pcie_ed_BAR_INTERPRETER.ip
+set_global_assignment -name IP_FILE pcie/pcie_example_design/ip/pcie_ed/pcie_ed_DUT.ip
+set_global_assignment -name IP_FILE pcie/pcie_example_design/ip/pcie_ed/pcie_ed_mm_bridge_0.ip
+set_global_assignment -name QSYS_FILE pcie/pcie_example_design/pcie_ed.qsys
 set_global_assignment -name SYSTEMVERILOG_FILE alt_ehipc2_hw.sv
 set_global_assignment -name SDC_ENTITY_FILE ./alt_ehipc2_hw.sdc -entity alt_ehipc2_hw
 set_global_assignment -name CDF_FILE output_files/load.cdf
 set_global_assignment -name SIGNALTAP_FILE stp1.stp
+set_global_assignment -name SIGNALTAP_FILE stp4.stp
