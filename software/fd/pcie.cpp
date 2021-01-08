@@ -38,6 +38,9 @@
 // #include "intel_fpga_pcie_link_test.hpp"
 #include "pcie.h"
 
+static const bool alloc_single_buf = (F2C_DSC_BUF_SIZE + \
+    F2C_PKT_BUF_SIZE_EXTRA_ROOM) > BUF_PAGE_SIZE/64;
+
 static inline uint16_t get_pkt_size(uint8_t *addr) {
     uint16_t l2_len = 14 + 4;
     uint16_t l3_len = be16toh(*((uint16_t*) (addr+14+2))); // ipv4 total length
@@ -166,7 +169,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
     // if the descriptor and packet buffers cannot fit together in a single huge
     // page, we need to allocate them separately
-    if ((F2C_DSC_BUF_SIZE + F2C_PKT_BUF_SIZE_EXTRA_ROOM) > BUF_PAGE_SIZE/64) {
+    if (alloc_single_buf) {
         socket_entry->dsc_buf =
             (pcie_pkt_desc_t*) get_huge_pages(app_id, ALIGNED_F2C_DSC_BUF_SIZE);
         if (socket_entry->dsc_buf == NULL) {
