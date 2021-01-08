@@ -274,12 +274,11 @@ public:
 
     /**
      * Map uio device's memory
-     * @param size Size of the previously-allocated kernel memory to map,
-     *             in bytes.
+     * @param size Size of the PCIe register region to map, in bytes.
      * @param mapping Mapping number.
      * @return Address on success; NULL otherwise
      */
-    void *uio_mmap(unsigned int size, unsigned int mapping);
+    void *uio_mmap(size_t size, unsigned int mapping);
 
     /**
      * Unmap device's kernel memory from user-space

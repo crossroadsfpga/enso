@@ -393,7 +393,7 @@ void *intel_fpga_pcie_dev::kmem_mmap(unsigned int size, unsigned int offset)
     return mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, m_dev_handle, offset);
 };
 
-void *intel_fpga_pcie_dev::uio_mmap(unsigned int size, unsigned int mapping)
+void *intel_fpga_pcie_dev::uio_mmap(size_t size, unsigned int mapping)
 {
     unsigned int offset = mapping * getpagesize();
 
