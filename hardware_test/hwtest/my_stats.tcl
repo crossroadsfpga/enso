@@ -63,6 +63,9 @@ set MAX_DMA_QUEUE       26
 #PCIE reg
 set PCIE_CTRL_REG       0
 
+set NB_CTRL_REGS 2
+set NB_QUEUE_REGS 16384
+
 set log 0
 #clock period
 set cp 2.56
@@ -631,10 +634,23 @@ proc sanity_check {} {
 
 ################## PCIE ##################
 
-proc read_pcie {{nb_bytes 16}} {
+proc read_pcie_reg {reg_nb} {
     global PCIE_BASE
 
-    for { set a 0 } { $a < $nb_bytes } {incr a} {
+    set rdata [reg_read $PCIE_BASE $reg_nb]
+    puts "$reg_nb : $rdata"
+}
+
+proc write_pcie_reg {reg_nb {wdata}} {
+    global PCIE_BASE
+
+    reg_write $PCIE_BASE $reg_nb $wdata
+}
+
+proc read_pcie {{nb_regs 16}} {
+    global PCIE_BASE
+
+    for { set a 0 } { $a < $nb_regs } {incr a} {
         set rdata [reg_read $PCIE_BASE $a]
         puts "$a : $rdata"
     }
@@ -666,16 +682,28 @@ proc enable_pcie {} {
     set_up
 }
 
-proc set_core_num {core_num} {
+proc sw_rst {} {
     global PCIE_BASE
     global PCIE_CTRL_REG
+    global NB_CTRL_REGS
+    global NB_QUEUE_REGS
+
     global rdata
     global wdata
 
     set rdata [reg_read $PCIE_BASE $PCIE_CTRL_REG]
-    set wdata [expr ( ($core_num << 27) | ($rdata & 0x07FFFFFF) )]
+    puts "rdata : $rdata"
+    set wdata [expr ( (1 << 27) | $rdata )]
 
     reg_write $PCIE_BASE $PCIE_CTRL_REG $wdata
+
+    # # clear all queue registers
+    # for { set a 0 } { $a < $NB_QUEUE_REGS } {incr a} {
+    #     reg_write $PCIE_BASE [expr $a + $NB_CTRL_REGS] 0
+    # }
+
+    # rewrite old value back
+    reg_write $PCIE_BASE $PCIE_CTRL_REG $rdata
 
     set_clear
     set_up

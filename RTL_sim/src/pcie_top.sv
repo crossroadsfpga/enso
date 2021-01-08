@@ -31,6 +31,7 @@ module pcie_top (
     output logic [PDU_AWIDTH-1:0] pcie_desc_buf_occup,
 
     output logic                  disable_pcie,
+    output logic                  sw_reset,
     output pdu_metadata_t         pdumeta_cpu_data,
     output logic                  pdumeta_cpu_valid,
     input  logic [9:0]            pdumeta_cnt,
@@ -99,7 +100,7 @@ bram_interface_t pkt_q_table_h_addrs;
 
 logic [APP_IDX_WIDTH-1:0] q_table_addr_jtag;
 logic [APP_IDX_WIDTH-1:0] q_table_addr_pcie;
-logic [APP_IDX_WIDTH-1:0] q_table_addr_jtag_rd_pending;
+logic [APP_IDX_WIDTH-1:0] q_table_addr_jtag_pending;
 logic [APP_IDX_WIDTH-1:0] q_table_addr_pcie_rd_pending;
 
 localparam NB_TABLES = 8; // number of BRAM tables
@@ -108,7 +109,7 @@ localparam C2F_HEAD_OFFSET = (NB_TABLES + 1) * REG_SIZE;
 
 logic [AWIDTH_NB_TABLES-1:0] q_table_jtag;
 logic [AWIDTH_NB_TABLES-1:0] q_table_pcie;
-logic [AWIDTH_NB_TABLES-1:0] q_table_jtag_rd_pending;
+logic [AWIDTH_NB_TABLES-1:0] q_table_jtag_pending;
 logic [AWIDTH_NB_TABLES-1:0] last_rd_b_table;
 logic [AWIDTH_NB_TABLES-1:0] last_rd_b_table_r;
 logic [AWIDTH_NB_TABLES-1:0] last_rd_b_table_r2;
@@ -116,13 +117,17 @@ logic [AWIDTH_NB_TABLES-1:0] last_rd_b_table_r2;
 logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] q_table_rd_data_b;
 logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] q_table_rd_data_b_jtag;
 
+logic q_table_wr;
 logic q_table_rd_en_jtag;
-logic q_table_data_rd_en_pcie;
-logic q_table_addr_rd_en_pcie;
+logic q_table_wr_en_jtag;
+logic q_table_rd_wr_en_pcie;
+logic q_table_rd_wr_en_pcie_r;
+logic q_table_data_en_pcie;
+logic q_table_data_en_pcie_r;
 logic q_table_jtag_rd_set;
+logic q_table_jtag_wr_set;
+logic q_table_jtag_wr_data_set;
 
-logic q_table_data_jtag_rd_set;
-logic q_table_addr_jtag_rd_set;
 logic q_table_rd_pending_from_jtag;
 logic q_table_pcie_rd_set;
 
@@ -146,10 +151,17 @@ logic [63:0]             f2c_pkt_buf_addr;
 
 logic pcie_reg_read;
 
-logic [31:0]   c2f_head;
-logic [31:0]   c2f_tail;
-logic [63:0]                c2f_kmem_addr;
-logic [63:0]                c2f_head_addr;
+logic [31:0] q_table_data;
+logic [31:0] q_table_data_r;
+logic [31:0] q_table_data_jtag;
+logic [31:0] q_table_data_jtag_pending;
+
+logic [31:0] c2f_head;
+logic [31:0] c2f_tail;
+logic [63:0] c2f_kmem_addr;
+logic [63:0] c2f_head_addr;
+
+assign c2f_head = 32'b0; // FIXME(sadok) remove when reenabling c2f path
 
 logic                     f2c_queue_ready;
 logic                     tail_wr_en;
@@ -181,6 +193,7 @@ always@(posedge clk_status) begin
 
     status_readdata_valid <= 0;
     q_table_rd_en_jtag <= 0;
+    q_table_wr_en_jtag <= 0;
 
     if (!pcie_reset_n) begin
         integer i;
@@ -206,17 +219,25 @@ always@(posedge clk_status) begin
             q_table_rd_pending_from_jtag <= 1;
             q_table_rd_en_jtag <= 1;
         end
-    end
-
-    if (status_addr_sel_r == PCIE & status_write_r) begin
+    end else if (status_addr_sel_r == PCIE & status_write_r) begin
         if (jtag_reg < NB_CONTROL_REGS) begin
             control_regs[jtag_reg] <= status_writedata_r;
+        end else begin
+            q_table_jtag <= {jtag_reg-NB_CONTROL_REGS}[AWIDTH_NB_TABLES-1:0];
+            q_table_data_jtag <= status_writedata_r;
+            q_table_addr_jtag <=
+                {jtag_reg - NB_CONTROL_REGS}[AWIDTH_NB_TABLES +:APP_IDX_WIDTH];
+            q_table_wr_en_jtag <= 1;
         end
     end
 end
 
 assign disable_pcie = control_regs_r2[0][0];
 assign pkt_rb_size = control_regs_r2[0][26:1];
+
+// Use to reset stats from software. Must also be unset from software
+assign sw_reset = control_regs_r2[0][27];
+
 assign dsc_rb_size = control_regs_r2[1][25:0];
 
 // Avoid short path/long path timing problem.
@@ -233,7 +254,6 @@ end
 // support)
 assign page_idx = pcie_address_0[12 +: APP_IDX_WIDTH];
 
-assign q_table_jtag_rd_set= q_table_data_jtag_rd_set & q_table_addr_jtag_rd_set;
 assign q_table_rd_data_b_pcie_ready = rd_en_r2 & pcie_bram_rd_r2;
 
 // We share a single BRAM port among: PCIe writes, PCIe reads and JTAG reads.
@@ -273,21 +293,28 @@ always @(posedge pcie_clk) begin
     // We assign the JTAG read enable and the address to pending registers.
     // These are read opportunistically, when there is no operation from the
     // PCIe. This lets us share the same BRAM port for PCIe and JTAG
-    if (q_table_data_rd_en_pcie) begin
-        q_table_jtag_rd_pending <= q_table_pcie;
-        q_table_data_jtag_rd_set <= 1;
+    if (q_table_rd_wr_en_pcie) begin
+        q_table_jtag_pending <= q_table_pcie;
+        if (q_table_wr) begin
+            q_table_jtag_wr_set <= 1;
+        end else begin
+            q_table_jtag_rd_set <= 1;
+        end
+        q_table_addr_jtag_pending <= q_table_addr_pcie;
     end
-    if (q_table_addr_rd_en_pcie) begin
-        q_table_addr_jtag_rd_pending <= q_table_addr_pcie;
-        q_table_addr_jtag_rd_set <= 1;
+
+    if (q_table_data_en_pcie) begin
+        q_table_jtag_wr_data_set <= 1;
+        q_table_data_jtag_pending <= q_table_data;
     end
 
     q_table_rd_data_b_jtag_ready <= 0;
 
     if (!pcie_reset_n) begin
         q_table_pcie_rd_set <= 0;
-        q_table_data_jtag_rd_set <= 0;
-        q_table_addr_jtag_rd_set <= 0;
+        q_table_jtag_wr_set <= 0;
+        q_table_jtag_wr_data_set <= 0;
+        q_table_jtag_rd_set <= 0;
         q_table_rd_data_b <= 0;
         c2f_kmem_addr <= 0;
     end else if (pcie_write_0) begin
@@ -374,42 +401,86 @@ always @(posedge pcie_clk) begin
 
         pkt_q_table_h_addrs.rd_en_b <= 1;
         pkt_q_table_h_addrs.addr_b <= q_table_addr_pcie_rd_pending;
+    end else if (q_table_jtag_wr_set && q_table_jtag_wr_data_set) begin
+        q_table_jtag_wr_set <= 0;
+        q_table_jtag_wr_data_set <= 0;
+        case (q_table_jtag_pending)
+            0: begin
+                dsc_q_table_tails.wr_data_b <= q_table_data_jtag_pending;
+                dsc_q_table_tails.wr_en_b <= 1;
+                dsc_q_table_tails.addr_b <= q_table_addr_jtag_pending;
+            end
+            1: begin
+                dsc_q_table_heads.wr_data_b <= q_table_data_jtag_pending;
+                dsc_q_table_heads.wr_en_b <= 1;
+                dsc_q_table_heads.addr_b <= q_table_addr_jtag_pending;
+            end
+            2: begin
+                dsc_q_table_l_addrs.wr_data_b <= q_table_data_jtag_pending;
+                dsc_q_table_l_addrs.wr_en_b <= 1;
+                dsc_q_table_l_addrs.addr_b <= q_table_addr_jtag_pending;
+            end
+            3: begin
+                dsc_q_table_h_addrs.wr_data_b <= q_table_data_jtag_pending;
+                dsc_q_table_h_addrs.wr_en_b <= 1;
+                dsc_q_table_h_addrs.addr_b <= q_table_addr_jtag_pending;
+            end
+            4: begin
+                pkt_q_table_tails.wr_data_b <= q_table_data_jtag_pending;
+                pkt_q_table_tails.wr_en_b <= 1;
+                pkt_q_table_tails.addr_b <= q_table_addr_jtag_pending;
+            end
+            5: begin
+                pkt_q_table_heads.wr_data_b <= q_table_data_jtag_pending;
+                pkt_q_table_heads.wr_en_b <= 1;
+                pkt_q_table_heads.addr_b <= q_table_addr_jtag_pending;
+            end
+            6: begin
+                pkt_q_table_l_addrs.wr_data_b <= q_table_data_jtag_pending;
+                pkt_q_table_l_addrs.wr_en_b <= 1;
+                pkt_q_table_l_addrs.addr_b <= q_table_addr_jtag_pending;
+            end
+            7: begin
+                pkt_q_table_h_addrs.wr_data_b <= q_table_data_jtag_pending;
+                pkt_q_table_h_addrs.wr_en_b <= 1;
+                pkt_q_table_h_addrs.addr_b <= q_table_addr_jtag_pending;
+            end
+        endcase
     end else if (q_table_jtag_rd_set) begin
-        q_table_data_jtag_rd_set <= 0;
-        q_table_addr_jtag_rd_set <= 0;
-        last_rd_b_table <= q_table_jtag_rd_pending;
-        case (q_table_jtag_rd_pending)
+        q_table_jtag_rd_set <= 0;
+        last_rd_b_table <= q_table_jtag_pending;
+        case (q_table_jtag_pending)
             0: begin
                 dsc_q_table_tails.rd_en_b <= 1;
-                dsc_q_table_tails.addr_b <= q_table_addr_jtag_rd_pending;
+                dsc_q_table_tails.addr_b <= q_table_addr_jtag_pending;
             end
             1: begin
                 dsc_q_table_heads.rd_en_b <= 1;
-                dsc_q_table_heads.addr_b <= q_table_addr_jtag_rd_pending;
+                dsc_q_table_heads.addr_b <= q_table_addr_jtag_pending;
             end
             2: begin
                 dsc_q_table_l_addrs.rd_en_b <= 1;
-                dsc_q_table_l_addrs.addr_b <= q_table_addr_jtag_rd_pending;
+                dsc_q_table_l_addrs.addr_b <= q_table_addr_jtag_pending;
             end
             3: begin
                 dsc_q_table_h_addrs.rd_en_b <= 1;
-                dsc_q_table_h_addrs.addr_b <= q_table_addr_jtag_rd_pending;
+                dsc_q_table_h_addrs.addr_b <= q_table_addr_jtag_pending;
             end
             4: begin
                 pkt_q_table_tails.rd_en_b <= 1;
-                pkt_q_table_tails.addr_b <= q_table_addr_jtag_rd_pending;
+                pkt_q_table_tails.addr_b <= q_table_addr_jtag_pending;
             end
             5: begin
                 pkt_q_table_heads.rd_en_b <= 1;
-                pkt_q_table_heads.addr_b <= q_table_addr_jtag_rd_pending;
+                pkt_q_table_heads.addr_b <= q_table_addr_jtag_pending;
             end
             6: begin
                 pkt_q_table_l_addrs.rd_en_b <= 1;
-                pkt_q_table_l_addrs.addr_b <= q_table_addr_jtag_rd_pending;
+                pkt_q_table_l_addrs.addr_b <= q_table_addr_jtag_pending;
             end
             7: begin
                 pkt_q_table_h_addrs.rd_en_b <= 1;
-                pkt_q_table_h_addrs.addr_b <= q_table_addr_jtag_rd_pending;
+                pkt_q_table_h_addrs.addr_b <= q_table_addr_jtag_pending;
             end
         endcase
     end
@@ -632,40 +703,51 @@ assign pcie_reg_read = cpu_reg_region & pcie_read_0;
 // assign frb_read = !cpu_reg_region & pcie_read_0;
 // assign frb_address = pcie_address_0[PCIE_ADDR_WIDTH-1:6] - RB_BRAM_OFFSET;
 
-// two cycle read delay
-always@(posedge pcie_clk) begin
+logic [31:0] pkt_q_table_pcie_out;
+logic [31:0] pkt_q_table_pcie_out_r;
+
+always @(posedge pcie_clk) begin
+    // two cycle read delay
     cpu_reg_region_r1 <= cpu_reg_region;
     cpu_reg_region_r2 <= cpu_reg_region_r1;
+
+    // jtag_to_pcie_fifo output pipeline
+    q_table_rd_wr_en_pcie <= q_table_rd_wr_en_pcie_r;
+    pkt_q_table_pcie_out <= pkt_q_table_pcie_out_r;
+    q_table_data_en_pcie <= q_table_data_en_pcie_r;
+    q_table_data <= q_table_data_r;
 end
 
-// explicitly truncating outputs
-logic [31:0] pkt_q_table_pcie_out;
-logic [31:0] pkt_q_table_addr_pcie_out;
-
-assign q_table_pcie = pkt_q_table_pcie_out[AWIDTH_NB_TABLES-1:0];
-assign q_table_addr_pcie = pkt_q_table_addr_pcie_out[APP_IDX_WIDTH-1:0];
+assign q_table_addr_pcie = pkt_q_table_pcie_out[0 +: APP_IDX_WIDTH];
+assign q_table_pcie = pkt_q_table_pcie_out[APP_IDX_WIDTH +: AWIDTH_NB_TABLES];
+assign q_table_wr = pkt_q_table_pcie_out[31]; // 0 = rd, 1 = wr
 
 // PCIe and JTAG are in different clock domains, we use the following
 // dual-clocked FIFOs to transfer data between the two
-dc_fifo_reg_core  jtag_to_pcie_data_fifo (
+dc_fifo_reg_core  jtag_to_pcie_fifo (
     .wrclock               (clk_status), // jtag clock
     .wrreset_n             (pcie_reset_n),
     .rdclock               (pcie_clk),
     .rdreset_n             (pcie_reset_n),
-    .avalonst_sink_valid   (q_table_rd_en_jtag),
-    .avalonst_sink_data    ({ {{32-AWIDTH_NB_TABLES}{1'b0}}, q_table_jtag }),
-    .avalonst_source_valid (q_table_data_rd_en_pcie),
-    .avalonst_source_data  (pkt_q_table_pcie_out)
+    .avalonst_sink_valid   (q_table_rd_en_jtag | q_table_wr_en_jtag),
+    .avalonst_sink_data    ({
+        q_table_wr_en_jtag,
+        {{32 - APP_IDX_WIDTH - AWIDTH_NB_TABLES - 1}{1'b0}},
+        q_table_jtag,
+        q_table_addr_jtag
+    }),
+    .avalonst_source_valid (q_table_rd_wr_en_pcie_r),
+    .avalonst_source_data  (pkt_q_table_pcie_out_r)
 );
-dc_fifo_reg_core  jtag_to_pcie_addr_fifo (
+dc_fifo_reg_core  jtag_to_pcie_wr_data_fifo (
     .wrclock               (clk_status), // jtag clock
     .wrreset_n             (pcie_reset_n),
     .rdclock               (pcie_clk),
     .rdreset_n             (pcie_reset_n),
-    .avalonst_sink_valid   (q_table_rd_en_jtag),
-    .avalonst_sink_data    ({ {{32-APP_IDX_WIDTH}{1'b0}}, q_table_addr_jtag }),
-    .avalonst_source_valid (q_table_addr_rd_en_pcie),
-    .avalonst_source_data  (pkt_q_table_addr_pcie_out)
+    .avalonst_sink_valid   (q_table_wr_en_jtag),
+    .avalonst_sink_data    (q_table_data_jtag),
+    .avalonst_source_valid (q_table_data_en_pcie_r),
+    .avalonst_source_data  (q_table_data_r)
 );
 dc_fifo_reg_core  pcie_to_jtag_fifo (
     .wrclock               (pcie_clk),
@@ -712,6 +794,7 @@ fpga2cpu_pcie f2c_inst (
     .pcie_bas_writedata     (pcie_bas_writedata),
     .pcie_bas_burstcount    (pcie_bas_burstcount),
     .pcie_bas_response      (pcie_bas_response),
+    .sw_reset               (sw_reset),
     .dma_queue_full_cnt     (dma_queue_full_cnt),
     .cpu_buf_full_cnt       (cpu_buf_full_cnt)
 );

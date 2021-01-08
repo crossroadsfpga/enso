@@ -251,6 +251,7 @@ pdu_metadata_t           pdumeta_cpu_data;
 logic                    pdumeta_cpu_valid;
 logic [9:0]              pdumeta_cnt;
 
+logic sw_reset;
 
 logic [7:0] status_addr_r;
 logic [STAT_AWIDTH-1:0]  status_addr_sel_r;
@@ -353,7 +354,7 @@ logic pcie_bas_write_r;
 //////////////////////////
 always @ (posedge clk)
 begin
-    if(rst)begin
+    if (rst | sw_reset) begin
         fd_in_pkt_cnt <= 0;
         fd_out_pkt_cnt <= 0;
         max_fd_out_fifo <= 0;
@@ -380,7 +381,7 @@ end
 
 // datamover clock domain
 always @(posedge clk_datamover) begin
-    if (rst_datamover) begin
+    if (rst_datamover | sw_reset) begin
         in_pkt_cnt <= 0;
         out_pkt_cnt_incomp <= 0;
         out_pkt_cnt_parser <= 0;
@@ -448,7 +449,7 @@ end
 
 // pcie clock domain
 always @(posedge clk_pcie) begin
-    if (rst_pcie) begin
+    if (rst_pcie | sw_reset) begin
         pcie_pkt_cnt <= 0;
         pcie_meta_cnt <= 0;
         dma_pkt_cnt <= 0;
@@ -1105,6 +1106,7 @@ pcie_top pcie (
     .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
     .pcie_desc_buf_occup    (pcie_desc_buf_occup),
     .disable_pcie           (disable_pcie),
+    .sw_reset               (sw_reset),
     .pdumeta_cpu_data       (pdumeta_cpu_data),
     .pdumeta_cpu_valid      (pdumeta_cpu_valid),
     .pdumeta_cnt            (pdumeta_cnt),

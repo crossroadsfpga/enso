@@ -323,10 +323,13 @@ typedef enum{
     CONFIGURE_1,
     READ_MEMORY,
     READ_PCIE_START,
-    READ_PCIE
+    READ_PCIE,
+    ZERO_PCIE
 } c_state_t;
 
 c_state_t conf_state;
+
+logic [31:0] read_pcie_cnt;
 
 //Configure
 //Read and display pkt/flow cnts
@@ -336,6 +339,7 @@ always @(posedge clk_status) begin
     status_writedata <= 0;
     if (rst) begin
         status_addr <= 0;
+        read_pcie_cnt <= 0;
         conf_state <= CONFIGURE_0;
     end else begin
         case (conf_state)
@@ -407,16 +411,35 @@ always @(posedge clk_status) begin
                 end
             end
             READ_PCIE: begin
+                // $display("READ_PCIE");
                 if (status_readdata_valid) begin
                     $display("%d: 0x%8h", status_addr[6:0], status_readdata);
                     if (status_addr == (
                             30'h2A00_0000 + 30'd8 * nb_queues + 30'd1)) begin
-                        $display("done");
-                        $finish;
+                        read_pcie_cnt <= read_pcie_cnt + 1;
+                        if (read_pcie_cnt == 1) begin
+                            $display("done");
+                            $finish;
+                        end else begin
+                            status_addr <= 30'h2A00_0000;
+                            status_write <= 1;
+                            status_writedata <= 0;
+                            conf_state <= ZERO_PCIE;
+                        end
                     end else begin
                         status_addr <= status_addr + 1;
                         status_read <= 1;
                     end
+                end
+            end
+            ZERO_PCIE: begin
+                if (status_addr == (
+                        30'h2A00_0000 + 30'd8 * nb_queues + 30'd2)) begin
+                    conf_state <= READ_PCIE_START;
+                end else begin
+                    status_write <= 1;
+                    status_writedata <= 0;
+                    status_addr <= status_addr + 1;
                 end
             end
         endcase

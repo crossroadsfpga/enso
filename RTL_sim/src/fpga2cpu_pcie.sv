@@ -54,7 +54,10 @@ module fpga2cpu_pcie (
     output logic [3:0]                 pcie_bas_burstcount,
     input  logic [1:0]                 pcie_bas_response,
 
-    // counters
+    // Counter reset
+    input  logic                     sw_reset,
+
+    // Counters
     output logic [31:0]              dma_queue_full_cnt,
     output logic [31:0]              cpu_buf_full_cnt
 );
@@ -164,7 +167,7 @@ always @(posedge clk) begin
     end
 
     rst_r <= rst;
-    if (rst_r) begin
+    if (rst_r | sw_reset) begin
         state <= IDLE;
         dma_queue_full_cnt_r <= 0;
         cpu_buf_full_cnt_r <= 0;
@@ -267,15 +270,18 @@ always @(posedge clk) begin
                         assert(pkt_buf_rd_data.sop);
                     end
 
-                    // skips the first block
-                    pcie_bas_address_r <= cur_pkt_buf_addr + req_offset
-                                          + 64 * cur_pkt_tail;
+                    // Skip DMA when addresses are not set
+                    if (cur_pkt_buf_addr && cur_dsc_buf_addr) begin
+                        pcie_bas_address_r <= cur_pkt_buf_addr + req_offset
+                                            + 64 * cur_pkt_tail;
 
-                    pcie_bas_byteenable_r <= 64'hffffffffffffffff;
-                    pcie_bas_writedata_r <= pkt_buf_rd_data.data;
+                        pcie_bas_byteenable_r <= 64'hffffffffffffffff;
+                        pcie_bas_writedata_r <= pkt_buf_rd_data.data;
+                        pcie_bas_write_r <= 1;
+                        pcie_bas_burstcount_r <= flits_in_transfer;
+                    end
+
                     pkt_buf_rd_en <= 1;
-                    pcie_bas_write_r <= 1;
-                    pcie_bas_burstcount_r <= flits_in_transfer;
 
                     if (missing_flits > 1) begin
                         state <= COMPLETE_BURST;
@@ -317,13 +323,17 @@ always @(posedge clk) begin
                     missing_flits_in_transfer <= 
                         missing_flits_in_transfer - 1'b1;
 
-                    // subsequent bursts from the same transfer do not need to
-                    // set the address
-                    pcie_bas_byteenable_r <= 64'hffffffffffffffff;
-                    pcie_bas_writedata_r <= pkt_buf_rd_data.data;
+                    // Skip DMA when addresses are not set
+                    if (cur_pkt_buf_addr && cur_dsc_buf_addr) begin
+                        // subsequent bursts from the same transfer do not need
+                        // to set the address
+                        pcie_bas_byteenable_r <= 64'hffffffffffffffff;
+                        pcie_bas_writedata_r <= pkt_buf_rd_data.data;
+                        pcie_bas_write_r <= 1;
+                        pcie_bas_burstcount_r <= 0;
+                    end
+
                     pkt_buf_rd_en <= 1;
-                    pcie_bas_write_r <= 1;
-                    pcie_bas_burstcount_r <= 0;
 
                     if (missing_flits_in_transfer == 1) begin
                         if (missing_flits > 1) begin
@@ -374,12 +384,15 @@ always @(posedge clk) begin
                     pcie_pkt_desc.queue_id = cur_desc.queue_id;
                     pcie_pkt_desc.pad = 0;
 
-                    // pcie_bas_address_r <= cur_pkt_buf_addr;
-                    pcie_bas_address_r <= cur_dsc_buf_addr + 64 * cur_dsc_tail;
-                    pcie_bas_byteenable_r <= 64'hffffffffffffffff;
-                    pcie_bas_writedata_r <= pcie_pkt_desc;
-                    pcie_bas_write_r <= 1;
-                    pcie_bas_burstcount_r <= 1;
+                    // Skip DMA when addresses are not set
+                    if (cur_pkt_buf_addr && cur_dsc_buf_addr) begin
+                        pcie_bas_address_r <= cur_dsc_buf_addr
+                                              + 64 * cur_dsc_tail;
+                        pcie_bas_byteenable_r <= 64'hffffffffffffffff;
+                        pcie_bas_writedata_r <= pcie_pkt_desc;
+                        pcie_bas_write_r <= 1;
+                        pcie_bas_burstcount_r <= 1;
+                    end
 
                     // update tail
                     out_dsc_tail <= new_dsc_tail;
