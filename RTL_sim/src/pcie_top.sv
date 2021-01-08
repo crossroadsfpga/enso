@@ -982,4 +982,12 @@ dsc_q_table_h_addrs_bram (
     .q_b        (dsc_q_table_h_addrs.rd_data_b)
 );
 
+// unused inputs
+assign dsc_q_table_heads.wr_data_a = 32'bx;
+assign dsc_q_table_l_addrs.wr_data_a = 32'bx;
+assign dsc_q_table_h_addrs.wr_data_a = 32'bx;
+assign pkt_q_table_heads.wr_data_a = 32'bx;
+assign pkt_q_table_l_addrs.wr_data_a = 32'bx;
+assign pkt_q_table_h_addrs.wr_data_a = 32'bx;
+
 endmodule
