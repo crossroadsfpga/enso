@@ -45,6 +45,22 @@ static inline uint16_t get_pkt_size(uint8_t *addr) {
     return total_len;
 }
 
+void print_buf(void* buf, const uint32_t nb_cache_lines)
+{
+    for (uint32_t i = 0; i < nb_cache_lines * 64; i++) {
+        printf("%02x ", ((uint8_t*) buf)[i]);
+        if ((i + 1) % 8 == 0) {
+            printf(" ");
+        }
+        if ((i + 1) % 16 == 0) {
+            printf("\n");
+        }
+        if ((i + 1) % 64 == 0) {
+            printf("\n");
+        }
+    }
+}
+
 // adapted from ixy
 static void* virt_to_phys(void* virt) {
 	long pagesize = sysconf(_SC_PAGESIZE);
@@ -336,22 +352,6 @@ void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range)
             printf("\n");
         }
         printf("rp_addr[%d] = 0x%08x \n", 16*start + i, rp_addr[16*start+i]);
-    }
-}
-
-void print_buf(void* buf, const uint32_t nb_cache_lines)
-{
-    for (uint32_t i = 0; i < nb_cache_lines; i++) {
-        printf("%02x ", ((uint8_t*) buf)[i]);
-        if ((i + 1) % 8 == 0) {
-            printf(" ");
-        }
-        if ((i + 1) % 16 == 0) {
-            printf("\n");
-        }
-        if ((i + 1) % 64 == 0) {
-            printf("\n");
-        }
     }
 }
 
