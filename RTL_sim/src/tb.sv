@@ -726,7 +726,7 @@ always @(posedge clk_status) begin
     s_write <= 0;
     s_writedata <= 0;
     error_termination_r <= error_termination;
-    if(rst)begin
+    if (rst) begin
         s_cnt <= 0;
         s_addr <= 0;
         conf_state <= CONFIGURE_0;
@@ -739,10 +739,10 @@ always @(posedge clk_status) begin
 
                 `ifdef NO_PCIE
                     // pcie disabled
-                    s_writedata <= {5'(nb_queues), pkt_buf_size, 1'b1};
+                    s_writedata <= {5'h0, pkt_buf_size, 1'b1};
                 `else
                     // pcie enabled
-                    s_writedata <= {5'(nb_queues), pkt_buf_size, 1'b0};
+                    s_writedata <= {5'h0, pkt_buf_size, 1'b0};
                 `endif
                 conf_state <= CONFIGURE_1;
             end
@@ -797,7 +797,7 @@ always @(posedge clk_status) begin
             end
             READ_PCIE: begin
                 if (top_readdata_valid) begin
-                    $display("%d: 0x%8h", s_addr[6:0], top_readdata);
+                    $display("%d: 0x%8h", s_addr[24:0], top_readdata);
 
                     if (s_addr == (
                             30'h2A00_0000 + 30'd8 * nb_queues + 30'd1)) begin
