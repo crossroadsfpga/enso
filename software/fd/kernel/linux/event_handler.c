@@ -36,6 +36,7 @@
 #include "event_handler.h"
 #include "event_queue.h"
 #include "intel_fpga_pcie_chr.h"
+#include "zc/mmap_zcopy.h"
 
 int handle_event(int queue_id0)
 {
@@ -44,7 +45,21 @@ int handle_event(int queue_id0)
     struct eventfd_ctx *efd_ctx = NULL;
     struct task_struct * task = NULL;
 
+#ifdef FAKE_BACK
+    struct file *pcap_file = NULL; // (soup) TODO
+    ssize_t ret = 0;
+    char fake_buf[1000]; // (soup) TODO
+    size_t fake_count = 0;
+    loff_t fake_pos;
+#endif
+
     spin_lock_irqsave(&event_lock, event_flags);
+
+#ifdef FAKE_BACK
+    // src port, dest port, len, checksum, data
+    // https://inst.eecs.berkeley.edu/~ee122/fa07/projects/p2files/packet_parser.c
+    ret = kernel_read(pcap_file, fake_buf, fake_count, &fake_pos);
+#endif
 
     fd = queue_map[queue_id0]; // (soup) change to var size
     if (fd <= 0) {

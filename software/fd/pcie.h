@@ -100,6 +100,9 @@ typedef struct {
     uint32_t c2f_cpu_tail;
     uint32_t nb_head_updates;
     int app_id;
+    int device_fd;
+    int epfd;
+    int efd;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues);
@@ -112,7 +115,7 @@ void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
 void print_fpga_reg(intel_fpga_pcie_dev *dev);
 void print_block(block_s *block);
 void fill_block(uint32_t *addr, block_s *block);
-uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
+uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
          block_s *block, uint32_t *kdata);
 
 #endif // PCIE_H

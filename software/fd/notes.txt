@@ -1,0 +1,4 @@
+ar ru fd.a fd.o
+ranlib fd.a
+g++ -shared -o libfd.so fd.o
+gcc -o short short.c -L.

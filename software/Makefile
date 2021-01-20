@@ -4,7 +4,7 @@ CXXFLAGS = -Wall -ansi -Wextra -O2 -std=c++11 \
 	-I fd/api/linux
 LDFLAGS = -O2 -Lfd -lfd -pthread
 
-SRCS = app.cpp
+SRCS = short.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
 EXEC = app
 

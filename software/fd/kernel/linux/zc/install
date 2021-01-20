@@ -1,0 +1,9 @@
+#!/bin/bash
+if [[ `lsmod | grep -o mmap_zcopy` ]]
+then
+    echo "Unloading previous module"
+    ./unload
+fi
+echo "Loading module"
+./load
+

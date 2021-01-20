@@ -1,0 +1,1 @@
+cmd_/home/soup/front_door/software/fd/kernel/linux/zc/mmap_zcopy.ko := ld -r -m elf_x86_64 -z max-page-size=0x200000 -T ./scripts/module-common.lds --build-id  -o /home/soup/front_door/software/fd/kernel/linux/zc/mmap_zcopy.ko /home/soup/front_door/software/fd/kernel/linux/zc/mmap_zcopy.o /home/soup/front_door/software/fd/kernel/linux/zc/mmap_zcopy.mod.o ;  true

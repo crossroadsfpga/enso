@@ -22,8 +22,7 @@ MODULE_INFO(retpoline, "Y");
 static const char __module_depends[]
 __used
 __attribute__((section(".modinfo"))) =
-"depends=uio";
+"depends=";
 
-MODULE_ALIAS("pci:v00001172d*sv*sd*bc*sc*i*");
 
-MODULE_INFO(srcversion, "FD40DBCB75A884B34E841C3");
+MODULE_INFO(srcversion, "1A51806C304C1663672CFED");

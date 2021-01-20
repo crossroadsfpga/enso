@@ -1,0 +1,6 @@
+#!/bin/sh
+rmmod mmap_zcopy
+
+# Remove device manually in case udev isn't set up to do so.
+rm -f /dev/mchar
+
