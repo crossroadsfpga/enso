@@ -17,7 +17,7 @@ endif
 
 LDFLAGS = -g -O2
 
-SRCS = fd.cpp pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp
+SRCS = pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
 LIB_STATIC = libfd.a
 LIB_SHARED = libfd.so
