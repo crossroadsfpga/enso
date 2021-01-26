@@ -77,7 +77,7 @@ static void* virt_to_phys(void* virt) {
         close(fd);
         return NULL;
     }
-	
+
     uintptr_t phy = 0;
     if (read(fd, &phy, sizeof(phy)) < 0) {
         close(fd);
@@ -89,7 +89,7 @@ static void* virt_to_phys(void* virt) {
         return NULL;
 	}
 	// bits 0-54 are the page number
-	return (void*) ((phy & 0x7fffffffffffffULL) * pagesize 
+	return (void*) ((phy & 0x7fffffffffffffULL) * pagesize
                     + ((uintptr_t) virt) % pagesize);
 }
 
@@ -124,7 +124,7 @@ static void* get_huge_pages(int app_id, size_t size) {
         unlink(huge_pages_path);
         return NULL;
     }
-    
+
     if (mlock(virt_addr, size)) {
         std::cerr << "(" << errno << ") Could not lock huge page" << std::endl;
         munmap(virt_addr, size);
@@ -179,8 +179,8 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->dsc_buf);
         uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
         uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
-        
-        socket_entry->pkt_buf = 
+
+        socket_entry->pkt_buf =
             (uint32_t*) get_huge_pages(app_id, ALIGNED_F2C_PKT_BUF_SIZE);
         if (socket_entry->pkt_buf == NULL) {
             std::cerr << "Could not get huge page" << std::endl;
@@ -215,10 +215,17 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     socket_entry->app_id = app_id;
     socket_entry->dsc_buf_head = uio_data_bar2->dsc_buf_head;
     socket_entry->pkt_buf_head = uio_data_bar2->pkt_buf_head;
+    socket_entry->active = true;
 
     return 0;
 }
 
+/**
+ *  @brief reads from socket buffers
+ *  @param buf user buffer?
+ *  @param len max num packets to read
+ *  @return number of packets read
+ */
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
     pcie_pkt_desc_t* dsc_buf = socket_entry->dsc_buf;
@@ -226,6 +233,7 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     uint32_t dsc_buf_head = socket_entry->dsc_buf_head;
     uint32_t pkt_buf_head = socket_entry->pkt_buf_head;
 
+    // 16 = CACHE_LINE_SIZE / sizeof(*pkt_buf)
     *buf = &pkt_buf[pkt_buf_head * 16];
     uint8_t* my_buf = (uint8_t*) *buf;
 
@@ -295,7 +303,7 @@ void advance_ring_buffer(socket_internal* socket_entry)
 //     block_s block;
 //     pcie_block_t* global_block = (pcie_block_t *) socket_entry->kdata;
 //     pcie_block_t* uio_data_bar2 = socket_entry->uio_data_bar2;
-    
+
 //     if (socket_entry->app_id != 0) {
 //         std::cerr << "Can only send control messages from app 0" << std::endl;
 //         return -1;
@@ -345,6 +353,8 @@ int dma_finish(socket_internal* socket_entry)
         munmap(socket_entry->dsc_buf, BUF_PAGE_SIZE);
     }
 
+    socket_entry->active = false;
+
     return 0;
 }
 
@@ -365,7 +375,7 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev)
         dev->read32(2, reinterpret_cast<void*>(0 + i*4), &temp_r);
         printf("fpga_reg[%d] = 0x%08x \n", i, temp_r);
     }
-} 
+}
 
 void print_pcie_block(pcie_block_t * pb)
 {
@@ -388,7 +398,7 @@ void print_pcie_block(pcie_block_t * pb)
 }
 
 
-// uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
+// uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
 //         block_s *block, uint32_t *kdata) {
 //     // uint32_t pdu_flit;
 //     // uint32_t copy_flit;
@@ -402,14 +412,14 @@ void print_pcie_block(pcie_block_t * pb)
 //     if (c2f_tail < c2f_head) {
 //         free_slot = c2f_head - c2f_tail - 1;
 //     } else {
-//         //CPU2FPGA ring buffer does not have the global register. 
+//         //CPU2FPGA ring buffer does not have the global register.
 //         //the free_slot should be at most one slot smaller than CPU2FPGA ring buffer.
 //         free_slot = C2F_BUFFER_SIZE - c2f_tail + c2f_head - 1;
 //     }
-//     //printf("free_slot = %d; c2f_head = %d; c2f_tail = %d\n", 
-//     //        free_slot, c2f_head, c2f_tail);   
+//     //printf("free_slot = %d; c2f_head = %d; c2f_tail = %d\n",
+//     //        free_slot, c2f_head, c2f_tail);
 //     //block when the CPU2FPGA ring buffer is almost full
-//     while (free_slot < 1) { 
+//     while (free_slot < 1) {
 //         //recalculate free_slot
 //     	c2f_head = global_block->c2f_head;
 //     	if (c2f_tail < c2f_head) {
@@ -437,7 +447,7 @@ void print_pcie_block(pcie_block_t * pb)
 //     kdata[base_addr + ACTION_OFFSET] = ACTION_NO_MATCH;
 //     kdata[base_addr + QUEUE_ID_LO_OFFSET] = block->queue_id & 0xFFFFFFFF;
 //     kdata[base_addr + QUEUE_ID_HI_OFFSET] = (block->queue_id >> 32) & 0xFFFFFFFF;
-    
+
 //     // print_slot(kdata, base_addr/16, 1);
 
 //     //update c2f_tail

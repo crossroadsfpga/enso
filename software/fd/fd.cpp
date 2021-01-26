@@ -9,6 +9,7 @@
 // TODO(sadok) replace with hash table?
 static socket_internal open_sockets[MAX_NB_SOCKETS];
 static unsigned int nb_open_sockets = 0;
+static int init = 0;
 
 int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     int nb_queues) // HACK(sadok) using protocol as nb_queues
@@ -17,6 +18,14 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     uint16_t bdf = 0;
     int bar = -1;
     int result;
+
+    // TODO (soup) check init atomically
+    if (unlikely(!init)) {
+        for (int queue_id = 0; queue_id < MAX_NB_SOCKETS; queue_id++) {
+            open_sockets[queue_id].active = false;
+        }
+        init = 1;
+    }
 
     if (unlikely(nb_open_sockets >= MAX_NB_SOCKETS)) {
         std::cerr << "Maximum number of sockets reached" << std::endl;
@@ -73,7 +82,7 @@ int bind(
         std::cerr << "Could not send control message" << std::endl;
         return -1;
     }
-    #else 
+    #else
     (void) addrlen;// avoid unused parameter warning
     (void) nb_queues;
     #endif
@@ -85,7 +94,7 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)
 {
     void* ring_buf;
     socket_internal* socket = &open_sockets[sockfd];
-    
+
     ssize_t bytes_received = dma_run(socket, &ring_buf, len);
 
     if (unlikely(bytes_received <= 0)) {
@@ -113,7 +122,7 @@ int shutdown(int sockfd, int how __attribute__((unused)))
 {
     int result;
     intel_fpga_pcie_dev *dev = open_sockets[sockfd].dev;
-    
+
     result = dma_finish(&open_sockets[sockfd]);
     result = dev->use_cmd(false);
 

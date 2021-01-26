@@ -109,6 +109,7 @@ typedef struct {
     uint64_t tail;
     uint64_t pad[5];
 } pcie_pkt_desc_t;
+
 typedef struct {
     intel_fpga_pcie_dev* dev;
     pcie_pkt_desc_t* dsc_buf;
@@ -119,6 +120,7 @@ typedef struct {
     uint32_t pkt_buf_head;
     int app_id;
     pcie_block_t* uio_data_bar2;
+    bool active;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues);
@@ -132,7 +134,7 @@ void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
 void print_fpga_reg(intel_fpga_pcie_dev *dev);
 void print_block(block_s *block);
 void fill_block(uint32_t *addr, block_s *block);
-uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
+uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block,
                        block_s *block, uint32_t *kdata);
 
 #endif // PCIE_H
