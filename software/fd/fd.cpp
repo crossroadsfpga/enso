@@ -18,6 +18,7 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     uint16_t bdf = 0;
     int bar = -1;
     int result;
+    int sock_id = -1;;
 
     // TODO (soup) check init atomically
     if (unlikely(!init)) {
@@ -55,6 +56,12 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
         std::cerr << "Problem initializing DMA" << std::endl;
         return -1;
     }
+
+    // TODO (soup) use kern_create_socket(void)
+    // sock_id = kern_create_socket();
+    // assert(sock_id == nb_open_sockets);
+    // nb_open_sockets++;
+    // return sock_id;
 
     // FIXME(sadok) use __sync_fetch_and_add to update atomically
     return nb_open_sockets++;

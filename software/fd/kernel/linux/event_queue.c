@@ -33,7 +33,7 @@
 #include "intel_fpga_pcie_setup.h"
 #include "event_queue.h"
 #include "event_handler.h"
-#include "fd.h"
+#include "sock_internal.h"
 
 // HACK(sadok) number of queues should not be fixed
 #define NB_QUEUES 2
@@ -46,19 +46,22 @@ int event_queue_loop(event_kthread_data_t* data) {
         // we can also pass a condition here instead of 0
         wait_event_timeout(data->queue, 0, HZ);
 
-        for (queue_id = 0; queue_id < MAX_NB_SOCKETS; queue_id++) {
-            socket_internal *socket_entry = open_sockets + queue_id;
+        for (queue_id = 0; queue_id < MAX_KERN_SOCKS; queue_id++) {
+            kern_sock_norman_t *socket_entry = kern_socks + queue_id;
             pcie_pkt_desc_t *dsc_buf = socket_entry->dsc_buf;
             uint32_t dsc_buf_head = socket_entry->dsc_buf_head;
-            pcie_pkt_desc_t *cur_desk = dsc_buf + dsc_buf_head;
+            pcie_pkt_desc_t *cur_desc = dsc_buf + dsc_buf_head;
 
             if (socket_entry->active == false) {
                 continue;
             }
 
+            // TODO (soup) read cur_desc somehow
+            /*
             if (cur_desc->signal == 1) {
                 handle_event(queue_id);
             }
+            */
         }
     }
     return 0;
