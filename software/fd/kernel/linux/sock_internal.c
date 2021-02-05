@@ -1,6 +1,8 @@
 #include "sock_internal.h"
+#include "intel_fpga_pcie_setup.h"
 
-int kern_create_socket(void) {
+// TODO figure out where to get dev from, deal with head ptr
+int kern_create_socket(struct pci_dev *dev, int app_id) {
     // alloc socket struct
     spin_lock_irqsave(&kern_sock_lock, kern_socks_event_flags);
     kern_sock_norman_t *sock = kern_socks + num_kern_socks;
@@ -14,10 +16,12 @@ int kern_create_socket(void) {
     num_pkt_bufs++;
 
     // app info
-    sock->app_id = 0; // TODO where does this come from??
+    sock->app_id = app_id; // TODO derive
     sock->app_thr = current;
-    sock->uio_data_bar2 = NULL; // TODO where does this come from??
-    // TODO figure out how reading packets from kernel works
+    uio_mmap_bar2_addr = dev->bar[2].base_addr;
+    sock->uio_data_bar2 = (pcie_block_t *) (
+        (uint8_t *)uio_mmap_bar2_addr + app_id * MEMORY_SPACE_PER_APP;
+        )
 
     // finish up
     sock->active = 1;

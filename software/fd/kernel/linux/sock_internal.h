@@ -4,6 +4,7 @@
 /* TODO change these values */
 #define MAX_KERN_SOCKS 7
 uint64_t num_kern_socks = 0;
+#define MEMORY_SPACE_PER_APP (1<<12)
 
 DEFINE_SPINLOCK(kern_sock_lock);
 
