@@ -39,17 +39,21 @@
 #define NB_QUEUES 2
 
 int event_queue_loop(event_kthread_data_t* data) {
-    int queue_id = 0;
+    int sock_id = 0;
     while (!kthread_should_stop()) {
         // FIXME(sadok) this is a very generous sleep that we should remove when
         // doing something useful here
         // we can also pass a condition here instead of 0
         wait_event_timeout(data->queue, 0, HZ);
 
-        for (queue_id = 0; queue_id < MAX_KERN_SOCKS; queue_id++) {
-            kern_sock_norman_t *socket_entry = kern_socks + queue_id;
+        for (sock_id = 0; sock_id < MAX_KERN_SOCKS; sock_id++) {
+            kern_sock_norman_t *socket_entry = kern_socks + sock_id;
             pcie_pkt_desc_t *dsc_buf = socket_entry->dsc_buf;
             uint32_t dsc_buf_head = socket_entry->dsc_buf_head;
+            if (dsc_buf_head == DESC_HEAD_INVALID) {
+                continue;
+            }
+
             pcie_pkt_desc_t *cur_desc = dsc_buf + dsc_buf_head;
 
             if (socket_entry->active == false) {

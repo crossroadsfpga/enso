@@ -116,7 +116,9 @@ struct intel_fpga_pcie_ksize {
                                                   9, unsigned int)
 #define INTEL_FPGA_PCIE_IOCTL_GET_KTIMER    _IOR (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
                                                   10, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 10
+#define INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK    _IOR (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
+                                                  11, unsigned int *)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 11
 
 
 

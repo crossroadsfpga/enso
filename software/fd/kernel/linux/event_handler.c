@@ -36,6 +36,7 @@
 
 int handle_event(int queue_id)
 {
+    // TODO (soup) wake up thr (see `event` branch)
     printk("Processing event for queue %i\n", queue_id);
     return 0;
 }

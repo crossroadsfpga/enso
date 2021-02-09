@@ -1,8 +1,17 @@
 #include "sock_internal.h"
 #include "intel_fpga_pcie_setup.h"
+#include "sock_errors.h"
 
-// TODO figure out where to get dev from, deal with head ptr
+// TODO figure out where to get dev from
 int kern_create_socket(struct pci_dev *dev, int app_id) {
+    if (num_kern_socks >= MAX_KERN_SOCKS) {
+        return -too_many_socks_err;
+    }
+
+    if (num_dsc_bufs >= MAX_KERN_DESCS) {
+        return -too_many_descs_err;
+    }
+
     // alloc socket struct
     spin_lock_irqsave(&kern_sock_lock, kern_socks_event_flags);
     kern_sock_norman_t *sock = kern_socks + num_kern_socks;
@@ -10,10 +19,7 @@ int kern_create_socket(struct pci_dev *dev, int app_id) {
     // alloc packet desc buf
     sock->dsc_buf = dsc_bufs + num_dsc_bufs;
     num_dsc_bufs++;
-
-    // alloc packet buf
-    sock->pkt_buf = pkt_bufs + num_pkt_bufs;
-    num_pkt_bufs++;
+    sock->dsc_buf_head = DESC_HEAD_INVALID;
 
     // app info
     sock->app_id = app_id; // TODO derive

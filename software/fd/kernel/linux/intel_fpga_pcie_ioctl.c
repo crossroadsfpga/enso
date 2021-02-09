@@ -45,6 +45,9 @@
 #include "intel_fpga_pcie_dma.h"
 #include "intel_fpga_pcie_ioctl.h"
 #include "intel_fpga_pcie_setup.h"
+#include "event_queue.h" // for allocating queue
+#include "sock_errors.h"
+#include "sock_internal.h"
 
 //In bytes
 #define FPGA2CPU_OFFSET 8
@@ -63,7 +66,7 @@ static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg);
 static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg);
 static long get_ktimer(struct dev_bookkeep *dev_bk,
                        unsigned int __user *user_addr);
-
+static int create_sock(struct pci_dev *pdev, long regfd);
 
 /******************************************************************************
  * Device and I/O control function
@@ -161,13 +164,15 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
     case INTEL_FPGA_PCIE_IOCTL_GET_KTIMER:
         retval = get_ktimer(dev_bk, (unsigned int __user *)uarg);
         break;
+    case INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK:
+        retval = create_sock(dev_bk->dev, uarg);
+        break;
     default:
         retval = -ENOTTY;
     }
 
     return retval;
 }
-
 
 /******************************************************************************
  * Helper functions
@@ -545,7 +550,7 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
         if ((kmem_addr_l + karg.f2c_size) < kmem_addr_l) {
             ++kmem_addr_h;
         }
-        iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4); 
+        iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4);
     }
 
     return retval;
@@ -575,3 +580,30 @@ static long get_ktimer(struct dev_bookkeep *dev_bk,
 
     return 0;
 }
+
+/** allocates a queue id, associates regfd with it, creates sock **/
+static int create_sock(struct pci_dev *pdev, long regfd)
+{
+    int sock_id;
+
+    printk(KERN_INFO "get_queue_id!\n");
+
+    sock_id = kern_create_socket(pdev, app_id);
+    if (sock_id < 0) {
+        printk(KERN_INFO "%s\n", sock_err_str(-sock_id));
+    }
+
+/*
+    if (queue_map[sock_id]) {
+        printk(KERN_INFO "failed to allocate queue\n");
+        return -no_queue_avail;
+    }
+    queue_map[sock_id] = (int)regfd;
+    tasks[sock_id] = current;
+    */
+
+    printk(KERN_INFO "sock id for thr %lx: %d\n", current, sock_id);
+
+    return sock_id;
+}
+

@@ -6,6 +6,11 @@
 uint64_t num_kern_socks = 0;
 #define MEMORY_SPACE_PER_APP (1<<12)
 
+#define MAX_KERN_DESCS (MAX_KERN_SOCKS * 2)
+uint64_t num_dsc_bufs = 0;
+
+#define DESC_HEAD_INVALID -1
+
 DEFINE_SPINLOCK(kern_sock_lock);
 
 /* WARNING: mirrors struct in fd/pcie.h */
@@ -40,11 +45,7 @@ typedef struct {
 
     /* packet descriptors */
     pcie_pkt_desc_t *dsc_buf;
-    uint32_t dsc_buf_head;
-
-    /* packet contents */
-    uint32_t *pkt_buf;
-    uint32_t pkt_buf_head;
+    uint32_t dsc_buf_head; // DESC_HEAD_INVALID if application running
 
     /* app information*/
     int app_id;
@@ -57,7 +58,7 @@ typedef struct {
 
 kern_sock_norman_t kern_socks[MAX_KERN_SOCKS];
 
-int kern_create_socket(void);
+int kern_create_socket(struct pci_dev *pdev, int app_id);
 int kern_verify_socket(void);
 
 #endif
