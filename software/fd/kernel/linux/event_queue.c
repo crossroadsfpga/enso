@@ -33,6 +33,7 @@
 #include "intel_fpga_pcie_setup.h"
 #include "event_queue.h"
 #include "event_handler.h"
+#include "sock_struct.h"
 #include "sock_internal.h"
 
 // HACK(sadok) number of queues should not be fixed

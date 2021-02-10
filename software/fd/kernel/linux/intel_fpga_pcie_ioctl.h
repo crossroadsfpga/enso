@@ -90,6 +90,12 @@ struct intel_fpga_pcie_ksize {
     int core_id;
 } __attribute__ ((packed));
 
+/** things needed to create a socket **/
+struct intel_fpga_pcie_sock {
+    int app_id;
+    int regfd;
+} __attribute__ ((packed));
+
 
 #define INTEL_FPGA_PCIE_IOCTL_MAGIC         0x70
 #define INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV   _IOW (INTEL_FPGA_PCIE_IOCTL_MAGIC, \

@@ -66,7 +66,7 @@ static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg);
 static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg);
 static long get_ktimer(struct dev_bookkeep *dev_bk,
                        unsigned int __user *user_addr);
-static int create_sock(struct pci_dev *pdev, long regfd);
+static int create_sock(struct dev_bookkeep *pdev, unsigned int __user *user_addr);
 
 /******************************************************************************
  * Device and I/O control function
@@ -165,7 +165,7 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
         retval = get_ktimer(dev_bk, (unsigned int __user *)uarg);
         break;
     case INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK:
-        retval = create_sock(dev_bk->dev, uarg);
+        retval = create_sock(dev_bk, uarg);
         break;
     default:
         retval = -ENOTTY;
@@ -582,9 +582,20 @@ static long get_ktimer(struct dev_bookkeep *dev_bk,
 }
 
 /** allocates a queue id, associates regfd with it, creates sock **/
-static int create_sock(struct pci_dev *pdev, long regfd)
+static int create_sock(struct dev_bookkeep *pdev, unsigned int __user *uarg)
 {
     int sock_id;
+    int app_id;
+    int regfd;
+
+    struct intel_fpga_pcie_sock karg;
+    if (copy_from_user(&karg, (void __user *) uarg, sizeof(karg))) {
+        INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
+        return -EFAULT;
+    }
+
+    app_id = karg.app_id;
+    regfd = karg.regfd;
 
     printk(KERN_INFO "get_queue_id!\n");
 
