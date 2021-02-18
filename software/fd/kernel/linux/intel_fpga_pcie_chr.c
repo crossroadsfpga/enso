@@ -374,6 +374,7 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
     iowrite32(kmem_addr_l, mmio_addr + FPGA2CPU_OFFSET + sock_id * PAGE_SIZE);
     iowrite32(kmem_addr_h, mmio_addr + FPGA2CPU_OFFSET + 4 + sock_id * PAGE_SIZE);
 
+    // TODO get f2c_dsc_buf_size from somewhere
     if (sock_id == 0) {
         iowrite32(kmem_addr_l + F2C_DSC_BUF_SIZE, mmio_addr + CPU2FPGA_OFFSET);
         if ((kmem_addr_l + F2C_DSC_BUF_SIZE) < kmem_addr_l) {
