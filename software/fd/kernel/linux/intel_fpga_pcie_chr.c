@@ -45,6 +45,8 @@
 #include "intel_fpga_pcie_chr.h"
 #include "intel_fpga_pcie_ioctl.h"
 #include "intel_fpga_pcie_setup.h"
+#include "sock_struct.h"
+#include "sock_internal.h"
 
 /******************************************************************************
  * Static function prototypes
@@ -298,7 +300,28 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
     struct dev_bookkeep *dev_bk;
     unsigned long len, pfn;
     int ret;
+    unsigned int size;
     pgoff_t pgoff;
+    struct kmem_info old_info;
+    void *__iomem mmio_addr;
+    uint32_t kmem_addr_l, kmem_addr_h;
+    kern_sock_norman_t *mysock;
+    int sock_id = mysock->sock_id;
+
+    // Get the correct socket
+    // TODO lock
+    for (ret = 0; ret < num_kern_socks; ret++) {
+        mysock = kern_socks + ret;
+        // TODO use sock_id (currently assumes 1 sock/thr)
+        if (mysock->app_thr == current) {
+            break;
+        }
+    }
+    if (ret == num_kern_socks) {
+        printk(KERN_INFO "no sock exists for this thr");
+        return -EINVAL; // well really, not this errcode
+    }
+    // TODO unlock
 
     len = vma->vm_end - vma->vm_start;
     pgoff = vma->vm_pgoff;
@@ -309,6 +332,56 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
     if ((len == 0) || (len+pgoff) > dev_bk->kmem_info.size) {
         return -EINVAL;
     }
+
+    old_info.size       = dev_bk->kmem_info.size;
+    old_info.virt_addr  = dev_bk->kmem_info.virt_addr;
+    old_info.bus_addr   = dev_bk->kmem_info.bus_addr;
+
+    if (unlikely(down_interruptible(&dev_bk->sem))) {
+        INTEL_FPGA_PCIE_DEBUG("interrupted by attempting to obtain sem.");
+        return -EFAULT;
+    }
+
+    // allocate memory from kernel
+    if (size > 0) {
+        ret = dma_set_mask_and_coherent(&dev_bk->dev->dev, DMA_BIT_MASK(64));
+        if (ret) {
+            printk(KERN_INFO "dma_set_mask returned: %i\n", ret);
+            return -EIO;
+        }
+
+        // TODO (soup) free this somewhere
+        dev_bk->kmem_info.virt_addr =
+            dma_zalloc_coherent(&dev_bk->dev->dev, size,
+                                &dev_bk->kmem_info.bus_addr, GFP_KERNEL);
+        if (!dev_bk->kmem_info.virt_addr) {
+            INTEL_FPGA_PCIE_DEBUG("couldn't obtain kernel buffer.");
+            // restore
+            dev_bk->kmem_info.virt_addr = old_info.virt_addr;
+            dev_bk->kmem_info.bus_addr = old_info.bus_addr;
+            ret = -ENOMEM;
+        } else {
+            dev_bk->kmem_info.size = size;
+        }
+    }
+
+    up(&dev_bk->sem);
+
+    kmem_addr_l = dev_bk->kmem_info.bus_addr & 0xFFFFFFFF;
+    kmem_addr_h = (dev_bk->kmem_info.bus_addr >> 32) & 0xFFFFFFFF;
+    mmio_addr = dev_bk->bar[2].base_addr;
+
+    iowrite32(kmem_addr_l, mmio_addr + FPGA2CPU_OFFSET + sock_id * PAGE_SIZE);
+    iowrite32(kmem_addr_h, mmio_addr + FPGA2CPU_OFFSET + 4 + sock_id * PAGE_SIZE);
+
+    if (sock_id == 0) {
+        iowrite32(kmem_addr_l + F2C_DSC_BUF_SIZE, mmio_addr + CPU2FPGA_OFFSET);
+        if ((kmem_addr_l + F2C_DSC_BUF_SIZE) < kmem_addr_l) {
+            ++kmem_addr_h;
+        }
+        iowrite32(kmem_addr_h, mmio_addr + CPU2FPGA_OFFSET + 4);
+    }
+
     vma->vm_ops = &intel_fpga_vm_ops;
     vma->vm_flags |= VM_PFNMAP | VM_DONTCOPY | VM_DONTEXPAND;
     vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);

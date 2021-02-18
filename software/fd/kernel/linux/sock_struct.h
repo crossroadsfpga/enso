@@ -7,6 +7,8 @@
 #define MAX_KERN_SOCKS 7
 #define MEMORY_SPACE_PER_APP (1<<12)
 #define MAX_KERN_DESCS (MAX_KERN_SOCKS * 2)
+#define F2C_DSC_BUF_SIZE 1024
+#define F2C_PKT_BUF_SIZE 4192
 
 /* WARNING: mirrors struct in fd/pcie.h */
 typedef struct pcie_block {

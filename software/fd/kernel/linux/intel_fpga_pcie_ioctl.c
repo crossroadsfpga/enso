@@ -49,10 +49,6 @@
 #include "sock_errors.h"
 #include "sock_internal.h"
 
-//In bytes
-#define FPGA2CPU_OFFSET 8
-#define CPU2FPGA_OFFSET 24
-
 /******************************************************************************
  * Static function prototypes
  *****************************************************************************/

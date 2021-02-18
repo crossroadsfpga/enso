@@ -5,6 +5,8 @@
 - [ ] setup for epoll (re-enable)
 - [ ] app advance head ptr (re-enable)
 
+
+## Sequence
 - [ ] allocate kernel hugepages buffer
 - [ ] mmap buffer into userspace
 - [x] user does stuff with fpga, populates pci block

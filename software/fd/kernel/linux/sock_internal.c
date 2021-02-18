@@ -5,7 +5,8 @@
 #include <linux/types.h>
 
 uint64_t num_kern_socks = 0;
-uint64_t num_dsc_bufs = 0;
+kern_sock_norman_t kern_socks[MAX_KERN_SOCKS];
+DEFINE_SPINLOCK(kern_sock_lock);
 
 int kern_create_socket(struct dev_bookkeep *dev, int app_id) {
     int kern_socks_event_flags = 0;
@@ -14,10 +15,6 @@ int kern_create_socket(struct dev_bookkeep *dev, int app_id) {
 
     if (num_kern_socks >= MAX_KERN_SOCKS) {
         return -too_many_socks_err;
-    }
-
-    if (num_dsc_bufs >= MAX_KERN_DESCS) {
-        return -too_many_descs_err;
     }
 
     // alloc socket struct
@@ -31,9 +28,12 @@ int kern_create_socket(struct dev_bookkeep *dev, int app_id) {
 
     // dsc buf
     uio_mmap_bar2_addr = dev->bar[2].base_addr;
+    // TODO deal with sock struct
+    /*
     sock->dsc_buf = (pcie_block_t *) (
         (uint8_t *)uio_mmap_bar2_addr + app_id * MEMORY_SPACE_PER_APP
         );
+    */
     sock->dsc_buf_head = DESC_HEAD_INVALID;
 
     // finish up

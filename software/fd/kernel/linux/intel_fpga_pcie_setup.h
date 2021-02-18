@@ -77,6 +77,8 @@
 #define PCI_DEVID(bus, devfn)  ((((u16)(bus)) << 8) | (devfn))
 #endif
 
+#define CPU2FPGA_OFFSET 24
+#define FPGA2CPU_OFFSET 8
 
 /**
  * struct bar_info - Contains information about a single BAR.
