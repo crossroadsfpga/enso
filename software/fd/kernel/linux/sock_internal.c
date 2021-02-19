@@ -14,6 +14,7 @@ int kern_create_socket(struct dev_bookkeep *dev, int app_id) {
     kern_sock_norman_t *sock;
 
     if (num_kern_socks >= MAX_KERN_SOCKS) {
+	printk(KERN_INFO "too many socks.");
         return -too_many_socks_err;
     }
 
@@ -27,12 +28,14 @@ int kern_create_socket(struct dev_bookkeep *dev, int app_id) {
     sock->app_thr = current;
 
     // dsc buf
+    printk(KERN_INFO "dsc buf stuff");
     uio_mmap_bar2_addr = dev->bar[2].base_addr;
     sock->uio_data_bar2 = (pcie_block_t *) (
         (uint8_t *)uio_mmap_bar2_addr + app_id * MEMORY_SPACE_PER_APP
         );
     sock->dsc_buf_head = DESC_HEAD_INVALID;
 
+    printk(KERN_INFO "finishing up");
     // finish up
     sock->active = 1;
     sock->sock_id = num_kern_socks;

@@ -51,9 +51,10 @@ int norman_socket(int domain __attribute__((unused)), int type __attribute__((un
     }
 
     open_sockets[nb_open_sockets].dev = dev;
-    ssize_t fd = open("/dev/intel_fpga_pcie_drv", O_RDWR | O_CLOEXEC);
-    open_sockets[nb_open_sockets].fd = fd;
-    sock_id = ioctl(fd, INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK, nb_open_sockets);
+    open_sockets[nb_open_sockets].fd = -1;
+    sock_id = dev->create_sock(nb_open_sockets, 0 ); // appid, regfd
+	std::cout << sock_id << std::endl;
+	std::cout << nb_open_sockets << std::endl;
     assert(sock_id == (int) nb_open_sockets);
 
     result = dma_init(&open_sockets[nb_open_sockets], nb_open_sockets, nb_queues);
@@ -133,8 +134,6 @@ int norman_shutdown(int sockfd, int how __attribute__((unused)))
 
     result = dma_finish(&open_sockets[sockfd]);
     result = dev->use_cmd(false);
-
-    close(open_sockets[sockfd].fd);
 
     if (unlikely(result == 0)) {
         std::cerr << "Could not switch to CMD use mode!\n";

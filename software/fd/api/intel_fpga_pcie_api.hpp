@@ -306,6 +306,9 @@ public:
      *         0 otherwise
      */
     unsigned int get_ktimer(void);
+
+    int create_sock(unsigned int appid, int regfd);
+
 private:
     INTEL_FPGA_PCIE_DEV_HANDLE m_dev_handle;
     INTEL_FPGA_PCIE_DEV_HANDLE m_uio_dev_handle;

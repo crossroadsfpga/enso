@@ -420,6 +420,8 @@ int __init intel_fpga_pcie_chr_init(void)
     dev_t dev_id;
     struct device *dev;
 
+    printk(KERN_INFO "initializing driver");
+
     if (unlikely(mutex_lock_interruptible(&global_bk.lock))) {
         INTEL_FPGA_PCIE_ERR("global driver lock acquisition has been "
                             "interrupted during driver initialization.");

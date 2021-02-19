@@ -97,6 +97,7 @@ struct intel_fpga_pcie_sock {
 } __attribute__ ((packed));
 
 
+
 #define INTEL_FPGA_PCIE_IOCTL_MAGIC         0x70
 #define INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV   _IOW (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
                                                   0, unsigned int)
@@ -120,9 +121,9 @@ struct intel_fpga_pcie_sock {
                                                   8, unsigned int)
 #define INTEL_FPGA_PCIE_IOCTL_GET_KTIMER    _IOR (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
                                                   9, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK    _IOWR (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
+#define INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK   _IOWR (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
                                                   10, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 11
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 10
 
 
 

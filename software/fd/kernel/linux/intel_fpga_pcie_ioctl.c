@@ -41,6 +41,8 @@
  * SOFTWARE.
  */
 
+#define DEBUG
+
 #include "intel_fpga_pcie.h"
 #include "intel_fpga_pcie_dma.h"
 #include "intel_fpga_pcie_ioctl.h"
@@ -83,6 +85,8 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
     struct dev_bookkeep *dev_bk;
     long retval = 0;
     int numvfs;
+
+    printk(KERN_INFO "ioctl %d\n", _IOC_NR(cmd));
 
     if (unlikely(_IOC_TYPE(cmd) != INTEL_FPGA_PCIE_IOCTL_MAGIC)) {
         INTEL_FPGA_PCIE_VERBOSE_DEBUG("ioctl called with wrong magic "
@@ -476,6 +480,7 @@ static int create_sock(struct dev_bookkeep *pdev, unsigned int __user *uarg)
     int regfd;
 
     struct intel_fpga_pcie_sock karg;
+    printk(KERN_INFO "hello from create_sock!\n");
     if (copy_from_user(&karg, (void __user *) uarg, sizeof(karg))) {
         INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
         return -EFAULT;

@@ -85,6 +85,11 @@ struct intel_fpga_pcie_size_app_id {
     uint32_t app_id;
 } __attribute__ ((packed));
 
+struct intel_fpga_pcie_sock {
+	int app_id;
+	int regfd;
+} __attribute__ ((packed));
+
 
 #include <linux/ioctl.h>
 #include <linux/types.h>
@@ -117,7 +122,8 @@ struct intel_fpga_pcie_size_app_id {
 #define INTEL_FPGA_PCIE_IOCTL_GET_KTIMER    _IOR (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
                                                   9, unsigned int *)
 
-#define INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK   _IOWR (INTEL_FPGA_PCIE_IOCTL_MAGIC, 10, unsigned int)
+#define INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK   _IOWR (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
+						 10, unsigned int *)
 
 #define INTEL_FPGA_PCIE_IOCTL_MAXNR 10
 

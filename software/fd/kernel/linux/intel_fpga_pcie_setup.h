@@ -44,6 +44,8 @@
 #ifndef INTEL_FPGA_PCIE_SETUP_H
 #define INTEL_FPGA_PCIE_SETUP_H
 
+#define DEBUG
+
 #include <linux/cdev.h>
 #include <linux/dma-mapping.h>
 #include <linux/fs.h>

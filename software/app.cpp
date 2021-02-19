@@ -47,7 +47,7 @@ int main(int argc, const char* argv[])
 
     int port = atoi(argv[2]);
     unsigned nb_rules = atoi(argv[3]);
-    int nb_queues = atoi(argv[4]);
+    int nb_queues = 1;
 
     signal(SIGINT, int_handler);
 
@@ -60,6 +60,7 @@ int main(int argc, const char* argv[])
 
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
 
+
         for (int i = 0; i < nb_queues; ++i) {
             // TODO(sadok) can we make this a valid file descriptor?
             int socket_fd = norman_socket(AF_INET, SOCK_DGRAM, nb_queues);
@@ -70,6 +71,7 @@ int main(int argc, const char* argv[])
                 exit(2);
             }
 
+/*
             struct sockaddr_in addr;
             memset(&addr, 0, sizeof(addr));
 
@@ -82,6 +84,9 @@ int main(int argc, const char* argv[])
                           << strerror(errno) <<  std::endl;
                 exit(3);
             }
+*/
+		// lets not really do anything
+		
         }
 
         #ifdef ZERO_COPY
@@ -94,20 +99,25 @@ int main(int argc, const char* argv[])
             // HACK(sadok) this only works because socket_fd is incremental, it
             // would not work with an actual file descriptor
             for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
+/*
                 #ifdef ZERO_COPY
                     int recv_len = norman_recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
                 #else
                     int recv_len = norman_recv(socket_fd, buf, BUF_LEN, 0);
                 #endif
+*/
+		int recv_len = 0;
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
                     exit(4);
                 }
                 if (recv_len > 0) {
                     ++nb_batches;
+/*
                     #ifdef ZERO_COPY
                     norman_free_pkt_buf(socket_fd);
                     #endif
+*/
                 }
                 recv_bytes += recv_len;
             }
@@ -116,7 +126,7 @@ int main(int argc, const char* argv[])
         // TODO(sadok) it is also common to use the close() syscall to close a
         // UDP socket
         for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-            shutdown(socket_fd, SHUT_RDWR);
+            norman_shutdown(socket_fd, SHUT_RDWR);
         }
     });
 
@@ -129,6 +139,8 @@ int main(int argc, const char* argv[])
         std::cerr << "Error setting CPU affinity" << std::endl;
         return 6;
     }
+
+	std::cout<< "welp here i am\n";
 
     while (keep_running) {
         uint64_t recv_bytes_before = recv_bytes;

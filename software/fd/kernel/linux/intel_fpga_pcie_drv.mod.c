@@ -15,7 +15,7 @@ __attribute__((section(".gnu.linkonce.this_module"))) = {
 	.arch = MODULE_ARCH_INIT,
 };
 
-#ifdef CONFIG_RETPOLINE
+#ifdef RETPOLINE
 MODULE_INFO(retpoline, "Y");
 #endif
 
@@ -26,4 +26,4 @@ __attribute__((section(".modinfo"))) =
 
 MODULE_ALIAS("pci:v00001172d*sv*sd*bc*sc*i*");
 
-MODULE_INFO(srcversion, "96D40BBA45D921F2473D348");
+MODULE_INFO(srcversion, "9422E768AC7D106C030F5BC");

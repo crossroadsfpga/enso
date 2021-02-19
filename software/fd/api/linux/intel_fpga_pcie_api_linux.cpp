@@ -100,6 +100,7 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar)
                                  "has been loaded");
     }
     m_dev_handle = fd;
+    printf("hi from intel_fpga_pcie_dev1");
 
     fd = open("/dev/uio0", O_RDWR | O_CLOEXEC); // HACK(sadok) assume it's uio0
 
@@ -110,6 +111,7 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar)
                                  "has been loaded");
     }
     m_uio_dev_handle = fd;
+    printf("hi from intel_fpga_pcie_dev2");
 
     if (bdf > 0) {
         result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV, bdf);
@@ -127,6 +129,7 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar)
                                      "selected device");
         }
     }
+    printf("hi from intel_fpga_pcie_dev3");
 
     if (bar >= 0) {
         m_bar = static_cast<unsigned int>(bar);
@@ -145,6 +148,7 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar)
         }
         m_bar = u_bar;
     }
+    printf("hi from intel_fpga_pcie_dev4");
 
     m_bdf = bdf;
     m_kmem_size = 0;
@@ -470,4 +474,15 @@ unsigned int intel_fpga_pcie_dev::get_ktimer(void)
     }
 
     return timer_usec;
+}
+
+int intel_fpga_pcie_dev::create_sock(unsigned int appid, int regfd)
+{
+    int result;
+    struct intel_fpga_pcie_sock karg;
+    karg.app_id = appid;
+    karg.regfd = regfd;
+    printf("about to create sock hi from userspace!");
+    result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK, &karg);
+    return result;
 }

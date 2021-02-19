@@ -44,6 +44,8 @@
 #ifndef INTEL_FPGA_PCIE_H
 #define INTEL_FPGA_PCIE_H
 
+#define DEBUG
+
 /* Debugging defines */
 #define INTEL_FPGA_PCIE_PRINT(level,...)                    \
     do {                                                    \
