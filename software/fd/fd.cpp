@@ -51,6 +51,11 @@ int norman_socket(int domain __attribute__((unused)), int type __attribute__((un
     }
 
     open_sockets[nb_open_sockets].dev = dev;
+    ssize_t fd = open("/dev/intel_fpga_pcie_drv", O_RDWR | O_CLOEXEC);
+    open_sockets[nb_open_sockets].fd = fd;
+    sock_id = ioctl(fd, INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK, nb_open_sockets);
+    assert(sock_id == (int) nb_open_sockets);
+
     result = dma_init(&open_sockets[nb_open_sockets], nb_open_sockets, nb_queues);
 
     if (unlikely(result < 0)) {
@@ -58,10 +63,6 @@ int norman_socket(int domain __attribute__((unused)), int type __attribute__((un
         return -1;
     }
 
-    ssize_t fd = open("/dev/intel_fpga_pcie_drv", O_RDWR | O_CLOEXEC);
-    open_sockets[nb_open_sockets].fd = fd;
-    sock_id = ioctl(fd, INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK, nb_open_sockets);
-    assert(sock_id == (int) nb_open_sockets);
     // TODO: make inc atomic
     nb_open_sockets++;
     return sock_id;

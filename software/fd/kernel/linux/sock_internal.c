@@ -28,12 +28,9 @@ int kern_create_socket(struct dev_bookkeep *dev, int app_id) {
 
     // dsc buf
     uio_mmap_bar2_addr = dev->bar[2].base_addr;
-    // TODO deal with sock struct
-    /*
-    sock->dsc_buf = (pcie_block_t *) (
+    sock->uio_data_bar2 = (pcie_block_t *) (
         (uint8_t *)uio_mmap_bar2_addr + app_id * MEMORY_SPACE_PER_APP
         );
-    */
     sock->dsc_buf_head = DESC_HEAD_INVALID;
 
     // finish up

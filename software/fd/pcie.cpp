@@ -170,18 +170,23 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     // if the descriptor and packet buffers cannot fit together in a single huge
     // page, we need to allocate them separately
     if (alloc_single_buf) {
+        // TODO (soup) check fd, also offset??
         socket_entry->dsc_buf =
-            (pcie_pkt_desc_t*) get_huge_pages(app_id, ALIGNED_F2C_DSC_BUF_SIZE);
+            (pcie_pkt_desc_t *)dev->kmem_mmap(
+             ALIGNED_F2C_DSC_BUF_SIZE, 0);
         if (socket_entry->dsc_buf == NULL) {
-            std::cerr << "Could not get huge page" << std::endl;
+            std::cerr << "Could not get kern fake hugepage" << std::endl;
             return -1;
         }
         uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->dsc_buf);
         uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
         uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
 
+        /*
         socket_entry->pkt_buf =
             (uint32_t*) get_huge_pages(app_id, ALIGNED_F2C_PKT_BUF_SIZE);
+            */
+
         if (socket_entry->pkt_buf == NULL) {
             std::cerr << "Could not get huge page" << std::endl;
             return -1;
@@ -190,9 +195,12 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         uio_data_bar2->pkt_buf_mem_low = (uint32_t) phys_addr;
         uio_data_bar2->pkt_buf_mem_high = (uint32_t) (phys_addr >> 32);
     } else {
-        void* base_addr = get_huge_pages(app_id, BUF_PAGE_SIZE);
+        // TODO (soup) check fd, also offset??
+        void *base_addr =
+            (pcie_pkt_desc_t *)dev->kmem_mmap(
+             BUF_PAGE_SIZE, 0);
         if (base_addr == NULL) {
-            std::cerr << "Could not get huge page" << std::endl;
+            std::cerr << "Could not get kern fake hugepage" << std::endl;
             return -1;
         }
 
