@@ -28,9 +28,10 @@ always @(*) begin
     //     out_meta_data.pkt_flags = PKT_DROP;
     // end
 
-    // HACK(sadok) determine queue using the src IP address. This is necessary
+    // FIXME(sadok) determine queue using the src IP address. This is necessary
     // as I temporarily removed the ability to populate the flow table.
-    out_meta_data.queue_id = {48'h0, in_meta_data.tuple.sIP[15:0]};
+    out_meta_data.pkt_queue_id = {48'h0, in_meta_data.tuple.dIP[15:0]};
+    out_meta_data.dsc_queue_id = {48'h0, in_meta_data.tuple.sIP[15:0]};
 
     // if (in_meta_valid) begin
     //   $display("Flow Director: Flow ID=0x%h, Queue ID=0x%h",

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Usage ./run_vsim_afs.sh rate input.pkt nb_queues
-# Usage ./run_vsim_afs.sh rate nb_pkts pkt_size nb_queues
+# Usage ./run_vsim_afs.sh rate input.pkt nb_dsc_queues nb_pkt_queues
+# Usage ./run_vsim_afs.sh rate nb_pkts pkt_size nb_dsc_queues nb_pkt_queues
 
 # exit when error occurs
 set -e
@@ -9,29 +9,24 @@ trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
 RATE=${1:-"100"}
 
-if [ "$#" -eq 4 ]; then
-    NB_PKTS=$2
-    PKT_SIZE=$3
-    NB_QUEUES=$4
-    PKT_FILE="./input_gen/${NB_PKTS}_${PKT_SIZE}_${NB_QUEUES}.pkt"
-    if [[ -f "$PKT_FILE" ]]; then
-        echo "$PKT_FILE exists, using cache"
-    else
-        echo "Generating $PKT_FILE"
-        cd "./input_gen"
-        ./generate_synthetic_trace.py ${NB_PKTS} ${PKT_SIZE} ${NB_QUEUES} \
-            "${NB_PKTS}_${PKT_SIZE}_${NB_QUEUES}.pcap"
-        ./run.sh "${NB_PKTS}_${PKT_SIZE}_${NB_QUEUES}.pcap" \
-            "${NB_PKTS}_${PKT_SIZE}_${NB_QUEUES}.pkt"
-        cd -
-    fi
+NB_PKTS=$2
+PKT_SIZE=$3
+NB_DSC_QS=$4
+NB_PKT_QS=$5
+PKT_FILE="./input_gen/${NB_PKTS}_${PKT_SIZE}_${NB_DSC_QS}_${NB_PKT_QS}.pkt"
+if [[ -f "$PKT_FILE" ]]; then
+    echo "$PKT_FILE exists, using cache"
 else
-    # if pkt file not specified, use the default
-    PKT_FILE=${2:-"./input_gen/small_pkt_100.pkt"}
-    NB_QUEUES=${3:-"1"}
+    echo "Generating $PKT_FILE"
+    cd "./input_gen"
+    ./generate_synthetic_trace.py ${NB_PKTS} ${PKT_SIZE} ${NB_DSC_QS} \
+        ${NB_PKT_QS} "${NB_PKTS}_${PKT_SIZE}_${NB_DSC_QS}_${NB_PKT_QS}.pcap"
+    ./run.sh "${NB_PKTS}_${PKT_SIZE}_${NB_DSC_QS}_${NB_PKT_QS}.pcap" \
+        "${NB_PKTS}_${PKT_SIZE}_${NB_DSC_QS}_${NB_PKT_QS}.pkt"
+    cd -
 fi
 
-echo "Using $NB_QUEUES queues"
+echo "Using $NB_DSC_QS descriptor queues and $NB_PKT_QS packet queues."
 
 pwd
 PKT_FILE_NB_LINES=$(wc -l < $PKT_FILE)
@@ -44,7 +39,8 @@ vlog +define+SIM \
      +define+RATE=$RATE \
      +define+PKT_FILE=\"$PKT_FILE\" \
      +define+PKT_FILE_NB_LINES=$PKT_FILE_NB_LINES \
-     +define+NB_QUEUES=$NB_QUEUES \
+     +define+NB_DSC_QUEUES=$NB_DSC_QS \
+     +define+NB_PKT_QUEUES=$NB_PKT_QS \
      +define+PKT_SIZE=$PKT_SIZE \
      ./src/*.sv -sv 
 #vlog *.v

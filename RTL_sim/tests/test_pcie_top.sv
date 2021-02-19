@@ -3,13 +3,27 @@
 `include "../src/fpga2cpu_pcie.sv"
 module test_pcie_top;
 
-`ifndef NB_QUEUES
-`define NB_QUEUES 8
+`ifndef NB_DSC_QUEUES
+`define NB_DSC_QUEUES 4
 `endif
+
+`ifndef NB_PKT_QUEUES
+`define NB_PKT_QUEUES 8
+`endif
+
+generate
+    // We assume this during the test, it does not necessarily hold in general.
+    if (((`NB_PKT_QUEUES / `NB_DSC_QUEUES) * `NB_DSC_QUEUES) != `NB_PKT_QUEUES)
+    begin
+        $error("NB_PKT_QUEUES must be a multiple of NB_DSC_QUEUES");
+    end
+endgenerate
 
 localparam pcie_period = 4;
 localparam status_period = 10;
-localparam nb_queues = `NB_QUEUES;
+localparam nb_dsc_queues = `NB_DSC_QUEUES;
+localparam nb_pkt_queues = `NB_PKT_QUEUES;
+localparam pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
 localparam req_size = 64; // in dwords
 
 localparam target_nb_requests = 32;
@@ -17,7 +31,8 @@ localparam target_nb_requests = 32;
 // size of the host buffer used by each queue (in flits)
 localparam DSC_BUF_SIZE = 8192;
 localparam PKT_BUF_SIZE = 8192;
-localparam RAM_SIZE = DSC_BUF_SIZE + PKT_BUF_SIZE;
+let max(a,b) = (a > b) ? a : b;
+localparam RAM_SIZE = max(DSC_BUF_SIZE, PKT_BUF_SIZE);
 localparam RAM_ADDR_LEN = $clog2(RAM_SIZE);
 
 logic [63:0] cnt;
@@ -51,6 +66,7 @@ logic                  pcie_desc_buf_wr_en;
 logic [PDU_AWIDTH-1:0] pcie_desc_buf_occup;
 
 logic                  disable_pcie;
+logic                  sw_reset;
 pdu_metadata_t         pdumeta_cpu_data;
 logic                  pdumeta_cpu_valid;
 logic [9:0]            pdumeta_cnt;
@@ -70,10 +86,10 @@ logic error_termination;
 logic [31:0] stop_cnt;
 
 // Host RAM
-logic [511:0] ram[nb_queues][RAM_SIZE];
+logic [511:0] ram[nb_pkt_queues + nb_dsc_queues][RAM_SIZE];
 
-logic [APP_IDX_WIDTH-1:0] expected_queue;
-logic [APP_IDX_WIDTH-1:0] cfg_queue;
+logic [BRAM_TABLE_IDX_WIDTH-1:0] expected_pkt_queue;
+logic [BRAM_TABLE_IDX_WIDTH-1:0] cfg_queue;
 logic [63:0] rx_cnt;
 logic [63:0] req_cnt;
 logic [63:0] start_wait;
@@ -94,7 +110,8 @@ always #(status_period) clk_status = ~clk_status;
 
 typedef enum
 {
-    SETUP,
+    SETUP_0,
+    SETUP_1,
     WAIT,
     RUN
 } control_state_t;
@@ -118,43 +135,62 @@ always @(posedge clk) begin
         req_cnt <= 0;
         stop_cnt <= 0;
         pdu_flit_cnt <= 0;
-        expected_queue <= 0;
+        expected_pkt_queue <= 0;
         cfg_queue <= 0;
         start_wait <= 0;
         startup_ready <= 0;
         burst_offset <= 0;
         burst_size <= 0;
 
-        control_state <= SETUP;
+        control_state <= SETUP_0;
     end else begin
         case (control_state)
-            SETUP: begin
+            SETUP_0: begin
                 if (cnt == 10) begin
                     rst <= 0;
                 end else begin
-                    // set queues
+                    // set pkt queues
                     pcie_write_0 <= 1;
                     pcie_address_0 <= cfg_queue << 12;
                     pcie_writedata_0 <= 0;
                     pcie_byteenable_0 <= 0;
                     
-                    // dsc queue address
+                    // pkt queue address
+                    // note that we are placing queues 32 bit apart in the
+                    // address space, this this is done to simplify the test and
+                    // it is not a requirement
                     pcie_writedata_0[64 +: 64] <= 64'habcd000000000000 +
                         (cfg_queue << 32);
                     pcie_byteenable_0[8 +: 8] <= 8'hff;
-                    
-                    // pkt queue address
-                    pcie_writedata_0[192 +: 64] <= 64'habcd000000000000 +
-                        + DSC_BUF_SIZE * 64 + (cfg_queue << 32);
-                    pcie_byteenable_0[24 +: 8] <= 8'hff;
 
-                    if (cfg_queue == nb_queues - 1) begin
-                        control_state <= WAIT;
+                    if (cfg_queue == nb_pkt_queues - 1) begin
+                        control_state <= SETUP_1;
                         cfg_queue <= 0;
                     end else begin
                         cfg_queue <= cfg_queue + 1;
                     end
-                end 
+                end
+            end
+            SETUP_1: begin
+                // set dsc queues
+                pcie_write_0 <= 1;
+                pcie_address_0 <= (cfg_queue + MAX_NB_FLOWS) << 12;
+                pcie_writedata_0 <= 0;
+                pcie_byteenable_0 <= 0;
+                
+                // dsc queue address
+                // we place dsc queues after pkt queues in the address space but
+                // this is done to simplify the test and it is not a requirement
+                pcie_writedata_0[64 +: 64] <= 64'habcd000000000000 +
+                    ((cfg_queue + nb_pkt_queues) << 32);
+                pcie_byteenable_0[8 +: 8] <= 8'hff;
+
+                if (cfg_queue == nb_dsc_queues - 1) begin
+                    control_state <= WAIT;
+                    cfg_queue <= 0;
+                end else begin
+                    cfg_queue <= cfg_queue + 1;
+                end
             end
             WAIT: begin
                 if (start_wait == 0) begin
@@ -173,6 +209,8 @@ always @(posedge clk) begin
                     automatic logic [31:0] cur_queue;
                     automatic logic [31:0] cur_address;
 
+                    cur_queue = pcie_bas_address[32 +: BRAM_TABLE_IDX_WIDTH];
+
                     if (pcie_bas_burstcount != 0) begin
                         burst_offset = 0;
                         burst_size <= pcie_bas_burstcount;
@@ -182,27 +220,46 @@ always @(posedge clk) begin
                         burst_offset = burst_offset + 1;
                     end
 
-                    rx_cnt <= rx_cnt + 1;
-                    pdu_flit_cnt <= pdu_flit_cnt + 1;
-                    if ((pdu_flit_cnt + 1) == (req_size + (16 - 1))/16 + 1)
-                    begin
+                    if (cur_queue < nb_pkt_queues) begin // pkt queue
+                        $display("cur_queue: %d, expected_pkt_queue: %d", cur_queue, expected_pkt_queue);
+                        assert(cur_queue == expected_pkt_queue) else $fatal;
+
+                        pdu_flit_cnt <= pdu_flit_cnt + 1;
+
+                        // check payload
+                        assert(req_cnt == pcie_bas_writedata[511:480])
+                            else $fatal;
+                    end else begin // dsc queue
+                        automatic logic [31:0] pkt_per_dsc_queue;
+                        automatic logic [31:0] expected_dsc_queue;
+
+                        // dsc queues can receive only one flit per burst
+                        assert(pcie_bas_burstcount == 1) else $fatal;
+
+                        // This is due to how we configured the queue addresses
+                        // (dsc queues after pkt queues) as well as how we send
+                        // packets (round robin among pkt queues).
+                        pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
+                        expected_dsc_queue = nb_pkt_queues +
+                            expected_pkt_queue / pkt_per_dsc_queue;
+
+                        $display("cur_queue: %d, expected_dsc_queue: %d", cur_queue, expected_dsc_queue);
+
+                        assert(cur_queue == expected_dsc_queue) else $fatal;
+
+                        // should receive desc after we all the flits in the pdu
+                        assert(pdu_flit_cnt == (req_size + (16 - 1))/16)
+                            else $fatal;
+
                         req_cnt <= req_cnt + 1;
                         pdu_flit_cnt <= 0;
-                        expected_queue <= expected_queue + 1 < nb_queues ?
-                                          expected_queue + 1 : 0;
-                    end else begin
-                        if (req_cnt != pcie_bas_writedata[511:480] 
-                                && !error_termination) begin
-                            assert(req_cnt == pcie_bas_writedata[511:480]);
-                            error_termination <= 1;
+                        if ((expected_pkt_queue + 1) < nb_pkt_queues) begin
+                            expected_pkt_queue <= expected_pkt_queue + 1;
+                        end else begin
+                            expected_pkt_queue <= 0;
                         end
-                    end
-
-                    // check queue
-                    cur_queue = pcie_bas_address[32 +: APP_IDX_WIDTH];
-                    assert(expected_queue == cur_queue);
-
-                    cur_address = pcie_bas_address[6 +: RAM_ADDR_LEN] 
+                    end 
+                    cur_address = pcie_bas_address[6 +: RAM_ADDR_LEN]
                                   + burst_offset;
 
                     // check if address out of bound
@@ -211,6 +268,8 @@ always @(posedge clk) begin
                     end else begin
                         ram[cur_queue][cur_address] <= pcie_bas_writedata;
                     end
+
+                    rx_cnt <= rx_cnt + 1;
                 end
             end
         endcase
@@ -236,11 +295,12 @@ typedef enum
     GEN_DATA
 } gen_state_t;
 
-gen_state_t               gen_state;
-logic [APP_IDX_WIDTH-1:0] queue_id;
-logic [31:0]              nb_requests;
-logic [PDU_AWIDTH-1:0]    flits_written;
-logic [32:0]              transmit_cycles;
+gen_state_t                gen_state;
+logic [FLOW_IDX_WIDTH-1:0] pkt_queue_id;
+logic [APP_IDX_WIDTH-1:0]  dsc_queue_id;
+logic [31:0]               nb_requests;
+logic [PDU_AWIDTH-1:0]     flits_written;
+logic [32:0]               transmit_cycles;
 
 // Generate requests
 always @(posedge clk) begin
@@ -249,7 +309,8 @@ always @(posedge clk) begin
     if (rst) begin
         gen_state <= GEN_START_WAIT;
         flits_written <= 0;
-        queue_id <= 0;
+        pkt_queue_id <= 0;
+        dsc_queue_id <= 0;
         nb_requests <= 0;
         transmit_cycles <= 0;
     end else begin
@@ -263,7 +324,8 @@ always @(posedge clk) begin
             end
             GEN_IDLE: begin
                 if (nb_requests < target_nb_requests) begin
-                    queue_id <= 0;
+                    pkt_queue_id <= 0;
+                    dsc_queue_id <= 0;
                     flits_written <= 0;
                     gen_state <= GEN_DATA;
                 end
@@ -290,17 +352,20 @@ always @(posedge clk) begin
 
                         // write descriptor
                         pcie_desc_buf_wr_en <= 1;
-                        pcie_desc_buf_wr_data.queue_id <= queue_id;
+                        pcie_desc_buf_wr_data.dsc_queue_id <= dsc_queue_id;
+                        pcie_desc_buf_wr_data.pkt_queue_id <= pkt_queue_id;
                         pcie_desc_buf_wr_data.size <= (req_size + (16 - 1))/16;
 
                         if (nb_requests + 1 == target_nb_requests) begin
                             gen_state <= GEN_IDLE;
                         end else begin
-                            if ((queue_id + 1) == nb_queues) begin
-                                queue_id <= 0;
+                            if ((pkt_queue_id + 1) == nb_pkt_queues) begin
+                                pkt_queue_id = 0;
                             end else begin
-                                queue_id <= queue_id + 1;
+                                pkt_queue_id = pkt_queue_id + 1;
                             end
+
+                            dsc_queue_id = pkt_queue_id / pkt_per_dsc_queue;
                         end
                     end else begin
                         pcie_pkt_buf_wr_data.eop <= 0;
@@ -350,10 +415,10 @@ always @(posedge clk_status) begin
 
                 `ifdef NO_PCIE
                     // pcie disabled
-                    status_writedata <= {5'(nb_queues), pkt_buf_size, 1'b1};
+                    status_writedata <= {5'b00000, pkt_buf_size, 1'b1};
                 `else
                     // pcie enabled
-                    status_writedata <= {5'(nb_queues), pkt_buf_size, 1'b0};
+                    status_writedata <= {5'b00000, pkt_buf_size, 1'b0};
                 `endif
                 conf_state <= CONFIGURE_1;
             end
@@ -367,34 +432,43 @@ always @(posedge clk_status) begin
             end
             READ_MEMORY: begin
                 if (stop || error_termination) begin
-                    integer queue;
+                    integer q;
+                    integer pkt_q;
                     integer i;
                     integer j;
                     integer k;
-                    for (queue = 0; queue < nb_queues; queue = queue + 1) begin
-                        $display("Queue %d", queue);
+
+                    for (q = 0; q < nb_dsc_queues; q = q + 1) begin
+                        $display("Queue %d", q);
                         // printing only the beginning of each buffer,
                         // may print the entire thing instead
-                        $display("Descriptor buffer:");
+                        $display("Descriptor queue:");
                         for (i = 0; i < 25; i = i + 1) begin
                         // for (i = 0; i < RAM_SIZE; i = i + 1) begin
                             for (j = 0; j < 8; j = j + 1) begin
                                 $write("%h:", i*64+j*8);
                                 for (k = 0; k < 8; k = k + 1) begin
-                                    $write(" %h", ram[queue][i][j*64+k*8 +: 8]);
+                                    $write(" %h",
+                                        ram[q+nb_pkt_queues][i][j*64+k*8 +: 8]);
                                 end
                                 $write("\n");
                             end
                         end
 
-                        $display("Packet buffer:");
-                        for (i = 0; i < 25; i = i + 1) begin
-                            for (j = 0; j < 8; j = j + 1) begin
-                                $write("%h:", i*64+j*8);
-                                for (k = 0; k < 8; k = k + 1) begin
-                                    $write(" %h", ram[queue][i+DSC_BUF_SIZE][j*64+k*8 +: 8]);
+                        $display("Packet queues:");
+                        for (pkt_q = q*pkt_per_dsc_queue;
+                            pkt_q < (q+1)*pkt_per_dsc_queue; pkt_q = pkt_q + 1)
+                        begin
+                            $display("Packet queue: %d", pkt_q);
+                            for (i = 0; i < 25; i = i + 1) begin
+                                for (j = 0; j < 8; j = j + 1) begin
+                                    $write("%h:", i*64+j*8);
+                                    for (k = 0; k < 8; k = k + 1) begin
+                                        $write(" %h",
+                                            ram[pkt_q][i][j*64+k*8 +: 8]);
+                                    end
+                                    $write("\n");
                                 end
-                                $write("\n");
                             end
                         end
                     end
@@ -411,11 +485,10 @@ always @(posedge clk_status) begin
                 end
             end
             READ_PCIE: begin
-                // $display("READ_PCIE");
                 if (status_readdata_valid) begin
                     $display("%d: 0x%8h", status_addr[6:0], status_readdata);
                     if (status_addr == (
-                            30'h2A00_0000 + 30'd8 * nb_queues + 30'd1)) begin
+                            30'h2A00_0000 + 30'd8 * nb_pkt_queues + 30'd1)) begin
                         read_pcie_cnt <= read_pcie_cnt + 1;
                         if (read_pcie_cnt == 1) begin
                             $display("done");
@@ -434,8 +507,9 @@ always @(posedge clk_status) begin
             end
             ZERO_PCIE: begin
                 if (status_addr == (
-                        30'h2A00_0000 + 30'd8 * nb_queues + 30'd2)) begin
+                        30'h2A00_0000 + 30'd8 * nb_pkt_queues + 30'd2)) begin
                     conf_state <= READ_PCIE_START;
+                    $display("After zeroing PCIe:");
                 end else begin
                     status_write <= 1;
                     status_writedata <= 0;
@@ -479,6 +553,7 @@ pcie_top pcie (
     .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
     .pcie_desc_buf_occup    (pcie_desc_buf_occup),
     .disable_pcie           (disable_pcie),
+    .sw_reset               (sw_reset),
     .pdumeta_cpu_data       (pdumeta_cpu_data),
     .pdumeta_cpu_valid      (pdumeta_cpu_valid),
     .pdumeta_cnt            (pdumeta_cnt),

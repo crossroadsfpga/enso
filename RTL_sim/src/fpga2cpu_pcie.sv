@@ -2,8 +2,8 @@
 `include "./my_struct_s.sv"
 
 module fpga2cpu_pcie (
-    input clk,
-    input rst,
+    input logic clk,
+    input logic rst,
 
     // write to FPGA ring buffer.
     // input  flit_lite_t               wr_data,
@@ -26,21 +26,23 @@ module fpga2cpu_pcie (
     output logic [PDU_AWIDTH-1:0]    desc_buf_occup,
 
     // CPU ring buffer signals
-    input  logic [RB_AWIDTH-1:0]     in_dsc_head,
-    input  logic [RB_AWIDTH-1:0]     in_dsc_tail,
-    input  logic [63:0]              in_dsc_buf_addr,
-    input  logic [RB_AWIDTH-1:0]     in_pkt_head,
-    input  logic [RB_AWIDTH-1:0]     in_pkt_tail,
-    input  logic [63:0]              in_pkt_buf_addr,
-    output logic [APP_IDX_WIDTH-1:0] rd_queue,
-    input  logic                     queue_ready,
-    output logic [RB_AWIDTH-1:0]     out_dsc_tail,
-    output logic [RB_AWIDTH-1:0]     out_pkt_tail,
-    output logic [APP_IDX_WIDTH-1:0] wr_queue,
-    output logic                     queue_rd_en,
-    output logic                     tail_wr_en,
-    input  logic [30:0]              dsc_rb_size,
-    input  logic [30:0]              pkt_rb_size,
+    input  logic [RB_AWIDTH-1:0]            in_dsc_head,
+    input  logic [RB_AWIDTH-1:0]            in_dsc_tail,
+    input  logic [63:0]                     in_dsc_buf_addr,
+    input  logic [RB_AWIDTH-1:0]            in_pkt_head,
+    input  logic [RB_AWIDTH-1:0]            in_pkt_tail,
+    input  logic [63:0]                     in_pkt_buf_addr,
+    output logic [BRAM_TABLE_IDX_WIDTH-1:0] rd_pkt_queue,
+    output logic [BRAM_TABLE_IDX_WIDTH-1:0] rd_dsc_queue,
+    input  logic                            queue_ready,
+    output logic [RB_AWIDTH-1:0]            out_dsc_tail,
+    output logic [RB_AWIDTH-1:0]            out_pkt_tail,
+    output logic [BRAM_TABLE_IDX_WIDTH-1:0] wr_pkt_queue,
+    output logic [BRAM_TABLE_IDX_WIDTH-1:0] wr_dsc_queue,
+    output logic                            queue_rd_en,
+    output logic                            tail_wr_en,
+    input  logic [30:0]                     dsc_rb_size,
+    input  logic [30:0]                     pkt_rb_size,
 
     // PCIe BAS
     input  logic                       pcie_bas_waitrequest,
@@ -93,7 +95,8 @@ logic [63:0]          pref_pkt_buf_addr;
 logic                 pref_desc_valid;
 
 logic                 wait_for_pref_desc;
-logic                 hold_tail;
+logic                 hold_pkt_tail;
+logic                 hold_dsc_tail;
 
 logic [31:0] missing_flits;
 logic [3:0]  missing_flits_in_transfer;
@@ -129,7 +132,9 @@ function logic [RB_AWIDTH-1:0] get_new_pointer(
     // This assumes that buffers are allocated with an extra page in the end.
     // We may need to revisit this decision once we start using byte streams as
     // there would be no way for software to figure out when we are writing past
-    // the buffer limit.
+    // the buffer limit. This also forces us to read all the packets in order to
+    // figure out when this happens. Right now the software is ignoring what
+    // goes beyond the buffer limit.
     if (pointer + upd_sz >= buf_sz) begin
         return 0;
         // return pointer + upd_sz - buf_sz;
@@ -143,7 +148,8 @@ function void try_prefetch();
         pref_desc = desc_buf_rd_data;
         desc_buf_rd_en <= 1;
         wait_for_pref_desc = 1;
-        rd_queue <= desc_buf_rd_data.queue_id;
+        rd_pkt_queue <= desc_buf_rd_data.pkt_queue_id;
+        rd_dsc_queue <= desc_buf_rd_data.dsc_queue_id;
         queue_rd_en <= 1;
     end
 endfunction
@@ -175,7 +181,8 @@ always @(posedge clk) begin
         cur_desc_valid <= 0;
         pref_desc_valid <= 0;
         wait_for_pref_desc <= 0;
-        hold_tail <= 0;
+        hold_pkt_tail <= 0;
+        hold_dsc_tail <= 0;
     end else begin
         // done prefetching
         if (cur_desc_valid && wait_for_pref_desc && queue_ready) begin
@@ -195,7 +202,8 @@ always @(posedge clk) begin
                 if (desc_buf_occup > 0) begin
                     // fetch next queue state
                     wait_for_pref_desc <= 0; // regular fetch
-                    rd_queue <= desc_buf_rd_data.queue_id;
+                    rd_pkt_queue <= desc_buf_rd_data.pkt_queue_id;
+                    rd_dsc_queue <= desc_buf_rd_data.dsc_queue_id;
                     cur_desc <= desc_buf_rd_data;
                     desc_buf_rd_en <= 1;
                     queue_rd_en <= 1;
@@ -219,11 +227,14 @@ always @(posedge clk) begin
                     cur_pkt_head = in_pkt_head;
                     // When switching to the same queue, the tail we fetch is
                     // outdated.
-                    if (!hold_tail) begin
-                        cur_dsc_tail = in_dsc_tail;
+                    if (!hold_pkt_tail) begin
                         cur_pkt_tail = in_pkt_tail;
                     end
-                    hold_tail <= 0;
+                    if (!hold_dsc_tail) begin
+                        cur_dsc_tail = in_dsc_tail;
+                    end
+                    hold_pkt_tail <= 0;
+                    hold_dsc_tail <= 0;
                     cur_dsc_buf_addr = in_dsc_buf_addr;
                     cur_pkt_buf_addr = in_pkt_buf_addr;
                     missing_flits = cur_desc.size;
@@ -308,9 +319,11 @@ always @(posedge clk) begin
 
                         // Fetch descriptor again so we can hopefully have
                         // enough space to write the packet.
-                        hold_tail <= 1;
+                        hold_pkt_tail <= 1;
+                        hold_dsc_tail <= 1;
                         cur_desc_valid = 0;
-                        rd_queue <= cur_desc.queue_id;
+                        rd_pkt_queue <= cur_desc.pkt_queue_id;
+                        rd_dsc_queue <= cur_desc.dsc_queue_id;
                         queue_rd_en <= 1;
                     end
                 end
@@ -364,7 +377,7 @@ always @(posedge clk) begin
                 // there is space in both the descriptor and packet ring
                 // buffers, when we get here we know that it is safe to write
                 // the descriptor.
-        
+
                 // make sure the previous transfer is complete
                 if (!pcie_bas_waitrequest) begin
                     automatic pcie_pkt_desc_t pcie_pkt_desc;
@@ -381,7 +394,7 @@ always @(posedge clk) begin
                         {{$bits(pcie_pkt_desc.tail) - RB_AWIDTH}{1'b0}},
                         new_pkt_tail
                     };
-                    pcie_pkt_desc.queue_id = cur_desc.queue_id;
+                    pcie_pkt_desc.queue_id = cur_desc.pkt_queue_id;
                     pcie_pkt_desc.pad = 0;
 
                     // Skip DMA when addresses are not set
@@ -398,19 +411,25 @@ always @(posedge clk) begin
                     out_dsc_tail <= new_dsc_tail;
                     out_pkt_tail <= new_pkt_tail;
                     tail_wr_en <= 1;
-                    wr_queue <= cur_desc.queue_id;
+                    wr_pkt_queue <= cur_desc.pkt_queue_id;
+                    wr_dsc_queue <= cur_desc.dsc_queue_id;
 
                     // If we have already prefetched the next descriptor, we can
                     // start the next transfer in the following cycle.
                     if (pref_desc_valid) begin
                         // If the prefetched desc corresponds to the same queue,
                         // we ignore the tail as it is still outdated.
-                        if (cur_desc.queue_id != pref_desc.queue_id) begin
-                            cur_dsc_tail = pref_dsc_tail;
+                        if (cur_desc.pkt_queue_id != pref_desc.pkt_queue_id)
+                        begin
                             cur_pkt_tail = pref_pkt_tail;
                         end else begin
-                            cur_dsc_tail = new_dsc_tail;
                             cur_pkt_tail = new_pkt_tail;
+                        end
+                        if (cur_desc.dsc_queue_id != pref_desc.dsc_queue_id)
+                        begin
+                            cur_dsc_tail = pref_dsc_tail;
+                        end else begin
+                            cur_dsc_tail = new_dsc_tail;
                         end
                         cur_desc = pref_desc;
                         cur_dsc_head = pref_dsc_head;
@@ -432,12 +451,22 @@ always @(posedge clk) begin
                         cur_desc_valid = 0;
 
                         // When we are not switching queues, we must not
-                        // override the tail. We use the hold_tail signal to
+                        // override the tail. We use the hold_*_tail signals to
                         // ensure that.
-                        if (cur_desc.queue_id == pref_desc.queue_id) begin
-                            hold_tail <= 1;
+                        if (cur_desc.pkt_queue_id == pref_desc.pkt_queue_id)
+                        begin
+                            hold_pkt_tail <= 1;
                             cur_dsc_tail = new_dsc_tail;
                             cur_pkt_tail = new_pkt_tail;
+                        end else begin
+                            hold_pkt_tail <= 0;
+                        end
+                        if (cur_desc.dsc_queue_id == pref_desc.dsc_queue_id)
+                        begin
+                            hold_dsc_tail <= 1;
+                            cur_dsc_tail = new_dsc_tail;
+                        end else begin
+                            hold_dsc_tail <= 0;
                         end
                         cur_desc = pref_desc;
                         try_prefetch();
@@ -454,7 +483,7 @@ always @(posedge clk) begin
             default: state <= IDLE;
         endcase
 
-        // Attempt to read and write at the same time. Try to write again.
+        // Attempted to read and write at the same time. Try to write again.
         if (tail_wr_en && queue_rd_en) begin
             tail_wr_en <= 1;
         end

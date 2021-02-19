@@ -143,8 +143,6 @@ always @(posedge clk) begin
                     swap <= 1;
                     pdu_data_r <= in_data;
 
-                    `hdisplay(("in_sop: %b in_eop: %b", in_sop, in_eop));
-
                     if (in_sop) begin
                         pdu_sop_r <= 1;
                         assert(pdu_size == 0);
@@ -160,8 +158,10 @@ always @(posedge clk) begin
                         pdu_eop_r <= 1;
 
                         // write descriptor
-                        pcie_desc_buf_wr_data_r.queue_id <=
-                            in_meta_data.queue_id[APP_IDX_WIDTH-1:0];
+                        pcie_desc_buf_wr_data_r.dsc_queue_id <=
+                            in_meta_data.dsc_queue_id[APP_IDX_WIDTH-1:0];
+                        pcie_desc_buf_wr_data_r.pkt_queue_id <=
+                            in_meta_data.pkt_queue_id[FLOW_IDX_WIDTH-1:0];
 
                         // TODO(sadok) specify size in bytes instead of flits
                         pcie_desc_buf_wr_data_r.size <= pdu_flit;

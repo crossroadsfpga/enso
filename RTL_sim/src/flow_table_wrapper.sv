@@ -258,21 +258,26 @@ always@(posedge clk) begin
 
                 if (s_ft_hit != 0) begin
                     if (s_ft_hit[0]) begin
-                        out_meta_data.queue_id <= ft0_q_a.queue_id;
+                        out_meta_data.pkt_queue_id <= ft0_q_a.pkt_queue_id;
+                        out_meta_data.dsc_queue_id <= ft0_q_a.dsc_queue_id;
                     end
                     else if (s_ft_hit[1]) begin
-                        out_meta_data.queue_id <= ft1_q_a.queue_id;
+                        out_meta_data.pkt_queue_id <= ft1_q_a.pkt_queue_id;
+                        out_meta_data.dsc_queue_id <= ft1_q_a.dsc_queue_id;
                     end
                     else if (s_ft_hit[2]) begin
-                        out_meta_data.queue_id <= ft2_q_a.queue_id;
+                        out_meta_data.pkt_queue_id <= ft2_q_a.pkt_queue_id;
+                        out_meta_data.dsc_queue_id <= ft2_q_a.dsc_queue_id;
                     end
                     else if (s_ft_hit[3]) begin
-                        out_meta_data.queue_id <= ft3_q_a.queue_id;
+                        out_meta_data.pkt_queue_id <= ft3_q_a.pkt_queue_id;
+                        out_meta_data.dsc_queue_id <= ft3_q_a.dsc_queue_id;
                     end
                 end
                 else begin
                     // queue id with all 1s indicates drop
-                    out_meta_data.queue_id <= '1;
+                    out_meta_data.pkt_queue_id <= '1;
+                    out_meta_data.dsc_queue_id <= '1;
                 end
             end
         end
@@ -315,7 +320,8 @@ always@(posedge clk) begin
                     p_lookup_tuple <= p_c7.tuple;
                     p_insert_fce_r.valid <= 1'b1;
                     p_insert_fce_r.tuple <= p_c7.tuple;
-                    p_insert_fce_r.queue_id <= p_c7.queue_id;
+                    p_insert_fce_r.dsc_queue_id <= p_c7.dsc_queue_id;
+                    p_insert_fce_r.pkt_queue_id <= p_c7.pkt_queue_id;
                 end
             end
 
@@ -361,8 +367,9 @@ always@(posedge clk) begin
                 end
 
                 // Debug
-                `hdisplay(("Flow Table: Updated FTE with Flow ID=0x%h, Queue ID=0x%h",
-                         p_insert_fce_r.tuple, p_insert_fce_r.queue_id));
+                `hdisplay(("FT: Updated Flow=0x%h, DSC_Q=0x%h, PKT_Q=0x%h",
+                         p_insert_fce_r.tuple, p_insert_fce_r.dsc_queue_id, 
+                         p_insert_fce_r.pkt_queue_id));
 
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
@@ -388,8 +395,9 @@ always@(posedge clk) begin
                 end
 
                 // Debug
-                `hdisplay(("Flow Table: Inserted FTE with Flow ID=0x%h, Queue ID=0x%h",
-                         p_insert_fce_r.tuple, p_insert_fce_r.queue_id));
+                `hdisplay(("FT: Insert Flow=0x%h, DSC_Q=0x%h, PKT_Q=0x%h",
+                         p_insert_fce_r.tuple, p_insert_fce_r.dsc_queue_id, 
+                         p_insert_fce_r.pkt_queue_id));
 
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
