@@ -121,6 +121,7 @@ typedef struct {
     int app_id;
     pcie_block_t* uio_data_bar2;
     bool active;
+    ssize_t fd;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues);

@@ -306,7 +306,7 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
     void *__iomem mmio_addr;
     uint32_t kmem_addr_l, kmem_addr_h;
     kern_sock_norman_t *mysock;
-    int sock_id = mysock->sock_id;
+    int sock_id = -1;
 
     // Get the correct socket
     // TODO lock
@@ -322,6 +322,7 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
         return -EINVAL; // well really, not this errcode
     }
     // TODO unlock
+    sock_id = mysock->sock_id;
 
     len = vma->vm_end - vma->vm_start;
     pgoff = vma->vm_pgoff;

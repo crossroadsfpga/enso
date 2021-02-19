@@ -1,6 +1,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <assert.h>
 
 #include "fd.h"
 #include "pcie.h"
@@ -11,7 +12,7 @@ static socket_internal open_sockets[MAX_NB_SOCKETS];
 static unsigned int nb_open_sockets = 0;
 static int init = 0;
 
-int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
+int norman_socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     int nb_queues) // HACK(sadok) using protocol as nb_queues
 {
     intel_fpga_pcie_dev *dev;
@@ -57,17 +58,16 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
         return -1;
     }
 
-    // TODO (soup) use kern_create_socket(void)
-    // sock_id = kern_create_socket();
-    // assert(sock_id == nb_open_sockets);
-    // nb_open_sockets++;
-    // return sock_id;
-
-    // FIXME(sadok) use __sync_fetch_and_add to update atomically
-    return nb_open_sockets++;
+    ssize_t fd = open("/dev/intel_fpga_pcie_drv", O_RDWR | O_CLOEXEC);
+    open_sockets[nb_open_sockets].fd = fd;
+    sock_id = ioctl(fd, INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK, nb_open_sockets);
+    assert(sock_id == (int) nb_open_sockets);
+    // TODO: make inc atomic
+    nb_open_sockets++;
+    return sock_id;
 }
 
-int bind(
+int norman_bind(
     int sockfd,
     const struct sockaddr *addr __attribute__((unused)),
     socklen_t addrlen, // HACK(sadok) specifying number of rules
@@ -97,7 +97,7 @@ int bind(
     return 0;
 }
 
-ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)))
+ssize_t norman_recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)))
 {
     void* ring_buf;
     socket_internal* socket = &open_sockets[sockfd];
@@ -115,23 +115,25 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)
     return bytes_received;
 }
 
-ssize_t recv_zc(int sockfd, void **buf, size_t len, int flags __attribute__((unused)))
+ssize_t norman_recv_zc(int sockfd, void **buf, size_t len, int flags __attribute__((unused)))
 {
     return dma_run(&open_sockets[sockfd], buf, len);
 }
 
-void free_pkt_buf(int sockfd)
+void norman_free_pkt_buf(int sockfd)
 {
     advance_ring_buffer(&open_sockets[sockfd]);
 }
 
-int shutdown(int sockfd, int how __attribute__((unused)))
+int norman_shutdown(int sockfd, int how __attribute__((unused)))
 {
     int result;
     intel_fpga_pcie_dev *dev = open_sockets[sockfd].dev;
 
     result = dma_finish(&open_sockets[sockfd]);
     result = dev->use_cmd(false);
+
+    close(open_sockets[sockfd].fd);
 
     if (unlikely(result == 0)) {
         std::cerr << "Could not switch to CMD use mode!\n";

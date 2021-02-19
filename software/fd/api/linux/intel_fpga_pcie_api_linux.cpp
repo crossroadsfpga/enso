@@ -356,6 +356,7 @@ int intel_fpga_pcie_dev::set_sriov_numvfs(unsigned int num_vfs)
     return result == 0;
 }
 
+/*
 int intel_fpga_pcie_dev::set_kmem_size(unsigned int f2c_size,
                                        unsigned int c2f_size,
                                        unsigned int app_id)
@@ -377,12 +378,13 @@ int intel_fpga_pcie_dev::set_kmem_size(unsigned int f2c_size,
     arg.core_id = app_id;
 
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SET_KMEM_SIZE, &arg);
-    
+
     if (result == 0) {
         m_kmem_size = f2c_size + c2f_size;
     }
     return result == 0;
 }
+*/
 
 void *intel_fpga_pcie_dev::kmem_mmap(unsigned int size, unsigned int offset)
 {

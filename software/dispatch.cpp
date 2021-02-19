@@ -15,7 +15,7 @@
 #include "fd/fd.h"
 // #include <sys/socket.h>
 // #include <netinet/in.h>
-// #include <arpa/inet.h> 
+// #include <arpa/inet.h>
 
 #define ZERO_COPY
 
@@ -74,17 +74,17 @@ int main(int argc, const char* argv[])
     }
 
     std::cout << "running test with " << nb_rules << " rules" << std::endl;
-    
+
     std::thread socket_thread = std::thread(
         [&recv_bytes, port, nb_rules, &nb_pkts, rb_states, &buffers, nb_cores]
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
 
-            std::cout << "Running socket on CPU " << sched_getcpu() 
+            std::cout << "Running socket on CPU " << sched_getcpu()
                       << std::endl;
 
             // TODO(sadok) can we make this a valid file descriptor?
-            int socket_fd = socket(AF_INET, SOCK_DGRAM, 1);
+            int socket_fd = norman_socket(AF_INET, SOCK_DGRAM, 1);
 
             if (socket_fd == -1) {
                 std::cerr << "Problem creating socket (" << errno << "): "
@@ -99,7 +99,7 @@ int main(int argc, const char* argv[])
             addr.sin_addr.s_addr = inet_addr("10.0.0.2"); // htonl(INADDR_ANY);
             addr.sin_port = htons(port);
 
-            if (bind(socket_fd, (struct sockaddr*) &addr, nb_rules, 1)) {
+            if (norman_bind(socket_fd, (struct sockaddr*) &addr, nb_rules, 1)) {
                 std::cerr << "Problem binding socket (" << errno << "): "
                           << strerror(errno) <<  std::endl;
                 exit(3);
@@ -113,10 +113,10 @@ int main(int argc, const char* argv[])
 
             while (keep_running) {
                 #ifdef ZERO_COPY
-                    int recv_len = recv_zc(socket_fd, (void**) &buf, BUF_LEN,
+                    int recv_len = norman_recv_zc(socket_fd, (void**) &buf, BUF_LEN,
                                            0);
                 #else
-                    int recv_len = recv(socket_fd, buf, BUF_LEN, 0);
+                    int recv_len = norman_recv(socket_fd, buf, BUF_LEN, 0);
                 #endif
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
@@ -134,7 +134,7 @@ int main(int argc, const char* argv[])
                     uint32_t occup_space;
                     uint32_t my_head = rb_states[buf_idx].head;
                     do {
-                        occup_space = (rb_states[buf_idx].head - 
+                        occup_space = (rb_states[buf_idx].head -
                                     rb_states[buf_idx].tail) % BUF_LEN;
                     } while ((BUF_LEN - occup_space - 1) < (uint32_t) recv_len);
                     // must always have at least one empty spot
@@ -148,7 +148,7 @@ int main(int argc, const char* argv[])
                         rb_states[buf_idx].head = (my_head + recv_len) % BUF_LEN;
                     }
                     #ifdef ZERO_COPY
-                        free_pkt_buf(socket_fd);
+                        norman_free_pkt_buf(socket_fd);
                     #endif
                 }
                 recv_bytes += recv_len;
@@ -156,7 +156,7 @@ int main(int argc, const char* argv[])
 
         // TODO(sadok) it is also common to use the close() syscall to close a
         // UDP socket
-        shutdown(socket_fd, SHUT_RDWR);
+        norman_shutdown(socket_fd, SHUT_RDWR);
 
         // free buffers
         for (uint32_t i = 0; i < nb_cores; ++i) {
@@ -208,7 +208,7 @@ int main(int argc, const char* argv[])
     while (keep_running) {
         uint64_t recv_bytes_before = recv_bytes;
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        std::cout << std::dec << "Goodput: " << 
+        std::cout << std::dec << "Goodput: " <<
             ((double) recv_bytes - recv_bytes_before) * 8. /1e6
             << " Mbps  #pkts: " << nb_pkts << std::endl;
     }

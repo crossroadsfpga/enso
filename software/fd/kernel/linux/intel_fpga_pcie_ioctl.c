@@ -59,7 +59,6 @@ static long sel_bar(struct chr_dev_bookkeep *dev_bk, unsigned long new_bar);
 static long get_bar(struct chr_dev_bookkeep *chr_dev_bk,
                     unsigned int __user *user_addr);
 static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg);
-static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg);
 static long get_ktimer(struct dev_bookkeep *dev_bk,
                        unsigned int __user *user_addr);
 static int create_sock(struct dev_bookkeep *pdev, unsigned int __user *user_addr);
@@ -148,9 +147,6 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
         else
             retval = (long)numvfs;
         break;
-    case INTEL_FPGA_PCIE_IOCTL_SET_KMEM_SIZE:
-        retval = set_kmem_size(dev_bk, uarg);
-        break;
     case INTEL_FPGA_PCIE_IOCTL_DMA_QUEUE:
         retval = intel_fpga_pcie_dma_queue(dev_bk, uarg);
         break;
@@ -161,7 +157,7 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
         retval = get_ktimer(dev_bk, (unsigned int __user *)uarg);
         break;
     case INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK:
-        retval = create_sock(dev_bk, uarg);
+        retval = create_sock(dev_bk, (unsigned int __user *)uarg);
         break;
     default:
         retval = -ENOTTY;
@@ -448,111 +444,6 @@ static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg)
 }
 
 /**
- * set_kmem_size() - If size is non-zero, obtains DMA-capable kernel memory
- *                   for use as a bounce buffer or for scratch memory.
- *
- * @dev_bk:     Pointer to the device bookkeeping structure. The structure
- *              is accessed to retrieve information about existing kernel
- *              memories allocated for the same purpose, and allocated
- *              memory is accessed through this structure.
- *  @uarg:       Pointer to intel_fpga_pcie_ksize structure
- *
- * Obtains DMA-capable kernel memory for use as a bounce buffer or for
- * scratch memory. This memory is accessible through dev_bk structure.
- * Only one such memory can be allocated per device at any time.
- *
- * For simplicity, memory resizing is not supported - previously
- * allocated memory will be freed and replaced by a new memory region.
- * If the new memory region cannot be obtained, the old memory region
- * will be retained.
- *
- *
- * Return: 0 if successful, negative error code otherwise.
- */
-static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
-{
-    long retval = 0;
-    struct kmem_info old_info;
-    uint32_t kmem_addr_l, kmem_addr_h;
-    void *__iomem ep_addr;
-    // unsigned long local_size;
-    // uint32_t cpu2fpga;
-    int core_id;
-    unsigned int size;
-
-    struct intel_fpga_pcie_ksize karg;
-
-    if (copy_from_user(&karg, (void __user *) uarg, sizeof(karg))) {
-        INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
-        return -EFAULT;
-    }
-
-    core_id = karg.core_id;
-    size = karg.f2c_size + karg.c2f_size;
-
-    if (unlikely(down_interruptible(&dev_bk->sem))) {
-        INTEL_FPGA_PCIE_DEBUG("interrupted while attempting to obtain "
-                              "device semaphore.");
-        return -ERESTARTSYS;
-    }
-
-    old_info.size       = dev_bk->kmem_info.size;
-    old_info.virt_addr  = dev_bk->kmem_info.virt_addr;
-    old_info.bus_addr   = dev_bk->kmem_info.bus_addr;
-
-    // TODO(sadok) Are we deallocating this somewhere?
-    // Get new memory region first if requested.
-    if (size > 0) {
-        retval = dma_set_mask_and_coherent(&dev_bk->dev->dev, DMA_BIT_MASK(64));
-        if (retval) {
-            printk(KERN_INFO "dma_set_mask returned: %li\n",  retval);
-            return -EIO;
-        }
-        dev_bk->kmem_info.virt_addr =
-            dma_zalloc_coherent(&dev_bk->dev->dev, size,
-                                &dev_bk->kmem_info.bus_addr, GFP_KERNEL);
-        if (!dev_bk->kmem_info.virt_addr) {
-            INTEL_FPGA_PCIE_DEBUG("couldn't obtain kernel buffer.");
-            // Restore old memory region.
-            dev_bk->kmem_info.virt_addr = old_info.virt_addr;
-            dev_bk->kmem_info.bus_addr = old_info.bus_addr;
-            retval = -ENOMEM;
-        } else {
-            dev_bk->kmem_info.size = size;
-        }
-    } else {
-        dev_bk->kmem_info.size = 0;
-        dev_bk->kmem_info.virt_addr = NULL;
-        dev_bk->kmem_info.bus_addr = 0;
-
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("freeing previously allocated memory.");
-        dma_free_coherent(&dev_bk->dev->dev, old_info.size, old_info.virt_addr,
-                          old_info.bus_addr);
-    }
-
-    up(&dev_bk->sem);
-
-    kmem_addr_l = dev_bk->kmem_info.bus_addr & 0xFFFFFFFF;
-    kmem_addr_h = (dev_bk->kmem_info.bus_addr >> 32) & 0xFFFFFFFF;
-    ep_addr = dev_bk->bar[2].base_addr;
-
-    iowrite32(kmem_addr_l, ep_addr + FPGA2CPU_OFFSET + core_id * PAGE_SIZE);
-    iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4 + core_id * PAGE_SIZE);
-
-    if (core_id == 0) {
-        iowrite32(kmem_addr_l + karg.f2c_size, ep_addr + CPU2FPGA_OFFSET);
-
-        // kmem_addr_h should have an offset of 1 if kmem_addr_l overflows
-        if ((kmem_addr_l + karg.f2c_size) < kmem_addr_l) {
-            ++kmem_addr_h;
-        }
-        iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4);
-    }
-
-    return retval;
-}
-
-/**
  * get_ktimer() - Copies the currently selected device BAR to the user.
  *
  * @dev_bk:     Pointer to the device bookkeeping structure. The structure
@@ -609,7 +500,7 @@ static int create_sock(struct dev_bookkeep *pdev, unsigned int __user *uarg)
     tasks[sock_id] = current;
     */
 
-    printk(KERN_INFO "sock id for thr %lx: %d\n", current, sock_id);
+    printk(KERN_INFO "sock id for thr %p: %d\n", current, sock_id);
 
     return sock_id;
 }

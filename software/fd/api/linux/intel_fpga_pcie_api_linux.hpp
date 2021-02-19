@@ -109,15 +109,16 @@ struct intel_fpga_pcie_size_app_id {
                                                   struct intel_fpga_pcie_arg *)
 #define INTEL_FPGA_PCIE_IOCTL_SRIOV_NUMVFS  _IOW (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
                                                   6, unsigned int)
-#define INTEL_FPGA_PCIE_IOCTL_SET_KMEM_SIZE _IOW (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
-                                                  7, unsigned int)
 #define INTEL_FPGA_PCIE_IOCTL_DMA_QUEUE     _IOWR(INTEL_FPGA_PCIE_IOCTL_MAGIC, \
-                                                  8,                           \
+                                                  7,                           \
                                                   struct intel_fpga_pcie_arg *)
 #define INTEL_FPGA_PCIE_IOCTL_DMA_SEND      _IOW (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
-                                                  9, unsigned int)
+                                                  8, unsigned int)
 #define INTEL_FPGA_PCIE_IOCTL_GET_KTIMER    _IOR (INTEL_FPGA_PCIE_IOCTL_MAGIC, \
-                                                  10, unsigned int *)
+                                                  9, unsigned int *)
+
+#define INTEL_FPGA_PCIE_IOCTL_CREATE_SOCK   _IOWR (INTEL_FPGA_PCIE_IOCTL_MAGIC, 10, unsigned int)
+
 #define INTEL_FPGA_PCIE_IOCTL_MAXNR 10
 
 

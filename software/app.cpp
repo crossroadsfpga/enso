@@ -15,7 +15,7 @@
 #include "fd/fd.h"
 // #include <sys/socket.h>
 // #include <netinet/in.h>
-// #include <arpa/inet.h> 
+// #include <arpa/inet.h>
 
 #define ZERO_COPY
 
@@ -52,8 +52,8 @@ int main(int argc, const char* argv[])
     signal(SIGINT, int_handler);
 
     std::cout << "running test with " << nb_rules << " rules" << std::endl;
-    
-    std::thread socket_thread = std::thread([&recv_bytes, port, nb_rules, 
+
+    std::thread socket_thread = std::thread([&recv_bytes, port, nb_rules,
         nb_queues, &nb_batches]
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -62,7 +62,7 @@ int main(int argc, const char* argv[])
 
         for (int i = 0; i < nb_queues; ++i) {
             // TODO(sadok) can we make this a valid file descriptor?
-            int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
+            int socket_fd = norman_socket(AF_INET, SOCK_DGRAM, nb_queues);
 
             if (socket_fd == -1) {
                 std::cerr << "Problem creating socket (" << errno << "): "
@@ -77,7 +77,7 @@ int main(int argc, const char* argv[])
             addr.sin_addr.s_addr = inet_addr("10.0.0.2"); // htonl(INADDR_ANY);
             addr.sin_port = htons(port);
 
-            if (bind(socket_fd, (struct sockaddr*) &addr, nb_rules, nb_rules)) {
+            if (norman_bind(socket_fd, (struct sockaddr*) &addr, nb_rules, nb_rules)) {
                 std::cerr << "Problem binding socket (" << errno << "): "
                           << strerror(errno) <<  std::endl;
                 exit(3);
@@ -95,9 +95,9 @@ int main(int argc, const char* argv[])
             // would not work with an actual file descriptor
             for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
                 #ifdef ZERO_COPY
-                    int recv_len = recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
+                    int recv_len = norman_recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
                 #else
-                    int recv_len = recv(socket_fd, buf, BUF_LEN, 0);
+                    int recv_len = norman_recv(socket_fd, buf, BUF_LEN, 0);
                 #endif
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
@@ -106,7 +106,7 @@ int main(int argc, const char* argv[])
                 if (recv_len > 0) {
                     ++nb_batches;
                     #ifdef ZERO_COPY
-                    free_pkt_buf(socket_fd);
+                    norman_free_pkt_buf(socket_fd);
                     #endif
                 }
                 recv_bytes += recv_len;
@@ -133,7 +133,7 @@ int main(int argc, const char* argv[])
     while (keep_running) {
         uint64_t recv_bytes_before = recv_bytes;
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        std::cout << std::dec << "Goodput: " << 
+        std::cout << std::dec << "Goodput: " <<
             ((double) recv_bytes - recv_bytes_before) * 8. /1e6
             << " Mbps  #bytes: " << recv_bytes << "  #batches: " << nb_batches
             << std::endl;
