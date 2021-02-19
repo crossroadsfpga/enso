@@ -392,9 +392,12 @@ int intel_fpga_pcie_dev::set_kmem_size(unsigned int f2c_size,
 
 void *intel_fpga_pcie_dev::kmem_mmap(unsigned int size, unsigned int offset)
 {
+/*
     if ((size+offset) > m_kmem_size) {
-        return MAP_FAILED;
+	printf("ahhhhh from kmem_mmap\n");
+        return NULL;
     }
+*/
 
     return mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, m_dev_handle, offset);
 };

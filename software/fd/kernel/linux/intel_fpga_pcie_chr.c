@@ -307,6 +307,7 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
     uint32_t kmem_addr_l, kmem_addr_h;
     kern_sock_norman_t *mysock;
     int sock_id = -1;
+    printk(KERN_INFO "chr_mmap!\n");
 
     // Get the correct socket
     // TODO lock
@@ -329,10 +330,6 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
 
     chr_dev_bk = filp->private_data;
     dev_bk = chr_dev_bk->dev_bk;
-
-    if ((len == 0) || (len+pgoff) > dev_bk->kmem_info.size) {
-        return -EINVAL;
-    }
 
     old_info.size       = dev_bk->kmem_info.size;
     old_info.virt_addr  = dev_bk->kmem_info.virt_addr;
@@ -396,7 +393,9 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
         return -ENXIO;
     }
 
-    return 0;
+    printk(KERN_INFO "mmap: 0x%x\n", ret);
+
+    return ret;
 }
 
 static void chr_vma_close(struct vm_area_struct *vma)

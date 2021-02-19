@@ -178,14 +178,13 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
             std::cerr << "Could not get kern fake hugepage" << std::endl;
             return -1;
         }
+	printf("dsc buf from dma_init: 0x%x\n", socket_entry->dsc_buf);
         uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->dsc_buf);
         uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
         uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
 
-        /*
         socket_entry->pkt_buf =
             (uint32_t*) get_huge_pages(app_id, ALIGNED_F2C_PKT_BUF_SIZE);
-            */
 
         if (socket_entry->pkt_buf == NULL) {
             std::cerr << "Could not get huge page" << std::endl;
@@ -205,6 +204,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         }
 
         socket_entry->dsc_buf = (pcie_pkt_desc_t*) base_addr;
+	printf("dsc buf from dma_init: 0x%x\n", socket_entry->dsc_buf);
 
         uint64_t phys_addr = (uint64_t) virt_to_phys(base_addr);
         uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
@@ -253,6 +253,8 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
         // we will need to consider the queue id once this changes
         pcie_pkt_desc_t* cur_desc = dsc_buf + dsc_buf_head;
 
+	printf("dereference cur_desc / dsc_buf\n");
+    	printf("dereference dsc_buf: 0x%x\n", dsc_buf);
         // check if the next descriptor was updated by the FPGA
         if (unlikely(cur_desc->signal == 0)) {
             break;

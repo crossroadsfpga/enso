@@ -71,7 +71,6 @@ int main(int argc, const char* argv[])
                 exit(2);
             }
 
-/*
             struct sockaddr_in addr;
             memset(&addr, 0, sizeof(addr));
 
@@ -79,13 +78,14 @@ int main(int argc, const char* argv[])
             addr.sin_addr.s_addr = inet_addr("10.0.0.2"); // htonl(INADDR_ANY);
             addr.sin_port = htons(port);
 
+	    printf("about to bind!\n");
             if (norman_bind(socket_fd, (struct sockaddr*) &addr, nb_rules, nb_rules)) {
                 std::cerr << "Problem binding socket (" << errno << "): "
                           << strerror(errno) <<  std::endl;
                 exit(3);
             }
-*/
 		// lets not really do anything
+	    printf("bound!\n");
 		
         }
 
@@ -99,25 +99,22 @@ int main(int argc, const char* argv[])
             // HACK(sadok) this only works because socket_fd is incremental, it
             // would not work with an actual file descriptor
             for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-/*
+		printf("about to recv!\n");
                 #ifdef ZERO_COPY
                     int recv_len = norman_recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
                 #else
                     int recv_len = norman_recv(socket_fd, buf, BUF_LEN, 0);
                 #endif
-*/
-		int recv_len = 0;
+		printf("received!\n");
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
                     exit(4);
                 }
                 if (recv_len > 0) {
                     ++nb_batches;
-/*
                     #ifdef ZERO_COPY
                     norman_free_pkt_buf(socket_fd);
                     #endif
-*/
                 }
                 recv_bytes += recv_len;
             }
