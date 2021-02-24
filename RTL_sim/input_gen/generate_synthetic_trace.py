@@ -27,17 +27,14 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest):
         sample_pkts.append(pkt)
 
     pkts = []
+    missing_bytes = pkt_size - len(sample_pkts[0]) - counter_size - 4  # no CRC
     for i, pkt in zip(range(nb_pkts), cycle(sample_pkts)):
         payload = (i).to_bytes(counter_size, byteorder='big')
-        missing_bytes = pkt_size - len(pkt) - counter_size - 4  # no CRC
         if (missing_bytes < 0):
             payload = payload[:missing_bytes]
         else:
             payload += binascii.unhexlify('00' * missing_bytes)
         pkt = pkt/Raw(load=payload)
-
-        if i == 0:
-            print(len(pkt), pkt)
         pkts.append(pkt)
 
     wrpcap(out_pcap, pkts)
