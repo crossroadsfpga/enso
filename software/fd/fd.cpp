@@ -39,16 +39,18 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
         return -1;
     }
 
-    open_sockets[nb_open_sockets].dev = dev;
-    result = dma_init(&open_sockets[nb_open_sockets], nb_open_sockets, nb_queues);
+    // FIXME(sadok) use __sync_fetch_and_add to update atomically
+    unsigned int socket_id = nb_open_sockets++;
+
+    open_sockets[socket_id].dev = dev;
+    result = dma_init(&open_sockets[socket_id], socket_id, nb_queues);
 
     if (unlikely(result < 0)) {
         std::cerr << "Problem initializing DMA" << std::endl;
         return -1;
     }
 
-    // FIXME(sadok) use __sync_fetch_and_add to update atomically
-    return nb_open_sockets++;
+    return socket_id;
 }
 
 int bind(
@@ -127,9 +129,4 @@ int shutdown(int sockfd, int how __attribute__((unused)))
     delete dev;
 
     return 0;
-}
-
-void print_reg(int sockfd)
-{
-    print_fpga_reg(open_sockets[sockfd].dev);
 }

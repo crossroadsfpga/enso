@@ -11,6 +11,11 @@
 
 #define MAX_PKT_SIZE 24 // in flits, if changed, must also change hardware
 
+// These determine the maximum number of descriptor and packet queues, these
+// macros also exist in hardware and **must be kept in sync**.
+#define MAX_NB_APPS 1024
+#define MAX_NB_FLOWS 1024
+
 #ifndef BATCH_SIZE
 // Maximum number of packets to process in call to dma_run
 #define BATCH_SIZE 64
@@ -19,13 +24,13 @@
 #ifndef F2C_DSC_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes)
-#define F2C_DSC_BUF_SIZE 1048575
+#define F2C_DSC_BUF_SIZE 256
 #endif
 
 #ifndef F2C_PKT_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes)
-#define F2C_PKT_BUF_SIZE 1048575
+#define F2C_PKT_BUF_SIZE 1024
 #endif
 
 #define C2F_BUFFER_SIZE 512
@@ -51,8 +56,6 @@
 #define HEAD_OFFSET 4
 #define C2F_TAIL_OFFSET 16
 
-#define MAX_NB_APPS 16384 // If we change this, must also change hardware
-
 #define PDU_ID_OFFSET 0
 #define PDU_PORTS_OFFSET 1
 #define PDU_DST_IP_OFFSET 2
@@ -67,27 +70,23 @@
 #define ACTION_NO_MATCH 1
 #define ACTION_MATCH 2
 
-#define MEMORY_SPACE_PER_APP (1<<12)
+#define MEMORY_SPACE_PER_QUEUE (1<<12)
 
 #define likely(x)       __builtin_expect((x),1)
 #define unlikely(x)     __builtin_expect((x),0)
 
 #define REGISTERS_PER_APP 8
-typedef struct pcie_block {
-    uint32_t dsc_buf_tail;
-    uint32_t dsc_buf_head;
-    uint32_t dsc_buf_mem_low;
-    uint32_t dsc_buf_mem_high;
-    uint32_t pkt_buf_tail;
-    uint32_t pkt_buf_head;
-    uint32_t pkt_buf_mem_low;
-    uint32_t pkt_buf_mem_high;
+typedef struct queue_regs {
+    uint32_t buf_tail;
+    uint32_t buf_head;
+    uint32_t buf_mem_low;
+    uint32_t buf_mem_high;
     uint32_t c2f_tail;
     uint32_t c2f_head;
     uint32_t c2f_kmem_low;
     uint32_t c2f_kmem_high;
-    uint32_t padding[4];
-} pcie_block_t;
+    uint32_t padding[8];
+} queue_regs_t;
 
 typedef struct block {
     uint32_t pdu_id;
@@ -109,16 +108,26 @@ typedef struct {
     uint64_t tail;
     uint64_t pad[5];
 } pcie_pkt_desc_t;
+
+typedef struct {
+    pcie_pkt_desc_t* buf;
+    queue_regs_t* regs;
+    uint32_t* buf_head_ptr;
+    uint32_t buf_head;
+    uint32_t ref_cnt;
+} dsc_queue_t;
+
+typedef struct {
+    uint32_t* buf;
+    queue_regs_t* regs;
+    uint32_t* buf_head_ptr;
+    uint32_t buf_head;
+} pkt_queue_t;
+
 typedef struct {
     intel_fpga_pcie_dev* dev;
-    pcie_pkt_desc_t* dsc_buf;
-    uint32_t* pkt_buf;
-    uint32_t* dsc_buf_head_ptr;
-    uint32_t* pkt_buf_head_ptr;
-    uint32_t dsc_buf_head;
-    uint32_t pkt_buf_head;
+    pkt_queue_t pkt_queue;
     int app_id;
-    pcie_block_t* uio_data_bar2;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues);
@@ -127,12 +136,12 @@ void advance_ring_buffer(socket_internal* socket_entry);
 int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
                          unsigned int nb_queues);
 int dma_finish(socket_internal* socket_entry);
-void print_pcie_block(pcie_block_t * pb);
+void print_queue_regs(queue_regs_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
-void print_fpga_reg(intel_fpga_pcie_dev *dev);
+void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs);
 void print_block(block_s *block);
 void fill_block(uint32_t *addr, block_s *block);
-uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
+uint32_t c2f_copy_head(uint32_t c2f_tail, queue_regs_t *global_block, 
                        block_s *block, uint32_t *kdata);
 
 #endif // PCIE_H

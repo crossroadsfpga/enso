@@ -38,8 +38,14 @@
 // #include "intel_fpga_pcie_link_test.hpp"
 #include "pcie.h"
 
-static const bool alloc_single_buf = (F2C_DSC_BUF_SIZE + \
-    F2C_PKT_BUF_SIZE_EXTRA_ROOM) > BUF_PAGE_SIZE/64;
+static dsc_queue_t dsc_queue;
+static uint32_t* pending_pkt_tails;
+
+// HACK(sadok) This is used to decrement the packet queue id and use it as an
+// index to the pending_pkt_tails array. This only works because packet queues
+// for the same app are contiguous. This will no longer hold in the future. How
+// bad would it be to use a hash table to keep pending_pkt_tails?
+static uint32_t pkt_queue_id_offset;
 
 static inline uint16_t get_pkt_size(uint8_t *addr) {
     uint16_t l2_len = 14 + 4;
@@ -157,80 +163,83 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         return -1;
     }
 
-    uio_mmap_bar2_addr = dev->uio_mmap((1<<12) * MAX_NB_APPS, 2);
+    uio_mmap_bar2_addr = dev->uio_mmap(
+        (1<<12) * (MAX_NB_FLOWS + MAX_NB_APPS), 2);
     if (uio_mmap_bar2_addr == MAP_FAILED) {
         std::cerr << "Could not get mmap uio memory!" << std::endl;
         return -1;
     }
-    pcie_block_t *uio_data_bar2 = (pcie_block_t *) (
-        (uint8_t*) uio_mmap_bar2_addr + app_id * MEMORY_SPACE_PER_APP
-    );
-    socket_entry->uio_data_bar2 = uio_data_bar2;
 
-    // if the descriptor and packet buffers cannot fit together in a single huge
-    // page, we need to allocate them separately
-    if (alloc_single_buf) {
-        socket_entry->dsc_buf =
+    // set descriptor queue only for the first socket
+    if (dsc_queue.ref_cnt == 0) {
+        // Register associated with the descriptor queue. Descriptor queue
+        // registers come after the packet queue ones, that's why we use 
+        // MAX_NB_FLOWS as an offset.
+        queue_regs_t *dsc_queue_regs = (queue_regs_t *) (
+            (uint8_t*) uio_mmap_bar2_addr + 
+            (app_id + MAX_NB_FLOWS) * MEMORY_SPACE_PER_QUEUE
+        );
+
+        dsc_queue.regs = dsc_queue_regs;
+        dsc_queue.buf =
             (pcie_pkt_desc_t*) get_huge_pages(app_id, ALIGNED_F2C_DSC_BUF_SIZE);
-        if (socket_entry->dsc_buf == NULL) {
+        if (dsc_queue.buf == NULL) {
             std::cerr << "Could not get huge page" << std::endl;
             return -1;
         }
-        uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->dsc_buf);
-        uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
-        uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
-        
-        socket_entry->pkt_buf = 
-            (uint32_t*) get_huge_pages(app_id, ALIGNED_F2C_PKT_BUF_SIZE);
-        if (socket_entry->pkt_buf == NULL) {
-            std::cerr << "Could not get huge page" << std::endl;
+        uint64_t phys_addr = (uint64_t) virt_to_phys(dsc_queue.buf);
+
+        dsc_queue_regs->buf_mem_low = (uint32_t) phys_addr;
+        dsc_queue_regs->buf_mem_high = (uint32_t) (phys_addr >> 32);
+
+        dsc_queue.buf_head_ptr = &dsc_queue_regs->buf_head;
+        dsc_queue.buf_head = dsc_queue_regs->buf_head;
+
+        // HACK(sadok) assuming that we know the number of queues beforehand
+        pending_pkt_tails = (uint32_t*) malloc(
+            sizeof(*pending_pkt_tails) * nb_queues);
+        if (pending_pkt_tails == NULL) {
+            std::cerr << "Could not allocate memory" << std::endl;
             return -1;
         }
-        phys_addr = (uint64_t) virt_to_phys(socket_entry->pkt_buf);
-        uio_data_bar2->pkt_buf_mem_low = (uint32_t) phys_addr;
-        uio_data_bar2->pkt_buf_mem_high = (uint32_t) (phys_addr >> 32);
-    } else {
-        void* base_addr = get_huge_pages(app_id, BUF_PAGE_SIZE);
-        if (base_addr == NULL) {
-            std::cerr << "Could not get huge page" << std::endl;
-            return -1;
-        }
+        memset(pending_pkt_tails, 0, nb_queues);
 
-        socket_entry->dsc_buf = (pcie_pkt_desc_t*) base_addr;
-
-        uint64_t phys_addr = (uint64_t) virt_to_phys(base_addr);
-        uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
-        uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
-
-        socket_entry->pkt_buf = (uint32_t*) base_addr + F2C_DSC_BUF_SIZE * 16;
-
-        phys_addr += F2C_DSC_BUF_SIZE * 64;
-        uio_data_bar2->pkt_buf_mem_low = (uint32_t) phys_addr;
-        uio_data_bar2->pkt_buf_mem_high = (uint32_t) (phys_addr >> 32);
+        pkt_queue_id_offset = app_id - socket_id;
     }
 
-    socket_entry->dsc_buf_head_ptr = &uio_data_bar2->dsc_buf_head;
-    socket_entry->pkt_buf_head_ptr = &uio_data_bar2->pkt_buf_head;
+    ++(dsc_queue.ref_cnt);
+
+    // register associated with the packet queue
+    queue_regs_t *pkt_queue_regs = (queue_regs_t *) (
+        (uint8_t*) uio_mmap_bar2_addr + app_id * MEMORY_SPACE_PER_QUEUE
+    );
+    socket_entry->pkt_queue.regs = pkt_queue_regs;
+
+    socket_entry->pkt_queue.buf = 
+        (uint32_t*) get_huge_pages(app_id, ALIGNED_F2C_PKT_BUF_SIZE);
+    if (socket_entry->pkt_queue.buf == NULL) {
+        std::cerr << "Could not get huge page" << std::endl;
+        return -1;
+    }
+    uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->pkt_queue.buf);
+
+    pkt_queue_regs->buf_mem_low = (uint32_t) phys_addr;
+    pkt_queue_regs->buf_mem_high = (uint32_t) (phys_addr >> 32);
 
     socket_entry->app_id = app_id;
-    socket_entry->dsc_buf_head = uio_data_bar2->dsc_buf_head;
-    socket_entry->pkt_buf_head = uio_data_bar2->pkt_buf_head;
+    socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->buf_head;
+    socket_entry->pkt_queue.buf_head = pkt_queue_regs->buf_head;
+
+    // make sure the last tail matches the current head
+    pending_pkt_tails[socket_id] = socket_entry->pkt_queue.buf_head;
 
     return 0;
 }
 
-int dma_run(socket_internal* socket_entry, void** buf, size_t len)
+static inline void get_new_tails()
 {
-    pcie_pkt_desc_t* dsc_buf = socket_entry->dsc_buf;
-    uint32_t* pkt_buf = socket_entry->pkt_buf;
-    uint32_t dsc_buf_head = socket_entry->dsc_buf_head;
-    uint32_t pkt_buf_head = socket_entry->pkt_buf_head;
-
-    *buf = &pkt_buf[pkt_buf_head * 16];
-    uint8_t* my_buf = (uint8_t*) *buf;
-
-    uint32_t total_size = 0;
-    uint32_t total_flits = 0;
+    pcie_pkt_desc_t* dsc_buf = dsc_queue.buf;
+    uint32_t dsc_buf_head = dsc_queue.buf_head;
 
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
         // TODO(sadok) right now we have one descriptor queue per packet queue,
@@ -242,49 +251,73 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
             break;
         }
 
-        uint32_t pkt_size = get_pkt_size(my_buf);
-        uint32_t pdu_flit = ((pkt_size-1) >> 6) + 1; // number of 64-byte blocks
-        uint32_t flit_aligned_size = pdu_flit * 64;
-
-        // reached the buffer limit
-        if (unlikely((total_size + flit_aligned_size) > len)) {
-            break;
-        }
-
-        // If we reach this point, it's safe to return the packet to the user
         cur_desc->signal = 0;
-        dsc_buf_head = dsc_buf_head == F2C_DSC_BUF_SIZE-1 ? 0 : dsc_buf_head+1;
+        dsc_buf_head = (dsc_buf_head + 1) % F2C_DSC_BUF_SIZE;
 
-        // TODO(sadok) Handle packets that are not flit-aligned. There will be a
-        // gap, what should we do?
-        total_size += flit_aligned_size;
-        total_flits += pdu_flit;
+        uint32_t pkt_queue_id = cur_desc->queue_id - pkt_queue_id_offset;
+        pending_pkt_tails[pkt_queue_id] = (uint32_t) cur_desc->tail;
+        // std::cout << "new tail for " << pkt_queue_id << ": " << cur_desc->tail << std::endl;
 
-        // Packets may go beyond the buffer size, but the next packet is
-        // guaranteed to start at index zero. Also, since the next packet starts
-        // at the beginning of the buffer, we need to return immediately to
-        // ensure that we always return a contiguous set of packets.
-        if ((pkt_buf_head + pdu_flit) >= F2C_PKT_BUF_SIZE) {
-            pkt_buf_head = 0;
-            break;
-        }
-        my_buf += flit_aligned_size;
-        pkt_buf_head += pdu_flit;
+        // TODO(sadok) consider prefetching. Two options to consider:
+        // (1) prefetch all the packets;
+        // (2) pass the current queue as argument and prefetch packets for it,
+        //     including potentially old packets.
     }
 
     // update descriptor buffer head
     asm volatile ("" : : : "memory"); // compiler memory barrier
-    *(socket_entry->dsc_buf_head_ptr) = dsc_buf_head;
+    *(dsc_queue.buf_head_ptr) = dsc_buf_head;
 
-    socket_entry->dsc_buf_head = dsc_buf_head;
-    socket_entry->pkt_buf_head = pkt_buf_head;
-    return total_size;
+    dsc_queue.buf_head = dsc_buf_head;
+}
+
+
+int dma_run(socket_internal* socket_entry, void** buf, size_t len)
+{
+    uint32_t* pkt_buf = socket_entry->pkt_queue.buf;
+    uint32_t pkt_buf_head = socket_entry->pkt_queue.buf_head;
+    int app_id = socket_entry-> app_id;
+
+    *buf = &pkt_buf[pkt_buf_head * 16];
+    // uint8_t* my_buf = (uint8_t*) *buf;
+
+    get_new_tails();
+
+    uint32_t pkt_buf_tail = pending_pkt_tails[app_id];
+
+    if (pkt_buf_tail == pkt_buf_head) {
+        return 0;
+    }
+
+    // To ensure that we can return a contiguous region, we ceil the tail to 
+    // F2C_PKT_BUF_SIZE
+    uint32_t ceiled_tail;
+    
+    if (pkt_buf_tail > pkt_buf_head) {
+        ceiled_tail = pkt_buf_tail;
+    } else {
+        ceiled_tail = F2C_PKT_BUF_SIZE;
+    }
+
+    uint32_t flit_aligned_size = (ceiled_tail - pkt_buf_head) * 64;
+
+    // reached the buffer limit
+    if (unlikely(flit_aligned_size > len)) {
+        flit_aligned_size = len & 0xffffffc0; // align len to 64 bytes
+    }
+
+    // my_buf += flit_aligned_size;
+    pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % F2C_PKT_BUF_SIZE;
+    // std::cout << "pkt_buf_head: " << pkt_buf_head << std::endl;
+
+    socket_entry->pkt_queue.buf_head = pkt_buf_head;
+    return flit_aligned_size;
 }
 
 void advance_ring_buffer(socket_internal* socket_entry)
 {
     asm volatile ("" : : : "memory"); // compiler memory barrier
-    *(socket_entry->pkt_buf_head_ptr) = socket_entry->pkt_buf_head;
+    *(socket_entry->pkt_queue.buf_head_ptr) = socket_entry->pkt_queue.buf_head;
 }
 
 // FIXME(sadok) This should be in the kernel
@@ -293,8 +326,8 @@ void advance_ring_buffer(socket_internal* socket_entry)
 // {
 //     unsigned next_queue = 0;
 //     block_s block;
-//     pcie_block_t* global_block = (pcie_block_t *) socket_entry->kdata;
-//     pcie_block_t* uio_data_bar2 = socket_entry->uio_data_bar2;
+//     queue_regs* global_block = (queue_regs *) socket_entry->kdata;
+//     queue_regs* uio_data_bar2 = socket_entry->uio_data_bar2;
     
 //     if (socket_entry->app_id != 0) {
 //         std::cerr << "Can only send control messages from app 0" << std::endl;
@@ -323,7 +356,7 @@ void advance_ring_buffer(socket_internal* socket_entry)
 //         uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
 
 //         // asm volatile ("" : : : "memory"); // compiler memory barrier
-//         // print_pcie_block(uio_data_bar2);
+//         // print_queue_regs(uio_data_bar2);
 //     }
 
 //     return 0;
@@ -331,18 +364,21 @@ void advance_ring_buffer(socket_internal* socket_entry)
 
 int dma_finish(socket_internal* socket_entry)
 {
-    pcie_block_t* uio_data_bar2 = socket_entry->uio_data_bar2;
+    queue_regs_t* pkt_queue_regs = socket_entry->pkt_queue.regs;
+    pkt_queue_regs->buf_mem_low = 0;
+    pkt_queue_regs->buf_mem_high = 0;
 
-    uio_data_bar2->dsc_buf_mem_low = 0;
-    uio_data_bar2->dsc_buf_mem_high = 0;
-    uio_data_bar2->pkt_buf_mem_low = 0;
-    uio_data_bar2->pkt_buf_mem_high = 0;
+    munmap(socket_entry->pkt_queue.buf, ALIGNED_F2C_PKT_BUF_SIZE);
 
-    if (alloc_single_buf) {
-        munmap(socket_entry->dsc_buf, ALIGNED_F2C_DSC_BUF_SIZE);
-        munmap(socket_entry->pkt_buf, ALIGNED_F2C_PKT_BUF_SIZE);
-    } else {
-        munmap(socket_entry->dsc_buf, BUF_PAGE_SIZE);
+    if (dsc_queue.ref_cnt == 0) {
+        return 0;
+    }
+
+    if (--(dsc_queue.ref_cnt) == 0) {
+        dsc_queue.regs->buf_mem_low = 0;
+        dsc_queue.regs->buf_mem_high = 0;
+        munmap(dsc_queue.buf, ALIGNED_F2C_DSC_BUF_SIZE);
+        free(pending_pkt_tails);
     }
 
     return 0;
@@ -358,37 +394,32 @@ void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range)
     }
 }
 
-void print_fpga_reg(intel_fpga_pcie_dev *dev)
+void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs)
 {
     uint32_t temp_r;
-    for (unsigned int i = 0; i < 16; ++i) {
+    for (unsigned int i = 0; i < nb_regs; ++i) {
         dev->read32(2, reinterpret_cast<void*>(0 + i*4), &temp_r);
         printf("fpga_reg[%d] = 0x%08x \n", i, temp_r);
     }
 } 
 
-void print_pcie_block(pcie_block_t * pb)
+void print_queue_regs(queue_regs* regs)
 {
-    printf("pb->dsc_buf_tail = %d \n", pb->dsc_buf_tail);
-    printf("pb->dsc_buf_head = %d \n", pb->dsc_buf_head);
-    printf("pb->dsc_buf_mem_low = 0x%08x \n", pb->dsc_buf_mem_low);
-    printf("pb->dsc_buf_mem_high = 0x%08x \n", pb->dsc_buf_mem_high);
-
-    printf("pb->pkt_buf_tail = %d \n", pb->pkt_buf_tail);
-    printf("pb->pkt_buf_head = %d \n", pb->pkt_buf_head);
-    printf("pb->pkt_buf_mem_low = 0x%08x \n", pb->pkt_buf_mem_low);
-    printf("pb->pkt_buf_mem_high = 0x%08x \n", pb->pkt_buf_mem_high);
+    printf("buf_tail = %d \n", regs->buf_tail);
+    printf("dsc_buf_head = %d \n", regs->buf_head);
+    printf("dsc_buf_mem_low = 0x%08x \n", regs->buf_mem_low);
+    printf("dsc_buf_mem_high = 0x%08x \n", regs->buf_mem_high);
 
     #ifdef CONTROL_MSG
-    printf("pb->c2f_tail = %d \n", pb->c2f_tail);
-    printf("pb->c2f_head = %d \n", pb->c2f_head);
-    printf("pb->c2f_kmem_low = 0x%08x \n", pb->c2f_kmem_low);
-    printf("pb->c2f_kmem_high = 0x%08x \n", pb->c2f_kmem_high);
+    printf("c2f_tail = %d \n", regs->c2f_tail);
+    printf("c2f_head = %d \n", regs->c2f_head);
+    printf("c2f_kmem_low = 0x%08x \n", regs->c2f_kmem_low);
+    printf("2f_kmem_high = 0x%08x \n", regs->c2f_kmem_high);
     #endif // CONTROL_MSG
 }
 
 
-// uint32_t c2f_copy_head(uint32_t c2f_tail, pcie_block_t *global_block, 
+// uint32_t c2f_copy_head(uint32_t c2f_tail, queue_regs *global_block, 
 //         block_s *block, uint32_t *kdata) {
 //     // uint32_t pdu_flit;
 //     // uint32_t copy_flit;
