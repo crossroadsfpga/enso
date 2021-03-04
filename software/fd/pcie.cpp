@@ -16,6 +16,7 @@
 // logic devices manufactured by Intel and sold by Intel or its authorized
 // distributors. Please refer to the applicable agreement for further details.
 
+#include <algorithm>
 #include <termios.h>
 #include <time.h>
 #include <cassert>
@@ -328,16 +329,18 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 
     *buf = &pkt_buf[pkt_buf_head * 16];
     uint8_t* my_buf = (uint8_t*) *buf;
-
     uint32_t total_size = 0;
+    size_t bytes_before_wrap = (F2C_PKT_BUF_SIZE - pkt_buf_head) * 64;
+
+    len = std::min(len, bytes_before_wrap);
 
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
-        if (unlikely(*((uint128_t*) my_buf) == buf_sig)) {
+        // reached the buffer limit
+        if (unlikely(total_size == len)) {
             break;
         }
 
-        // reached the buffer limit
-        if (unlikely(total_size == len)) {
+        if (unlikely(*((uint128_t*) my_buf) == buf_sig)) {
             break;
         }
 
@@ -345,11 +348,6 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
         // gap, what should we do?
         total_size += 64;
         my_buf += 64;
-    }
-
-    if (total_size) {
-        print_buffer(pkt_buf, 11);
-        printf("-----\n");
     }
 
     pkt_buf_head = (pkt_buf_head + total_size / 64) % F2C_PKT_BUF_SIZE;
