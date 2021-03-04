@@ -233,6 +233,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     socket_entry->app_id = app_id;
     socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->buf_head;
     socket_entry->pkt_queue.buf_head = pkt_queue_regs->buf_head;
+    socket_entry->pkt_queue.old_buf_head = socket_entry->pkt_queue.buf_head;
 
     // make sure the last tail matches the current head
     pending_pkt_tails[socket_id] = socket_entry->pkt_queue.buf_head;
@@ -358,8 +359,14 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 
 void advance_ring_buffer(socket_internal* socket_entry)
 {
-    asm volatile ("" : : : "memory"); // compiler memory barrier
-    *(socket_entry->pkt_queue.buf_head_ptr) = socket_entry->pkt_queue.buf_head;
+    uint32_t buf_head = socket_entry->pkt_queue.buf_head;
+    uint32_t old_buf_head = socket_entry->pkt_queue.old_buf_head;
+    uint32_t head_gap = (buf_head - old_buf_head) % F2C_PKT_BUF_SIZE;
+    if (head_gap >= BATCH_SIZE) {
+        asm volatile ("" : : : "memory"); // compiler memory barrier
+        *(socket_entry->pkt_queue.buf_head_ptr) = buf_head;
+        socket_entry->pkt_queue.old_buf_head = buf_head;
+    }
 }
 
 // FIXME(sadok) This should be in the kernel

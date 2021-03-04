@@ -122,6 +122,7 @@ typedef struct {
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
     uint32_t buf_head;
+    uint32_t old_buf_head;
 } pkt_queue_t;
 
 typedef struct {
