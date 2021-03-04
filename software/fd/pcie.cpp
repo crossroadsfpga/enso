@@ -47,6 +47,9 @@ static uint32_t* pending_pkt_tails;
 // bad would it be to use a hash table to keep pending_pkt_tails?
 static uint32_t pkt_queue_id_offset;
 
+static uint128_t buf_sig = ((uint128_t) 0xbabefacebabeface << 64 |
+                            (uint128_t) 0xbabefacebabeface);
+
 static inline uint16_t get_pkt_size(uint8_t *addr) {
     uint16_t l2_len = 14 + 4;
     uint16_t l3_len = be16toh(*((uint16_t*) (addr+14+2))); // ipv4 total length
@@ -233,6 +236,10 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     // make sure the last tail matches the current head
     pending_pkt_tails[socket_id] = socket_entry->pkt_queue.buf_head;
 
+    // set signature in the first flit
+    *((uint128_t*) socket_entry->pkt_queue.buf + 
+        socket_entry->pkt_queue.buf_head) = buf_sig;
+
     return 0;
 }
 
@@ -272,46 +279,83 @@ static inline void get_new_tails()
 }
 
 
+// int dma_run(socket_internal* socket_entry, void** buf, size_t len)
+// {
+//     uint32_t* pkt_buf = socket_entry->pkt_queue.buf;
+//     uint32_t pkt_buf_head = socket_entry->pkt_queue.buf_head;
+//     int app_id = socket_entry-> app_id;
+
+//     *buf = &pkt_buf[pkt_buf_head * 16];
+//     // uint8_t* my_buf = (uint8_t*) *buf;
+
+//     get_new_tails();
+
+//     uint32_t pkt_buf_tail = pending_pkt_tails[app_id];
+
+//     if (pkt_buf_tail == pkt_buf_head) {
+//         return 0;
+//     }
+
+//     // To ensure that we can return a contiguous region, we ceil the tail to 
+//     // F2C_PKT_BUF_SIZE
+//     uint32_t ceiled_tail;
+    
+//     if (pkt_buf_tail > pkt_buf_head) {
+//         ceiled_tail = pkt_buf_tail;
+//     } else {
+//         ceiled_tail = F2C_PKT_BUF_SIZE;
+//     }
+
+//     uint32_t flit_aligned_size = (ceiled_tail - pkt_buf_head) * 64;
+
+//     // reached the buffer limit
+//     if (unlikely(flit_aligned_size > len)) {
+//         flit_aligned_size = len & 0xffffffc0; // align len to 64 bytes
+//     }
+
+//     // my_buf += flit_aligned_size;
+//     pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % F2C_PKT_BUF_SIZE;
+//     // std::cout << "pkt_buf_head: " << pkt_buf_head << std::endl;
+
+//     socket_entry->pkt_queue.buf_head = pkt_buf_head;
+//     return flit_aligned_size;
+// }
+
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
     uint32_t* pkt_buf = socket_entry->pkt_queue.buf;
     uint32_t pkt_buf_head = socket_entry->pkt_queue.buf_head;
-    int app_id = socket_entry-> app_id;
 
     *buf = &pkt_buf[pkt_buf_head * 16];
-    // uint8_t* my_buf = (uint8_t*) *buf;
+    uint8_t* my_buf = (uint8_t*) *buf;
 
-    get_new_tails();
+    uint32_t total_size = 0;
 
-    uint32_t pkt_buf_tail = pending_pkt_tails[app_id];
+    for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
+        if (unlikely(*((uint128_t*) my_buf) == buf_sig)) {
+            break;
+        }
 
-    if (pkt_buf_tail == pkt_buf_head) {
-        return 0;
+        // reached the buffer limit
+        if (unlikely(total_size == len)) {
+            break;
+        }
+
+        // TODO(sadok) Handle packets that are not flit-aligned. There will be a
+        // gap, what should we do?
+        total_size += 64;
+        my_buf += 64;
     }
 
-    // To ensure that we can return a contiguous region, we ceil the tail to 
-    // F2C_PKT_BUF_SIZE
-    uint32_t ceiled_tail;
-    
-    if (pkt_buf_tail > pkt_buf_head) {
-        ceiled_tail = pkt_buf_tail;
-    } else {
-        ceiled_tail = F2C_PKT_BUF_SIZE;
+    if (total_size) {
+        print_buffer(pkt_buf, 11);
+        printf("-----\n");
     }
 
-    uint32_t flit_aligned_size = (ceiled_tail - pkt_buf_head) * 64;
-
-    // reached the buffer limit
-    if (unlikely(flit_aligned_size > len)) {
-        flit_aligned_size = len & 0xffffffc0; // align len to 64 bytes
-    }
-
-    // my_buf += flit_aligned_size;
-    pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % F2C_PKT_BUF_SIZE;
-    // std::cout << "pkt_buf_head: " << pkt_buf_head << std::endl;
+    pkt_buf_head = (pkt_buf_head + total_size / 64) % F2C_PKT_BUF_SIZE;
 
     socket_entry->pkt_queue.buf_head = pkt_buf_head;
-    return flit_aligned_size;
+    return total_size;
 }
 
 void advance_ring_buffer(socket_internal* socket_entry)
@@ -418,6 +462,18 @@ void print_queue_regs(queue_regs* regs)
     #endif // CONTROL_MSG
 }
 
+void print_buffer(uint32_t* buf, uint32_t nb_flits)
+{
+    for (uint32_t i = 0; i < nb_flits; ++i) {
+        for (uint32_t j = 0; j < 8; ++j) {
+            for (uint32_t k = 0; k < 8; ++k) {
+                printf("%02x ", ((uint8_t*) buf)[i*64 + j*8 + k] );
+            }
+            printf("\n");
+        }
+        printf("\n");
+    }
+}
 
 // uint32_t c2f_copy_head(uint32_t c2f_tail, queue_regs *global_block, 
 //         block_s *block, uint32_t *kdata) {

@@ -176,6 +176,12 @@ typedef struct packed
 
 typedef struct packed
 {
+    logic [383:0] pad;
+    logic [127:0]  signature; // should always be 0x1
+} rb_signature_t;
+
+typedef struct packed
+{
     logic [255:0] padding;
 
     logic [31:0] c2f_kmem_high; // higher 32 bit of kernel memory, FPGA read only

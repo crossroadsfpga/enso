@@ -139,9 +139,14 @@ int dma_finish(socket_internal* socket_entry);
 void print_queue_regs(queue_regs_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
 void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs);
+void print_buffer(uint32_t* buf, uint32_t nb_flits);
 void print_block(block_s *block);
 void fill_block(uint32_t *addr, block_s *block);
 uint32_t c2f_copy_head(uint32_t c2f_tail, queue_regs_t *global_block, 
                        block_s *block, uint32_t *kdata);
 
 #endif // PCIE_H
+
+// TODO(sadok) do we care about compiling on something other than gcc?
+typedef __int128 int128_t;
+typedef unsigned __int128 uint128_t;
