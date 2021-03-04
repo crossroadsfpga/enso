@@ -381,23 +381,21 @@ always @(posedge clk) begin
 
                     // Subsequent bursts from the same transfer do not need to
                     // set the address.
-                    if (missing_flits_in_transfer == 1) begin
-                        dma_signature(0, 0);
-                        if (missing_flits > 1) begin
-                            state <= START_BURST;
-                            cur_pkt_tail <= get_new_pointer(
-                                cur_pkt_tail, 1, pkt_rb_size);
-                        end else begin
-                            // TODO(sadok) handle unaligned cases here
-                            // pcie_bas_byteenable_r <= ;
-                            state <= DONE;
-                        end
-                    end else begin
+                    if (missing_flits > 1) begin
                         dma_pkt(0, pkt_buf_rd_data.data, 0);
                         pkt_buf_rd_en <= 1;
 
                         cur_pkt_tail <= get_new_pointer(
                                 cur_pkt_tail, 1, pkt_rb_size);
+                        if (missing_flits_in_transfer == 1) begin
+                            state <= START_BURST;
+                        end
+                    end else begin
+                        // TODO(sadok) handle unaligned cases here
+                        // pcie_bas_byteenable_r <= ;
+
+                        dma_signature(0, 0);
+                        state <= DONE;
                     end
                 end else begin
                     assert(pkt_buf_occup == 0);
