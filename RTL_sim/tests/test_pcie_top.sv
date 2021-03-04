@@ -239,6 +239,21 @@ always @(posedge clk) begin
                             end else begin
                                 expected_pkt_queue <= 0;
                             end
+
+                            // advance pointer
+                            pcie_write_0 <= 1;
+                            pcie_address_0 <= cur_queue << 12;
+                            pcie_writedata_0 <= 0;
+                            pcie_byteenable_0 <= 0;
+                            
+                            // We are being lazy and actually setting the
+                            // pointer to the beginning of the latest packet.
+                            // This is sufficient to ensure that there is always
+                            // enough room for new packets, but we are never
+                            // consuming the entire queue.
+                            pcie_writedata_0[32 +: 32] <= pcie_bas_address[
+                                6 +: RAM_ADDR_LEN];
+                            pcie_byteenable_0[4 +: 4] <= 4'hf;
                         end else if (pcie_bas_writedata[127:0] 
                                 == 128'hbabefacebabefacebabefacebabeface) begin
                             // found signature
