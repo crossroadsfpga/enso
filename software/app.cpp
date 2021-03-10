@@ -39,8 +39,8 @@ int main(int argc, const char* argv[])
     uint64_t recv_bytes = 0;
     uint64_t nb_batches = 0;
 
-    if (argc != 5) {
-        std::cerr << "Usage: " << argv[0] << " core port nb_rules nb_queues"
+    if (argc != 6) {
+        std::cerr << "Usage: " << argv[0] << " core port nb_rules nb_queues nb_cycles"
                   << std::endl;
         return 1;
     }
@@ -48,13 +48,14 @@ int main(int argc, const char* argv[])
     int port = atoi(argv[2]);
     unsigned nb_rules = atoi(argv[3]);
     int nb_queues = atoi(argv[4]);
+    uint32_t nb_cycles = atoi(argv[5]);
 
     signal(SIGINT, int_handler);
 
     std::cout << "running test with " << nb_rules << " rules" << std::endl;
     
     std::thread socket_thread = std::thread([&recv_bytes, port, nb_rules, 
-        nb_queues, &nb_batches]
+        nb_queues, &nb_batches, &nb_cycles]
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -102,6 +103,9 @@ int main(int argc, const char* argv[])
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
                     exit(4);
+                }
+                for (uint32_t i = 0; i < nb_cycles; ++i) {
+                    asm("nop");
                 }
                 if (recv_len > 0) {
                     ++nb_batches;
