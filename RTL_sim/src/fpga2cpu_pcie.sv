@@ -353,7 +353,7 @@ always @(posedge clk) begin
                     end else begin
                         pcie_bas_write_r <= 0;
                     end
-                    if (pkt_free_slot < cur_desc.size || dsc_free_slot == 0)
+                    if (pkt_free_slot < missing_flits || dsc_free_slot == 0)
                     begin
                         cpu_buf_full_cnt_r <= cpu_buf_full_cnt_r + 1;
                         
@@ -419,7 +419,7 @@ always @(posedge clk) begin
                 // make sure the previous transfer is complete
                 if (!pcie_bas_waitrequest) begin
                     // TODO(sadok) reenable the dsc queue (remember to increment
-                    // dsc tail)
+                    // dsc tail by uncomment the lines below "// update tail")
                     // automatic pcie_pkt_desc_t pcie_pkt_desc;
                     
                     // pcie_pkt_desc.signal = 1;
