@@ -360,13 +360,13 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 void advance_ring_buffer(socket_internal* socket_entry)
 {
     uint32_t buf_head = socket_entry->pkt_queue.buf_head;
-    uint32_t old_buf_head = socket_entry->pkt_queue.old_buf_head;
-    uint32_t head_gap = (buf_head - old_buf_head) % F2C_PKT_BUF_SIZE;
-    if (head_gap >= BATCH_SIZE) {
+    // uint32_t old_buf_head = socket_entry->pkt_queue.old_buf_head;
+    // uint32_t head_gap = (buf_head - old_buf_head) % F2C_PKT_BUF_SIZE;
+    // if (head_gap >= BATCH_SIZE) {
         asm volatile ("" : : : "memory"); // compiler memory barrier
         *(socket_entry->pkt_queue.buf_head_ptr) = buf_head;
-        socket_entry->pkt_queue.old_buf_head = buf_head;
-    }
+        // socket_entry->pkt_queue.old_buf_head = buf_head;
+    // }
 }
 
 // FIXME(sadok) This should be in the kernel
