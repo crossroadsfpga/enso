@@ -104,6 +104,10 @@ int main(int argc, const char* argv[])
                     std::cerr << "Error receiving" << std::endl;
                     exit(4);
                 }
+                // ensuring that we are modifying every cache line
+                for (uint32_t i = 0; i < ((uint32_t) recv_len) / 64; ++i) {
+                    ++buf[i*64];
+                }
                 for (uint32_t i = 0; i < nb_cycles; ++i) {
                     asm("nop");
                 }
