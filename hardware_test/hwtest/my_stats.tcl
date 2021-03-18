@@ -4,6 +4,12 @@ set TX_TRACKER_BASE  0x30000000
 set TOP_REG_BASE  0x22000000
 set PCIE_BASE    0x2A000000 
 
+set NB_PKT_QUEUES 1024
+set REGS_PER_QUEUE 4
+
+set PKT_QUEUE_OFFSET 2
+set DSC_QUEUE_OFFSET [expr $PKT_QUEUE_OFFSET + $NB_PKT_QUEUES * $REGS_PER_QUEUE]
+
 set SCRATCH     0
 set REG_CTRL    1
 
@@ -652,6 +658,29 @@ proc read_pcie {{nb_regs 16}} {
 
     for { set a 0 } { $a < $nb_regs } {incr a} {
         set rdata [reg_read $PCIE_BASE $a]
+        puts "$a : $rdata"
+    }
+}
+
+proc read_pkt_queue {queue_id} {
+    global PCIE_BASE
+    global REGS_PER_QUEUE
+    global PKT_QUEUE_OFFSET
+
+
+    for { set a 0 } { $a < $REGS_PER_QUEUE } {incr a} {
+        set rdata [reg_read $PCIE_BASE [expr $PKT_QUEUE_OFFSET + $a]]
+        puts "$a : $rdata"
+    }
+}
+
+proc read_dsc_queue {queue_id} {
+    global PCIE_BASE
+    global REGS_PER_QUEUE
+    global DSC_QUEUE_OFFSET
+
+    for { set a 0 } { $a < $REGS_PER_QUEUE } {incr a} {
+        set rdata [reg_read $PCIE_BASE [expr $DSC_QUEUE_OFFSET + $a]]
         puts "$a : $rdata"
     }
 }
