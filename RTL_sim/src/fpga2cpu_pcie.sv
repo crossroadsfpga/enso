@@ -82,7 +82,6 @@ logic [RB_AWIDTH-1:0] cur_dsc_tail;
 logic [63:0]          cur_dsc_buf_addr;
 logic [RB_AWIDTH-1:0] cur_pkt_head;
 logic [RB_AWIDTH-1:0] cur_pkt_tail;
-logic [RB_AWIDTH-1:0] first_flit_pkt_tail;
 logic [63:0]          cur_pkt_buf_addr;
 logic                 cur_desc_valid;
 
@@ -110,8 +109,6 @@ logic [63:0]  pcie_bas_byteenable_r;
 logic         pcie_bas_write_r;
 logic [511:0] pcie_bas_writedata_r;
 logic [3:0]   pcie_bas_burstcount_r;
-
-logic [511:0] first_flit_data;
 
 logic rst_r;
 
@@ -165,26 +162,7 @@ function logic [RB_AWIDTH-1:0] dma_pkt(
         pcie_bas_writedata_r <= data;
         pcie_bas_write_r <= 1;
         pcie_bas_burstcount_r <= flits_in_transfer;
-
-        return get_new_pointer(tail, flits_in_transfer, pkt_rb_size);
     end
-    return tail;
-endfunction
-
-function void dma_signature(
-    logic [RB_AWIDTH-1:0] tail,
-    logic [3:0] flits_in_transfer
-);
-    // When there is only one missing flit, we should write the signature
-    automatic rb_signature_t signature_flit;
-
-    // TODO(sadok) Make signature unique to the app.
-    // TODO(sadok) Use signature flit to place information about unaligned data
-    // so that software can figure out where it ends.
-    signature_flit.signature = 128'hbabefacebabefacebabefacebabeface;
-    signature_flit.pad = 0;
-
-    dma_pkt(tail, signature_flit, flits_in_transfer);
 endfunction
 
 // Consume requests and issue DMAs
@@ -240,13 +218,6 @@ always @(posedge clk) begin
                     cur_desc <= desc_buf_rd_data;
                     desc_buf_rd_en <= 1;
                     queue_rd_en <= 1;
-
-                    // We need to save the packet's first flit so that we can
-                    // start the transfer from the second. We need this to avoid
-                    // overriding the signature before we complete the transfer.
-                    assert(pkt_buf_rd_data.sop);
-                    first_flit_data <= pkt_buf_rd_data.data;
-                    pkt_buf_rd_en <= 1;
 
                     state <= START_BURST;
                 end
@@ -314,12 +285,7 @@ always @(posedge clk) begin
                     end
 
                     if (missing_flits == cur_desc.size) begin
-                        // save first flit's tail to DMA it later
-                        first_flit_pkt_tail <= cur_pkt_tail;
-                        
-                        // skip first flit
-                        cur_pkt_tail = get_new_pointer(
-                            cur_pkt_tail, 1, pkt_rb_size);
+                        assert(pkt_buf_rd_data.sop);
                     end
 
                     // The DMA transfer cannot go across the buffer limit.
@@ -329,23 +295,23 @@ always @(posedge clk) begin
                             pkt_rb_size[RB_AWIDTH-1:0] - cur_pkt_tail;
                     end
 
+                    dma_pkt(cur_pkt_tail, pkt_buf_rd_data.data,
+                            flits_in_transfer);
+
+                    cur_pkt_tail = get_new_pointer(
+                        cur_pkt_tail, 1, pkt_rb_size);
+
+                    pkt_buf_rd_en <= 1;
+
                     if (missing_flits > 1) begin
-                        dma_pkt(cur_pkt_tail, pkt_buf_rd_data.data,
-                                flits_in_transfer);
-
-                        cur_pkt_tail = get_new_pointer(
-                            cur_pkt_tail, 1, pkt_rb_size);
-
-                        pkt_buf_rd_en <= 1;
                         state <= COMPLETE_BURST;
                         missing_flits <= missing_flits - 1;
                         missing_flits_in_transfer <= flits_in_transfer - 1'b1;
                     end else begin
-                        dma_signature(cur_pkt_tail, 1);
-
                         // TODO(sadok) handle unaligned cases here
                         // pcie_bas_byteenable_r <= ;
                         state <= DONE;
+                        assert(pkt_buf_rd_data.eop);
                     end
                 end else begin
                     if (pcie_bas_waitrequest) begin
@@ -381,21 +347,21 @@ always @(posedge clk) begin
 
                     // Subsequent bursts from the same transfer do not need to
                     // set the address.
-                    if (missing_flits > 1) begin
-                        dma_pkt(0, pkt_buf_rd_data.data, 0);
-                        pkt_buf_rd_en <= 1;
+                    dma_pkt(0, pkt_buf_rd_data.data, 0);
+                    pkt_buf_rd_en <= 1;
 
-                        cur_pkt_tail <= get_new_pointer(
-                                cur_pkt_tail, 1, pkt_rb_size);
-                        if (missing_flits_in_transfer == 1) begin
+                    cur_pkt_tail <= get_new_pointer(
+                        cur_pkt_tail, 1, pkt_rb_size);
+
+                    // last flit in burst
+                    if (missing_flits_in_transfer == 1) begin
+                        if (missing_flits > 1) begin
+                            // more flits to send for this packet
                             state <= START_BURST;
+                        end else begin
+                            // we are done with this packet
+                            state <= DONE;
                         end
-                    end else begin
-                        // TODO(sadok) handle unaligned cases here
-                        // pcie_bas_byteenable_r <= ;
-
-                        dma_signature(0, 0);
-                        state <= DONE;
                     end
                 end else begin
                     assert(pkt_buf_occup == 0);
@@ -418,34 +384,33 @@ always @(posedge clk) begin
 
                 // make sure the previous transfer is complete
                 if (!pcie_bas_waitrequest) begin
-                    // TODO(sadok) reenable the dsc queue (remember to increment
-                    // dsc tail by uncomment the lines below "// update tail")
-                    // automatic pcie_pkt_desc_t pcie_pkt_desc;
-                    
-                    // pcie_pkt_desc.signal = 1;
-                    // pcie_pkt_desc.tail = {
-                    //     {{$bits(pcie_pkt_desc.tail) - RB_AWIDTH}{1'b0}},
-                    //     cur_pkt_tail
-                    // };
-                    // pcie_pkt_desc.queue_id = cur_desc.pkt_queue_id;
-                    // pcie_pkt_desc.pad = 0;
-                    
-                    // // Skip DMA when addresses are not set
-                    // if (cur_pkt_buf_addr && cur_dsc_buf_addr) begin
-                    //     pcie_bas_address_r <= cur_dsc_buf_addr
-                    //                           + 64 * cur_dsc_tail;
-                    //     pcie_bas_byteenable_r <= 64'hffffffffffffffff;
-                    //     pcie_bas_writedata_r <= pcie_pkt_desc;
-                    //     pcie_bas_write_r <= 1;
-                    //     pcie_bas_burstcount_r <= 1;
-                    // end
+                    automatic pcie_pkt_desc_t pcie_pkt_desc;
+                    pcie_pkt_desc.signal = 1;
+                    pcie_pkt_desc.tail = {
+                        {{$bits(pcie_pkt_desc.tail) - RB_AWIDTH}{1'b0}},
+                        cur_pkt_tail
+                    };
+                    pcie_pkt_desc.queue_id = cur_desc.pkt_queue_id;
+                    pcie_pkt_desc.pad = 0;
 
-                    // dma first flit and override old signature
-                    dma_pkt(first_flit_pkt_tail, first_flit_data, 1);
+                    // Skip DMA when addresses are not set
+                    if (cur_pkt_buf_addr && cur_dsc_buf_addr) begin
+                        pcie_bas_address_r <= cur_dsc_buf_addr
+                                              + 64 * cur_dsc_tail;
+                        pcie_bas_byteenable_r <= 64'hffffffffffffffff;
+                        pcie_bas_writedata_r <= pcie_pkt_desc;
+                        pcie_bas_write_r <= 1;
+                        pcie_bas_burstcount_r <= 1;
+                    end
 
                     // update tail
-                    // out_dsc_tail <= get_new_pointer(cur_dsc_tail, 1,
-                    //     dsc_rb_size);
+                    cur_dsc_tail = get_new_pointer(cur_dsc_tail, 1,
+                        dsc_rb_size);
+
+                    // TODO(sadok) Output new tails at the start of the packet
+                    // transfer, this should inform the DMA engine of the latest
+                    // pointer before we transmit the descriptor. This is useful
+                    // when we start to reactively send events
                     out_dsc_tail <= cur_dsc_tail;
                     out_pkt_tail <= cur_pkt_tail;
                     tail_wr_en <= 1;
@@ -490,15 +455,12 @@ always @(posedge clk) begin
                         if (cur_desc.pkt_queue_id == pref_desc.pkt_queue_id)
                         begin
                             hold_pkt_tail <= 1;
-                            // cur_dsc_tail = new_dsc_tail;
-                            // cur_pkt_tail = new_pkt_tail;
                         end else begin
                             hold_pkt_tail <= 0;
                         end
                         if (cur_desc.dsc_queue_id == pref_desc.dsc_queue_id)
                         begin
                             hold_dsc_tail <= 1;
-                            // cur_dsc_tail = new_dsc_tail;
                         end else begin
                             hold_dsc_tail <= 0;
                         end
@@ -509,17 +471,6 @@ always @(posedge clk) begin
                         // no prefetch available or in progress
                         cur_desc_valid = 0;
                         state = IDLE;
-                    end
-
-                    if (state != IDLE) begin
-                        // If there is a descriptor to prefetch, there must be a
-                        // packet available in the packet queue. Therefore we
-                        // can save its first flit right away so that we can
-                        // start transferring the second flit in the next cycle.
-                        assert(pkt_buf_occup > 0);
-                        assert(pkt_buf_rd_data.sop);
-                        first_flit_data <= pkt_buf_rd_data.data;
-                        pkt_buf_rd_en <= 1;
                     end
                 end else begin
                     dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;

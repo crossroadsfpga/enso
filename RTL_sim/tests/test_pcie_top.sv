@@ -8,7 +8,7 @@ module test_pcie_top;
 `endif
 
 `ifndef NB_PKT_QUEUES
-`define NB_PKT_QUEUES 8
+`define NB_PKT_QUEUES 1
 `endif
 
 generate
@@ -24,7 +24,7 @@ localparam status_period = 10;
 localparam nb_dsc_queues = `NB_DSC_QUEUES;
 localparam nb_pkt_queues = `NB_PKT_QUEUES;
 localparam pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
-localparam req_size = 64; // in dwords
+localparam req_size = 16; // in dwords
 
 localparam target_nb_requests = 32;
 
@@ -94,7 +94,6 @@ logic [63:0] rx_cnt;
 logic [63:0] req_cnt;
 logic [63:0] start_wait;
 logic        startup_ready;
-logic        pkt_after_signature;
 logic [2:0]  burst_offset; // max of 8 flits per burst
 logic [3:0]  burst_size;
 logic [$clog2(MAX_PKT_SIZE)-1:0] pdu_flit_cnt;
@@ -211,6 +210,7 @@ always @(posedge clk) begin
                     automatic logic [31:0] cur_address;
 
                     cur_queue = pcie_bas_address[32 +: BRAM_TABLE_IDX_WIDTH];
+                    $display("cur_queue: %d", cur_queue);
 
                     if (pcie_bas_burstcount != 0) begin
                         burst_offset = 0;
@@ -222,78 +222,57 @@ always @(posedge clk) begin
                     end
 
                     if (cur_queue < nb_pkt_queues) begin // pkt queue
-                       assert(cur_queue == expected_pkt_queue) else $fatal;
+                        $display("pkt queue");
+                        assert(cur_queue == expected_pkt_queue) else $fatal;
 
                         pdu_flit_cnt <= pdu_flit_cnt + 1;
-                        pkt_after_signature <= 0;
 
-                        if (pkt_after_signature) begin
-                            // make sure we got all packets in the pdu
-                            assert(pdu_flit_cnt == (req_size + (16 - 1))/16)
-                                else $fatal;
+                        // check payload
+                        assert(req_cnt == pcie_bas_writedata[511:480])
+                            else $fatal;
 
-                            req_cnt <= req_cnt + 1;
-                            pdu_flit_cnt <= 0;
-                            if ((expected_pkt_queue + 1) < nb_pkt_queues) begin
-                                expected_pkt_queue <= expected_pkt_queue + 1;
-                            end else begin
-                                expected_pkt_queue <= 0;
-                            end
+                        // advance pointer
+                        pcie_write_0 <= 1;
+                        pcie_address_0 <= cur_queue << 12;
+                        pcie_writedata_0 <= 0;
+                        pcie_byteenable_0 <= 0;
 
-                            // advance pointer
-                            pcie_write_0 <= 1;
-                            pcie_address_0 <= cur_queue << 12;
-                            pcie_writedata_0 <= 0;
-                            pcie_byteenable_0 <= 0;
-                            
-                            // We are being lazy and actually setting the
-                            // pointer to the beginning of the latest packet.
-                            // This is sufficient to ensure that there is always
-                            // enough room for new packets, but we are never
-                            // consuming the entire queue.
-                            pcie_writedata_0[32 +: 32] <= pcie_bas_address[
-                                6 +: RAM_ADDR_LEN];
-                            pcie_byteenable_0[4 +: 4] <= 4'hf;
-                        end else if (pcie_bas_writedata[127:0] 
-                                == 128'hbabefacebabefacebabefacebabeface) begin
-                            // found signature
-                            pkt_after_signature <= 1;
+                        pcie_writedata_0[32 +: 32] <= pcie_bas_address[
+                            6 +: RAM_ADDR_LEN];
+                        pcie_byteenable_0[4 +: 4] <= 4'hf;
+                    end else begin // dsc queue
+                        automatic logic [31:0] pkt_per_dsc_queue;
+                        automatic logic [31:0] expected_dsc_queue;
+                        $display("dsc queue");
+
+                        // dsc queues can receive only one flit per burst
+                        assert(pcie_bas_burstcount == 1) else $fatal;
+
+                        // This is due to how we configured the queue addresses
+                        // (dsc queues after pkt queues) as well as how we send
+                        // packets (round robin among pkt queues).
+                        pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
+                        expected_dsc_queue = nb_pkt_queues +
+                            expected_pkt_queue / pkt_per_dsc_queue;
+
+                        $display("cur_queue: %d, expected_dsc_queue: %d", cur_queue, expected_dsc_queue);
+
+                        assert(cur_queue == expected_dsc_queue) else $fatal;
+
+                        $display("pdu_flit_cnt: %d, req_size: %d", pdu_flit_cnt, req_size);
+
+                        // should receive desc after we got all the flits in the pdu
+                        assert(pdu_flit_cnt == (req_size + (16 - 1))/16)
+                            else $fatal;
+
+                        req_cnt <= req_cnt + 1;
+                        pdu_flit_cnt <= 0;
+                        if ((expected_pkt_queue + 1) < nb_pkt_queues) begin
+                            expected_pkt_queue <= expected_pkt_queue + 1;
                         end else begin
-                            // check payload
-                            assert(req_cnt == pcie_bas_writedata[511:480])
-                                else $fatal;
+                            expected_pkt_queue <= 0;
                         end
-                    end
-                    // else begin // dsc queue
-                    //     automatic logic [31:0] pkt_per_dsc_queue;
-                    //     automatic logic [31:0] expected_dsc_queue;
-
-                    //     // dsc queues can receive only one flit per burst
-                    //     assert(pcie_bas_burstcount == 1) else $fatal;
-
-                    //     // This is due to how we configured the queue addresses
-                    //     // (dsc queues after pkt queues) as well as how we send
-                    //     // packets (round robin among pkt queues).
-                    //     pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
-                    //     expected_dsc_queue = nb_pkt_queues +
-                    //         expected_pkt_queue / pkt_per_dsc_queue;
-
-                    //     $display("cur_queue: %d, expected_dsc_queue: %d", cur_queue, expected_dsc_queue);
-
-                    //     assert(cur_queue == expected_dsc_queue) else $fatal;
-
-                    //     // should receive desc after we got all the flits in the pdu
-                    //     assert(pdu_flit_cnt == (req_size + (16 - 1))/16)
-                    //         else $fatal;
-
-                    //     req_cnt <= req_cnt + 1;
-                    //     pdu_flit_cnt <= 0;
-                    //     if ((expected_pkt_queue + 1) < nb_pkt_queues) begin
-                    //         expected_pkt_queue <= expected_pkt_queue + 1;
-                    //     end else begin
-                    //         expected_pkt_queue <= 0;
-                    //     end
-                    // end 
+                    end 
                     cur_address = pcie_bas_address[6 +: RAM_ADDR_LEN]
                                   + burst_offset;
 
@@ -480,18 +459,18 @@ always @(posedge clk_status) begin
                         $display("Queue %d", q);
                         // printing only the beginning of each buffer,
                         // may print the entire thing instead
-                        // $display("Descriptor queue:");
-                        // for (i = 0; i < 25; i = i + 1) begin
-                        // // for (i = 0; i < RAM_SIZE; i = i + 1) begin
-                        //     for (j = 0; j < 8; j = j + 1) begin
-                        //         $write("%h:", i*64+j*8);
-                        //         for (k = 0; k < 8; k = k + 1) begin
-                        //             $write(" %h",
-                        //                 ram[q+nb_pkt_queues][i][j*64+k*8 +: 8]);
-                        //         end
-                        //         $write("\n");
-                        //     end
-                        // end
+                        $display("Descriptor queue:");
+                        for (i = 0; i < 25; i = i + 1) begin
+                        // for (i = 0; i < RAM_SIZE; i = i + 1) begin
+                            for (j = 0; j < 8; j = j + 1) begin
+                                $write("%h:", i*64+j*8);
+                                for (k = 0; k < 8; k = k + 1) begin
+                                    $write(" %h",
+                                        ram[q+nb_pkt_queues][i][j*64+k*8 +: 8]);
+                                end
+                                $write("\n");
+                            end
+                        end
 
                         $display("Packet queues:");
                         for (pkt_q = q*pkt_per_dsc_queue;
