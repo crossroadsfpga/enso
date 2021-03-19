@@ -669,7 +669,8 @@ proc read_pkt_queue {queue_id} {
 
 
     for { set a 0 } { $a < $REGS_PER_QUEUE } {incr a} {
-        set rdata [reg_read $PCIE_BASE [expr $PKT_QUEUE_OFFSET + $a]]
+        set rdata [reg_read $PCIE_BASE [
+            expr $PKT_QUEUE_OFFSET + $queue_id * $REGS_PER_QUEUE + $a]]
         puts "$a : $rdata"
     }
 }
@@ -680,7 +681,8 @@ proc read_dsc_queue {queue_id} {
     global DSC_QUEUE_OFFSET
 
     for { set a 0 } { $a < $REGS_PER_QUEUE } {incr a} {
-        set rdata [reg_read $PCIE_BASE [expr $DSC_QUEUE_OFFSET + $a]]
+        set rdata [reg_read $PCIE_BASE [
+            expr $DSC_QUEUE_OFFSET + $queue_id * $REGS_PER_QUEUE + $a]]
         puts "$a : $rdata"
     }
 }
