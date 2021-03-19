@@ -148,6 +148,7 @@ logic [RB_AWIDTH-1:0]    f2c_dsc_tail;
 logic [63:0]             f2c_dsc_buf_addr;
 logic [RB_AWIDTH-1:0]    f2c_pkt_head;
 logic [RB_AWIDTH-1:0]    f2c_pkt_tail;
+logic                    f2c_pkt_q_needs_dsc;
 logic [63:0]             f2c_pkt_buf_addr;
 
 logic pcie_reg_read;
@@ -167,7 +168,9 @@ assign c2f_head = 32'b0; // FIXME(sadok) remove when reenabling c2f path
 logic                            f2c_queue_ready;
 logic                            tail_wr_en;
 logic                            queue_rd_en;
+logic                            queue_rd_en_r;
 logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_rd_pkt_queue;
+logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_rd_pkt_queue_r;
 logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_rd_dsc_queue;
 logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_wr_pkt_queue;
 logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_wr_dsc_queue;
@@ -181,6 +184,10 @@ logic [RB_AWIDTH-1:0]            pkt_q_table_tails_wr_data_a_r;
 logic [RB_AWIDTH-1:0]            pkt_q_table_tails_wr_data_a_r2;
 logic [RB_AWIDTH-1:0]            new_dsc_tail;
 logic [RB_AWIDTH-1:0]            new_pkt_tail;
+
+// Bit vector holding the status of every pkt queue
+// (i.e., if they need a descriptor or not).
+logic [MAX_NB_FLOWS-1:0] pkt_q_status;
 
 // JTAG
 always@(posedge clk_status) begin
@@ -317,6 +324,11 @@ always @(posedge pcie_clk) begin
 
     q_table_rd_data_b_jtag_ready <= 0;
 
+    if (queue_rd_en_r) begin
+        f2c_pkt_q_needs_dsc <= !pkt_q_status[f2c_rd_pkt_queue_r];
+        pkt_q_status[f2c_rd_pkt_queue_r] <= 1'b1;
+    end
+
     if (!pcie_reset_n) begin
         q_table_pcie_rd_set <= 0;
         q_table_jtag_wr_set <= 0;
@@ -324,6 +336,7 @@ always @(posedge pcie_clk) begin
         q_table_jtag_rd_set <= 0;
         q_table_rd_data_b <= 0;
         c2f_kmem_addr <= 0;
+        pkt_q_status <= 0;
     end else if (pcie_write_0) begin // PCIe write
         if (page_idx < MAX_NB_FLOWS) begin
             automatic logic [BRAM_TABLE_IDX_WIDTH-1:0] address = page_idx;
@@ -337,6 +350,25 @@ always @(posedge pcie_clk) begin
                 pkt_q_table_heads.wr_data_b <= pcie_writedata_0[1*32 +: 32];
                 pkt_q_table_heads.wr_en_b <= 1;
                 pkt_q_table_heads.addr_b <= address;
+
+                // update queue status so that we send a descriptor next time
+                pkt_q_status[address] <= 1'b0;
+                // FIXME(sadok) this will only work if the queue eventually
+                // receives more packets. Otherwise, there will be some residue
+                // packets that software will never know about. To fix this, we
+                // need to check if the latest tail pointer is greater than the
+                // new head that we received. If it is, that means that we need
+                // to send an extra descriptor. The logic to send an extra
+                // descriptor, however, is quite tricky. We probably need to add
+                // a queue with `descriptor requests` to send to the fpga2cpu so
+                // that it can send these descriptor when it has a chance -- it
+                // may even ignore some of them if it receives a new packet for
+                // the queue. Another tricky part is that there may be some race
+                // conditions, where this part of the design thinks that the
+                // queue is updated but the fpga2cpu is processing a new packet
+                // and will not send a descriptor. To overcome this, fpga2cpu
+                // should make sure pcie_top has the latest tail, before it
+                // decides if it needs to send the descriptor.
             end
             if (pcie_byteenable_0[2*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
                 pkt_q_table_l_addrs.wr_data_b <= pcie_writedata_0[2*32 +: 32];
@@ -626,6 +658,9 @@ always @(posedge pcie_clk)begin
     pkt_q_table_heads_wr_data_b_r2 <= pkt_q_table_heads_wr_data_b_r;
     pkt_q_table_tails_wr_data_a_r <= pkt_q_table_tails.wr_data_a[RB_AWIDTH-1:0];
     pkt_q_table_tails_wr_data_a_r2 <= pkt_q_table_tails_wr_data_a_r;
+
+    queue_rd_en_r <= queue_rd_en;
+    f2c_rd_pkt_queue_r <= f2c_rd_pkt_queue;
 end
 
 always_comb begin
@@ -828,6 +863,7 @@ fpga2cpu_pcie f2c_inst (
     .in_dsc_buf_addr        (f2c_dsc_buf_addr),
     .in_pkt_head            (f2c_pkt_head),
     .in_pkt_tail            (f2c_pkt_tail),
+    .in_pkt_q_needs_dsc     (f2c_pkt_q_needs_dsc),
     .in_pkt_buf_addr        (f2c_pkt_buf_addr),
     .rd_pkt_queue           (f2c_rd_pkt_queue),
     .rd_dsc_queue           (f2c_rd_dsc_queue),

@@ -31,6 +31,7 @@ module fpga2cpu_pcie (
     input  logic [63:0]                     in_dsc_buf_addr,
     input  logic [RB_AWIDTH-1:0]            in_pkt_head,
     input  logic [RB_AWIDTH-1:0]            in_pkt_tail,
+    input  logic                            in_pkt_q_needs_dsc,
     input  logic [63:0]                     in_pkt_buf_addr,
     output logic [BRAM_TABLE_IDX_WIDTH-1:0] rd_pkt_queue,
     output logic [BRAM_TABLE_IDX_WIDTH-1:0] rd_dsc_queue,
@@ -84,6 +85,7 @@ logic [RB_AWIDTH-1:0] cur_pkt_head;
 logic [RB_AWIDTH-1:0] cur_pkt_tail;
 logic [63:0]          cur_pkt_buf_addr;
 logic                 cur_desc_valid;
+logic                 cur_pkt_needs_dsc;
 
 pkt_desc_t            pref_desc;
 logic [RB_AWIDTH-1:0] pref_dsc_head;
@@ -93,6 +95,7 @@ logic [RB_AWIDTH-1:0] pref_pkt_head;
 logic [RB_AWIDTH-1:0] pref_pkt_tail;
 logic [63:0]          pref_pkt_buf_addr;
 logic                 pref_desc_valid;
+logic                 pref_pkt_needs_dsc;
 
 logic                 wait_for_pref_desc;
 logic                 hold_pkt_tail;
@@ -145,7 +148,7 @@ function void try_prefetch();
     end
 endfunction
 
-function logic [RB_AWIDTH-1:0] dma_pkt(
+function void dma_pkt(
     logic [RB_AWIDTH-1:0] tail,
     logic [511:0] data,
     logic [3:0] flits_in_transfer
@@ -204,6 +207,7 @@ always @(posedge clk) begin
             pref_dsc_buf_addr = in_dsc_buf_addr;
             pref_pkt_head = in_pkt_head;
             pref_pkt_tail = in_pkt_tail;
+            pref_pkt_needs_dsc = in_pkt_q_needs_dsc;
             pref_pkt_buf_addr = in_pkt_buf_addr;
         end
 
@@ -236,6 +240,7 @@ always @(posedge clk) begin
                     cur_desc_valid = 1;
                     cur_dsc_head = in_dsc_head;
                     cur_pkt_head = in_pkt_head;
+                    cur_pkt_needs_dsc = in_pkt_q_needs_dsc;
                     // When switching to the same queue, the tail we fetch is
                     // outdated.
                     if (!hold_pkt_tail) begin
@@ -393,19 +398,24 @@ always @(posedge clk) begin
                     pcie_pkt_desc.queue_id = cur_desc.pkt_queue_id;
                     pcie_pkt_desc.pad = 0;
 
-                    // Skip DMA when addresses are not set
-                    if (cur_pkt_buf_addr && cur_dsc_buf_addr) begin
-                        pcie_bas_address_r <= cur_dsc_buf_addr
-                                              + 64 * cur_dsc_tail;
-                        pcie_bas_byteenable_r <= 64'hffffffffffffffff;
-                        pcie_bas_writedata_r <= pcie_pkt_desc;
-                        pcie_bas_write_r <= 1;
-                        pcie_bas_burstcount_r <= 1;
+                    if (cur_pkt_needs_dsc) begin
+                        // Skip DMA when addresses are not set
+                        if (cur_pkt_buf_addr && cur_dsc_buf_addr) begin
+                            pcie_bas_address_r <= cur_dsc_buf_addr
+                                                + 64 * cur_dsc_tail;
+                            pcie_bas_byteenable_r <= 64'hffffffffffffffff;
+                            pcie_bas_writedata_r <= pcie_pkt_desc;
+                            pcie_bas_write_r <= 1;
+                            pcie_bas_burstcount_r <= 1;
+                            // update tail
+                            cur_dsc_tail = get_new_pointer(cur_dsc_tail, 1,
+                                dsc_rb_size);
+                        end
+                    end else begin
+                        // since we are not writing anything, we have to make
+                        // sure that write is unset
+                        pcie_bas_write_r <= 0;
                     end
-
-                    // update tail
-                    cur_dsc_tail = get_new_pointer(cur_dsc_tail, 1,
-                        dsc_rb_size);
 
                     // TODO(sadok) Output new tails at the start of the packet
                     // transfer, this should inform the DMA engine of the latest
@@ -434,6 +444,7 @@ always @(posedge clk) begin
                         cur_dsc_head = pref_dsc_head;
                         cur_dsc_buf_addr = pref_dsc_buf_addr;
                         cur_pkt_head = pref_pkt_head;
+                        cur_pkt_needs_dsc = pref_pkt_needs_dsc;
                         cur_pkt_buf_addr = pref_pkt_buf_addr;
                         pref_desc_valid = 0;
                         cur_desc_valid = 1;
