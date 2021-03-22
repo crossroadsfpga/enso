@@ -248,12 +248,10 @@ static inline void get_new_tails()
     uint32_t dsc_buf_head = dsc_queue.buf_head;
 
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
-        // TODO(sadok) right now we have one descriptor queue per packet queue,
-        // we will need to consider the queue id once this changes
         pcie_pkt_desc_t* cur_desc = dsc_buf + dsc_buf_head;
 
         // check if the next descriptor was updated by the FPGA
-        if (unlikely(cur_desc->signal == 0)) {
+        if (cur_desc->signal == 0) {
             break;
         }
 
@@ -262,7 +260,6 @@ static inline void get_new_tails()
 
         uint32_t pkt_queue_id = cur_desc->queue_id - pkt_queue_id_offset;
         pending_pkt_tails[pkt_queue_id] = (uint32_t) cur_desc->tail;
-        // std::cout << "new tail for " << pkt_queue_id << ": " << cur_desc->tail << std::endl;
 
         // TODO(sadok) consider prefetching. Two options to consider:
         // (1) prefetch all the packets;
