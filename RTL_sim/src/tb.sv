@@ -59,6 +59,9 @@ localparam nb_dsc_queues = `NB_DSC_QUEUES;
 localparam nb_pkt_queues = `NB_PKT_QUEUES;
 localparam pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
 
+// #cycles to wait before updating the head pointer for the packet queue
+localparam update_head_delay = 1024;
+
 // this determines the number of cycles to wait before stopping the simulation
 localparam STOP_DELAY = 100000;
 
@@ -223,7 +226,8 @@ typedef enum{
     CONFIGURE_1,
     READ_MEMORY,
     READ_PCIE_START,
-    READ_PCIE,
+    READ_PCIE_PKT_Q,
+    READ_PCIE_DSC_Q,
     IDLE,
     IN_PKT,
     OUT_PKT,
@@ -376,8 +380,6 @@ end
 
 logic [7:0] pcie_delay_cnt;
 
-// DMA requests ring buffer
-// pcie_desc_t dma_buf [DMA_BUF_SIZE-1:0];
 logic [DMA_BUF_AWIDTH-1:0] dma_buf_head;
 logic [DMA_BUF_AWIDTH-1:0] dma_buf_tail;
 logic [DMA_BUF_AWIDTH-1:0] delayed_dma_buf_head [DMA_DELAY];
@@ -385,51 +387,6 @@ logic dma_buf_full;
 logic dma_buf_full_r1;
 logic dma_buf_full_r2;
 assign dma_buf_full = dma_buf_head + 1'b1 == dma_buf_tail;
-// assign pcie_wrdm_desc_ready = !dma_buf_full;
-
-// // DMA Controller: receives DMA requests, inserts in the buffer and advances the
-// // head pointer.
-// always @(posedge clk_pcie) begin
-//     integer i;
-//     if (rst) begin
-//         dma_buf_head <= 0;
-//         pcie_delay_cnt <= 0;
-//         for (i = 0; i < DMA_DELAY; i = i + 1) begin
-//             delayed_dma_buf_head[i] <= 0;
-//         end
-//     end else begin
-//         automatic logic [DMA_BUF_AWIDTH-1:0] next_head;
-//         if (!dma_buf_full && !dma_buf_full_r1 && !dma_buf_full_r2 &&
-//             pcie_wrdm_desc_valid)
-//         begin
-//             // automatic pcie_desc_t pcie_desc = pcie_wrdm_desc_data;
-//             // `hdisplay(("pcie_desc.immediate: %b", pcie_desc.immediate));
-//             dma_buf[dma_buf_head] <= pcie_wrdm_desc_data;
-//             next_head = dma_buf_head + 1'b1;
-//         end else begin
-//             next_head = dma_buf_head;
-//         end
-
-//         if ((dma_buf_full_r2 || dma_buf_full_r1 || dma_buf_full) &&
-//             pcie_wrdm_desc_valid)
-//         begin
-//             hterminate("DMA Write while not ready");
-//         end
-
-//         dma_buf_head <= next_head;
-
-//         delayed_dma_buf_head[0] <= dma_buf_head;
-
-//         for (i = 0; i < DMA_DELAY-1; i = i + 1) begin
-//             delayed_dma_buf_head[i+1] <= delayed_dma_buf_head[i];
-//         end
-//     end
-//     dma_buf_full_r1 <= dma_buf_full;
-//     dma_buf_full_r2 <= dma_buf_full_r1;
-// end
-
-// assign delayed_pcie_wrdm_desc_valid =
-//     delayed_dma_buf_head[DMA_DELAY-1] != dma_buf_tail;
 
 logic [31:0] cnt_delay;
 logic [PCIE_ADDR_WIDTH-1:0] cfg_queue;
@@ -447,8 +404,7 @@ typedef enum{
     PCIE_READ_C2F_QUEUE_WAIT,
     PCIE_RULE_INSERT,
     PCIE_RULE_UPDATE,
-    PCIE_WAIT_DESC,
-    PCIE_UPD_PTR
+    PCIE_WAIT_DESC
 } pcie_state_t;
 
 typedef struct packed
@@ -489,9 +445,12 @@ logic [511:0] read_return_buf [DMA_BUF_SIZE-1:0];
 logic [DMA_BUF_AWIDTH-1:0] read_return_buf_head;
 logic [DMA_BUF_AWIDTH-1:0] read_return_buf_tail;
 
-logic [BRAM_TABLE_IDX_WIDTH-1:0] expected_pkt_queue;
 logic [$clog2(MAX_PKT_SIZE)-1:0] pdu_flit_cnt;
+logic [nb_pkt_queues-1:0]        pending_pkt_tails_valid;
 
+logic [31:0] pending_pkt_tails[nb_pkt_queues];
+logic [31:0] last_upd_pkt_q;
+logic [31:0] head_upd_delay_cnt;
 logic [63:0] rx_cnt;
 logic [63:0] req_cnt;
 logic [2:0]  burst_offset; // max of 8 flits per burst
@@ -504,7 +463,7 @@ logic [31:0]                next_upd_tail;
 always @(posedge clk_pcie) begin
 
     pcie_read_0 <= 0;
-    pcie_write_0 <= 0;
+    pcie_write_0 = 0;
     pcie_address_0 <= 0;
     pcie_writedata_0 <= 0;
     pcie_byteenable_0 <= 0;
@@ -517,7 +476,7 @@ always @(posedge clk_pcie) begin
     pcie_byteenable_1 <= 0; // not used at the moment
 
     if (rst) begin
-        integer i;
+        automatic integer c;
 
         pcie_state <= PCIE_SET_F2C_PKT_QUEUE;
         cfg_queue <= 0;
@@ -541,15 +500,23 @@ always @(posedge clk_pcie) begin
         rx_cnt <= 0;
         req_cnt <= 0;
         pdu_flit_cnt <= 0;
-        expected_pkt_queue <= 0;
         burst_offset <= 0;
         burst_size <= 0;
+
+        last_upd_pkt_q <= 0;
+        head_upd_delay_cnt <= 0;
+
+        pending_pkt_tails_valid <= 0;
+
+        for (c = 0; c < nb_pkt_queues; c++) begin
+            pending_pkt_tails[c] <= 0;
+        end
 
     end else begin
         case (pcie_state)
             PCIE_SET_F2C_PKT_QUEUE: begin
                 if (cnt >= 1000) begin
-                    pcie_write_0 <= 1;
+                    pcie_write_0 = 1;
                     pcie_address_0 <= cfg_queue << 12;
                     pcie_writedata_0 <= 0;
                     pcie_byteenable_0 <= 0;
@@ -570,7 +537,7 @@ always @(posedge clk_pcie) begin
             end
             PCIE_SET_F2C_DSC_QUEUE: begin
                 if (cnt >= cnt_delay) begin
-                    pcie_write_0 <= 1;
+                    pcie_write_0 = 1;
                     pcie_address_0 <= (cfg_queue + MAX_NB_FLOWS) << 12;
                     pcie_writedata_0 <= 0;
                     pcie_byteenable_0 <= 0;
@@ -721,49 +688,35 @@ always @(posedge clk_pcie) begin
                                   + burst_offset;
 
                     if (cur_queue < nb_pkt_queues) begin // pkt queue
-                        assert(cur_queue == expected_pkt_queue) else $fatal;
-
                         pdu_flit_cnt <= pdu_flit_cnt + 1;
-
                     end else begin // dsc queue
                         automatic logic [31:0] pkt_per_dsc_queue;
-                        automatic logic [31:0] expected_dsc_queue;
                         automatic pcie_pkt_desc_t pcie_pkt_desc = 
                             pcie_bas_writedata;
 
                         // dsc queues can receive only one flit per burst
                         assert(pcie_bas_burstcount == 1) else $fatal;
 
-                        // This is due to how we configured the queue addresses
-                        // (dsc queues after pkt queues) as well as how we send
-                        // packets (round robin among pkt queues).
-                        pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
-                        expected_dsc_queue = nb_pkt_queues +
-                            expected_pkt_queue / pkt_per_dsc_queue;
+                        assert(pcie_pkt_desc.signal == 1) else $fatal;
 
-                        assert(cur_queue == expected_dsc_queue) else $fatal;
+                        // update dsc queue here
+                        pcie_write_0 = 1;
+                        pcie_address_0 <= (
+                            cur_queue - nb_pkt_queues + MAX_NB_FLOWS) << 12;
+                        pcie_writedata_0 <= 0;
+                        pcie_byteenable_0 <= 0;
 
-                        req_cnt <= req_cnt + 1;
-                        pdu_flit_cnt <= 0;
-                        if ((expected_pkt_queue + 1) < nb_pkt_queues) begin
-                            expected_pkt_queue <= expected_pkt_queue + 1;
-                        end else begin
-                            expected_pkt_queue <= 0;
-                        end
-                        
-                        // // update head on the FPGA
-                        // pcie_write_0 <= 1;
-                        // pcie_address_0 <= (cur_queue + MAX_NB_FLOWS) << 12;
-                        // pcie_writedata_0 <= 0;
-                        // pcie_byteenable_0 <= 0;
+                        pcie_writedata_0[32 +: 32] <= cur_address;
+                        pcie_byteenable_0[4 +: 4] <= 4'hf;
 
-                        // pcie_writedata_0[32 +: 32] <= cur_address + 1;
-                        // pcie_byteenable_0[4 +: 4] <= 4'hf;
+                        // Shoud not receive a descriptor to the same queue
+                        // before software advanced the head for this queue.
+                        assert(pending_pkt_tails_valid[
+                            pcie_pkt_desc.queue_id] == 0) else $fatal;
 
-                        // next_pcie_address_0 <= cur_queue << 12;
-                        // next_upd_tail <= pcie_pkt_desc.tail[31:0];
-
-                        // pcie_state <= PCIE_UPD_PTR;
+                        // save tail so we can advance the head later
+                        pending_pkt_tails[pcie_pkt_desc.queue_id] <= pcie_pkt_desc.tail;
+                        pending_pkt_tails_valid[pcie_pkt_desc.queue_id] <= 1'b1;
                     end
 
                     // check if address out of bound
@@ -775,17 +728,38 @@ always @(posedge clk_pcie) begin
 
                     rx_cnt <= rx_cnt + 1;
                 end
-            end
-            PCIE_UPD_PTR: begin
-                pcie_write_0 <= 1;
-                pcie_address_0 <= next_pcie_address_0;
-                pcie_writedata_0 <= 0;
-                pcie_byteenable_0 <= 0;
 
-                pcie_writedata_0[32 +: 32] <= next_upd_tail;
-                pcie_byteenable_0[4 +: 4] <= 4'hf;
+                if (head_upd_delay_cnt != 0) begin
+                    head_upd_delay_cnt--;
+                end
 
-                pcie_state <= PCIE_WAIT_DESC;
+                // if not trying to write anything, we can try to advance one of
+                // the head pointers
+                if (pcie_write_0 == 0 && head_upd_delay_cnt == 0) begin
+                    automatic integer i;
+                    for (i = 0; i < nb_pkt_queues; i++) begin
+                        automatic integer q = 
+                            (i + last_upd_pkt_q) % nb_pkt_queues;
+                        if (pending_pkt_tails_valid[q]) begin
+                            pcie_write_0 = 1;
+                            pcie_address_0 <= q << 12;
+                            pcie_writedata_0 <= 0;
+                            pcie_byteenable_0 <= 0;
+
+                            pcie_writedata_0[32 +: 32] <= pending_pkt_tails[q];
+                            pcie_byteenable_0[4 +: 4] <= 4'hf;
+
+                            pending_pkt_tails_valid[q] <= 0;
+                            
+                            last_upd_pkt_q = q;
+                            break;
+                        end
+                    end
+
+                    if (last_upd_pkt_q == nb_pkt_queues - 1) begin
+                        head_upd_delay_cnt <= update_head_delay;
+                    end
+                end
             end
         endcase
 
@@ -878,18 +852,32 @@ always @(posedge clk_status) begin
             end
             READ_PCIE_START: begin
                 s_read <= 1;
-                conf_state <= READ_PCIE;
+                conf_state <= READ_PCIE_PKT_Q;
                 $display("read_pcie:");
+                $display("status + pkt queues:");
             end
-            READ_PCIE: begin
+            READ_PCIE_PKT_Q: begin
                 if (top_readdata_valid) begin
-                    $display("%d: 0x%8h", s_addr[24:0], top_readdata);
-
+                    $display("%d: 0x%8h", s_addr[15:0], top_readdata);
+                    s_addr = s_addr + 1;
+                    s_read <= 1;
                     if (s_addr == (
-                            30'h2A00_0000 + 30'd8 * nb_pkt_queues + 30'd1)) begin
+                            30'h2A00_0000 + 30'd4 * nb_pkt_queues + 30'd2)) begin
+                        s_addr <= 30'h2A00_0000 + 30'd4 * MAX_NB_FLOWS + 30'd2;
+                        s_writedata <= 0;
+                        conf_state <= READ_PCIE_DSC_Q;
+                        $display("dsc queues:");
+                    end
+                end
+            end
+            READ_PCIE_DSC_Q: begin
+                if (top_readdata_valid) begin
+                    $display("%d: 0x%8h", s_addr[15:0], top_readdata);
+                    s_addr = s_addr + 1;
+                    if (s_addr == (30'h2A00_0000 + 30'd4 * MAX_NB_FLOWS 
+                            + 30'd4 * nb_pkt_queues + 30'd2)) begin
                         conf_state <= IDLE;
                     end else begin
-                        s_addr <= s_addr + 1;
                         s_read <= 1;
                     end
                 end
