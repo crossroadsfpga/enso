@@ -72,6 +72,16 @@ assign occup = real_occup - valid_rd_en; // consume right away
 
 assign rd_data = pending_rd_data[NB_PREFETCH_REGS - valid_rd_en - 1];
 
+// simulation-time assertions
+always @(posedge clk) begin
+    if (rd_en) begin
+        assert(real_occup > 0) else $fatal;
+    end
+    if (wr_en) begin
+        assert(real_occup < MAX_OCCUP) else $fatal;
+    end
+end
+
 always @(posedge clk) begin
     bram_wr_en <= 0;
     bram_rd_en <= 0;
