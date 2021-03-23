@@ -241,6 +241,7 @@ logic [31:0]   pdumeta_cpu_csr_readdata;
 flit_lite_t            pcie_pkt_buf_wr_data;
 logic                  pcie_pkt_buf_wr_en;
 logic [PDU_AWIDTH-1:0] pcie_pkt_buf_occup;
+logic [PDU_AWIDTH-1:0] pcie_pkt_buf_occup_r;
 
 pkt_desc_t             pcie_desc_buf_wr_data;
 logic                  pcie_desc_buf_wr_en;
@@ -476,8 +477,8 @@ always @(posedge clk_pcie) begin
         if (pdumeta_cpu_valid) begin
             rule_set_cnt <= rule_set_cnt + 1;
         end
-        if (pcie_pkt_buf_occup > max_pcie_rb) begin
-            max_pcie_rb <= pcie_pkt_buf_occup;
+        if (pcie_pkt_buf_occup_r > max_pcie_rb) begin
+            max_pcie_rb <= pcie_pkt_buf_occup_r;
         end
         if (dma_queue_occup > max_dma_queue_occup) begin
             max_dma_queue_occup <= dma_queue_occup;
@@ -485,6 +486,7 @@ always @(posedge clk_pcie) begin
     end
 
     pcie_bas_write_r <= pcie_bas_write;
+    pcie_pkt_buf_occup_r <= pcie_pkt_buf_occup;
 end
 
 
