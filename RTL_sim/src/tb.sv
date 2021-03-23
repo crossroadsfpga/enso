@@ -21,10 +21,8 @@ module tb;
 `endif
 
 `ifndef RATE
-`define RATE 100; // in Gbps (not always exact)
+`define RATE 100; // in Gbps (without Ethernet overhead)
 `endif
-localparam PACE = 200/`RATE; // assume 400MHz clock and 1 flit/cycle, max 200Gbps
-
 
 generate
     // We assume this during the test, it does not necessarily hold in general.
@@ -339,6 +337,10 @@ begin
     end
 end
 
+// we send a burst of packets in a window, we set the rate by limiting the size
+// of the window
+logic [7:0] rate_cnt;
+
 always @(posedge clk_rxmac)
 begin
     cnt <= cnt + 1;
@@ -346,6 +348,7 @@ begin
         rst <= 1;
         addr <= 0;
         l8_rx_valid <= 0;
+        rate_cnt <= 0;
     end else if (cnt == 35) begin
         rst <= 0;
     
@@ -353,7 +356,7 @@ begin
     end else if (cnt == 7000 && setup_finished) begin
         l8_rx_valid <= 1;
     end else if (cnt >= 7001 && setup_finished) begin
-        if ((cnt % PACE) == 0) begin
+        if (rate_cnt < 100 * (`RATE * period_rx/(64 * 8))) begin
             if (addr < hi && !error_termination) begin
                 addr <= addr + 1;
                 l8_rx_valid <= 1;
@@ -363,6 +366,12 @@ begin
             end
         end else begin
             l8_rx_valid <= 0;
+        end
+
+        if (rate_cnt == 99) begin
+            rate_cnt <= 0;
+        end else begin
+            rate_cnt <= rate_cnt + 1;
         end
     end
 
