@@ -114,6 +114,7 @@ typedef struct {
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
     uint32_t buf_head;
+    uint32_t old_buf_head;
     uint32_t ref_cnt;
 } dsc_queue_t;
 
@@ -122,7 +123,6 @@ typedef struct {
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
     uint32_t buf_head;
-    uint32_t old_buf_head;
 } pkt_queue_t;
 
 typedef struct {
@@ -133,6 +133,8 @@ typedef struct {
 
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues);
 int dma_run(socket_internal* socket_entry, void** buf, size_t len);
+int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
+                   size_t len);
 void advance_ring_buffer(socket_internal* socket_entry);
 int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
                          unsigned int nb_queues);
@@ -145,10 +147,5 @@ void print_block(block_s *block);
 void fill_block(uint32_t *addr, block_s *block);
 uint32_t c2f_copy_head(uint32_t c2f_tail, queue_regs_t *global_block, 
                        block_s *block, uint32_t *kdata);
-
-
-// TODO(sadok) do we care about compiling on something other than gcc?
-typedef __int128 int128_t;
-typedef unsigned __int128 uint128_t;
 
 #endif // PCIE_H

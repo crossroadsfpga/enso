@@ -20,6 +20,8 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags);
 
 ssize_t recv_zc(int sockfd, void **buf, size_t len, int flags);
 
+ssize_t recv_select(int* sockfd, void **buf, size_t len, int flags);
+
 void free_pkt_buf(int sockfd);
 
 // ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,

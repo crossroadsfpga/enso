@@ -106,6 +106,12 @@ ssize_t recv_zc(int sockfd, void **buf, size_t len, int flags __attribute__((unu
     return dma_run(&open_sockets[sockfd], buf, len);
 }
 
+// TODO: should be able to somehow receive the descriptor queue as parameter
+ssize_t recv_select(int* sockfd, void **buf, size_t len, int flags __attribute__((unused)))
+{
+    return get_next_batch(open_sockets, sockfd, buf, len);
+}
+
 void free_pkt_buf(int sockfd)
 {
     advance_ring_buffer(&open_sockets[sockfd]);

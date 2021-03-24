@@ -48,9 +48,6 @@ static uint32_t* pending_pkt_tails;
 // bad would it be to use a hash table to keep pending_pkt_tails?
 static uint32_t pkt_queue_id_offset;
 
-static uint128_t buf_sig = ((uint128_t) 0xbabefacebabeface << 64 |
-                            (uint128_t) 0xbabefacebabeface);
-
 static inline uint16_t get_pkt_size(uint8_t *addr) {
     uint16_t l2_len = 14 + 4;
     uint16_t l3_len = be16toh(*((uint16_t*) (addr+14+2))); // ipv4 total length
@@ -198,6 +195,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
         dsc_queue.buf_head_ptr = &dsc_queue_regs->buf_head;
         dsc_queue.buf_head = dsc_queue_regs->buf_head;
+        dsc_queue.old_buf_head = dsc_queue.buf_head;
 
         // HACK(sadok) assuming that we know the number of queues beforehand
         pending_pkt_tails = (uint32_t*) malloc(
@@ -233,11 +231,9 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     socket_entry->app_id = app_id;
     socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->buf_head;
     socket_entry->pkt_queue.buf_head = pkt_queue_regs->buf_head;
-    socket_entry->pkt_queue.old_buf_head = socket_entry->pkt_queue.buf_head;
 
     // make sure the last tail matches the current head
     pending_pkt_tails[socket_id] = socket_entry->pkt_queue.buf_head;
-
 
     return 0;
 }
@@ -274,17 +270,14 @@ static inline void get_new_tails()
     dsc_queue.buf_head = dsc_buf_head;
 }
 
-
-int dma_run(socket_internal* socket_entry, void** buf, size_t len)
+static inline int consume_queue(socket_internal* socket_entry, void** buf,
+                                size_t len)
 {
     uint32_t* pkt_buf = socket_entry->pkt_queue.buf;
     uint32_t pkt_buf_head = socket_entry->pkt_queue.buf_head;
-    int app_id = socket_entry-> app_id;
+    int app_id = socket_entry->app_id;
 
     *buf = &pkt_buf[pkt_buf_head * 16];
-    // uint8_t* my_buf = (uint8_t*) *buf;
-
-    get_new_tails();
 
     uint32_t pkt_buf_tail = pending_pkt_tails[app_id];
 
@@ -309,24 +302,63 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
         flit_aligned_size = len & 0xffffffc0; // align len to 64 bytes
     }
 
-    // my_buf += flit_aligned_size;
     pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % F2C_PKT_BUF_SIZE;
-    // std::cout << "pkt_buf_head: " << pkt_buf_head << std::endl;
 
     socket_entry->pkt_queue.buf_head = pkt_buf_head;
     return flit_aligned_size;
 }
 
+int dma_run(socket_internal* socket_entry, void** buf, size_t len)
+{
+    get_new_tails();
+    return consume_queue(socket_entry, buf, len);
+}
+
+// return next batch among all open sockets
+int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
+                   size_t len)
+{
+    pcie_pkt_desc_t* dsc_buf = dsc_queue.buf;
+    uint32_t dsc_buf_head = dsc_queue.buf_head;
+    uint32_t old_buf_head = dsc_queue.old_buf_head;
+
+    pcie_pkt_desc_t* cur_desc = dsc_buf + dsc_buf_head;
+
+    // check if the next descriptor was updated by the FPGA
+    if (unlikely(cur_desc->signal == 0)) {
+        return 0;
+    }
+
+    cur_desc->signal = 0;
+    dsc_buf_head = (dsc_buf_head + 1) % F2C_DSC_BUF_SIZE;
+
+    uint32_t pkt_queue_id = cur_desc->queue_id - pkt_queue_id_offset;
+    pending_pkt_tails[pkt_queue_id] = (uint32_t) cur_desc->tail;
+
+    // TODO(sadok) consider prefetching. Two options to consider:
+    // (1) prefetch all the packets;
+    // (2) pass the current queue as argument and prefetch packets for it,
+    //     including potentially old packets.
+
+    uint32_t head_gap = (dsc_buf_head - old_buf_head) % F2C_PKT_BUF_SIZE;
+    if (head_gap >= BATCH_SIZE) {
+        // update descriptor buffer head
+        asm volatile ("" : : : "memory"); // compiler memory barrier
+        *(dsc_queue.buf_head_ptr) = dsc_buf_head;
+        dsc_queue.old_buf_head = dsc_buf_head;
+    }
+    dsc_queue.buf_head = dsc_buf_head;
+
+    *sockfd = pkt_queue_id;
+    socket_internal* socket_entry = &socket_entries[pkt_queue_id];
+    return consume_queue(socket_entry, buf, len);
+}
+
 void advance_ring_buffer(socket_internal* socket_entry)
 {
     uint32_t buf_head = socket_entry->pkt_queue.buf_head;
-    // uint32_t old_buf_head = socket_entry->pkt_queue.old_buf_head;
-    // uint32_t head_gap = (buf_head - old_buf_head) % F2C_PKT_BUF_SIZE;
-    // if (head_gap >= BATCH_SIZE) {
-        asm volatile ("" : : : "memory"); // compiler memory barrier
-        *(socket_entry->pkt_queue.buf_head_ptr) = buf_head;
-        // socket_entry->pkt_queue.old_buf_head = buf_head;
-    // }
+    asm volatile ("" : : : "memory"); // compiler memory barrier
+    *(socket_entry->pkt_queue.buf_head_ptr) = buf_head;
 }
 
 // FIXME(sadok) This should be in the kernel
