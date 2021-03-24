@@ -70,9 +70,13 @@ module fpga2cpu_pcie (
 // assign almost_full = 0;
 assign pcie_bas_read = 0;
 
+flit_lite_t pkt_buf_wr_data_r;
+logic       pkt_buf_wr_en_r;
+pkt_desc_t  desc_buf_wr_data_r;
+logic       desc_buf_wr_en_r;
+
 flit_lite_t            pkt_buf_rd_data;
 logic                  pkt_buf_rd_en;
-
 
 pkt_desc_t             desc_buf_rd_data;
 logic                  desc_buf_rd_en;
@@ -497,6 +501,15 @@ always @(posedge clk) begin
     end
 end
 
+// fix for timing issues
+always @(posedge clk) begin
+    pkt_buf_wr_data_r <= pkt_buf_wr_data;
+    pkt_buf_wr_en_r <= pkt_buf_wr_en;
+
+    desc_buf_wr_data_r <= desc_buf_wr_data;
+    desc_buf_wr_en_r <= desc_buf_wr_en;
+end
+
 prefetch_rb #(
     .DEPTH(PDU_DEPTH),
     .AWIDTH(PDU_AWIDTH),
@@ -505,8 +518,8 @@ prefetch_rb #(
 pkt_buf (
     .clk     (clk),
     .rst     (rst),
-    .wr_data (pkt_buf_wr_data),
-    .wr_en   (pkt_buf_wr_en),
+    .wr_data (pkt_buf_wr_data_r),
+    .wr_en   (pkt_buf_wr_en_r),
     .rd_data (pkt_buf_rd_data),
     .rd_en   (pkt_buf_rd_en),
     .occup   (pkt_buf_occup)
@@ -522,8 +535,8 @@ prefetch_rb #(
 desc_buf (
     .clk     (clk),
     .rst     (rst),
-    .wr_data (desc_buf_wr_data),
-    .wr_en   (desc_buf_wr_en),
+    .wr_data (desc_buf_wr_data_r),
+    .wr_en   (desc_buf_wr_en_r),
     .rd_data (desc_buf_rd_data),
     .rd_en   (desc_buf_rd_en),
     .occup   (desc_buf_occup)
