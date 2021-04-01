@@ -373,14 +373,7 @@ always @(posedge clk) begin
                         end
                     end
                 end else begin
-                    assert(pkt_buf_occup == 0);
-
-                    // a DMA may have finished, ensure write is unset
-                    if (!pcie_bas_waitrequest) begin
-                        pcie_bas_write_r <= 0;
-                    end else begin
-                        dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
-                    end
+                    dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
                 end
 
                 try_prefetch();
