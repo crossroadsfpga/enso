@@ -7,23 +7,23 @@ module fpga2cpu_pcie (
 
     // write to FPGA ring buffer.
     // input  flit_lite_t               wr_data,
-    // input  logic [PDU_AWIDTH-1:0]    wr_addr,
+    // input  logic [F2C_RB_AWIDTH-1:0]    wr_addr,
     // input  logic                     wr_en,
-    // output logic [PDU_AWIDTH-1:0]    wr_base_addr,
+    // output logic [F2C_RB_AWIDTH-1:0]    wr_base_addr,
     // output logic                     wr_base_addr_valid,
     // output logic                     almost_full,
     // input  logic                     update_valid,
-    // input  logic [PDU_AWIDTH-1:0]    update_size,
+    // input  logic [F2C_RB_AWIDTH-1:0]    update_size,
 
     // packet buffer input and status
     input  flit_lite_t               pkt_buf_wr_data,
     input  logic                     pkt_buf_wr_en,
-    output logic [PDU_AWIDTH-1:0]    pkt_buf_occup,
+    output logic [F2C_RB_AWIDTH-1:0]    pkt_buf_occup,
 
     // descriptor buffer input and status
     input  pkt_desc_t                desc_buf_wr_data,
     input  logic                     desc_buf_wr_en,
-    output logic [PDU_AWIDTH-1:0]    desc_buf_occup,
+    output logic [F2C_RB_AWIDTH-1:0]    desc_buf_occup,
 
     // CPU ring buffer signals
     input  logic [RB_AWIDTH-1:0]            in_dsc_head,
@@ -504,8 +504,8 @@ always @(posedge clk) begin
 end
 
 prefetch_rb #(
-    .DEPTH(PDU_DEPTH),
-    .AWIDTH(PDU_AWIDTH),
+    .DEPTH(F2C_RB_DEPTH),
+    .AWIDTH(F2C_RB_AWIDTH),
     .DWIDTH($bits(flit_lite_t))
 )
 pkt_buf (
@@ -521,8 +521,8 @@ pkt_buf (
 // Descriptor buffer. This was sized considering the worst case -- where all
 // packets are min-sized. We may use a smaller buffer here to save BRAM.
 prefetch_rb #(
-    .DEPTH(PDU_DEPTH),
-    .AWIDTH(PDU_AWIDTH),
+    .DEPTH(F2C_RB_DEPTH),
+    .AWIDTH(F2C_RB_AWIDTH),
     .DWIDTH($bits(pkt_desc_t))
 )
 desc_buf (

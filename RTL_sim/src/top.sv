@@ -240,12 +240,12 @@ logic [31:0]   pdumeta_cpu_csr_readdata;
 
 flit_lite_t            pcie_pkt_buf_wr_data;
 logic                  pcie_pkt_buf_wr_en;
-logic [PDU_AWIDTH-1:0] pcie_pkt_buf_occup;
-logic [PDU_AWIDTH-1:0] pcie_pkt_buf_occup_r;
+logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup;
+logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup_r;
 
 pkt_desc_t             pcie_desc_buf_wr_data;
 logic                  pcie_desc_buf_wr_en;
-logic [PDU_AWIDTH-1:0] pcie_desc_buf_occup;
+logic [F2C_RB_AWIDTH-1:0] pcie_desc_buf_occup;
 
 logic                    disable_pcie;
 pdu_metadata_t           pdumeta_cpu_data;

@@ -82,9 +82,9 @@ localparam MAX_PKT_SIZE = 24; // in 512 bits
 // The MAX_NB_APPS determines the max number of descriptor queues, while 
 // MAX_NB_FLOWS determines the max number of packet queues.
 // Both MAX_NB_APPS and MAX_NB_FLOWS must be powers of two
-localparam MAX_NB_APPS = 1024; // If we change this, must also change software
+localparam MAX_NB_APPS = 256; // If we change this, must also change software
 localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
-localparam MAX_NB_FLOWS = 1024; // If we change this, must also change software
+localparam MAX_NB_FLOWS = 4096; // If we change this, must also change software
 localparam FLOW_IDX_WIDTH = ($clog2(MAX_NB_FLOWS));
 localparam BRAM_TABLE_IDX_WIDTH = $clog2(MAX_NB_APPS + MAX_NB_FLOWS);
 
@@ -216,14 +216,11 @@ typedef struct packed
     logic [PADDING_WIDTH-1:0] padding;
 } metadata_t; //Metadata
 
-// PDU_DEPTH is the number of 512 bits for fpga side f2c ring buffer
+// F2C_RB_DEPTH is the number of 512 bits for fpga side f2c ring buffer
 // (must be a power of two)
-localparam PDU_DEPTH = 8192;
-localparam PDU_AWIDTH = ($clog2(PDU_DEPTH));
+localparam F2C_RB_DEPTH = 16384;
+localparam F2C_RB_AWIDTH = ($clog2(F2C_RB_DEPTH));
 localparam PDU_NUM = 256;
-localparam PDUBUF_AWIDTH = ($clog2(PDU_NUM)+5);
-localparam PDUBUF_DEPTH = (32 * PDU_NUM);
-localparam PDUID_WIDTH = ($clog2(PDU_NUM));
 typedef struct packed
 {
     logic [191:0] padding;

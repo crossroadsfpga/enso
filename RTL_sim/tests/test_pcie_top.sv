@@ -63,11 +63,11 @@ logic [63:0]                pcie_byteenable_0;
 
 flit_lite_t            pcie_pkt_buf_wr_data;
 logic                  pcie_pkt_buf_wr_en;
-logic [PDU_AWIDTH-1:0] pcie_pkt_buf_occup;
+logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup;
 
 pkt_desc_t             pcie_desc_buf_wr_data;
 logic                  pcie_desc_buf_wr_en;
-logic [PDU_AWIDTH-1:0] pcie_desc_buf_occup;
+logic [F2C_RB_AWIDTH-1:0] pcie_desc_buf_occup;
 
 logic                  disable_pcie;
 logic                  sw_reset;
@@ -385,7 +385,7 @@ gen_state_t                gen_state;
 logic [FLOW_IDX_WIDTH-1:0] pkt_queue_id;
 logic [APP_IDX_WIDTH-1:0]  dsc_queue_id;
 logic [31:0]               nb_requests;
-logic [PDU_AWIDTH-1:0]     flits_written;
+logic [F2C_RB_AWIDTH-1:0]     flits_written;
 logic [32:0]               transmit_cycles;
 
 // Generate requests
@@ -400,8 +400,8 @@ always @(posedge clk) begin
         nb_requests <= 0;
         transmit_cycles <= 0;
     end else begin
-        automatic logic can_insert_pkt = (pcie_pkt_buf_occup < (PDU_DEPTH - 2))
-            && (pcie_desc_buf_occup < (PDU_DEPTH - 2));
+        automatic logic can_insert_pkt = (pcie_pkt_buf_occup < (F2C_RB_DEPTH - 2))
+            && (pcie_desc_buf_occup < (F2C_RB_DEPTH - 2));
         case (gen_state)
             GEN_START_WAIT: begin
                 if (startup_ready) begin

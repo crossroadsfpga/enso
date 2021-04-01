@@ -13,8 +13,8 @@
 
 // These determine the maximum number of descriptor and packet queues, these
 // macros also exist in hardware and **must be kept in sync**.
-#define MAX_NB_APPS 1024
-#define MAX_NB_FLOWS 1024
+#define MAX_NB_APPS 256
+#define MAX_NB_FLOWS 4096
 
 #ifndef BATCH_SIZE
 // Maximum number of packets to process in call to dma_run

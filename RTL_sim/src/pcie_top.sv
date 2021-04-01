@@ -25,10 +25,10 @@ module pcie_top (
 
     input  flit_lite_t            pcie_pkt_buf_wr_data,
     input  logic                  pcie_pkt_buf_wr_en,
-    output logic [PDU_AWIDTH-1:0] pcie_pkt_buf_occup,
+    output logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup,
     input  pkt_desc_t             pcie_desc_buf_wr_data,
     input  logic                  pcie_desc_buf_wr_en,
-    output logic [PDU_AWIDTH-1:0] pcie_desc_buf_occup,
+    output logic [F2C_RB_AWIDTH-1:0] pcie_desc_buf_occup,
 
     output logic                  disable_pcie,
     output logic                  sw_reset,

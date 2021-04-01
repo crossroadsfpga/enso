@@ -14,10 +14,10 @@ module pdu_gen(
         output logic                  in_meta_ready,
         output flit_lite_t            pcie_pkt_buf_wr_data,
         output logic                  pcie_pkt_buf_wr_en,
-        input  logic [PDU_AWIDTH-1:0] pcie_pkt_buf_occup,
+        input  logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup,
         output pkt_desc_t             pcie_desc_buf_wr_data,
         output logic                  pcie_desc_buf_wr_en,
-        input  logic [PDU_AWIDTH-1:0] pcie_desc_buf_occup
+        input  logic [F2C_RB_AWIDTH-1:0] pcie_desc_buf_occup
 	);
 
 logic         pdu_wren_r;
@@ -40,7 +40,6 @@ logic [15:0] pdu_flit;
 pdu_hdr_t pdu_hdr;
 tuple_t tuple;
 logic [31:0] prot;
-logic [PDUID_WIDTH-1:0] pdu_id;
 
 logic pcie_pkt_buf_wr_en_r2;
 flit_lite_t pcie_pkt_buf_wr_data_r2;
@@ -126,8 +125,8 @@ assign pdu_data_swap_r = {
 // It is only safe to write if we can fit a packet with the maximum size and
 // there are at least 5 slots available (due to pipeline delays).
 logic almost_full;
-assign almost_full = pcie_pkt_buf_occup >= (PDU_DEPTH - 4 - MAX_PKT_SIZE)
-                     || pcie_desc_buf_occup >= (PDU_DEPTH - 5);
+assign almost_full = pcie_pkt_buf_occup >= (F2C_RB_DEPTH - 4 - MAX_PKT_SIZE)
+                     || pcie_desc_buf_occup >= (F2C_RB_DEPTH - 5);
 
 assign in_ready = !almost_full;
 
@@ -140,7 +139,6 @@ always @(posedge clk) begin
 
     if (rst) begin
         pdu_flit <= 0;
-        pdu_id <= 0;
     end else begin
         if (in_valid && in_meta_valid && !almost_full) begin
             pdu_wren_r2 <= 1;
