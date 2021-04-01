@@ -251,7 +251,9 @@ typedef enum{
     DMA_REQUEST,
     RULE_SET,
     DMA_QUEUE_FULL,
-    CPU_BUF_FULL,
+    CPU_DSC_BUF_FULL,
+    CPU_PKT_BUF_FULL,
+    PENDING_PREFETCH,
     MAX_PCIE_RB,
     MAX_DMA_QUEUE
 } c_state_t;
@@ -1110,18 +1112,36 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("DMA_QUEUE_FULL:\t%d",top_readdata);
-                    conf_state <= CPU_BUF_FULL;
+                    conf_state <= CPU_DSC_BUF_FULL;
                     s_read <= 1;
                     s_addr <= 30'h2200_0018;
                 end
             end
-            CPU_BUF_FULL: begin
+            CPU_DSC_BUF_FULL: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("CPU_BUF_FULL:\t\t%d",top_readdata);
-                    conf_state <= MAX_PCIE_RB;
+                    $display("CPU_DSC_BUF_FULL:\t%d",top_readdata);
+                    conf_state <= CPU_PKT_BUF_FULL;
                     s_read <= 1;
                     s_addr <= 30'h2200_0019;
+                end
+            end
+            CPU_PKT_BUF_FULL: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("CPU_PKT_BUF_FULL:\t%d",top_readdata);
+                    conf_state <= PENDING_PREFETCH;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_001A;
+                end
+            end
+            PENDING_PREFETCH: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PENDING_PREFETCH:\t%d",top_readdata);
+                    conf_state <= MAX_PCIE_RB;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_001B;
                 end
             end
             MAX_PCIE_RB: begin
@@ -1130,7 +1150,7 @@ always @(posedge clk_status) begin
                     $display("MAX_PCIE_RB:\t\t%d",top_readdata);
                     conf_state <= MAX_DMA_QUEUE;
                     s_read <= 1;
-                    s_addr <= 30'h2200_001A;
+                    s_addr <= 30'h2200_001C;
                 end
             end
             MAX_DMA_QUEUE: begin

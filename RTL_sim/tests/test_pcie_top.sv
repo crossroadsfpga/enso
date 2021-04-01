@@ -75,7 +75,8 @@ pdu_metadata_t         pdumeta_cpu_data;
 logic                  pdumeta_cpu_valid;
 logic [9:0]            pdumeta_cnt;
 logic [31:0]           dma_queue_full_cnt;
-logic [31:0]           cpu_buf_full_cnt;
+logic [31:0]           cpu_dsc_buf_full_cnt;
+logic [31:0]           cpu_pkt_buf_full_cnt;
 
 logic        clk_status;
 logic [29:0] status_addr;
@@ -663,7 +664,8 @@ pcie_top pcie (
     .pdumeta_cpu_valid      (pdumeta_cpu_valid),
     .pdumeta_cnt            (pdumeta_cnt),
     .dma_queue_full_cnt     (dma_queue_full_cnt),
-    .cpu_buf_full_cnt       (cpu_buf_full_cnt),
+    .cpu_dsc_buf_full_cnt   (cpu_dsc_buf_full_cnt),
+    .cpu_pkt_buf_full_cnt   (cpu_pkt_buf_full_cnt),
     .clk_status             (clk_status),
     .status_addr            (status_addr),
     .status_read            (status_read),

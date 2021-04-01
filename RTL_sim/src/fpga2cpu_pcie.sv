@@ -62,7 +62,9 @@ module fpga2cpu_pcie (
 
     // Counters
     output logic [31:0]              dma_queue_full_cnt,
-    output logic [31:0]              cpu_buf_full_cnt
+    output logic [31:0]              cpu_dsc_buf_full_cnt,
+    output logic [31:0]              cpu_pkt_buf_full_cnt,
+    output logic [31:0]              pending_prefetch_cnt
 );
 
 // assign wr_base_addr = 0;
@@ -109,7 +111,9 @@ logic [31:0] missing_flits;
 logic [3:0]  missing_flits_in_transfer;
 
 logic [31:0] dma_queue_full_cnt_r;
-logic [31:0] cpu_buf_full_cnt_r;
+logic [31:0] cpu_dsc_buf_full_cnt_r;
+logic [31:0] cpu_pkt_buf_full_cnt_r;
+logic [31:0] pending_prefetch_cnt_r;
 
 logic [63:0]  pcie_bas_address_r;
 logic [63:0]  pcie_bas_byteenable_r;
@@ -180,7 +184,9 @@ always @(posedge clk) begin
     desc_buf_rd_en <= 0;
     
     dma_queue_full_cnt <= dma_queue_full_cnt_r;
-    cpu_buf_full_cnt <= cpu_buf_full_cnt_r;
+    cpu_dsc_buf_full_cnt <= cpu_dsc_buf_full_cnt_r;
+    cpu_pkt_buf_full_cnt <= cpu_pkt_buf_full_cnt_r;
+    pending_prefetch_cnt <= pending_prefetch_cnt_r;
 
     if (!pcie_bas_waitrequest) begin
         pcie_bas_address <= pcie_bas_address_r;
@@ -194,7 +200,9 @@ always @(posedge clk) begin
     if (rst_r | sw_reset) begin
         state <= IDLE;
         dma_queue_full_cnt_r <= 0;
-        cpu_buf_full_cnt_r <= 0;
+        cpu_dsc_buf_full_cnt_r <= 0;
+        cpu_pkt_buf_full_cnt_r <= 0;
+        pending_prefetch_cnt_r <= 0;
         pcie_bas_write_r <= 0;
         cur_desc_valid <= 0;
         pref_desc_valid <= 0;
@@ -328,10 +336,17 @@ always @(posedge clk) begin
                     end else begin
                         pcie_bas_write_r <= 0;
                     end
+                    if (pkt_free_slot < missing_flits) begin
+                        cpu_pkt_buf_full_cnt_r <= cpu_pkt_buf_full_cnt_r + 1;
+                    end
+                    if (dsc_free_slot == 0) begin
+                        cpu_dsc_buf_full_cnt_r <= cpu_dsc_buf_full_cnt_r + 1;
+                    end
+                    if (!cur_desc_valid) begin
+                        pending_prefetch_cnt_r <= pending_prefetch_cnt_r + 1;
+                    end
                     if (pkt_free_slot < missing_flits || dsc_free_slot == 0)
                     begin
-                        cpu_buf_full_cnt_r <= cpu_buf_full_cnt_r + 1;
-                        
                         // TODO(sadok) Should we drop the packet instead of
                         // waiting?
 

@@ -36,7 +36,9 @@ module pcie_top (
     output logic                  pdumeta_cpu_valid,
     input  logic [9:0]            pdumeta_cnt,
     output logic [31:0]           dma_queue_full_cnt,
-    output logic [31:0]           cpu_buf_full_cnt,
+    output logic [31:0]           cpu_dsc_buf_full_cnt,
+    output logic [31:0]           cpu_pkt_buf_full_cnt,
+    output logic [31:0]           pending_prefetch_cnt,
 
     // status register bus
     input  logic        clk_status,
@@ -888,7 +890,9 @@ fpga2cpu_pcie f2c_inst (
     .pcie_bas_response      (pcie_bas_response),
     .sw_reset               (sw_reset),
     .dma_queue_full_cnt     (dma_queue_full_cnt),
-    .cpu_buf_full_cnt       (cpu_buf_full_cnt)
+    .cpu_dsc_buf_full_cnt   (cpu_dsc_buf_full_cnt),
+    .cpu_pkt_buf_full_cnt   (cpu_pkt_buf_full_cnt),
+    .pending_prefetch_cnt   (pending_prefetch_cnt)
 );
 
 // cpu2fpga_pcie c2f_inst (
