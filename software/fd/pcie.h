@@ -37,16 +37,12 @@
 
 #define BUF_PAGE_SIZE (1UL << 21) // using 2MB huge pages (size in bytes)
 
-// Total size needed in the f2c memory region (in flits). This includes space
-// for packets that go beyond the buffer limits (MAX_PKT_SIZE - 1).
-#define F2C_PKT_BUF_SIZE_EXTRA_ROOM (F2C_PKT_BUF_SIZE + MAX_PKT_SIZE - 1)
-
 // Sizes aligned to the huge page size, but if both buffers fit in a single
 // page, we may put them in the same page
-#define ALIGNED_F2C_DSC_BUF_SIZE (((F2C_DSC_BUF_SIZE * 64 - 1) \
-    / BUF_PAGE_SIZE + BUF_PAGE_SIZE))
-#define ALIGNED_F2C_PKT_BUF_SIZE (((F2C_PKT_BUF_SIZE_EXTRA_ROOM * 64 - 1) \
-    / BUF_PAGE_SIZE + BUF_PAGE_SIZE))
+#define ALIGNED_F2C_DSC_BUF_SIZE ((((F2C_DSC_BUF_SIZE * 64 - 1) \
+    / BUF_PAGE_SIZE + 1) * BUF_PAGE_SIZE))
+#define ALIGNED_F2C_PKT_BUF_SIZE ((((F2C_PKT_BUF_SIZE * 64 - 1) \
+    / BUF_PAGE_SIZE + 1) * BUF_PAGE_SIZE))
 
 // In dwords.
 // if changed, should also change the kernel
