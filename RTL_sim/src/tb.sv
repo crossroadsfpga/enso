@@ -32,13 +32,15 @@ generate
     end
 endgenerate
 
+// #cycles to wait before updating the head pointer for the packet queue
+localparam UPDATE_HEAD_DELAY = 1024;
+
 // size of the host buffer used by each queue (in flits)
 localparam DSC_BUF_SIZE = 8192;
 localparam PKT_BUF_SIZE = 8192;
 localparam RAM_SIZE = DSC_BUF_SIZE + PKT_BUF_SIZE;
 localparam RAM_ADDR_LEN = $clog2(RAM_SIZE);
 
-localparam DMA_DELAY = 36;
 localparam DMA_BUF_SIZE = 64;
 localparam DMA_BUF_AWIDTH = ($clog2(DMA_BUF_SIZE));
 
@@ -57,8 +59,6 @@ localparam nb_dsc_queues = `NB_DSC_QUEUES;
 localparam nb_pkt_queues = `NB_PKT_QUEUES;
 localparam pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
 
-// #cycles to wait before updating the head pointer for the packet queue
-localparam update_head_delay = 1024;
 
 // this determines the number of cycles to wait before stopping the simulation
 localparam STOP_DELAY = 100000;
@@ -179,20 +179,20 @@ logic [31:0]  stop_cnt;
 
 //eSRAM signals
 logic esram_pll_lock;
-logic         esram_pkt_buf_wren;
-logic [16:0]  esram_pkt_buf_wraddress;
-logic [519:0] esram_pkt_buf_wrdata;
-logic         esram_pkt_buf_rden;
-logic [16:0]  esram_pkt_buf_rdaddress;
-logic         esram_pkt_buf_rd_valid;
-logic [519:0] esram_pkt_buf_rddata;
-logic         reg_esram_pkt_buf_wren;
-logic [16:0]  reg_esram_pkt_buf_wraddress;
-logic [519:0] reg_esram_pkt_buf_wrdata;
-logic         reg_esram_pkt_buf_rden;
-logic [16:0]  reg_esram_pkt_buf_rdaddress;
-logic         reg_esram_pkt_buf_rd_valid;
-logic [519:0] reg_esram_pkt_buf_rddata;
+logic                      esram_pkt_buf_wren;
+logic [PKTBUF_AWIDTH-1:0]  esram_pkt_buf_wraddress;
+logic [519:0]              esram_pkt_buf_wrdata;
+logic                      esram_pkt_buf_rden;
+logic [PKTBUF_AWIDTH-1:0]  esram_pkt_buf_rdaddress;
+logic                      esram_pkt_buf_rd_valid;
+logic [519:0]              esram_pkt_buf_rddata;
+logic                      reg_esram_pkt_buf_wren;
+logic [PKTBUF_AWIDTH-1:0]  reg_esram_pkt_buf_wraddress;
+logic [519:0]              reg_esram_pkt_buf_wrdata;
+logic                      reg_esram_pkt_buf_rden;
+logic [PKTBUF_AWIDTH-1:0]  reg_esram_pkt_buf_rdaddress;
+logic                      reg_esram_pkt_buf_rd_valid;
+logic [519:0]              reg_esram_pkt_buf_rddata;
 
 //JTAG
 logic [29:0] s_addr;
@@ -393,7 +393,6 @@ logic [7:0] pcie_delay_cnt;
 
 logic [DMA_BUF_AWIDTH-1:0] dma_buf_head;
 logic [DMA_BUF_AWIDTH-1:0] dma_buf_tail;
-logic [DMA_BUF_AWIDTH-1:0] delayed_dma_buf_head [DMA_DELAY];
 logic dma_buf_full;
 logic dma_buf_full_r1;
 logic dma_buf_full_r2;
@@ -533,7 +532,7 @@ always @(posedge clk_pcie) begin
                     pcie_byteenable_0 <= 0;
 
                     // pkt queue address
-                    pcie_writedata_0[64 +: 64] <= 64'habcd000080000000 +
+                    pcie_writedata_0[64 +: 64] <= 64'ha000000080000000 +
                         (cfg_queue << 32);
                     pcie_byteenable_0[8 +: 8] <= 8'hff;
 
@@ -554,7 +553,7 @@ always @(posedge clk_pcie) begin
                     pcie_byteenable_0 <= 0;
 
                     // dsc queue address
-                    pcie_writedata_0[64 +: 64] <= 64'habcd000080000000 +
+                    pcie_writedata_0[64 +: 64] <= 64'hb000000080000000 +
                         ((cfg_queue + nb_pkt_queues) << 32);
                     pcie_byteenable_0[8 +: 8] <= 8'hff;
 
@@ -581,7 +580,7 @@ always @(posedge clk_pcie) begin
             PCIE_READ_F2C_PKT_QUEUE_WAIT: begin
                 if (pcie_readdatavalid_0) begin
                     $display("pcie_readdata_0[64 +: 64]: %h", pcie_readdata_0[64 +: 64]);
-                    assert(pcie_readdata_0[64 +: 64] == 64'habcd000080000000) 
+                    assert(pcie_readdata_0[64 +: 64] == 64'ha000000080000000) 
                         else $fatal;
                     
                     pcie_state <= PCIE_READ_F2C_DSC_QUEUE;
@@ -601,7 +600,7 @@ always @(posedge clk_pcie) begin
             end
             PCIE_READ_F2C_DSC_QUEUE_WAIT: begin
                 if (pcie_readdatavalid_0) begin
-                    assert(pcie_readdata_0[64 +: 64] == 64'habcd000080000000
+                    assert(pcie_readdata_0[64 +: 64] == 64'hb000000080000000
                         + (nb_pkt_queues << 32));
 
                     // pcie_state <= PCIE_SET_C2F_QUEUE;
@@ -768,7 +767,7 @@ always @(posedge clk_pcie) begin
                     end
 
                     if (last_upd_pkt_q == nb_pkt_queues - 1) begin
-                        head_upd_delay_cnt <= update_head_delay;
+                        head_upd_delay_cnt <= UPDATE_HEAD_DELAY;
                     end
                 end
             end
@@ -886,7 +885,7 @@ always @(posedge clk_status) begin
                     $display("%d: 0x%8h", s_addr[15:0], top_readdata);
                     s_addr = s_addr + 1;
                     if (s_addr == (30'h2A00_0000 + 30'd4 * MAX_NB_FLOWS 
-                            + 30'd4 * nb_pkt_queues + 30'd2)) begin
+                            + 30'd4 * nb_dsc_queues + 30'd2)) begin
                         conf_state <= IDLE;
                     end else begin
                         s_read <= 1;
