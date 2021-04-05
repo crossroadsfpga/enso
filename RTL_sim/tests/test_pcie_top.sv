@@ -8,7 +8,7 @@ module test_pcie_top;
 `endif
 
 `ifndef NB_PKT_QUEUES
-`define NB_PKT_QUEUES 1
+`define NB_PKT_QUEUES 16
 `endif
 
 generate
@@ -178,7 +178,7 @@ always @(posedge clk) begin
                     // note that we are placing queues 32 bit apart in the
                     // address space, this this is done to simplify the test and
                     // it is not a requirement
-                    pcie_writedata_0[64 +: 64] <= 64'habcd000000000000 +
+                    pcie_writedata_0[64 +: 64] <= 64'ha000000000000000 +
                         (cfg_queue << 32);
                     pcie_byteenable_0[8 +: 8] <= 8'hff;
 
@@ -200,7 +200,7 @@ always @(posedge clk) begin
                 // dsc queue address
                 // we place dsc queues after pkt queues in the address space but
                 // this is done to simplify the test and it is not a requirement
-                pcie_writedata_0[64 +: 64] <= 64'habcd000000000000 +
+                pcie_writedata_0[64 +: 64] <= 64'hb000000000000000 +
                     ((cfg_queue + nb_pkt_queues) << 32);
                 pcie_byteenable_0[8 +: 8] <= 8'hff;
 
@@ -594,7 +594,7 @@ always @(posedge clk_status) begin
                     status_addr = status_addr + 1;
                     if (status_addr == (
                             30'h2A00_0000 + 30'd4 * MAX_NB_FLOWS 
-                            + 30'd4 * nb_pkt_queues + 30'd2)) begin
+                            + 30'd4 * nb_dsc_queues + 30'd2)) begin
                         read_pcie_cnt <= read_pcie_cnt + 1;
                         if (read_pcie_cnt == 1) begin
                             $display("done");
