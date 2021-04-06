@@ -240,13 +240,15 @@ logic          pdumeta_cpu_out_ready;
 logic          pdumeta_cpu_ready;
 logic [31:0]   pdumeta_cpu_csr_readdata;
 
-flit_lite_t            pcie_pkt_buf_wr_data;
-logic                  pcie_pkt_buf_wr_en;
+flit_lite_t               pcie_pkt_buf_wr_data;
+logic                     pcie_pkt_buf_wr_en;
+logic                     pcie_pkt_buf_in_ready;
 logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup;
 logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup_r;
 
-pkt_desc_t             pcie_desc_buf_wr_data;
-logic                  pcie_desc_buf_wr_en;
+pkt_desc_t                pcie_desc_buf_wr_data;
+logic                     pcie_desc_buf_wr_en;
+logic                     pcie_desc_buf_in_ready;
 logic [F2C_RB_AWIDTH-1:0] pcie_desc_buf_occup;
 
 logic                    disable_pcie;
@@ -1025,10 +1027,10 @@ pdu_gen pdu_gen_inst(
     .in_meta_ready          (pcie_meta_ready),
     .pcie_pkt_buf_wr_data   (pcie_pkt_buf_wr_data),
     .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
-    .pcie_pkt_buf_occup     (pcie_pkt_buf_occup),
+    .pcie_pkt_buf_in_ready  (pcie_pkt_buf_in_ready),
     .pcie_desc_buf_wr_data  (pcie_desc_buf_wr_data),
     .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
-    .pcie_desc_buf_occup    (pcie_desc_buf_occup)
+    .pcie_desc_buf_in_ready (pcie_desc_buf_in_ready)
 );
 
 //////////////////// To OUTPUT FIFO //////////////////////////////////
@@ -1119,9 +1121,11 @@ pcie_top pcie (
     .pcie_byteenable_0      (pcie_byteenable_0),
     .pcie_pkt_buf_wr_data   (pcie_pkt_buf_wr_data),
     .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
+    .pcie_pkt_buf_in_ready  (pcie_pkt_buf_in_ready),
     .pcie_pkt_buf_occup     (pcie_pkt_buf_occup),
     .pcie_desc_buf_wr_data  (pcie_desc_buf_wr_data),
     .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
+    .pcie_desc_buf_in_ready (pcie_desc_buf_in_ready),
     .pcie_desc_buf_occup    (pcie_desc_buf_occup),
     .disable_pcie           (disable_pcie),
     .sw_reset               (sw_reset),

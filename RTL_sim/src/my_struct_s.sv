@@ -219,6 +219,7 @@ typedef struct packed
 // F2C_RB_DEPTH is the number of 512 bits for fpga side f2c ring buffer
 // (must be a power of two)
 localparam F2C_RB_DEPTH = 16384;
+localparam F2C_RB_AWIDTH = ($clog2(F2C_RB_DEPTH));
 localparam PDU_NUM = 256;
 typedef struct packed
 {

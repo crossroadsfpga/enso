@@ -18,12 +18,14 @@ module fpga2cpu_pcie (
     // packet buffer input and status
     input  flit_lite_t               pkt_buf_wr_data,
     input  logic                     pkt_buf_wr_en,
-    output logic [F2C_RB_AWIDTH-1:0]    pkt_buf_occup,
+    output logic                     pkt_buf_in_ready,
+    output logic [F2C_RB_AWIDTH-1:0] pkt_buf_occup,
 
     // descriptor buffer input and status
     input  pkt_desc_t                desc_buf_wr_data,
     input  logic                     desc_buf_wr_en,
-    output logic [F2C_RB_AWIDTH-1:0]    desc_buf_occup,
+    output logic                     desc_buf_in_ready,
+    output logic [F2C_RB_AWIDTH-1:0] desc_buf_occup,
 
     // CPU ring buffer signals
     input  logic [RB_AWIDTH-1:0]            in_dsc_head,
@@ -72,16 +74,13 @@ module fpga2cpu_pcie (
 // assign almost_full = 0;
 assign pcie_bas_read = 0;
 
-flit_lite_t pkt_buf_wr_data_r;
-logic       pkt_buf_wr_en_r;
-pkt_desc_t  desc_buf_wr_data_r;
-logic       desc_buf_wr_en_r;
+flit_lite_t pkt_buf_rd_data;
+logic       pkt_buf_out_ready;
+logic       pkt_buf_out_valid;
 
-flit_lite_t            pkt_buf_rd_data;
-logic                  pkt_buf_rd_en;
-
-pkt_desc_t             desc_buf_rd_data;
-logic                  desc_buf_rd_en;
+pkt_desc_t  desc_buf_rd_data;
+logic       desc_buf_rd_en;
+logic       desc_buf_out_valid;
 
 pkt_desc_t            cur_desc;
 logic [RB_AWIDTH-1:0] cur_dsc_head;
@@ -146,7 +145,7 @@ function logic [RB_AWIDTH-1:0] get_new_pointer(
 endfunction
 
 function void try_prefetch();
-    if (!pref_desc_valid && !wait_for_pref_desc && (desc_buf_occup > 0)) begin
+    if (!pref_desc_valid && !wait_for_pref_desc && desc_buf_out_valid) begin
         pref_desc = desc_buf_rd_data;
         desc_buf_rd_en <= 1;
         wait_for_pref_desc = 1;
@@ -180,7 +179,7 @@ endfunction
 always @(posedge clk) begin
     tail_wr_en <= 0;
     queue_rd_en <= 0;
-    pkt_buf_rd_en <= 0;
+    pkt_buf_out_ready <= 0;
     desc_buf_rd_en <= 0;
     
     dma_queue_full_cnt <= dma_queue_full_cnt_r;
@@ -192,7 +191,15 @@ always @(posedge clk) begin
         pcie_bas_address <= pcie_bas_address_r;
         pcie_bas_byteenable <= pcie_bas_byteenable_r;
         pcie_bas_write <= pcie_bas_write_r;
-        pcie_bas_writedata <= pcie_bas_writedata_r;
+
+        // When we DMA a packet, we wait one cycle for it to become available
+        // in the FIFO. With a descriptor this is not necessary, as long as
+        // there is at least a one-cycle gap between descriptors.
+        if (pkt_buf_out_ready) begin
+            pcie_bas_writedata <= pkt_buf_rd_data.data;
+        end else begin
+            pcie_bas_writedata <= pcie_bas_writedata_r;
+        end
         pcie_bas_burstcount <= pcie_bas_burstcount_r;
     end
 
@@ -226,7 +233,7 @@ always @(posedge clk) begin
         case (state)
             IDLE: begin
                 // invariant: cur_desc_valid == 0
-                if (desc_buf_occup > 0 && pkt_buf_occup > 0) begin
+                if (desc_buf_out_valid && pkt_buf_out_valid) begin
                     // fetch next queue state
                     wait_for_pref_desc <= 0; // regular fetch
                     rd_pkt_queue <= desc_buf_rd_data.pkt_queue_id;
@@ -291,8 +298,9 @@ always @(posedge clk) begin
                 // pcie_bas_waitrequest is unset. So we are checking this signal
                 // not to ensure that we are able to write but instead to make
                 // sure that any write request in the previous cycle is complete
-                if (!pcie_bas_waitrequest && cur_desc_valid && dsc_free_slot > 0
-                        && pkt_free_slot >= missing_flits) begin
+                if (!pcie_bas_waitrequest && cur_desc_valid && pkt_buf_out_valid
+                        && pkt_free_slot >= missing_flits && dsc_free_slot != 0)
+                begin
                     automatic logic [3:0] flits_in_transfer;
                     // max 8 flits per burst
                     if (missing_flits > 8) begin
@@ -318,7 +326,7 @@ always @(posedge clk) begin
                     cur_pkt_tail = get_new_pointer(
                         cur_pkt_tail, 1, pkt_rb_size);
 
-                    pkt_buf_rd_en <= 1;
+                    pkt_buf_out_ready <= 1;
 
                     if (missing_flits > 1) begin
                         state <= COMPLETE_BURST;
@@ -364,7 +372,7 @@ always @(posedge clk) begin
                 try_prefetch();
             end
             COMPLETE_BURST: begin
-                if (!pcie_bas_waitrequest) begin
+                if (!pcie_bas_waitrequest && pkt_buf_out_valid) begin
                     missing_flits <= missing_flits - 1;
                     missing_flits_in_transfer <= 
                         missing_flits_in_transfer - 1'b1;
@@ -372,8 +380,7 @@ always @(posedge clk) begin
                     // Subsequent bursts from the same transfer do not need to
                     // set the address.
                     dma_pkt(0, pkt_buf_rd_data.data, 0);
-                    pkt_buf_rd_en <= 1;
-
+                    pkt_buf_out_ready <= 1;
                     cur_pkt_tail <= get_new_pointer(
                         cur_pkt_tail, 1, pkt_rb_size);
 
@@ -388,7 +395,9 @@ always @(posedge clk) begin
                         end
                     end
                 end else begin
-                    dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
+                    if (pcie_bas_waitrequest) begin
+                        dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
+                    end
                 end
 
                 try_prefetch();
@@ -509,45 +518,48 @@ always @(posedge clk) begin
     end
 end
 
-// fix for timing issues
-always @(posedge clk) begin
-    pkt_buf_wr_data_r <= pkt_buf_wr_data;
-    pkt_buf_wr_en_r <= pkt_buf_wr_en;
-
-    desc_buf_wr_data_r <= desc_buf_wr_data;
-    desc_buf_wr_en_r <= desc_buf_wr_en;
-end
-
-prefetch_rb #(
-    .DEPTH(F2C_RB_DEPTH),
-    .AWIDTH(F2C_RB_AWIDTH),
-    .DWIDTH($bits(flit_lite_t))
+fifo_wrapper_infill #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(flit_lite_t)),
+    .FIFO_DEPTH(F2C_RB_DEPTH)
 )
 pkt_buf (
-    .clk     (clk),
-    .rst     (rst),
-    .wr_data (pkt_buf_wr_data_r),
-    .wr_en   (pkt_buf_wr_en_r),
-    .rd_data (pkt_buf_rd_data),
-    .rd_en   (pkt_buf_rd_en),
-    .occup   (pkt_buf_occup)
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (pkt_buf_occup),
+    .csr_writedata (32'b0),
+    .in_data       (pkt_buf_wr_data),
+    .in_valid      (pkt_buf_wr_en),
+    .in_ready      (pkt_buf_in_ready),
+    .out_data      (pkt_buf_rd_data),
+    .out_valid     (pkt_buf_out_valid),
+    .out_ready     (pkt_buf_out_ready)
 );
 
 // Descriptor buffer. This was sized considering the worst case -- where all
 // packets are min-sized. We may use a smaller buffer here to save BRAM.
-prefetch_rb #(
-    .DEPTH(F2C_RB_DEPTH),
-    .AWIDTH(F2C_RB_AWIDTH),
-    .DWIDTH($bits(pkt_desc_t))
+fifo_wrapper_infill #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(pkt_desc_t)),
+    .FIFO_DEPTH(F2C_RB_DEPTH)
 )
 desc_buf (
-    .clk     (clk),
-    .rst     (rst),
-    .wr_data (desc_buf_wr_data_r),
-    .wr_en   (desc_buf_wr_en_r),
-    .rd_data (desc_buf_rd_data),
-    .rd_en   (desc_buf_rd_en),
-    .occup   (desc_buf_occup)
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (desc_buf_occup),
+    .csr_writedata (32'b0),
+    .in_data       (desc_buf_wr_data),
+    .in_valid      (desc_buf_wr_en),
+    .in_ready      (desc_buf_in_ready),
+    .out_data      (desc_buf_rd_data),
+    .out_valid     (desc_buf_out_valid),
+    .out_ready     (desc_buf_rd_en)
 );
 
 endmodule
