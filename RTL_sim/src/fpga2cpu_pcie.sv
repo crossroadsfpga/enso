@@ -145,7 +145,8 @@ function logic [RB_AWIDTH-1:0] get_new_pointer(
 endfunction
 
 function void try_prefetch();
-    if (!pref_desc_valid && !wait_for_pref_desc && desc_buf_out_valid) begin
+    if (!pref_desc_valid && !wait_for_pref_desc && desc_buf_out_valid
+            && !desc_buf_rd_en) begin
         pref_desc = desc_buf_rd_data;
         desc_buf_rd_en <= 1;
         wait_for_pref_desc = 1;
