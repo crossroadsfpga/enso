@@ -12,9 +12,11 @@
 #define MAX_PKT_SIZE 24 // in flits, if changed, must also change hardware
 
 // These determine the maximum number of descriptor and packet queues, these
-// macros also exist in hardware and **must be kept in sync**.
+// macros also exist in hardware and **must be kept in sync**. Update the
+// variables with the same name on `RTL_sim/src/my_struct_s.sv` and 
+// `hardware_test/hwtest/my_stats.tcl`.
 #define MAX_NB_APPS 256
-#define MAX_NB_FLOWS 4096
+#define MAX_NB_FLOWS 8192
 
 #ifndef BATCH_SIZE
 // Maximum number of packets to process in call to dma_run

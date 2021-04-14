@@ -81,10 +81,15 @@ localparam MAX_PKT_SIZE = 24; // in 512 bits
 
 // The MAX_NB_APPS determines the max number of descriptor queues, while 
 // MAX_NB_FLOWS determines the max number of packet queues.
-// Both MAX_NB_APPS and MAX_NB_FLOWS must be powers of two
-localparam MAX_NB_APPS = 256; // If we change this, must also change software
+// Both MAX_NB_APPS and MAX_NB_FLOWS must be powers of two.
+// These **must be kept in sync** with the variables with the same name on 
+// `hardware_test/hwtest/my_stats.tcl` and `software/fd/pcie.h`.
+// TODO(sadok): expose these values from JTAG so that software and the tcl
+// script can adapt to the bitstream that is loaded at given moment.
+localparam MAX_NB_APPS = 256;
+localparam MAX_NB_FLOWS = 8192;
+
 localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
-localparam MAX_NB_FLOWS = 4096; // If we change this, must also change software
 localparam FLOW_IDX_WIDTH = ($clog2(MAX_NB_FLOWS));
 localparam BRAM_TABLE_IDX_WIDTH = $clog2(MAX_NB_APPS + MAX_NB_FLOWS);
 
@@ -110,6 +115,12 @@ localparam PKT_Q_TABLE_TAILS_DWIDTH = 32;
 localparam PKT_Q_TABLE_HEADS_DWIDTH = 32;
 localparam PKT_Q_TABLE_L_ADDRS_DWIDTH = 32;
 localparam PKT_Q_TABLE_H_ADDRS_DWIDTH = 32;
+
+// TODO(sadok) reduce BRAM sizes to the values bellow
+// localparam PKT_Q_TABLE_TAILS_DWIDTH = 8;
+// localparam PKT_Q_TABLE_HEADS_DWIDTH = 8;
+// localparam PKT_Q_TABLE_L_ADDRS_DWIDTH = 10;
+// localparam PKT_Q_TABLE_H_ADDRS_DWIDTH = 10;
 
 // TODO(sadok) There are lots of tricks we can use to save space, e.g., reduce
 // number of bits for addresses given that they are aligned to page size, group
