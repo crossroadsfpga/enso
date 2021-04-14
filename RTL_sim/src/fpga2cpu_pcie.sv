@@ -106,7 +106,7 @@ logic                 wait_for_pref_desc;
 logic                 hold_pkt_tail;
 logic                 hold_dsc_tail;
 
-logic [31:0] missing_flits;
+logic [$bits(cur_desc.size):0] missing_flits;
 logic [3:0]  missing_flits_in_transfer;
 
 logic [31:0] dma_queue_full_cnt_r;

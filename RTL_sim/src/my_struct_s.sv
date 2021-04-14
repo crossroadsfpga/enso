@@ -142,9 +142,7 @@ typedef struct packed
 {
     logic [APP_IDX_WIDTH-1:0] dsc_queue_id;
     logic [FLOW_IDX_WIDTH-1:0] pkt_queue_id;
-    logic [16:0] size; // in number of flits TODO(sadok) this is much bigger
-                       // than the MTU, consider using the expression below:
-    // logic [$clog2(MAX_PKT_SIZE)-1:0] size; // in number of flits
+    logic [$clog2(MAX_PKT_SIZE):0] size; // in number of flits
 } pkt_desc_t;
 
 typedef struct packed
