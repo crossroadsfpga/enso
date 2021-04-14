@@ -128,6 +128,8 @@ static int chr_open(struct inode *inode, struct file *filp)
     struct dev_bookkeep *dev_bk;
     unsigned int num_dev_bks;
 
+    printk(KERN_INFO "example of kern space stack: %p", &result);
+
     // Look for the device with lowest BDF and select it as default.
     if (unlikely(mutex_lock_interruptible(&global_bk.lock))) {
         INTEL_FPGA_PCIE_DEBUG("interrupted while attempting to obtain "
@@ -150,6 +152,7 @@ static int chr_open(struct inode *inode, struct file *filp)
         INTEL_FPGA_PCIE_DEBUG("couldn't create character device bookkeeper.");
         return -ENOMEM;
     }
+    printk(KERN_INFO "example of kzalloc addr: %p", chr_dev_bk);
     dev_bk = a_dev_bk;
     chr_dev_bk->dev_bk = dev_bk;
     filp->private_data = chr_dev_bk;
@@ -340,6 +343,8 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
         return -EFAULT;
     }
 
+    size = len;
+    printk("size: %d\n", size);
     // allocate memory from kernel
     if (size > 0) {
         ret = dma_set_mask_and_coherent(&dev_bk->dev->dev, DMA_BIT_MASK(64));
@@ -354,6 +359,7 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
                                 &dev_bk->kmem_info.bus_addr, GFP_KERNEL);
         if (!dev_bk->kmem_info.virt_addr) {
             INTEL_FPGA_PCIE_DEBUG("couldn't obtain kernel buffer.");
+	    printk(KERN_INFO "zalloc coherent failed.");
             // restore
             dev_bk->kmem_info.virt_addr = old_info.virt_addr;
             dev_bk->kmem_info.bus_addr = old_info.bus_addr;
@@ -387,13 +393,17 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
     vma->vm_private_data = dev_bk;
 
     pfn = __pa(dev_bk->kmem_info.virt_addr + (pgoff<<PAGE_SHIFT))>>PAGE_SHIFT;
+    printk(KERN_INFO "vfn: %p\n", dev_bk->kmem_info.virt_addr);
+    printk(KERN_INFO "pfn: %p\n", pfn);
+    printk(KERN_INFO "len: %d\n", len);
+    printk(KERN_INFO "vm_page_prot: %x\n", vma->vm_page_prot);
     ret = remap_pfn_range(vma, vma->vm_start, pfn, len, vma->vm_page_prot);
     if (ret < 0) {
         INTEL_FPGA_PCIE_WARN("could not remap kernel buffer to user-space.");
         return -ENXIO;
     }
 
-    printk(KERN_INFO "mmap: 0x%x\n", ret);
+    printk(KERN_INFO "mmap: %p\n", ret);
 
     return ret;
 }

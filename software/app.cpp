@@ -99,12 +99,18 @@ int main(int argc, const char* argv[])
             // HACK(sadok) this only works because socket_fd is incremental, it
             // would not work with an actual file descriptor
             for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
+
+
 		printf("about to recv!\n");
                 #ifdef ZERO_COPY
                     int recv_len = norman_recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
                 #else
                     int recv_len = norman_recv(socket_fd, buf, BUF_LEN, 0);
                 #endif
+
+
+		// printf("user stack addr: %p\n", &recv_len);
+		printf("recv_len: %d\n", recv_len);
 		printf("received!\n");
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
