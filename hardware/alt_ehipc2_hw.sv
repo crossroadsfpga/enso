@@ -10,7 +10,7 @@
 // Intel or its authorized distributors.  Please refer to the applicable
 // agreement for further details.
 
-`include "./src/my_struct_s.sv"
+`include "./src/constants.sv"
 
 `timescale 1 ps / 1 ps
 //`define DISABLE_PCIE

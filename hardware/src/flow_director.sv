@@ -1,4 +1,4 @@
-`include "./my_struct_s.sv"
+`include "./constants.sv"
 module flow_director(
     clk,rst,
     in_meta_data,

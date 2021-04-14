@@ -1,4 +1,4 @@
-`include "./my_struct_s.sv"
+`include "./constants.sv"
 module basic_data_mover (
         input  logic         clk,                    //        clk.clk
         input  logic         rst,                    //        rst.reset

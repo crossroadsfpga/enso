@@ -5,7 +5,7 @@ set TOP_REG_BASE  0x22000000
 set PCIE_BASE    0x2A000000 
 
 # These **must be kept in sync** with the variables with the same name on 
-# `RTL_sim/src/my_struct_s.sv` and `software/fd/pcie.h`.
+# `hardware/src/constants.sv` and `software/fd/pcie.h`.
 set MAX_NB_APPS 256
 set MAX_NB_FLOWS 8192
 

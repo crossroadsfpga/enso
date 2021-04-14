@@ -13,7 +13,7 @@
 
 // These determine the maximum number of descriptor and packet queues, these
 // macros also exist in hardware and **must be kept in sync**. Update the
-// variables with the same name on `RTL_sim/src/my_struct_s.sv` and 
+// variables with the same name on `hardware/src/constants.sv` and 
 // `hardware_test/hwtest/my_stats.tcl`.
 #define MAX_NB_APPS 256
 #define MAX_NB_FLOWS 8192

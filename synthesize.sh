@@ -26,8 +26,8 @@ else
 fi
 
 # copy newest source
-cp $SCRIPT_DIR/RTL_sim/alt_ehipc2_hw.* $quartus_project_root/hardware_test_design/
-cp -r $SCRIPT_DIR/RTL_sim/src $quartus_project_root/hardware_test_design/
+cp $SCRIPT_DIR/hardware/alt_ehipc2_hw.* $quartus_project_root/hardware_test_design/
+cp -r $SCRIPT_DIR/hardware/src $quartus_project_root/hardware_test_design/
 
 # run synthesis
 cd $quartus_project_root/hardware_test_design

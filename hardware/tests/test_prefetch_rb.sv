@@ -1,5 +1,5 @@
 `timescale 1 ns/10 ps  // time-unit = 1 ns, precision = 10 ps
-`include "../src/prefetch_rb.sv"
+`include "../src/common/prefetch_rb.sv"
 module test_prefetch_rb;
 
 localparam period = 4;

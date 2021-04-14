@@ -1,5 +1,5 @@
 `timescale 1 ns/10 ps  // time-unit = 1 ns, precision = 10 ps
-`include "./my_struct_s.sv"
+`include "../src/constants.sv"
 module tb;
 
 
@@ -861,8 +861,9 @@ always @(posedge clk_status) begin
                 end
             end
             READ_PCIE_START: begin
-                s_read <= 1;
-                conf_state <= READ_PCIE_PKT_Q;
+                // s_read <= 1;
+                // conf_state <= READ_PCIE_PKT_Q;
+                conf_state <= IDLE;
                 $display("read_pcie:");
                 $display("status + pkt queues:");
             end

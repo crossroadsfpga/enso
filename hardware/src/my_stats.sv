@@ -1,4 +1,4 @@
-`include "./my_struct_s.sv"
+`include "./constants.sv"
 module my_stats (
     input   logic                       arst,
 

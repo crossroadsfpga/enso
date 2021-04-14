@@ -20,7 +20,7 @@ cd ..
 ./run_vsim_afs.sh
 ```
 ### SRC description:
-- my_struct_s.sv is the header file that specify most of the parameters and structs. 
+- constants.sv is the header file that specify most of the parameters and structs. 
 - tb.sv is the testbench. You should specify new .pkt file in this file and number of line of new .pkt.
 ```
 localparam hi = X; //X is number of lines in new .pkt file
@@ -56,7 +56,7 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
   - ex_100G: folders that contains the 100Gbps Ethernet Core logic.
   - ex_100G.ip: the ip file for Ethernet Core
   - hardware_test_design (folder that we care most)
-    - src: the src RTL code from RTL_sim. 
+    - src: the src RTL code from hardware. 
     - output_files: the bitstream file `alt_ehipc2_hw.sof` and some reports which can be viewed in Quartus.
 
 ### Synthesize Quartus Project (you can skip this the first time)

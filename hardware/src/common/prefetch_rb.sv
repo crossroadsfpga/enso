@@ -1,4 +1,4 @@
-`include "./my_struct_s.sv"
+// `include "../constants.sv"
 
 /*
  * Ring buffer stored in BRAM that automatically prefetches the next entry.

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Usage ./run_tests.sh
+
+# exit when error occurs
+set -e
+trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
+trap '[ $? -ne 0 ] && echo "\"${last_command}\" command exited with code $?."' EXIT
+
+declare -a tests=(
+    'test_pcie_top'
+    'test_prefetch_rb'
+)
+
+sim_lib_path="$HOME/sim_lib/verilog_libs"
+altera_ver="$sim_lib_path/altera_ver"
+lpm_ver="$sim_lib_path/lpm_ver"
+sgate_ver="$sim_lib_path/sgate_ver"
+altera_mf_ver="$sim_lib_path/altera_mf_ver"
+altera_lnsim_ver="$sim_lib_path/altera_lnsim_ver"
+fourteennm_ver="$sim_lib_path/fourteennm_ver"
+fourteennm_ct1_ver="$sim_lib_path/fourteennm_ct1_ver"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+rm -rf work
+rm -f vsim.wlf
+
+shopt -s globstar  # make sure we match all subdirs
+
+vlib work
+for t in ${tests[@]}; do
+    vlog "./tests/$t.sv" -sv -lint
+done
+vlog ./src/common/*.v
+
+# avoid trap
+output_if_error() {
+    if grep -q -e "Errors: [^0]" out.txt; then
+        grep --color -e 'Error' -e '^' out.txt
+        printf "${RED}$1 failed!${NC}\n"
+        rm out.txt
+        return 1
+    fi
+    return 0
+}
+
+for t in ${tests[@]}; do
+    echo "Running test: $t"
+    vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
+        -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver \
+        -voptargs="+acc" -c -do "run -all" $t > out.txt
+    output_if_error "$t"
+done
+
+printf "${GREEN}All tests passed${NC}\n"

@@ -7,6 +7,15 @@ set -e
 trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
 trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
+sim_lib_path="$HOME/sim_lib/verilog_libs"
+altera_ver="$sim_lib_path/altera_ver"
+lpm_ver="$sim_lib_path/lpm_ver"
+sgate_ver="$sim_lib_path/sgate_ver"
+altera_mf_ver="$sim_lib_path/altera_mf_ver"
+altera_lnsim_ver="$sim_lib_path/altera_lnsim_ver"
+fourteennm_ver="$sim_lib_path/fourteennm_ver"
+fourteennm_ct1_ver="$sim_lib_path/fourteennm_ct1_ver"
+
 RATE=${1:-"100"}
 
 NB_PKTS=$2
@@ -34,7 +43,11 @@ PKT_FILE_NB_LINES=$(wc -l < $PKT_FILE)
 rm -rf work
 rm -f vsim.wlf
 
+shopt -s globstar  # make sure we match all subdirs
+
 vlib work
+vlog +define+SIM ./src/**/*.sv -sv
+vlog +define+SIM ./src/**/*.v
 vlog +define+SIM \
      +define+RATE=$RATE \
      +define+PKT_FILE=\"$PKT_FILE\" \
@@ -42,21 +55,15 @@ vlog +define+SIM \
      +define+NB_DSC_QUEUES=$NB_DSC_QS \
      +define+NB_PKT_QUEUES=$NB_PKT_QS \
      +define+PKT_SIZE=$PKT_SIZE \
-     ./src/*.sv -sv 
-#vlog *.v
-vlog +define+SIM ./src/common/*.sv -sv
-vlog +define+SIM ./src/common/*.v
-#vlog ./src/common/esram/synth/esram.v  
-#vlog ./src/common/esram/esram_1913/synth/iopll.v  
-#vlog ./src/common/esram/esram_1913/synth/esram_esram_1913_a3ainji.sv -sv
-#vlog ./src/common/esram/altera_iopll_1930/synth/stratix10_altera_iopll.v
-#vlog ./src/common/esram/altera_iopll_1930/synth/esram_altera_iopll_1930_rnqonzq.v
+     ./tests/tb.sv -sv 
 
 #GUI full debug
 # vsim tb -L altera_mf_ver -L altera_lnsim_ver -L altera_ver -L lpm_ver -L sgate_ver -L fourteennm_ver -L fourteennm_ct1_ver -voptargs="+acc"
 
 #NO GUI
-vsim -L altera_mf_ver -L altera_lnsim_ver -L altera_ver -L lpm_ver -L sgate_ver -L fourteennm_ver -L fourteennm_ct1_ver -voptargs="+acc" -c -do "run -all" tb
+vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
+    -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver -voptargs="+acc" \
+    -c -do "run -all" tb | grep --color -e 'Error' -e '^'
 
 #NO GUI, Optimized, but the stats may not match
 #vsim -L altera_mf_ver -L altera_lnsim_ver -L altera_ver -L lpm_ver -L sgate_ver -L fourteennm_ver -L fourteennm_ct1_ver -c -do "run -all" tb

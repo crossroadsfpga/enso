@@ -1,5 +1,5 @@
 
-`include "./my_struct_s.sv"
+`include "../constants.sv"
 
 module fpga2cpu_pcie (
     input logic clk,

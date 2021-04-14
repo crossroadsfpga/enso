@@ -1,6 +1,7 @@
 `timescale 1 ns/10 ps  // time-unit = 1 ns, precision = 10 ps
-`include "../src/pcie_top.sv"
-`include "../src/fpga2cpu_pcie.sv"
+`include "../src/pcie/pcie_top.sv"
+`include "../src/pcie/fpga2cpu_pcie.sv"
+
 module test_pcie_top;
 
 `ifndef NB_DSC_QUEUES

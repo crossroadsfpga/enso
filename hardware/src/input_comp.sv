@@ -1,5 +1,5 @@
 // new_component.v
-`include "./my_struct_s.sv"
+`include "./constants.sv"
 // This file was auto-generated as a prototype implementation of a module
 // created in component editor.  It ties off all outputs to ground and
 // ignores all inputs.  It needs to be edited to make it do something

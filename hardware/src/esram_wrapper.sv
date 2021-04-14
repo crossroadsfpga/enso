@@ -1,4 +1,4 @@
-`include "./my_struct_s.sv"
+`include "./constants.sv"
 
 module esram_wrapper(
     input  logic clk_esram_ref, //100 MHz

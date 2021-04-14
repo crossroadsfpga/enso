@@ -1,4 +1,4 @@
-`include "./my_struct_s.sv"
+`include "./constants.sv"
 
 module hash_func(clk,rst,
     stall,

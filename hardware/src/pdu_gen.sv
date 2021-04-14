@@ -1,5 +1,5 @@
 `timescale 1 ps / 1 ps
-`include "./my_struct_s.sv"
+`include "./constants.sv"
 module pdu_gen(
 		input  logic         clk,
 		input  logic         rst,

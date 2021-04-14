@@ -1,4 +1,4 @@
-`include "./my_struct_s.sv"
+`include "./constants.sv"
 module flow_table_wrapper(
     input   logic           clk,
     input   logic           rst,

@@ -251,25 +251,25 @@ set_global_assignment -name FAST_PRESERVE AUTO -entity alt_ehipc2_hw
 set_global_assignment -name OPTIMIZATION_MODE "SUPERIOR PERFORMANCE WITH MAXIMUM PLACEMENT EFFORT"
 set_global_assignment -name ENABLE_SIGNALTAP ON
 set_global_assignment -name USE_SIGNALTAP_FILE stp4.stp
-set_global_assignment -name SYSTEMVERILOG_FILE src/pcie_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/pcie_core.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_table_wrapper.sv
-set_global_assignment -name SYSTEMVERILOG_FILE src/cpu2fpga_pcie.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/cpu2fpga_pcie.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe_fd.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_director.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/top.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/ring_buffer.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pdu_gen.sv
-set_global_assignment -name SYSTEMVERILOG_FILE src/pcie_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/pcie_top.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/parser.sv
-set_global_assignment -name SYSTEMVERILOG_FILE src/my_struct_s.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/constants.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/my_stats.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/input_comp.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe_rst.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe_root.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hash_func.sv
-set_global_assignment -name SYSTEMVERILOG_FILE src/fpga2cpu_pcie.sv
-set_global_assignment -name VERILOG_FILE src/prefetch_rb.sv -hdl_version SystemVerilog_2009
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/fpga2cpu_pcie.sv
+set_global_assignment -name VERILOG_FILE src/common/prefetch_rb.sv -hdl_version SystemVerilog_2009
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_director_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/esram_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/dc_back_pressure.sv

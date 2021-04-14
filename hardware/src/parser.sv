@@ -1,4 +1,4 @@
-`include "./my_struct_s.sv"
+`include "./constants.sv"
 /* parse the ethnet frame to data for kernel. Convert Big endian to little
 * endian */
 module parser(clk,rst,

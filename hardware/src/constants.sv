@@ -1,5 +1,5 @@
-`ifndef MY_STRUCT_S
-`define MY_STRUCT_S
+`ifndef CONSTANTS_SV
+`define CONSTANTS_SV
 // `define SIM //Should comment this during synthesis
 // `define NO_PCIE //Should comment this during synthesis
 `define USE_BRAM //Replace the esram with BRAM.
@@ -258,10 +258,10 @@ typedef struct packed
 } pdu_metadata_t; //Metadata
 
 `ifdef SIM
-`define hdisplay(A) if (!tb.error_termination_r) $display("%s", $sformatf A );
+`define hdisplay(A) if (!tb.error_termination_r) $display("%s", $sformatf A )
 // `define hdisplay(A);
-`define hwarning(A) if (!tb.error_termination_r) $warning("%s", $sformatf A );
-`define herror(A) if (!tb.error_termination_r) $error("%s", $sformatf A );
+`define hwarning(A) if (!tb.error_termination_r) $warning("%s", $sformatf A )
+`define herror(A) if (!tb.error_termination_r) $error("%s", $sformatf A )
 
 function void hterminate(string s);
     `herror((s));
@@ -279,4 +279,4 @@ endfunction
 
 `endif // SIM
 
-`endif
+`endif // CONSTANTS_SV
