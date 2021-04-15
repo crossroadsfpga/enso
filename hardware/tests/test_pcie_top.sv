@@ -1,6 +1,5 @@
 `timescale 1 ns/10 ps  // time-unit = 1 ns, precision = 10 ps
-`include "../src/pcie/pcie_top.sv"
-`include "../src/pcie/fpga2cpu_pcie.sv"
+`include "../src/constants.sv"
 
 module test_pcie_top;
 
@@ -66,7 +65,7 @@ flit_lite_t            pcie_pkt_buf_wr_data;
 logic                  pcie_pkt_buf_wr_en;
 logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup;
 
-pkt_desc_t             pcie_desc_buf_wr_data;
+pkt_dsc_t             pcie_desc_buf_wr_data;
 logic                  pcie_desc_buf_wr_en;
 logic [F2C_RB_AWIDTH-1:0] pcie_desc_buf_occup;
 
@@ -277,7 +276,7 @@ always @(posedge clk) begin
                     end else begin // dsc queue
                         automatic logic [31:0] pkt_per_dsc_queue;
                         automatic logic [31:0] expected_dsc_queue;
-                        automatic pcie_pkt_desc_t pcie_pkt_desc;
+                        automatic pcie_pkt_dsc_t pcie_pkt_desc;
 
                         // dsc queues can receive only one flit per burst
                         assert(pcie_bas_burstcount == 1) else $fatal;
@@ -291,7 +290,8 @@ always @(posedge clk) begin
                         // packets (round robin among pkt queues).
                         pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
                         expected_dsc_queue = nb_pkt_queues +
-                            expected_pkt_queue / pkt_per_dsc_queue;
+                            (expected_pkt_queue - 1) % nb_pkt_queues 
+                            / pkt_per_dsc_queue;
 
                         assert(cur_queue == expected_dsc_queue) else $fatal;
 
@@ -633,6 +633,10 @@ assign pcie_bas_response = 0;
 
 assign pdumeta_cnt = 0;
 
+logic pcie_pkt_buf_in_ready;
+logic pcie_desc_buf_in_ready;
+logic [31:0] pending_prefetch_cnt;
+
 pcie_top pcie (
     .pcie_clk               (clk),
     .pcie_reset_n           (!rst),
@@ -655,9 +659,11 @@ pcie_top pcie (
     .pcie_byteenable_0      (pcie_byteenable_0),
     .pcie_pkt_buf_wr_data   (pcie_pkt_buf_wr_data),
     .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
+    .pcie_pkt_buf_in_ready  (pcie_pkt_buf_in_ready),
     .pcie_pkt_buf_occup     (pcie_pkt_buf_occup),
     .pcie_desc_buf_wr_data  (pcie_desc_buf_wr_data),
     .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
+    .pcie_desc_buf_in_ready (pcie_desc_buf_in_ready),
     .pcie_desc_buf_occup    (pcie_desc_buf_occup),
     .disable_pcie           (disable_pcie),
     .sw_reset               (sw_reset),
@@ -667,6 +673,7 @@ pcie_top pcie (
     .dma_queue_full_cnt     (dma_queue_full_cnt),
     .cpu_dsc_buf_full_cnt   (cpu_dsc_buf_full_cnt),
     .cpu_pkt_buf_full_cnt   (cpu_pkt_buf_full_cnt),
+    .pending_prefetch_cnt   (pending_prefetch_cnt),
     .clk_status             (clk_status),
     .status_addr            (status_addr),
     .status_read            (status_read),

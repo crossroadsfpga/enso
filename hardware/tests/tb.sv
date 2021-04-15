@@ -701,7 +701,7 @@ always @(posedge clk_pcie) begin
                         pdu_flit_cnt <= pdu_flit_cnt + 1;
                     end else begin // dsc queue
                         automatic logic [31:0] pkt_per_dsc_queue;
-                        automatic pcie_pkt_desc_t pcie_pkt_desc = 
+                        automatic pcie_pkt_dsc_t pcie_pkt_desc = 
                             pcie_bas_writedata;
 
                         // dsc queues can receive only one flit per burst

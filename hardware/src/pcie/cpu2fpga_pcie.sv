@@ -5,7 +5,7 @@ module cpu2fpga_pcie (
     input rst,
 
     //pdu meta out signals
-    output pdu_metadata_t               pdumeta_cpu_data,
+    output var pdu_metadata_t           pdumeta_cpu_data,
     output logic                        pdumeta_cpu_valid,
     input  logic [9:0]                  pdumeta_cnt,
 

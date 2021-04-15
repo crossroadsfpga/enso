@@ -183,7 +183,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
         dsc_queue.regs = dsc_queue_regs;
         dsc_queue.buf =
-            (pcie_pkt_desc_t*) get_huge_pages(app_id, ALIGNED_F2C_DSC_BUF_SIZE);
+            (pcie_pkt_dsc_t*) get_huge_pages(app_id, ALIGNED_F2C_DSC_BUF_SIZE);
         if (dsc_queue.buf == NULL) {
             std::cerr << "Could not get huge page" << std::endl;
             return -1;
@@ -240,11 +240,11 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
 static inline void get_new_tails()
 {
-    pcie_pkt_desc_t* dsc_buf = dsc_queue.buf;
+    pcie_pkt_dsc_t* dsc_buf = dsc_queue.buf;
     uint32_t dsc_buf_head = dsc_queue.buf_head;
 
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
-        pcie_pkt_desc_t* cur_desc = dsc_buf + dsc_buf_head;
+        pcie_pkt_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
 
         // check if the next descriptor was updated by the FPGA
         if (cur_desc->signal == 0) {
@@ -318,11 +318,11 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
                    size_t len)
 {
-    pcie_pkt_desc_t* dsc_buf = dsc_queue.buf;
+    pcie_pkt_dsc_t* dsc_buf = dsc_queue.buf;
     uint32_t dsc_buf_head = dsc_queue.buf_head;
     uint32_t old_buf_head = dsc_queue.old_buf_head;
 
-    pcie_pkt_desc_t* cur_desc = dsc_buf + dsc_buf_head;
+    pcie_pkt_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
 
     // check if the next descriptor was updated by the FPGA
     if (unlikely(cur_desc->signal == 0)) {

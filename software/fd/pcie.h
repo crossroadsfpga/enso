@@ -105,10 +105,10 @@ typedef struct {
     uint64_t queue_id;
     uint64_t tail;
     uint64_t pad[5];
-} pcie_pkt_desc_t;
+} pcie_pkt_dsc_t;
 
 typedef struct {
-    pcie_pkt_desc_t* buf;
+    pcie_pkt_dsc_t* buf;
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
     uint32_t buf_head;

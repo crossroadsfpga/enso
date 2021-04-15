@@ -1,19 +1,19 @@
 `include "./constants.sv"
 module flow_table_wrapper(
-    input   logic           clk,
-    input   logic           rst,
+    input logic clk,
+    input logic rst,
     // Packet data
-    input   metadata_t      in_meta_data,
-    input   logic           in_meta_valid,
-    output  logic           in_meta_ready,
-    output  metadata_t      out_meta_data,
-    output  logic           out_meta_valid,
-    input   logic           out_meta_ready,
+    input  var   metadata_t in_meta_data,
+    input  logic            in_meta_valid,
+    output logic            in_meta_ready,
+    output var   metadata_t out_meta_data,
+    output logic            out_meta_valid,
+    input  logic            out_meta_ready,
     // Control data
-    input   pdu_metadata_t  in_control_data,
-    input   logic           in_control_valid,
-    output  logic           in_control_ready,
-    output  logic           out_control_done
+    input  var   pdu_metadata_t in_control_data,
+    input  logic                in_control_valid,
+    output logic                in_control_ready,
+    output logic                out_control_done
 );
 
 // Service FSM hashing

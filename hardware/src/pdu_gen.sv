@@ -1,23 +1,23 @@
 `timescale 1 ps / 1 ps
 `include "./constants.sv"
 module pdu_gen(
-		input  logic         clk,
-		input  logic         rst,
-		input  logic         in_sop,
-		input  logic         in_eop,
-		input  logic [511:0] in_data,
-		input  logic [5:0]   in_empty,
-		input  logic         in_valid,
-		output logic         in_ready,
-        input  logic         in_meta_valid,
-        input  metadata_t    in_meta_data,
-        output logic         in_meta_ready,
-        output flit_lite_t   pcie_pkt_buf_wr_data,
-        output logic         pcie_pkt_buf_wr_en,
-        input  logic         pcie_pkt_buf_in_ready,
-        output pkt_desc_t    pcie_desc_buf_wr_data,
-        output logic         pcie_desc_buf_wr_en,
-        input  logic         pcie_desc_buf_in_ready
+		input  logic           clk,
+		input  logic           rst,
+		input  logic           in_sop,
+		input  logic           in_eop,
+		input  logic [511:0]   in_data,
+		input  logic [5:0]     in_empty,
+		input  logic           in_valid,
+		output logic           in_ready,
+        input  logic           in_meta_valid,
+        input  var metadata_t  in_meta_data,
+        output logic           in_meta_ready,
+        output var flit_lite_t pcie_pkt_buf_wr_data,
+        output logic           pcie_pkt_buf_wr_en,
+        input  logic           pcie_pkt_buf_in_ready,
+        output var pkt_dsc_t   pcie_desc_buf_wr_data,
+        output logic           pcie_desc_buf_wr_en,
+        input  logic           pcie_desc_buf_in_ready
 	);
 
 logic [511:0] pdu_data;

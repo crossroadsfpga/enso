@@ -246,7 +246,7 @@ logic                     pcie_pkt_buf_in_ready;
 logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup;
 logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup_r;
 
-pkt_desc_t                pcie_desc_buf_wr_data;
+pkt_dsc_t                pcie_desc_buf_wr_data;
 logic                     pcie_desc_buf_wr_en;
 logic                     pcie_desc_buf_in_ready;
 logic [F2C_RB_AWIDTH-1:0] pcie_desc_buf_occup;

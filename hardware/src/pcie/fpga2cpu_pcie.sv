@@ -16,13 +16,13 @@ module fpga2cpu_pcie (
     // input  logic [F2C_RB_AWIDTH-1:0]    update_size,
 
     // packet buffer input and status
-    input  flit_lite_t               pkt_buf_wr_data,
+    input  var flit_lite_t           pkt_buf_wr_data,
     input  logic                     pkt_buf_wr_en,
     output logic                     pkt_buf_in_ready,
     output logic [F2C_RB_AWIDTH-1:0] pkt_buf_occup,
 
     // descriptor buffer input and status
-    input  pkt_desc_t                desc_buf_wr_data,
+    input  var pkt_dsc_t             desc_buf_wr_data,
     input  logic                     desc_buf_wr_en,
     output logic                     desc_buf_in_ready,
     output logic [F2C_RB_AWIDTH-1:0] desc_buf_occup,
@@ -78,11 +78,11 @@ flit_lite_t pkt_buf_rd_data;
 logic       pkt_buf_out_ready;
 logic       pkt_buf_out_valid;
 
-pkt_desc_t  desc_buf_rd_data;
+pkt_dsc_t  desc_buf_rd_data;
 logic       desc_buf_rd_en;
 logic       desc_buf_out_valid;
 
-pkt_desc_t            cur_desc;
+pkt_dsc_t            cur_desc;
 logic [RB_AWIDTH-1:0] cur_dsc_head;
 logic [RB_AWIDTH-1:0] cur_dsc_tail;
 logic [63:0]          cur_dsc_buf_addr;
@@ -92,7 +92,7 @@ logic [63:0]          cur_pkt_buf_addr;
 logic                 cur_desc_valid;
 logic                 cur_pkt_needs_dsc;
 
-pkt_desc_t            pref_desc;
+pkt_dsc_t            pref_desc;
 logic [RB_AWIDTH-1:0] pref_dsc_head;
 logic [RB_AWIDTH-1:0] pref_dsc_tail;
 logic [63:0]          pref_dsc_buf_addr;
@@ -411,7 +411,7 @@ always @(posedge clk) begin
 
                 // make sure the previous transfer is complete
                 if (!pcie_bas_waitrequest) begin
-                    automatic pcie_pkt_desc_t pcie_pkt_desc;
+                    automatic pcie_pkt_dsc_t pcie_pkt_desc;
                     pcie_pkt_desc.signal = 1;
                     pcie_pkt_desc.tail = {
                         {{$bits(pcie_pkt_desc.tail) - RB_AWIDTH}{1'b0}},
@@ -544,7 +544,7 @@ pkt_buf (
 // packets are min-sized. We may use a smaller buffer here to save BRAM.
 fifo_wrapper_infill #(
     .SYMBOLS_PER_BEAT(1),
-    .BITS_PER_SYMBOL($bits(pkt_desc_t)),
+    .BITS_PER_SYMBOL($bits(pkt_dsc_t)),
     .FIFO_DEPTH(F2C_RB_DEPTH)
 )
 desc_buf (

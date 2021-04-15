@@ -4,7 +4,7 @@
 # exit when error occurs
 set -e
 trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
-trap '[ $? -ne 0 ] && echo "\"${last_command}\" command exited with code $?."' EXIT
+trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
 declare -a tests=(
     'test_pcie_top'
@@ -30,8 +30,10 @@ rm -f vsim.wlf
 shopt -s globstar  # make sure we match all subdirs
 
 vlib work
+vlog ./src/**/*.sv -sv
 for t in ${tests[@]}; do
-    vlog "./tests/$t.sv" -sv -lint
+    echo "Compiling $t"
+    vlog "./tests/$t.sv" -sv -lint | grep --color -e 'Error' -e '^'
 done
 vlog ./src/common/*.v
 
@@ -51,7 +53,7 @@ for t in ${tests[@]}; do
     vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
         -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver \
         -voptargs="+acc" -c -do "run -all" $t > out.txt
-    output_if_error "$t"
+    output_if_error "$t test"
 done
 
 printf "${GREEN}All tests passed${NC}\n"

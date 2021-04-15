@@ -151,10 +151,25 @@ typedef struct packed
 
 typedef struct packed
 {
-    logic [APP_IDX_WIDTH-1:0] dsc_queue_id;
-    logic [FLOW_IDX_WIDTH-1:0] pkt_queue_id;
+    logic [31:0] f2c_tail;
+    logic [31:0] f2c_head;
+    logic [63:0] f2c_kmem_addr;
+} queue_state_t;
+
+typedef struct packed
+{
+    logic [APP_IDX_WIDTH-1:0]      dsc_queue_id;
+    logic [FLOW_IDX_WIDTH-1:0]     pkt_queue_id;
     logic [$clog2(MAX_PKT_SIZE):0] size; // in number of flits
-} pkt_desc_t;
+} pkt_dsc_t;
+
+typedef struct packed
+{
+    logic [APP_IDX_WIDTH-1:0]      dsc_queue_id;
+    logic [FLOW_IDX_WIDTH-1:0]     pkt_queue_id;
+    logic [$clog2(MAX_PKT_SIZE):0] size; // in number of flits
+    queue_state_t                  pkt_q_state;
+} pkt_dsc_with_pkt_q_t;
 
 typedef struct packed
 {
@@ -181,22 +196,7 @@ typedef struct packed
     logic [63:0]  tail;
     logic [63:0]  queue_id;
     logic [63:0]  signal; // should always be 0x1
-} pcie_pkt_desc_t;
-
-typedef struct packed
-{
-    logic [255:0] padding;
-
-    logic [31:0] c2f_kmem_high; // higher 32 bit of kernel memory, FPGA read only
-    logic [31:0] c2f_kmem_low; // lower 32 bit of kernel memory, FPGA read only
-    logic [31:0] c2f_head; //head pointer, FPGA read only
-    logic [31:0] c2f_tail; //tail pointer, CPU read only
-
-    logic [31:0] f2c_kmem_high; // higher 32 bit of kernel memory, FPGA read only
-    logic [31:0] f2c_kmem_low; // lower 32 bit of kernel memory, FPGA read only
-    logic [31:0] f2c_head; //head pointer, FPGA read only
-    logic [31:0] f2c_tail; //tail pointer, CPU read only
-} pcie_block_t;
+} pcie_pkt_dsc_t;
 
 //1 + 96 + 64 = 195
 localparam FT_DWIDTH = (1+TUPLE_DWIDTH+64);
@@ -242,13 +242,6 @@ typedef struct packed
     tuple_t       tuple;
     logic [31:0]  pdu_id;
 } pdu_hdr_t;
-
-typedef struct packed
-{
-    logic [31:0] f2c_tail;
-    logic [31:0] f2c_head;
-    logic [63:0] f2c_kmem_addr;
-} queue_state_t;
 
 typedef struct packed
 {

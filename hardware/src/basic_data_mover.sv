@@ -3,12 +3,12 @@ module basic_data_mover (
         input  logic         clk,                    //        clk.clk
         input  logic         rst,                    //        rst.reset
         input  logic         meta_valid,
-        input  metadata_t    meta_data,
+        input var metadata_t meta_data,
         output logic         meta_ready,  
         output logic [PKTBUF_AWIDTH-1:0]   pkt_buffer_address,     // pkt_buffer.address
         output logic         pkt_buffer_read,       //           .read
         input  logic         pkt_buffer_readvalid,       //           .read
-        input flit_t         pkt_buffer_readdata,   //           .writedata
+        input  var flit_t    pkt_buffer_readdata,   //           .writedata
         output logic [PKT_AWIDTH-1:0]   emptylist_in_data,
         output logic                    emptylist_in_valid,
         input  logic                    emptylist_in_ready,
@@ -21,7 +21,7 @@ module basic_data_mover (
         input  logic         pcie_pkt_ready,  
         input  logic         pcie_pkt_almost_full,  
         output  logic        pcie_meta_valid,
-        output  metadata_t   pcie_meta_data,
+        output var metadata_t pcie_meta_data,
         input logic          pcie_meta_ready,   
         output logic         eth_pkt_sop,
         output logic         eth_pkt_eop,
