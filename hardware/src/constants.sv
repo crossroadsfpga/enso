@@ -165,14 +165,6 @@ typedef struct packed
 
 typedef struct packed
 {
-    logic [APP_IDX_WIDTH-1:0]      dsc_queue_id;
-    logic [FLOW_IDX_WIDTH-1:0]     pkt_queue_id;
-    logic [$clog2(MAX_PKT_SIZE):0] size; // in number of flits
-    queue_state_t                  pkt_q_state;
-} pkt_dsc_with_pkt_q_t;
-
-typedef struct packed
-{
     logic sop;
     logic eop;
     logic [5:0] empty;

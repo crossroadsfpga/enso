@@ -57,21 +57,24 @@ logic [25:0] dsc_rb_size;
 logic [25:0] pkt_rb_size;
 
 // descriptor queue table interface signals
-queue_interface_t dsc_q_table_a;
-queue_interface_t dsc_q_table_b;
-
-// bram_interface_t dsc_q_table_tails;
-// bram_interface_t dsc_q_table_heads;
-// bram_interface_t dsc_q_table_l_addrs;
-// bram_interface_t dsc_q_table_h_addrs;
+bram_interface_io dsc_q_table_a_tails();
+bram_interface_io dsc_q_table_a_heads();
+bram_interface_io dsc_q_table_a_l_addrs();
+bram_interface_io dsc_q_table_a_h_addrs();
+bram_interface_io dsc_q_table_b_tails();
+bram_interface_io dsc_q_table_b_heads();
+bram_interface_io dsc_q_table_b_l_addrs();
+bram_interface_io dsc_q_table_b_h_addrs();
 
 // packet queue tables interface signals
-queue_interface_t pkt_q_table_a;
-queue_interface_t pkt_q_table_b;
-// bram_interface_t pkt_q_table_tails;
-// bram_interface_t pkt_q_table_heads;
-// bram_interface_t pkt_q_table_l_addrs;
-// bram_interface_t pkt_q_table_h_addrs;
+bram_interface_io pkt_q_table_a_tails();
+bram_interface_io pkt_q_table_a_heads();
+bram_interface_io pkt_q_table_a_l_addrs();
+bram_interface_io pkt_q_table_a_h_addrs();
+bram_interface_io pkt_q_table_b_tails();
+bram_interface_io pkt_q_table_b_heads();
+bram_interface_io pkt_q_table_b_l_addrs();
+bram_interface_io pkt_q_table_b_h_addrs();
 
 logic [RB_AWIDTH-1:0]    f2c_dsc_head;
 logic [RB_AWIDTH-1:0]    f2c_dsc_tail;
@@ -162,35 +165,53 @@ always @(posedge pcie_clk) begin
         
 end
 
-always @(posedge pcie_clk)begin
-    dsc_q_table_a.tails.rd_en_r <= dsc_q_table_a.tails.rd_en;
-    dsc_q_table_a.tails.rd_en_r2 <= dsc_q_table_a.tails.rd_en_r;
-    dsc_q_table_a.heads.rd_en_r <= dsc_q_table_a.heads.rd_en;
-    dsc_q_table_a.heads.rd_en_r2 <= dsc_q_table_a.heads.rd_en_r;
-    dsc_q_table_a.l_addrs.rd_en_r <= dsc_q_table_a.l_addrs.rd_en;
-    dsc_q_table_a.l_addrs.rd_en_r2 <= dsc_q_table_a.l_addrs.rd_en_r;
-    dsc_q_table_a.h_addrs.rd_en_r <= dsc_q_table_a.h_addrs.rd_en;
-    dsc_q_table_a.h_addrs.rd_en_r2 <= dsc_q_table_a.h_addrs.rd_en_r;
+logic dsc_q_table_a_tails_rd_en_r;
+logic dsc_q_table_a_tails_rd_en_r2;
+logic dsc_q_table_a_heads_rd_en_r;
+logic dsc_q_table_a_heads_rd_en_r2;
+logic dsc_q_table_a_l_addrs_rd_en_r;
+logic dsc_q_table_a_l_addrs_rd_en_r2;
+logic dsc_q_table_a_h_addrs_rd_en_r;
+logic dsc_q_table_a_h_addrs_rd_en_r2;
 
-    pkt_q_table_a.tails.rd_en_r <= pkt_q_table_a.tails.rd_en;
-    pkt_q_table_a.tails.rd_en_r2 <= pkt_q_table_a.tails.rd_en_r;
-    pkt_q_table_a.heads.rd_en_r <= pkt_q_table_a.heads.rd_en;
-    pkt_q_table_a.heads.rd_en_r2 <= pkt_q_table_a.heads.rd_en_r;
-    pkt_q_table_a.l_addrs.rd_en_r <= pkt_q_table_a.l_addrs.rd_en;
-    pkt_q_table_a.l_addrs.rd_en_r2 <= pkt_q_table_a.l_addrs.rd_en_r;
-    pkt_q_table_a.h_addrs.rd_en_r <= pkt_q_table_a.h_addrs.rd_en;
-    pkt_q_table_a.h_addrs.rd_en_r2 <= pkt_q_table_a.h_addrs.rd_en_r;
+logic pkt_q_table_a_tails_rd_en_r;
+logic pkt_q_table_a_tails_rd_en_r2;
+logic pkt_q_table_a_heads_rd_en_r;
+logic pkt_q_table_a_heads_rd_en_r2;
+logic pkt_q_table_a_l_addrs_rd_en_r;
+logic pkt_q_table_a_l_addrs_rd_en_r2;
+logic pkt_q_table_a_h_addrs_rd_en_r;
+logic pkt_q_table_a_h_addrs_rd_en_r2;
+
+always @(posedge pcie_clk)begin
+    dsc_q_table_a_tails_rd_en_r <= dsc_q_table_a_tails.rd_en;
+    dsc_q_table_a_tails_rd_en_r2 <= dsc_q_table_a_tails_rd_en_r;
+    dsc_q_table_a_heads_rd_en_r <= dsc_q_table_a_heads.rd_en;
+    dsc_q_table_a_heads_rd_en_r2 <= dsc_q_table_a_heads_rd_en_r;
+    dsc_q_table_a_l_addrs_rd_en_r <= dsc_q_table_a_l_addrs.rd_en;
+    dsc_q_table_a_l_addrs_rd_en_r2 <= dsc_q_table_a_l_addrs_rd_en_r;
+    dsc_q_table_a_h_addrs_rd_en_r <= dsc_q_table_a_h_addrs.rd_en;
+    dsc_q_table_a_h_addrs_rd_en_r2 <= dsc_q_table_a_h_addrs_rd_en_r;
+
+    pkt_q_table_a_tails_rd_en_r <= pkt_q_table_a_tails.rd_en;
+    pkt_q_table_a_tails_rd_en_r2 <= pkt_q_table_a_tails_rd_en_r;
+    pkt_q_table_a_heads_rd_en_r <= pkt_q_table_a_heads.rd_en;
+    pkt_q_table_a_heads_rd_en_r2 <= pkt_q_table_a_heads_rd_en_r;
+    pkt_q_table_a_l_addrs_rd_en_r <= pkt_q_table_a_l_addrs.rd_en;
+    pkt_q_table_a_l_addrs_rd_en_r2 <= pkt_q_table_a_l_addrs_rd_en_r;
+    pkt_q_table_a_h_addrs_rd_en_r <= pkt_q_table_a_h_addrs.rd_en;
+    pkt_q_table_a_h_addrs_rd_en_r2 <= pkt_q_table_a_h_addrs_rd_en_r;
 
     // we used the delayed wr signals for head and tail to use when there are
     // concurrent reads
-    dsc_q_table_heads_wr_data_b_r <= dsc_q_table_b.heads.wr_data[RB_AWIDTH-1:0];
+    dsc_q_table_heads_wr_data_b_r <= dsc_q_table_b_heads.wr_data[RB_AWIDTH-1:0];
     dsc_q_table_heads_wr_data_b_r2 <= dsc_q_table_heads_wr_data_b_r;
-    dsc_q_table_tails_wr_data_a_r <= dsc_q_table_a.tails.wr_data[RB_AWIDTH-1:0];
+    dsc_q_table_tails_wr_data_a_r <= dsc_q_table_a_tails.wr_data[RB_AWIDTH-1:0];
     dsc_q_table_tails_wr_data_a_r2 <= dsc_q_table_tails_wr_data_a_r;
     
-    pkt_q_table_heads_wr_data_b_r <= pkt_q_table_b.heads.wr_data[RB_AWIDTH-1:0];
+    pkt_q_table_heads_wr_data_b_r <= pkt_q_table_b_heads.wr_data[RB_AWIDTH-1:0];
     pkt_q_table_heads_wr_data_b_r2 <= pkt_q_table_heads_wr_data_b_r;
-    pkt_q_table_tails_wr_data_a_r <= pkt_q_table_a.tails.wr_data[RB_AWIDTH-1:0];
+    pkt_q_table_tails_wr_data_a_r <= pkt_q_table_a_tails.wr_data[RB_AWIDTH-1:0];
     pkt_q_table_tails_wr_data_a_r2 <= pkt_q_table_tails_wr_data_a_r;
 
     queue_rd_en_r <= queue_rd_en;
@@ -198,162 +219,130 @@ always @(posedge pcie_clk)begin
 end
 
 always_comb begin
-    dsc_q_table_a.tails.addr = f2c_rd_dsc_queue;
-    dsc_q_table_a.heads.addr = f2c_rd_dsc_queue;
-    dsc_q_table_a.l_addrs.addr = f2c_rd_dsc_queue;
-    dsc_q_table_a.h_addrs.addr = f2c_rd_dsc_queue;
-    pkt_q_table_a.tails.addr = f2c_rd_pkt_queue;
-    pkt_q_table_a.heads.addr = f2c_rd_pkt_queue;
-    pkt_q_table_a.l_addrs.addr = f2c_rd_pkt_queue;
-    pkt_q_table_a.h_addrs.addr = f2c_rd_pkt_queue;
+    dsc_q_table_a_tails.addr = f2c_rd_dsc_queue;
+    dsc_q_table_a_heads.addr = f2c_rd_dsc_queue;
+    dsc_q_table_a_l_addrs.addr = f2c_rd_dsc_queue;
+    dsc_q_table_a_h_addrs.addr = f2c_rd_dsc_queue;
+    pkt_q_table_a_tails.addr = f2c_rd_pkt_queue;
+    pkt_q_table_a_heads.addr = f2c_rd_pkt_queue;
+    pkt_q_table_a_l_addrs.addr = f2c_rd_pkt_queue;
+    pkt_q_table_a_h_addrs.addr = f2c_rd_pkt_queue;
 
-    dsc_q_table_a.tails.rd_en = 0;
-    dsc_q_table_a.heads.rd_en = 0;
-    dsc_q_table_a.l_addrs.rd_en = 0;
-    dsc_q_table_a.h_addrs.rd_en = 0;
-    pkt_q_table_a.tails.rd_en = 0;
-    pkt_q_table_a.heads.rd_en = 0;
-    pkt_q_table_a.l_addrs.rd_en = 0;
-    pkt_q_table_a.h_addrs.rd_en = 0;
+    dsc_q_table_a_tails.rd_en = 0;
+    dsc_q_table_a_heads.rd_en = 0;
+    dsc_q_table_a_l_addrs.rd_en = 0;
+    dsc_q_table_a_h_addrs.rd_en = 0;
+    pkt_q_table_a_tails.rd_en = 0;
+    pkt_q_table_a_heads.rd_en = 0;
+    pkt_q_table_a_l_addrs.rd_en = 0;
+    pkt_q_table_a_h_addrs.rd_en = 0;
 
-    dsc_q_table_a.tails.wr_en = 0;
-    dsc_q_table_a.heads.wr_en = 0;
-    dsc_q_table_a.l_addrs.wr_en = 0;
-    dsc_q_table_a.h_addrs.wr_en = 0;
-    pkt_q_table_a.tails.wr_en = 0;
-    pkt_q_table_a.heads.wr_en = 0;
-    pkt_q_table_a.l_addrs.wr_en = 0;
-    pkt_q_table_a.h_addrs.wr_en = 0;
+    dsc_q_table_a_tails.wr_en = 0;
+    dsc_q_table_a_heads.wr_en = 0;
+    dsc_q_table_a_l_addrs.wr_en = 0;
+    dsc_q_table_a_h_addrs.wr_en = 0;
+    pkt_q_table_a_tails.wr_en = 0;
+    pkt_q_table_a_heads.wr_en = 0;
+    pkt_q_table_a_l_addrs.wr_en = 0;
+    pkt_q_table_a_h_addrs.wr_en = 0;
 
-    dsc_q_table_a.tails.wr_data = new_dsc_tail;
-    pkt_q_table_a.tails.wr_data = new_pkt_tail;
+    dsc_q_table_a_tails.wr_data = new_dsc_tail;
+    pkt_q_table_a_tails.wr_data = new_pkt_tail;
 
     if (queue_rd_en) begin
         // when reading and writing the same queue, we avoid reading the tail
         // and use the new written tail instead
-        dsc_q_table_a.tails.rd_en = !tail_wr_en 
+        dsc_q_table_a_tails.rd_en = !tail_wr_en 
             || (f2c_rd_dsc_queue != f2c_wr_dsc_queue);
-        dsc_q_table_a.heads.rd_en = 1;
-        dsc_q_table_a.l_addrs.rd_en = 1;
-        dsc_q_table_a.h_addrs.rd_en = 1;
-        pkt_q_table_a.tails.rd_en = !tail_wr_en 
+        dsc_q_table_a_heads.rd_en = 1;
+        dsc_q_table_a_l_addrs.rd_en = 1;
+        dsc_q_table_a_h_addrs.rd_en = 1;
+        pkt_q_table_a_tails.rd_en = !tail_wr_en 
             || (f2c_rd_pkt_queue != f2c_wr_pkt_queue);
-        pkt_q_table_a.heads.rd_en = 1;
-        pkt_q_table_a.l_addrs.rd_en = 1;
-        pkt_q_table_a.h_addrs.rd_en = 1;
+        pkt_q_table_a_heads.rd_en = 1;
+        pkt_q_table_a_l_addrs.rd_en = 1;
+        pkt_q_table_a_h_addrs.rd_en = 1;
 
         // Concurrent head write from PCIe or JTAG, we bypass the read and use
         // the new written value instead. This is done to prevent concurrent
         // read and write to the same address, which causes undefined behavior.
-        if ((dsc_q_table_a.heads.addr == dsc_q_table_b.heads.addr) 
-                && dsc_q_table_b.heads.wr_en) begin
-            dsc_q_table_a.heads.rd_en = 0;
+        if ((dsc_q_table_a_heads.addr == dsc_q_table_b_heads.addr) 
+                && dsc_q_table_b_heads.wr_en) begin
+            dsc_q_table_a_heads.rd_en = 0;
         end
-        if ((pkt_q_table_a.heads.addr == pkt_q_table_b.heads.addr) 
-                && pkt_q_table_b.heads.wr_en) begin
-            pkt_q_table_a.heads.rd_en = 0;
+        if ((pkt_q_table_a_heads.addr == pkt_q_table_b_heads.addr) 
+                && pkt_q_table_b_heads.wr_en) begin
+            pkt_q_table_a_heads.rd_en = 0;
         end
     end else if (tail_wr_en) begin
-        dsc_q_table_a.tails.wr_en = 1;
-        dsc_q_table_a.tails.addr = f2c_wr_dsc_queue;
-        pkt_q_table_a.tails.wr_en = 1;
-        pkt_q_table_a.tails.addr = f2c_wr_pkt_queue;
+        dsc_q_table_a_tails.wr_en = 1;
+        dsc_q_table_a_tails.addr = f2c_wr_dsc_queue;
+        pkt_q_table_a_tails.wr_en = 1;
+        pkt_q_table_a_tails.addr = f2c_wr_pkt_queue;
     end
 
     f2c_queue_ready = 
-        dsc_q_table_a.tails.rd_en_r2   || dsc_q_table_a.heads.rd_en_r2   ||
-        dsc_q_table_a.l_addrs.rd_en_r2 || dsc_q_table_a.h_addrs.rd_en_r2 ||
-        pkt_q_table_a.tails.rd_en_r2   || pkt_q_table_a.heads.rd_en_r2   ||
-        pkt_q_table_a.l_addrs.rd_en_r2 || pkt_q_table_a.h_addrs.rd_en_r2;
+        dsc_q_table_a_tails_rd_en_r2   || dsc_q_table_a_heads_rd_en_r2   ||
+        dsc_q_table_a_l_addrs_rd_en_r2 || dsc_q_table_a_h_addrs_rd_en_r2 ||
+        pkt_q_table_a_tails_rd_en_r2   || pkt_q_table_a_heads_rd_en_r2   ||
+        pkt_q_table_a_l_addrs_rd_en_r2 || pkt_q_table_a_h_addrs_rd_en_r2;
 
-    if (dsc_q_table_a.tails.rd_en_r2) begin
-        f2c_dsc_tail = dsc_q_table_a.tails.rd_data[RB_AWIDTH-1:0];
+    if (dsc_q_table_a_tails_rd_en_r2) begin
+        f2c_dsc_tail = dsc_q_table_a_tails.rd_data[RB_AWIDTH-1:0];
     end else begin
         f2c_dsc_tail = dsc_q_table_tails_wr_data_a_r2;
     end
-    if (pkt_q_table_a.tails.rd_en_r2) begin
-        f2c_pkt_tail = pkt_q_table_a.tails.rd_data[RB_AWIDTH-1:0];
+    if (pkt_q_table_a_tails_rd_en_r2) begin
+        f2c_pkt_tail = pkt_q_table_a_tails.rd_data[RB_AWIDTH-1:0];
     end else begin
         f2c_pkt_tail = pkt_q_table_tails_wr_data_a_r2;
     end
 
-    if (dsc_q_table_a.heads.rd_en_r2) begin
-        f2c_dsc_head = dsc_q_table_a.heads.rd_data[RB_AWIDTH-1:0];
+    if (dsc_q_table_a_heads_rd_en_r2) begin
+        f2c_dsc_head = dsc_q_table_a_heads.rd_data[RB_AWIDTH-1:0];
     end else begin
         // return the delayed concurrent write
         f2c_dsc_head = dsc_q_table_heads_wr_data_b_r2;
     end
-    if (pkt_q_table_a.heads.rd_en_r2) begin
-        f2c_pkt_head = pkt_q_table_a.heads.rd_data[RB_AWIDTH-1:0];
+    if (pkt_q_table_a_heads_rd_en_r2) begin
+        f2c_pkt_head = pkt_q_table_a_heads.rd_data[RB_AWIDTH-1:0];
     end else begin
         // return the delayed concurrent write
         f2c_pkt_head = pkt_q_table_heads_wr_data_b_r2;
     end
 
-    f2c_dsc_buf_addr[31:0] = dsc_q_table_a.l_addrs.rd_data;
-    f2c_dsc_buf_addr[63:32] = dsc_q_table_a.h_addrs.rd_data;
-    f2c_pkt_buf_addr[31:0] = pkt_q_table_a.l_addrs.rd_data;
-    f2c_pkt_buf_addr[63:32] = pkt_q_table_a.h_addrs.rd_data;
+    f2c_dsc_buf_addr[31:0] = dsc_q_table_a_l_addrs.rd_data;
+    f2c_dsc_buf_addr[63:32] = dsc_q_table_a_h_addrs.rd_data;
+    f2c_pkt_buf_addr[31:0] = pkt_q_table_a_l_addrs.rd_data;
+    f2c_pkt_buf_addr[63:32] = pkt_q_table_a_h_addrs.rd_data;
 end
 
 jtag_mmio_arbiter jtag_mmio_arbiter_inst (
-    .pcie_clk                    (pcie_clk),
-    .jtag_clk                    (clk_status),
-    .pcie_reset_n                (pcie_reset_n),
-    .pcie_address_0              (pcie_address_0),
-    .pcie_write_0                (pcie_write_0),
-    .pcie_read_0                 (pcie_read_0),
-    .pcie_readdatavalid_0        (pcie_readdatavalid_0),
-    .pcie_readdata_0             (pcie_readdata_0),
-    .pcie_writedata_0            (pcie_writedata_0),
-    .pcie_byteenable_0           (pcie_byteenable_0),
-    .status_addr                 (status_addr),
-    .status_read                 (status_read),
-    .status_write                (status_write),
-    .status_writedata            (status_writedata),
-    .status_readdata             (status_readdata),
-    .status_readdata_valid       (status_readdata_valid),
-    .dsc_q_table_tails_addr      (dsc_q_table_b.tails.addr),
-    .dsc_q_table_tails_wr_data   (dsc_q_table_b.tails.wr_data),
-    .dsc_q_table_tails_rd_data   (dsc_q_table_b.tails.rd_data),
-    .dsc_q_table_tails_rd_en     (dsc_q_table_b.tails.rd_en),
-    .dsc_q_table_tails_wr_en     (dsc_q_table_b.tails.wr_en),
-    .dsc_q_table_heads_addr      (dsc_q_table_b.heads.addr),
-    .dsc_q_table_heads_wr_data   (dsc_q_table_b.heads.wr_data),
-    .dsc_q_table_heads_rd_data   (dsc_q_table_b.heads.rd_data),
-    .dsc_q_table_heads_rd_en     (dsc_q_table_b.heads.rd_en),
-    .dsc_q_table_heads_wr_en     (dsc_q_table_b.heads.wr_en),
-    .dsc_q_table_l_addrs_addr    (dsc_q_table_b.l_addrs.addr),
-    .dsc_q_table_l_addrs_wr_data (dsc_q_table_b.l_addrs.wr_data),
-    .dsc_q_table_l_addrs_rd_data (dsc_q_table_b.l_addrs.rd_data),
-    .dsc_q_table_l_addrs_rd_en   (dsc_q_table_b.l_addrs.rd_en),
-    .dsc_q_table_l_addrs_wr_en   (dsc_q_table_b.l_addrs.wr_en),
-    .dsc_q_table_h_addrs_addr    (dsc_q_table_b.h_addrs.addr),
-    .dsc_q_table_h_addrs_wr_data (dsc_q_table_b.h_addrs.wr_data),
-    .dsc_q_table_h_addrs_rd_data (dsc_q_table_b.h_addrs.rd_data),
-    .dsc_q_table_h_addrs_rd_en   (dsc_q_table_b.h_addrs.rd_en),
-    .dsc_q_table_h_addrs_wr_en   (dsc_q_table_b.h_addrs.wr_en),
-    .pkt_q_table_tails_addr      (pkt_q_table_b.tails.addr),
-    .pkt_q_table_tails_wr_data   (pkt_q_table_b.tails.wr_data),
-    .pkt_q_table_tails_rd_data   (pkt_q_table_b.tails.rd_data),
-    .pkt_q_table_tails_rd_en     (pkt_q_table_b.tails.rd_en),
-    .pkt_q_table_tails_wr_en     (pkt_q_table_b.tails.wr_en),
-    .pkt_q_table_heads_addr      (pkt_q_table_b.heads.addr),
-    .pkt_q_table_heads_wr_data   (pkt_q_table_b.heads.wr_data),
-    .pkt_q_table_heads_rd_data   (pkt_q_table_b.heads.rd_data),
-    .pkt_q_table_heads_rd_en     (pkt_q_table_b.heads.rd_en),
-    .pkt_q_table_heads_wr_en     (pkt_q_table_b.heads.wr_en),
-    .pkt_q_table_l_addrs_addr    (pkt_q_table_b.l_addrs.addr),
-    .pkt_q_table_l_addrs_wr_data (pkt_q_table_b.l_addrs.wr_data),
-    .pkt_q_table_l_addrs_rd_data (pkt_q_table_b.l_addrs.rd_data),
-    .pkt_q_table_l_addrs_rd_en   (pkt_q_table_b.l_addrs.rd_en),
-    .pkt_q_table_l_addrs_wr_en   (pkt_q_table_b.l_addrs.wr_en),
-    .pkt_q_table_h_addrs_addr    (pkt_q_table_b.h_addrs.addr),
-    .pkt_q_table_h_addrs_wr_data (pkt_q_table_b.h_addrs.wr_data),
-    .pkt_q_table_h_addrs_rd_data (pkt_q_table_b.h_addrs.rd_data),
-    .pkt_q_table_h_addrs_rd_en   (pkt_q_table_b.h_addrs.rd_en),
-    .pkt_q_table_h_addrs_wr_en   (pkt_q_table_b.h_addrs.wr_en),
-    .control_regs                (control_regs)
+    .pcie_clk              (pcie_clk),
+    .jtag_clk              (clk_status),
+    .pcie_reset_n          (pcie_reset_n),
+    .pcie_address_0        (pcie_address_0),
+    .pcie_write_0          (pcie_write_0),
+    .pcie_read_0           (pcie_read_0),
+    .pcie_readdatavalid_0  (pcie_readdatavalid_0),
+    .pcie_readdata_0       (pcie_readdata_0),
+    .pcie_writedata_0      (pcie_writedata_0),
+    .pcie_byteenable_0     (pcie_byteenable_0),
+    .status_addr           (status_addr),
+    .status_read           (status_read),
+    .status_write          (status_write),
+    .status_writedata      (status_writedata),
+    .status_readdata       (status_readdata),
+    .status_readdata_valid (status_readdata_valid),
+    .dsc_q_table_tails     (dsc_q_table_b_tails.user),
+    .dsc_q_table_heads     (dsc_q_table_b_heads.user),
+    .dsc_q_table_l_addrs   (dsc_q_table_b_l_addrs.user),
+    .dsc_q_table_h_addrs   (dsc_q_table_b_h_addrs.user),
+    .pkt_q_table_tails     (pkt_q_table_b_tails.user),
+    .pkt_q_table_heads     (pkt_q_table_b_heads.user),
+    .pkt_q_table_l_addrs   (pkt_q_table_b_l_addrs.user),
+    .pkt_q_table_h_addrs   (pkt_q_table_b_h_addrs.user),
+    .control_regs          (control_regs)
 );
 
 fpga2cpu_pcie f2c_inst (
@@ -434,17 +423,17 @@ bram_true2port #(
     .DEPTH(PKT_Q_TABLE_DEPTH)
 )
 pkt_q_table_tails_bram (
-    .address_a  (pkt_q_table_a.tails.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (pkt_q_table_b.tails.addr[PKT_Q_TABLE_AWIDTH-1:0]),
+    .address_a  (pkt_q_table_a_tails.addr[PKT_Q_TABLE_AWIDTH-1:0]),
+    .address_b  (pkt_q_table_b_tails.addr[PKT_Q_TABLE_AWIDTH-1:0]),
     .clock      (pcie_clk),
-    .data_a     (pkt_q_table_a.tails.wr_data),
-    .data_b     (pkt_q_table_b.tails.wr_data),
-    .rden_a     (pkt_q_table_a.tails.rd_en),
-    .rden_b     (pkt_q_table_b.tails.rd_en),
-    .wren_a     (pkt_q_table_a.tails.wr_en),
-    .wren_b     (pkt_q_table_b.tails.wr_en),
-    .q_a        (pkt_q_table_a.tails.rd_data),
-    .q_b        (pkt_q_table_b.tails.rd_data)
+    .data_a     (pkt_q_table_a_tails.wr_data),
+    .data_b     (pkt_q_table_b_tails.wr_data),
+    .rden_a     (pkt_q_table_a_tails.rd_en),
+    .rden_b     (pkt_q_table_b_tails.rd_en),
+    .wren_a     (pkt_q_table_a_tails.wr_en),
+    .wren_b     (pkt_q_table_b_tails.wr_en),
+    .q_a        (pkt_q_table_a_tails.rd_data),
+    .q_b        (pkt_q_table_b_tails.rd_data)
 );
 
 bram_true2port #(
@@ -453,17 +442,17 @@ bram_true2port #(
     .DEPTH(PKT_Q_TABLE_DEPTH)
 )
 pkt_q_table_heads_bram (
-    .address_a  (pkt_q_table_a.heads.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (pkt_q_table_b.heads.addr[PKT_Q_TABLE_AWIDTH-1:0]),
+    .address_a  (pkt_q_table_a_heads.addr[PKT_Q_TABLE_AWIDTH-1:0]),
+    .address_b  (pkt_q_table_b_heads.addr[PKT_Q_TABLE_AWIDTH-1:0]),
     .clock      (pcie_clk),
-    .data_a     (pkt_q_table_a.heads.wr_data),
-    .data_b     (pkt_q_table_b.heads.wr_data),
-    .rden_a     (pkt_q_table_a.heads.rd_en),
-    .rden_b     (pkt_q_table_b.heads.rd_en),
-    .wren_a     (pkt_q_table_a.heads.wr_en),
-    .wren_b     (pkt_q_table_b.heads.wr_en),
-    .q_a        (pkt_q_table_a.heads.rd_data),
-    .q_b        (pkt_q_table_b.heads.rd_data)
+    .data_a     (pkt_q_table_a_heads.wr_data),
+    .data_b     (pkt_q_table_b_heads.wr_data),
+    .rden_a     (pkt_q_table_a_heads.rd_en),
+    .rden_b     (pkt_q_table_b_heads.rd_en),
+    .wren_a     (pkt_q_table_a_heads.wr_en),
+    .wren_b     (pkt_q_table_b_heads.wr_en),
+    .q_a        (pkt_q_table_a_heads.rd_data),
+    .q_b        (pkt_q_table_b_heads.rd_data)
 );
 
 bram_true2port #(
@@ -472,17 +461,17 @@ bram_true2port #(
     .DEPTH(PKT_Q_TABLE_DEPTH)
 )
 pkt_q_table_l_addrs_bram (
-    .address_a  (pkt_q_table_a.l_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (pkt_q_table_b.l_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
+    .address_a  (pkt_q_table_a_l_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
+    .address_b  (pkt_q_table_b_l_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
     .clock      (pcie_clk),
-    .data_a     (pkt_q_table_a.l_addrs.wr_data),
-    .data_b     (pkt_q_table_b.l_addrs.wr_data),
-    .rden_a     (pkt_q_table_a.l_addrs.rd_en),
-    .rden_b     (pkt_q_table_b.l_addrs.rd_en),
-    .wren_a     (pkt_q_table_a.l_addrs.wr_en),
-    .wren_b     (pkt_q_table_b.l_addrs.wr_en),
-    .q_a        (pkt_q_table_a.l_addrs.rd_data),
-    .q_b        (pkt_q_table_b.l_addrs.rd_data)
+    .data_a     (pkt_q_table_a_l_addrs.wr_data),
+    .data_b     (pkt_q_table_b_l_addrs.wr_data),
+    .rden_a     (pkt_q_table_a_l_addrs.rd_en),
+    .rden_b     (pkt_q_table_b_l_addrs.rd_en),
+    .wren_a     (pkt_q_table_a_l_addrs.wr_en),
+    .wren_b     (pkt_q_table_b_l_addrs.wr_en),
+    .q_a        (pkt_q_table_a_l_addrs.rd_data),
+    .q_b        (pkt_q_table_b_l_addrs.rd_data)
 );
 
 bram_true2port #(
@@ -491,17 +480,17 @@ bram_true2port #(
     .DEPTH(PKT_Q_TABLE_DEPTH)
 )
 pkt_q_table_h_addrs_bram (
-    .address_a  (pkt_q_table_a.h_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (pkt_q_table_b.h_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
+    .address_a  (pkt_q_table_a_h_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
+    .address_b  (pkt_q_table_b_h_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
     .clock      (pcie_clk),
-    .data_a     (pkt_q_table_a.h_addrs.wr_data),
-    .data_b     (pkt_q_table_b.h_addrs.wr_data),
-    .rden_a     (pkt_q_table_a.h_addrs.rd_en),
-    .rden_b     (pkt_q_table_b.h_addrs.rd_en),
-    .wren_a     (pkt_q_table_a.h_addrs.wr_en),
-    .wren_b     (pkt_q_table_b.h_addrs.wr_en),
-    .q_a        (pkt_q_table_a.h_addrs.rd_data),
-    .q_b        (pkt_q_table_b.h_addrs.rd_data)
+    .data_a     (pkt_q_table_a_h_addrs.wr_data),
+    .data_b     (pkt_q_table_b_h_addrs.wr_data),
+    .rden_a     (pkt_q_table_a_h_addrs.rd_en),
+    .rden_b     (pkt_q_table_b_h_addrs.rd_en),
+    .wren_a     (pkt_q_table_a_h_addrs.wr_en),
+    .wren_b     (pkt_q_table_b_h_addrs.wr_en),
+    .q_a        (pkt_q_table_a_h_addrs.rd_data),
+    .q_b        (pkt_q_table_b_h_addrs.rd_data)
 );
 
 
@@ -515,17 +504,17 @@ bram_true2port #(
     .DEPTH(DSC_Q_TABLE_DEPTH)
 )
 dsc_q_table_tails_bram (
-    .address_a  (dsc_q_table_a.tails.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (dsc_q_table_b.tails.addr[DSC_Q_TABLE_AWIDTH-1:0]),
+    .address_a  (dsc_q_table_a_tails.addr[DSC_Q_TABLE_AWIDTH-1:0]),
+    .address_b  (dsc_q_table_b_tails.addr[DSC_Q_TABLE_AWIDTH-1:0]),
     .clock      (pcie_clk),
-    .data_a     (dsc_q_table_a.tails.wr_data),
-    .data_b     (dsc_q_table_b.tails.wr_data),
-    .rden_a     (dsc_q_table_a.tails.rd_en),
-    .rden_b     (dsc_q_table_b.tails.rd_en),
-    .wren_a     (dsc_q_table_a.tails.wr_en),
-    .wren_b     (dsc_q_table_b.tails.wr_en),
-    .q_a        (dsc_q_table_a.tails.rd_data),
-    .q_b        (dsc_q_table_b.tails.rd_data)
+    .data_a     (dsc_q_table_a_tails.wr_data),
+    .data_b     (dsc_q_table_b_tails.wr_data),
+    .rden_a     (dsc_q_table_a_tails.rd_en),
+    .rden_b     (dsc_q_table_b_tails.rd_en),
+    .wren_a     (dsc_q_table_a_tails.wr_en),
+    .wren_b     (dsc_q_table_b_tails.wr_en),
+    .q_a        (dsc_q_table_a_tails.rd_data),
+    .q_b        (dsc_q_table_b_tails.rd_data)
 );
 
 bram_true2port #(
@@ -534,17 +523,17 @@ bram_true2port #(
     .DEPTH(DSC_Q_TABLE_DEPTH)
 )
 dsc_q_table_heads_bram (
-    .address_a  (dsc_q_table_a.heads.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (dsc_q_table_b.heads.addr[DSC_Q_TABLE_AWIDTH-1:0]),
+    .address_a  (dsc_q_table_a_heads.addr[DSC_Q_TABLE_AWIDTH-1:0]),
+    .address_b  (dsc_q_table_b_heads.addr[DSC_Q_TABLE_AWIDTH-1:0]),
     .clock      (pcie_clk),
-    .data_a     (dsc_q_table_a.heads.wr_data),
-    .data_b     (dsc_q_table_b.heads.wr_data),
-    .rden_a     (dsc_q_table_a.heads.rd_en),
-    .rden_b     (dsc_q_table_b.heads.rd_en),
-    .wren_a     (dsc_q_table_a.heads.wr_en),
-    .wren_b     (dsc_q_table_b.heads.wr_en),
-    .q_a        (dsc_q_table_a.heads.rd_data),
-    .q_b        (dsc_q_table_b.heads.rd_data)
+    .data_a     (dsc_q_table_a_heads.wr_data),
+    .data_b     (dsc_q_table_b_heads.wr_data),
+    .rden_a     (dsc_q_table_a_heads.rd_en),
+    .rden_b     (dsc_q_table_b_heads.rd_en),
+    .wren_a     (dsc_q_table_a_heads.wr_en),
+    .wren_b     (dsc_q_table_b_heads.wr_en),
+    .q_a        (dsc_q_table_a_heads.rd_data),
+    .q_b        (dsc_q_table_b_heads.rd_data)
 );
 
 bram_true2port #(
@@ -553,17 +542,17 @@ bram_true2port #(
     .DEPTH(DSC_Q_TABLE_DEPTH)
 )
 dsc_q_table_l_addrs_bram (
-    .address_a  (dsc_q_table_a.l_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (dsc_q_table_b.l_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
+    .address_a  (dsc_q_table_a_l_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
+    .address_b  (dsc_q_table_b_l_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
     .clock      (pcie_clk),
-    .data_a     (dsc_q_table_a.l_addrs.wr_data),
-    .data_b     (dsc_q_table_b.l_addrs.wr_data),
-    .rden_a     (dsc_q_table_a.l_addrs.rd_en),
-    .rden_b     (dsc_q_table_b.l_addrs.rd_en),
-    .wren_a     (dsc_q_table_a.l_addrs.wr_en),
-    .wren_b     (dsc_q_table_b.l_addrs.wr_en),
-    .q_a        (dsc_q_table_a.l_addrs.rd_data),
-    .q_b        (dsc_q_table_b.l_addrs.rd_data)
+    .data_a     (dsc_q_table_a_l_addrs.wr_data),
+    .data_b     (dsc_q_table_b_l_addrs.wr_data),
+    .rden_a     (dsc_q_table_a_l_addrs.rd_en),
+    .rden_b     (dsc_q_table_b_l_addrs.rd_en),
+    .wren_a     (dsc_q_table_a_l_addrs.wr_en),
+    .wren_b     (dsc_q_table_b_l_addrs.wr_en),
+    .q_a        (dsc_q_table_a_l_addrs.rd_data),
+    .q_b        (dsc_q_table_b_l_addrs.rd_data)
 );
 
 bram_true2port #(
@@ -572,25 +561,25 @@ bram_true2port #(
     .DEPTH(DSC_Q_TABLE_DEPTH)
 )
 dsc_q_table_h_addrs_bram (
-    .address_a  (dsc_q_table_a.h_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (dsc_q_table_b.h_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
+    .address_a  (dsc_q_table_a_h_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
+    .address_b  (dsc_q_table_b_h_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
     .clock      (pcie_clk),
-    .data_a     (dsc_q_table_a.h_addrs.wr_data),
-    .data_b     (dsc_q_table_b.h_addrs.wr_data),
-    .rden_a     (dsc_q_table_a.h_addrs.rd_en),
-    .rden_b     (dsc_q_table_b.h_addrs.rd_en),
-    .wren_a     (dsc_q_table_a.h_addrs.wr_en),
-    .wren_b     (dsc_q_table_b.h_addrs.wr_en),
-    .q_a        (dsc_q_table_a.h_addrs.rd_data),
-    .q_b        (dsc_q_table_b.h_addrs.rd_data)
+    .data_a     (dsc_q_table_a_h_addrs.wr_data),
+    .data_b     (dsc_q_table_b_h_addrs.wr_data),
+    .rden_a     (dsc_q_table_a_h_addrs.rd_en),
+    .rden_b     (dsc_q_table_b_h_addrs.rd_en),
+    .wren_a     (dsc_q_table_a_h_addrs.wr_en),
+    .wren_b     (dsc_q_table_b_h_addrs.wr_en),
+    .q_a        (dsc_q_table_a_h_addrs.rd_data),
+    .q_b        (dsc_q_table_b_h_addrs.rd_data)
 );
 
 // unused inputs
-assign dsc_q_table_a.heads.wr_data = 32'bx;
-assign dsc_q_table_a.l_addrs.wr_data = 32'bx;
-assign dsc_q_table_a.h_addrs.wr_data = 32'bx;
-assign pkt_q_table_a.heads.wr_data = 32'bx;
-assign pkt_q_table_a.l_addrs.wr_data = 32'bx;
-assign pkt_q_table_a.h_addrs.wr_data = 32'bx;
+assign dsc_q_table_a_heads.wr_data = 32'bx;
+assign dsc_q_table_a_l_addrs.wr_data = 32'bx;
+assign dsc_q_table_a_h_addrs.wr_data = 32'bx;
+assign pkt_q_table_a_heads.wr_data = 32'bx;
+assign pkt_q_table_a_l_addrs.wr_data = 32'bx;
+assign pkt_q_table_a_h_addrs.wr_data = 32'bx;
 
 endmodule

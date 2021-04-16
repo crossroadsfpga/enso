@@ -28,100 +28,21 @@ module jtag_mmio_arbiter (
     output logic [31:0] status_readdata,
     output logic        status_readdata_valid,
 
-    // BRAM signals
-    output logic [BRAM_TABLE_IDX_WIDTH-1:0] dsc_q_table_tails_addr,
-    output logic [31:0]                     dsc_q_table_tails_wr_data,
-    input  logic [31:0]                     dsc_q_table_tails_rd_data,
-    output logic                            dsc_q_table_tails_rd_en,
-    output logic                            dsc_q_table_tails_wr_en,
-    output logic [BRAM_TABLE_IDX_WIDTH-1:0] dsc_q_table_heads_addr,
-    output logic [31:0]                     dsc_q_table_heads_wr_data,
-    input  logic [31:0]                     dsc_q_table_heads_rd_data,
-    output logic                            dsc_q_table_heads_rd_en,
-    output logic                            dsc_q_table_heads_wr_en,
-    output logic [BRAM_TABLE_IDX_WIDTH-1:0] dsc_q_table_l_addrs_addr,
-    output logic [31:0]                     dsc_q_table_l_addrs_wr_data,
-    input  logic [31:0]                     dsc_q_table_l_addrs_rd_data,
-    output logic                            dsc_q_table_l_addrs_rd_en,
-    output logic                            dsc_q_table_l_addrs_wr_en,
-    output logic [BRAM_TABLE_IDX_WIDTH-1:0] dsc_q_table_h_addrs_addr,
-    output logic [31:0]                     dsc_q_table_h_addrs_wr_data,
-    input  logic [31:0]                     dsc_q_table_h_addrs_rd_data,
-    output logic                            dsc_q_table_h_addrs_rd_en,
-    output logic                            dsc_q_table_h_addrs_wr_en,
+    // BRAM signals for dsc queues
+    bram_interface_io.user dsc_q_table_tails,
+    bram_interface_io.user dsc_q_table_heads,
+    bram_interface_io.user dsc_q_table_l_addrs,
+    bram_interface_io.user dsc_q_table_h_addrs,
 
-    output logic [BRAM_TABLE_IDX_WIDTH-1:0] pkt_q_table_tails_addr,
-    output logic [31:0]                     pkt_q_table_tails_wr_data,
-    input  logic [31:0]                     pkt_q_table_tails_rd_data,
-    output logic                            pkt_q_table_tails_rd_en,
-    output logic                            pkt_q_table_tails_wr_en,
-    output logic [BRAM_TABLE_IDX_WIDTH-1:0] pkt_q_table_heads_addr,
-    output logic [31:0]                     pkt_q_table_heads_wr_data,
-    input  logic [31:0]                     pkt_q_table_heads_rd_data,
-    output logic                            pkt_q_table_heads_rd_en,
-    output logic                            pkt_q_table_heads_wr_en,
-    output logic [BRAM_TABLE_IDX_WIDTH-1:0] pkt_q_table_l_addrs_addr,
-    output logic [31:0]                     pkt_q_table_l_addrs_wr_data,
-    input  logic [31:0]                     pkt_q_table_l_addrs_rd_data,
-    output logic                            pkt_q_table_l_addrs_rd_en,
-    output logic                            pkt_q_table_l_addrs_wr_en,
-    output logic [BRAM_TABLE_IDX_WIDTH-1:0] pkt_q_table_h_addrs_addr,
-    output logic [31:0]                     pkt_q_table_h_addrs_wr_data,
-    input  logic [31:0]                     pkt_q_table_h_addrs_rd_data,
-    output logic                            pkt_q_table_h_addrs_rd_en,
-    output logic                            pkt_q_table_h_addrs_wr_en,
+    // BRAM signals for pkt queues
+    bram_interface_io.user pkt_q_table_tails,
+    bram_interface_io.user pkt_q_table_heads,
+    bram_interface_io.user pkt_q_table_l_addrs,
+    bram_interface_io.user pkt_q_table_h_addrs,
 
     // extra control signals
     output logic [31:0] control_regs [NB_CONTROL_REGS]
 );
-
-queue_interface_t dsc_q_table;
-queue_interface_t pkt_q_table;
-
-// We can't expose a struct with both input and output signals, so we expose the
-// individual signals and combine them here:
-always_comb begin
-    dsc_q_table_tails_addr = dsc_q_table.tails.addr;
-    dsc_q_table_tails_wr_data = dsc_q_table.tails.wr_data;
-    dsc_q_table.tails.rd_data = dsc_q_table_tails_rd_data;
-    dsc_q_table_tails_rd_en = dsc_q_table.tails.rd_en;
-    dsc_q_table_tails_wr_en = dsc_q_table.tails.wr_en;
-    dsc_q_table_heads_addr = dsc_q_table.heads.addr;
-    dsc_q_table_heads_wr_data = dsc_q_table.heads.wr_data;
-    dsc_q_table.heads.rd_data = dsc_q_table_heads_rd_data;
-    dsc_q_table_heads_rd_en = dsc_q_table.heads.rd_en;
-    dsc_q_table_heads_wr_en = dsc_q_table.heads.wr_en;
-    dsc_q_table_l_addrs_addr = dsc_q_table.l_addrs.addr;
-    dsc_q_table_l_addrs_wr_data = dsc_q_table.l_addrs.wr_data;
-    dsc_q_table.l_addrs.rd_data = dsc_q_table_l_addrs_rd_data;
-    dsc_q_table_l_addrs_rd_en = dsc_q_table.l_addrs.rd_en;
-    dsc_q_table_l_addrs_wr_en = dsc_q_table.l_addrs.wr_en;
-    dsc_q_table_h_addrs_addr = dsc_q_table.h_addrs.addr;
-    dsc_q_table_h_addrs_wr_data = dsc_q_table.h_addrs.wr_data;
-    dsc_q_table.h_addrs.rd_data = dsc_q_table_h_addrs_rd_data;
-    dsc_q_table_h_addrs_rd_en = dsc_q_table.h_addrs.rd_en;
-    dsc_q_table_h_addrs_wr_en = dsc_q_table.h_addrs.wr_en;
-    pkt_q_table_tails_addr = pkt_q_table.tails.addr;
-    pkt_q_table_tails_wr_data = pkt_q_table.tails.wr_data;
-    pkt_q_table.tails.rd_data = pkt_q_table_tails_rd_data;
-    pkt_q_table_tails_rd_en = pkt_q_table.tails.rd_en;
-    pkt_q_table_tails_wr_en = pkt_q_table.tails.wr_en;
-    pkt_q_table_heads_addr = pkt_q_table.heads.addr;
-    pkt_q_table_heads_wr_data = pkt_q_table.heads.wr_data;
-    pkt_q_table.heads.rd_data = pkt_q_table_heads_rd_data;
-    pkt_q_table_heads_rd_en = pkt_q_table.heads.rd_en;
-    pkt_q_table_heads_wr_en = pkt_q_table.heads.wr_en;
-    pkt_q_table_l_addrs_addr = pkt_q_table.l_addrs.addr;
-    pkt_q_table_l_addrs_wr_data = pkt_q_table.l_addrs.wr_data;
-    pkt_q_table.l_addrs.rd_data = pkt_q_table_l_addrs_rd_data;
-    pkt_q_table_l_addrs_rd_en = pkt_q_table.l_addrs.rd_en;
-    pkt_q_table_l_addrs_wr_en = pkt_q_table.l_addrs.wr_en;
-    pkt_q_table_h_addrs_addr = pkt_q_table.h_addrs.addr;
-    pkt_q_table_h_addrs_wr_data = pkt_q_table.h_addrs.wr_data;
-    pkt_q_table.h_addrs.rd_data = pkt_q_table_h_addrs_rd_data;
-    pkt_q_table_h_addrs_rd_en = pkt_q_table.h_addrs.rd_en;
-    pkt_q_table_h_addrs_wr_en = pkt_q_table.h_addrs.wr_en;
-end
 
 // JTAG signals
 logic [29:0]            status_addr_r;
@@ -285,25 +206,25 @@ assign q_table_rd_data_b_pcie_ready =
 // serve PCIe reads when there are no PCIe writes and we only serve JTAG reads
 // when there are no PCIe writes or reads.
 always @(posedge pcie_clk) begin
-    dsc_q_table.tails.wr_en <= 0;
-    dsc_q_table.heads.wr_en <= 0;
-    dsc_q_table.l_addrs.wr_en <= 0;
-    dsc_q_table.h_addrs.wr_en <= 0;
+    dsc_q_table_tails.wr_en <= 0;
+    dsc_q_table_heads.wr_en <= 0;
+    dsc_q_table_l_addrs.wr_en <= 0;
+    dsc_q_table_h_addrs.wr_en <= 0;
 
-    dsc_q_table.tails.rd_en <= 0;
-    dsc_q_table.heads.rd_en <= 0;
-    dsc_q_table.l_addrs.rd_en <= 0;
-    dsc_q_table.h_addrs.rd_en <= 0;
+    dsc_q_table_tails.rd_en <= 0;
+    dsc_q_table_heads.rd_en <= 0;
+    dsc_q_table_l_addrs.rd_en <= 0;
+    dsc_q_table_h_addrs.rd_en <= 0;
 
-    pkt_q_table.tails.wr_en <= 0;
-    pkt_q_table.heads.wr_en <= 0;
-    pkt_q_table.l_addrs.wr_en <= 0;
-    pkt_q_table.h_addrs.wr_en <= 0;
+    pkt_q_table_tails.wr_en <= 0;
+    pkt_q_table_heads.wr_en <= 0;
+    pkt_q_table_l_addrs.wr_en <= 0;
+    pkt_q_table_h_addrs.wr_en <= 0;
 
-    pkt_q_table.tails.rd_en <= 0;
-    pkt_q_table.heads.rd_en <= 0;
-    pkt_q_table.l_addrs.rd_en <= 0;
-    pkt_q_table.h_addrs.rd_en <= 0;
+    pkt_q_table_tails.rd_en <= 0;
+    pkt_q_table_heads.rd_en <= 0;
+    pkt_q_table_l_addrs.rd_en <= 0;
+    pkt_q_table_h_addrs.rd_en <= 0;
 
     last_rd_b_table <= 0;
 
@@ -346,48 +267,48 @@ always @(posedge pcie_clk) begin
             automatic logic [BRAM_TABLE_IDX_WIDTH-1:0] address = page_idx;
         
             // if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
-            //     pkt_q_table.tails.wr_data <= pcie_writedata_0[0*32 +: 32];
-            //     pkt_q_table.tails.wr_en <= 1;
-            //     pkt_q_table.tails.addr <= address;
+            //     pkt_q_table_tails.wr_data <= pcie_writedata_0[0*32 +: 32];
+            //     pkt_q_table_tails.wr_en <= 1;
+            //     pkt_q_table_tails.addr <= address;
             // end
             if (pcie_byteenable_0[1*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
-                pkt_q_table.heads.wr_data <= pcie_writedata_0[1*32 +: 32];
-                pkt_q_table.heads.wr_en <= 1;
-                pkt_q_table.heads.addr <= address;
+                pkt_q_table_heads.wr_data <= pcie_writedata_0[1*32 +: 32];
+                pkt_q_table_heads.wr_en <= 1;
+                pkt_q_table_heads.addr <= address;
             end
             if (pcie_byteenable_0[2*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
-                pkt_q_table.l_addrs.wr_data <= pcie_writedata_0[2*32 +: 32];
-                pkt_q_table.l_addrs.wr_en <= 1;
-                pkt_q_table.l_addrs.addr <= address;
+                pkt_q_table_l_addrs.wr_data <= pcie_writedata_0[2*32 +: 32];
+                pkt_q_table_l_addrs.wr_en <= 1;
+                pkt_q_table_l_addrs.addr <= address;
             end
             if (pcie_byteenable_0[3*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
-                pkt_q_table.h_addrs.wr_data <= pcie_writedata_0[3*32 +: 32];
-                pkt_q_table.h_addrs.wr_en <= 1;
-                pkt_q_table.h_addrs.addr <= address;
+                pkt_q_table_h_addrs.wr_data <= pcie_writedata_0[3*32 +: 32];
+                pkt_q_table_h_addrs.wr_en <= 1;
+                pkt_q_table_h_addrs.addr <= address;
             end
         end else begin
             automatic logic [BRAM_TABLE_IDX_WIDTH-1:0] address;
             address = page_idx - MAX_NB_FLOWS;
 
             // if (pcie_byteenable_0[0*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
-            //     dsc_q_table.tails.wr_data <= pcie_writedata_0[0*32 +: 32];
-            //     dsc_q_table.tails.wr_en <= 1;
-            //     dsc_q_table.tails.addr <= address;
+            //     dsc_q_table_tails.wr_data <= pcie_writedata_0[0*32 +: 32];
+            //     dsc_q_table_tails.wr_en <= 1;
+            //     dsc_q_table_tails.addr <= address;
             // end
             if (pcie_byteenable_0[1*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
-                dsc_q_table.heads.wr_data <= pcie_writedata_0[1*32 +: 32];
-                dsc_q_table.heads.wr_en <= 1;
-                dsc_q_table.heads.addr <= address;
+                dsc_q_table_heads.wr_data <= pcie_writedata_0[1*32 +: 32];
+                dsc_q_table_heads.wr_en <= 1;
+                dsc_q_table_heads.addr <= address;
             end
             if (pcie_byteenable_0[2*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
-                dsc_q_table.l_addrs.wr_data <= pcie_writedata_0[2*32 +: 32];
-                dsc_q_table.l_addrs.wr_en <= 1;
-                dsc_q_table.l_addrs.addr <= address;
+                dsc_q_table_l_addrs.wr_data <= pcie_writedata_0[2*32 +: 32];
+                dsc_q_table_l_addrs.wr_en <= 1;
+                dsc_q_table_l_addrs.addr <= address;
             end
             if (pcie_byteenable_0[3*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}}) begin
-                dsc_q_table.h_addrs.wr_data <= pcie_writedata_0[3*32 +: 32];
-                dsc_q_table.h_addrs.wr_en <= 1;
-                dsc_q_table.h_addrs.addr <= address;
+                dsc_q_table_h_addrs.wr_data <= pcie_writedata_0[3*32 +: 32];
+                dsc_q_table_h_addrs.wr_en <= 1;
+                dsc_q_table_h_addrs.addr <= address;
             end
         end
 
@@ -414,32 +335,32 @@ always @(posedge pcie_clk) begin
             automatic logic [BRAM_TABLE_IDX_WIDTH-1:0] address = 
                 q_table_addr_pcie_rd_pending;
 
-            pkt_q_table.tails.rd_en <= 1;
-            pkt_q_table.tails.addr <= address;
+            pkt_q_table_tails.rd_en <= 1;
+            pkt_q_table_tails.addr <= address;
 
-            pkt_q_table.heads.rd_en <= 1;
-            pkt_q_table.heads.addr <= address;
+            pkt_q_table_heads.rd_en <= 1;
+            pkt_q_table_heads.addr <= address;
 
-            pkt_q_table.l_addrs.rd_en <= 1;
-            pkt_q_table.l_addrs.addr <= address;
+            pkt_q_table_l_addrs.rd_en <= 1;
+            pkt_q_table_l_addrs.addr <= address;
 
-            pkt_q_table.h_addrs.rd_en <= 1;
-            pkt_q_table.h_addrs.addr <= address;
+            pkt_q_table_h_addrs.rd_en <= 1;
+            pkt_q_table_h_addrs.addr <= address;
         end else begin
             automatic logic [BRAM_TABLE_IDX_WIDTH-1:0] address = 
                 q_table_addr_pcie_rd_pending - MAX_NB_FLOWS;
 
-            dsc_q_table.tails.rd_en <= 1;
-            dsc_q_table.tails.addr <= address;
+            dsc_q_table_tails.rd_en <= 1;
+            dsc_q_table_tails.addr <= address;
 
-            dsc_q_table.heads.rd_en <= 1;
-            dsc_q_table.heads.addr <= address;
+            dsc_q_table_heads.rd_en <= 1;
+            dsc_q_table_heads.addr <= address;
 
-            dsc_q_table.l_addrs.rd_en <= 1;
-            dsc_q_table.l_addrs.addr <= address;
+            dsc_q_table_l_addrs.rd_en <= 1;
+            dsc_q_table_l_addrs.addr <= address;
 
-            dsc_q_table.h_addrs.rd_en <= 1;
-            dsc_q_table.h_addrs.addr <= address;
+            dsc_q_table_h_addrs.rd_en <= 1;
+            dsc_q_table_h_addrs.addr <= address;
         end
     end else if (q_table_jtag_wr_set && q_table_jtag_wr_data_set) begin 
         // JTAG write
@@ -450,24 +371,24 @@ always @(posedge pcie_clk) begin
                 q_table_addr_jtag_pending;
             case (q_table_jtag_pending)
                 0: begin
-                    pkt_q_table.tails.wr_data <= q_table_data_jtag_pending;
-                    pkt_q_table.tails.wr_en <= 1;
-                    pkt_q_table.tails.addr <= address;
+                    pkt_q_table_tails.wr_data <= q_table_data_jtag_pending;
+                    pkt_q_table_tails.wr_en <= 1;
+                    pkt_q_table_tails.addr <= address;
                 end
                 1: begin
-                    pkt_q_table.heads.wr_data <= q_table_data_jtag_pending;
-                    pkt_q_table.heads.wr_en <= 1;
-                    pkt_q_table.heads.addr <= address;
+                    pkt_q_table_heads.wr_data <= q_table_data_jtag_pending;
+                    pkt_q_table_heads.wr_en <= 1;
+                    pkt_q_table_heads.addr <= address;
                 end
                 2: begin
-                    pkt_q_table.l_addrs.wr_data <= q_table_data_jtag_pending;
-                    pkt_q_table.l_addrs.wr_en <= 1;
-                    pkt_q_table.l_addrs.addr <= address;
+                    pkt_q_table_l_addrs.wr_data <= q_table_data_jtag_pending;
+                    pkt_q_table_l_addrs.wr_en <= 1;
+                    pkt_q_table_l_addrs.addr <= address;
                 end
                 3: begin
-                    pkt_q_table.h_addrs.wr_data <= q_table_data_jtag_pending;
-                    pkt_q_table.h_addrs.wr_en <= 1;
-                    pkt_q_table.h_addrs.addr <= address;
+                    pkt_q_table_h_addrs.wr_data <= q_table_data_jtag_pending;
+                    pkt_q_table_h_addrs.wr_en <= 1;
+                    pkt_q_table_h_addrs.addr <= address;
                 end
             endcase
         end else begin
@@ -475,24 +396,24 @@ always @(posedge pcie_clk) begin
                 q_table_addr_jtag_pending - MAX_NB_FLOWS;
             case (q_table_jtag_pending)
                 0: begin
-                    dsc_q_table.tails.wr_data <= q_table_data_jtag_pending;
-                    dsc_q_table.tails.wr_en <= 1;
-                    dsc_q_table.tails.addr <= address;
+                    dsc_q_table_tails.wr_data <= q_table_data_jtag_pending;
+                    dsc_q_table_tails.wr_en <= 1;
+                    dsc_q_table_tails.addr <= address;
                 end
                 1: begin
-                    dsc_q_table.heads.wr_data <= q_table_data_jtag_pending;
-                    dsc_q_table.heads.wr_en <= 1;
-                    dsc_q_table.heads.addr <= address;
+                    dsc_q_table_heads.wr_data <= q_table_data_jtag_pending;
+                    dsc_q_table_heads.wr_en <= 1;
+                    dsc_q_table_heads.addr <= address;
                 end
                 2: begin
-                    dsc_q_table.l_addrs.wr_data <= q_table_data_jtag_pending;
-                    dsc_q_table.l_addrs.wr_en <= 1;
-                    dsc_q_table.l_addrs.addr <= address;
+                    dsc_q_table_l_addrs.wr_data <= q_table_data_jtag_pending;
+                    dsc_q_table_l_addrs.wr_en <= 1;
+                    dsc_q_table_l_addrs.addr <= address;
                 end
                 3: begin
-                    dsc_q_table.h_addrs.wr_data <= q_table_data_jtag_pending;
-                    dsc_q_table.h_addrs.wr_en <= 1;
-                    dsc_q_table.h_addrs.addr <= address;
+                    dsc_q_table_h_addrs.wr_data <= q_table_data_jtag_pending;
+                    dsc_q_table_h_addrs.wr_en <= 1;
+                    dsc_q_table_h_addrs.addr <= address;
                 end
             endcase
         end
@@ -505,20 +426,20 @@ always @(posedge pcie_clk) begin
                 q_table_addr_jtag_pending;
             case (q_table_jtag_pending)
                 0: begin
-                    pkt_q_table.tails.rd_en <= 1;
-                    pkt_q_table.tails.addr <= address;
+                    pkt_q_table_tails.rd_en <= 1;
+                    pkt_q_table_tails.addr <= address;
                 end
                 1: begin
-                    pkt_q_table.heads.rd_en <= 1;
-                    pkt_q_table.heads.addr <= address;
+                    pkt_q_table_heads.rd_en <= 1;
+                    pkt_q_table_heads.addr <= address;
                 end
                 2: begin
-                    pkt_q_table.l_addrs.rd_en <= 1;
-                    pkt_q_table.l_addrs.addr <= address;
+                    pkt_q_table_l_addrs.rd_en <= 1;
+                    pkt_q_table_l_addrs.addr <= address;
                 end
                 3: begin
-                    pkt_q_table.h_addrs.rd_en <= 1;
-                    pkt_q_table.h_addrs.addr <= address;
+                    pkt_q_table_h_addrs.rd_en <= 1;
+                    pkt_q_table_h_addrs.addr <= address;
                 end
             endcase
         end else begin
@@ -526,20 +447,20 @@ always @(posedge pcie_clk) begin
                 q_table_addr_jtag_pending - MAX_NB_FLOWS;
             case (q_table_jtag_pending)
                 0: begin
-                    dsc_q_table.tails.rd_en <= 1;
-                    dsc_q_table.tails.addr <= address;
+                    dsc_q_table_tails.rd_en <= 1;
+                    dsc_q_table_tails.addr <= address;
                 end
                 1: begin
-                    dsc_q_table.heads.rd_en <= 1;
-                    dsc_q_table.heads.addr <= address;
+                    dsc_q_table_heads.rd_en <= 1;
+                    dsc_q_table_heads.addr <= address;
                 end
                 2: begin
-                    dsc_q_table.l_addrs.rd_en <= 1;
-                    dsc_q_table.l_addrs.addr <= address;
+                    dsc_q_table_l_addrs.rd_en <= 1;
+                    dsc_q_table_l_addrs.addr <= address;
                 end
                 3: begin
-                    dsc_q_table.h_addrs.rd_en <= 1;
-                    dsc_q_table.h_addrs.addr <= address;
+                    dsc_q_table_h_addrs.rd_en <= 1;
+                    dsc_q_table_h_addrs.addr <= address;
                 end
             endcase
         end
@@ -549,11 +470,11 @@ always @(posedge pcie_clk) begin
     last_rd_b_table_r <= last_rd_b_table;
     last_rd_b_table_r2 <= last_rd_b_table_r;
 
-    dsc_rd_en_r <= dsc_q_table.tails.rd_en | dsc_q_table.heads.rd_en |
-               dsc_q_table.l_addrs.rd_en | dsc_q_table.h_addrs.rd_en;
+    dsc_rd_en_r <= dsc_q_table_tails.rd_en | dsc_q_table_heads.rd_en |
+               dsc_q_table_l_addrs.rd_en | dsc_q_table_h_addrs.rd_en;
 
-    pkt_rd_en_r <= pkt_q_table.tails.rd_en | pkt_q_table.heads.rd_en |
-                pkt_q_table.l_addrs.rd_en | pkt_q_table.h_addrs.rd_en;
+    pkt_rd_en_r <= pkt_q_table_tails.rd_en | pkt_q_table_heads.rd_en |
+                pkt_q_table_l_addrs.rd_en | pkt_q_table_h_addrs.rd_en;
 
     dsc_rd_en_r2 <= dsc_rd_en_r;
     pkt_rd_en_r2 <= pkt_rd_en_r;
@@ -568,16 +489,16 @@ always @(posedge pcie_clk) begin
         if (dsc_rd_en_r2) begin
             case (last_rd_b_table_r2)
                 0: begin
-                    q_table_rd_data_b <= dsc_q_table.tails.rd_data;
+                    q_table_rd_data_b <= dsc_q_table_tails.rd_data;
                 end
                 1: begin
-                    q_table_rd_data_b <= dsc_q_table.heads.rd_data;
+                    q_table_rd_data_b <= dsc_q_table_heads.rd_data;
                 end
                 2: begin
-                    q_table_rd_data_b <= dsc_q_table.l_addrs.rd_data;
+                    q_table_rd_data_b <= dsc_q_table_l_addrs.rd_data;
                 end
                 3: begin
-                    q_table_rd_data_b <= dsc_q_table.h_addrs.rd_data;
+                    q_table_rd_data_b <= dsc_q_table_h_addrs.rd_data;
                 end
             endcase
             q_table_rd_data_b_jtag_ready <= 1;
@@ -586,16 +507,16 @@ always @(posedge pcie_clk) begin
         if (pkt_rd_en_r2) begin
             case (last_rd_b_table_r2)
                 0: begin
-                    q_table_rd_data_b <= pkt_q_table.tails.rd_data;
+                    q_table_rd_data_b <= pkt_q_table_tails.rd_data;
                 end
                 1: begin
-                    q_table_rd_data_b <= pkt_q_table.heads.rd_data;
+                    q_table_rd_data_b <= pkt_q_table_heads.rd_data;
                 end
                 2: begin
-                    q_table_rd_data_b <= pkt_q_table.l_addrs.rd_data;
+                    q_table_rd_data_b <= pkt_q_table_l_addrs.rd_data;
                 end
                 3: begin
-                    q_table_rd_data_b <= pkt_q_table.h_addrs.rd_data;
+                    q_table_rd_data_b <= pkt_q_table_h_addrs.rd_data;
                 end
             endcase
             q_table_rd_data_b_jtag_ready <= 1;
@@ -615,14 +536,14 @@ always @(posedge pcie_clk) begin
         if (pkt_rd_en_r2) begin
             pcie_readdata_0 <= {
                 256'h0, c2f_kmem_addr, c2f_head, c2f_tail,
-                pkt_q_table.h_addrs.rd_data, pkt_q_table.l_addrs.rd_data,
-                pkt_q_table.heads.rd_data, pkt_q_table.tails.rd_data
+                pkt_q_table_h_addrs.rd_data, pkt_q_table_l_addrs.rd_data,
+                pkt_q_table_heads.rd_data, pkt_q_table_tails.rd_data
             };
         end else begin
             pcie_readdata_0 <= {
                 256'h0, c2f_kmem_addr, c2f_head, c2f_tail,
-                dsc_q_table.h_addrs.rd_data, dsc_q_table.l_addrs.rd_data,
-                dsc_q_table.heads.rd_data, dsc_q_table.tails.rd_data
+                dsc_q_table_h_addrs.rd_data, dsc_q_table_l_addrs.rd_data,
+                dsc_q_table_heads.rd_data, dsc_q_table_tails.rd_data
             };
         end
         
