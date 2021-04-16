@@ -57,60 +57,16 @@ logic [25:0] dsc_rb_size;
 logic [25:0] pkt_rb_size;
 
 // descriptor queue table interface signals
-// port a
-bram_interface_io dsc_q_table_a_tails();
-bram_interface_io dsc_q_table_a_heads();
-bram_interface_io dsc_q_table_a_l_addrs();
-bram_interface_io dsc_q_table_a_h_addrs();
-// port b
-bram_interface_io dsc_q_table_b_tails();
-bram_interface_io dsc_q_table_b_heads();
-bram_interface_io dsc_q_table_b_l_addrs();
-bram_interface_io dsc_q_table_b_h_addrs();
+bram_interface_io dsc_q_table_tails();
+bram_interface_io dsc_q_table_heads();
+bram_interface_io dsc_q_table_l_addrs();
+bram_interface_io dsc_q_table_h_addrs();
 
 // packet queue table interface signals
-// port a
-bram_interface_io pkt_q_table_a_tails();
-bram_interface_io pkt_q_table_a_heads();
-bram_interface_io pkt_q_table_a_l_addrs();
-bram_interface_io pkt_q_table_a_h_addrs();
-// port b
-bram_interface_io pkt_q_table_b_tails();
-bram_interface_io pkt_q_table_b_heads();
-bram_interface_io pkt_q_table_b_l_addrs();
-bram_interface_io pkt_q_table_b_h_addrs();
-
-logic [RB_AWIDTH-1:0]    f2c_dsc_head;
-logic [RB_AWIDTH-1:0]    f2c_dsc_tail;
-logic [63:0]             f2c_dsc_buf_addr;
-logic [RB_AWIDTH-1:0]    f2c_pkt_head;
-logic [RB_AWIDTH-1:0]    f2c_pkt_tail;
-logic                    f2c_pkt_q_needs_dsc;
-logic [63:0]             f2c_pkt_buf_addr;
-
-logic                            f2c_queue_ready;
-logic                            tail_wr_en;
-logic                            queue_rd_en;
-logic                            queue_rd_en_r;
-logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_rd_pkt_queue;
-logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_rd_pkt_queue_r;
-logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_rd_dsc_queue;
-logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_wr_pkt_queue;
-logic [BRAM_TABLE_IDX_WIDTH-1:0] f2c_wr_dsc_queue;
-logic [RB_AWIDTH-1:0]            dsc_q_table_heads_wr_data_b_r;
-logic [RB_AWIDTH-1:0]            dsc_q_table_heads_wr_data_b_r2;
-logic [RB_AWIDTH-1:0]            dsc_q_table_tails_wr_data_a_r;
-logic [RB_AWIDTH-1:0]            dsc_q_table_tails_wr_data_a_r2;
-logic [RB_AWIDTH-1:0]            pkt_q_table_heads_wr_data_b_r;
-logic [RB_AWIDTH-1:0]            pkt_q_table_heads_wr_data_b_r2;
-logic [RB_AWIDTH-1:0]            pkt_q_table_tails_wr_data_a_r;
-logic [RB_AWIDTH-1:0]            pkt_q_table_tails_wr_data_a_r2;
-logic [RB_AWIDTH-1:0]            new_dsc_tail;
-logic [RB_AWIDTH-1:0]            new_pkt_tail;
-
-// Bit vector holding the status of every pkt queue
-// (i.e., if they need a descriptor or not).
-logic [MAX_NB_FLOWS-1:0] pkt_q_status;
+bram_interface_io pkt_q_table_tails();
+bram_interface_io pkt_q_table_heads();
+bram_interface_io pkt_q_table_l_addrs();
+bram_interface_io pkt_q_table_h_addrs();
 
 logic [31:0] control_regs [NB_CONTROL_REGS];
 
@@ -122,203 +78,23 @@ assign sw_reset = control_regs[0][27];
 
 assign dsc_rb_size = control_regs[1][25:0];
 
-typedef enum
-{
-    IDLE,
-    WAIT_DMA,
-    BRAM_DELAY_1,
-    BRAM_DELAY_2,
-    SWITCH_QUEUE
-} state_t;
-state_t state;
+logic queue_updated;
+logic [BRAM_TABLE_IDX_WIDTH-1:0] queue_idx;
+logic [BRAM_TABLE_IDX_WIDTH-1:0] updated_queue_idx;
+assign queue_idx = pcie_address_0[12 +: BRAM_TABLE_IDX_WIDTH];
 
-logic [BRAM_TABLE_IDX_WIDTH-1:0] page_idx;
-assign page_idx = pcie_address_0[12 +: BRAM_TABLE_IDX_WIDTH];
+logic head_upd;
+assign head_upd = pcie_byteenable_0[1*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}};
 
+// Monitor PCIe writes to detect updates to a pkt queue head.
 always @(posedge pcie_clk) begin
-    if (queue_rd_en_r) begin
-        f2c_pkt_q_needs_dsc <= !pkt_q_status[f2c_rd_pkt_queue_r];
-        pkt_q_status[f2c_rd_pkt_queue_r] <= 1'b1;
+    queue_updated <= 0;
+
+    // Got a PCIe write to a packet queue head.
+    if (pcie_write_0 && queue_idx < MAX_NB_FLOWS && head_upd) begin
+        updated_queue_idx <= queue_idx;
+        queue_updated <= 1;
     end
-
-    if (!pcie_reset_n) begin
-        pkt_q_status <= 0;
-    end else if (pcie_write_0 && page_idx < MAX_NB_FLOWS 
-            && pcie_byteenable_0[1*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}})
-            // Got a PCIe write to a packet queue head.
-    begin
-        // update queue status so that we send a descriptor next time
-        pkt_q_status[page_idx] <= 1'b0;
-        // FIXME(sadok) this will only work if the queue eventually
-        // receives more packets. Otherwise, there will be some residue
-        // packets that software will never know about. To fix this, we
-        // need to check if the latest tail pointer is greater than the
-        // new head that we received. If it is, that means that we need
-        // to send an extra descriptor. The logic to send an extra
-        // descriptor, however, is quite tricky. We probably need to add
-        // a queue with `descriptor requests` to send to the fpga2cpu so
-        // that it can send these descriptor when it has a chance -- it
-        // may even ignore some of them if it receives a new packet for
-        // the queue. Another tricky part is that there may be some race
-        // conditions, where this part of the design thinks that the
-        // queue is updated but the fpga2cpu is processing a new packet
-        // and will not send a descriptor. To overcome this, fpga2cpu
-        // should make sure pcie_top has the latest tail, before it
-        // decides if it needs to send the descriptor.
-    end
-        
-end
-
-logic dsc_q_table_a_tails_rd_en_r;
-logic dsc_q_table_a_tails_rd_en_r2;
-logic dsc_q_table_a_heads_rd_en_r;
-logic dsc_q_table_a_heads_rd_en_r2;
-logic dsc_q_table_a_l_addrs_rd_en_r;
-logic dsc_q_table_a_l_addrs_rd_en_r2;
-logic dsc_q_table_a_h_addrs_rd_en_r;
-logic dsc_q_table_a_h_addrs_rd_en_r2;
-
-logic pkt_q_table_a_tails_rd_en_r;
-logic pkt_q_table_a_tails_rd_en_r2;
-logic pkt_q_table_a_heads_rd_en_r;
-logic pkt_q_table_a_heads_rd_en_r2;
-logic pkt_q_table_a_l_addrs_rd_en_r;
-logic pkt_q_table_a_l_addrs_rd_en_r2;
-logic pkt_q_table_a_h_addrs_rd_en_r;
-logic pkt_q_table_a_h_addrs_rd_en_r2;
-
-always @(posedge pcie_clk)begin
-    dsc_q_table_a_tails_rd_en_r <= dsc_q_table_a_tails.rd_en;
-    dsc_q_table_a_tails_rd_en_r2 <= dsc_q_table_a_tails_rd_en_r;
-    dsc_q_table_a_heads_rd_en_r <= dsc_q_table_a_heads.rd_en;
-    dsc_q_table_a_heads_rd_en_r2 <= dsc_q_table_a_heads_rd_en_r;
-    dsc_q_table_a_l_addrs_rd_en_r <= dsc_q_table_a_l_addrs.rd_en;
-    dsc_q_table_a_l_addrs_rd_en_r2 <= dsc_q_table_a_l_addrs_rd_en_r;
-    dsc_q_table_a_h_addrs_rd_en_r <= dsc_q_table_a_h_addrs.rd_en;
-    dsc_q_table_a_h_addrs_rd_en_r2 <= dsc_q_table_a_h_addrs_rd_en_r;
-
-    pkt_q_table_a_tails_rd_en_r <= pkt_q_table_a_tails.rd_en;
-    pkt_q_table_a_tails_rd_en_r2 <= pkt_q_table_a_tails_rd_en_r;
-    pkt_q_table_a_heads_rd_en_r <= pkt_q_table_a_heads.rd_en;
-    pkt_q_table_a_heads_rd_en_r2 <= pkt_q_table_a_heads_rd_en_r;
-    pkt_q_table_a_l_addrs_rd_en_r <= pkt_q_table_a_l_addrs.rd_en;
-    pkt_q_table_a_l_addrs_rd_en_r2 <= pkt_q_table_a_l_addrs_rd_en_r;
-    pkt_q_table_a_h_addrs_rd_en_r <= pkt_q_table_a_h_addrs.rd_en;
-    pkt_q_table_a_h_addrs_rd_en_r2 <= pkt_q_table_a_h_addrs_rd_en_r;
-
-    // we used the delayed wr signals for head and tail to use when there are
-    // concurrent reads
-    dsc_q_table_heads_wr_data_b_r <= dsc_q_table_b_heads.wr_data[RB_AWIDTH-1:0];
-    dsc_q_table_heads_wr_data_b_r2 <= dsc_q_table_heads_wr_data_b_r;
-    dsc_q_table_tails_wr_data_a_r <= dsc_q_table_a_tails.wr_data[RB_AWIDTH-1:0];
-    dsc_q_table_tails_wr_data_a_r2 <= dsc_q_table_tails_wr_data_a_r;
-    
-    pkt_q_table_heads_wr_data_b_r <= pkt_q_table_b_heads.wr_data[RB_AWIDTH-1:0];
-    pkt_q_table_heads_wr_data_b_r2 <= pkt_q_table_heads_wr_data_b_r;
-    pkt_q_table_tails_wr_data_a_r <= pkt_q_table_a_tails.wr_data[RB_AWIDTH-1:0];
-    pkt_q_table_tails_wr_data_a_r2 <= pkt_q_table_tails_wr_data_a_r;
-
-    queue_rd_en_r <= queue_rd_en;
-    f2c_rd_pkt_queue_r <= f2c_rd_pkt_queue;
-end
-
-always_comb begin
-    dsc_q_table_a_tails.addr = f2c_rd_dsc_queue;
-    dsc_q_table_a_heads.addr = f2c_rd_dsc_queue;
-    dsc_q_table_a_l_addrs.addr = f2c_rd_dsc_queue;
-    dsc_q_table_a_h_addrs.addr = f2c_rd_dsc_queue;
-    pkt_q_table_a_tails.addr = f2c_rd_pkt_queue;
-    pkt_q_table_a_heads.addr = f2c_rd_pkt_queue;
-    pkt_q_table_a_l_addrs.addr = f2c_rd_pkt_queue;
-    pkt_q_table_a_h_addrs.addr = f2c_rd_pkt_queue;
-
-    dsc_q_table_a_tails.rd_en = 0;
-    dsc_q_table_a_heads.rd_en = 0;
-    dsc_q_table_a_l_addrs.rd_en = 0;
-    dsc_q_table_a_h_addrs.rd_en = 0;
-    pkt_q_table_a_tails.rd_en = 0;
-    pkt_q_table_a_heads.rd_en = 0;
-    pkt_q_table_a_l_addrs.rd_en = 0;
-    pkt_q_table_a_h_addrs.rd_en = 0;
-
-    dsc_q_table_a_tails.wr_en = 0;
-    dsc_q_table_a_heads.wr_en = 0;
-    dsc_q_table_a_l_addrs.wr_en = 0;
-    dsc_q_table_a_h_addrs.wr_en = 0;
-    pkt_q_table_a_tails.wr_en = 0;
-    pkt_q_table_a_heads.wr_en = 0;
-    pkt_q_table_a_l_addrs.wr_en = 0;
-    pkt_q_table_a_h_addrs.wr_en = 0;
-
-    dsc_q_table_a_tails.wr_data = new_dsc_tail;
-    pkt_q_table_a_tails.wr_data = new_pkt_tail;
-
-    if (queue_rd_en) begin
-        // when reading and writing the same queue, we avoid reading the tail
-        // and use the new written tail instead
-        dsc_q_table_a_tails.rd_en = !tail_wr_en 
-            || (f2c_rd_dsc_queue != f2c_wr_dsc_queue);
-        dsc_q_table_a_heads.rd_en = 1;
-        dsc_q_table_a_l_addrs.rd_en = 1;
-        dsc_q_table_a_h_addrs.rd_en = 1;
-        pkt_q_table_a_tails.rd_en = !tail_wr_en 
-            || (f2c_rd_pkt_queue != f2c_wr_pkt_queue);
-        pkt_q_table_a_heads.rd_en = 1;
-        pkt_q_table_a_l_addrs.rd_en = 1;
-        pkt_q_table_a_h_addrs.rd_en = 1;
-
-        // Concurrent head write from PCIe or JTAG, we bypass the read and use
-        // the new written value instead. This is done to prevent concurrent
-        // read and write to the same address, which causes undefined behavior.
-        if ((dsc_q_table_a_heads.addr == dsc_q_table_b_heads.addr) 
-                && dsc_q_table_b_heads.wr_en) begin
-            dsc_q_table_a_heads.rd_en = 0;
-        end
-        if ((pkt_q_table_a_heads.addr == pkt_q_table_b_heads.addr) 
-                && pkt_q_table_b_heads.wr_en) begin
-            pkt_q_table_a_heads.rd_en = 0;
-        end
-    end else if (tail_wr_en) begin
-        dsc_q_table_a_tails.wr_en = 1;
-        dsc_q_table_a_tails.addr = f2c_wr_dsc_queue;
-        pkt_q_table_a_tails.wr_en = 1;
-        pkt_q_table_a_tails.addr = f2c_wr_pkt_queue;
-    end
-
-    f2c_queue_ready = 
-        dsc_q_table_a_tails_rd_en_r2   || dsc_q_table_a_heads_rd_en_r2   ||
-        dsc_q_table_a_l_addrs_rd_en_r2 || dsc_q_table_a_h_addrs_rd_en_r2 ||
-        pkt_q_table_a_tails_rd_en_r2   || pkt_q_table_a_heads_rd_en_r2   ||
-        pkt_q_table_a_l_addrs_rd_en_r2 || pkt_q_table_a_h_addrs_rd_en_r2;
-
-    if (dsc_q_table_a_tails_rd_en_r2) begin
-        f2c_dsc_tail = dsc_q_table_a_tails.rd_data[RB_AWIDTH-1:0];
-    end else begin
-        f2c_dsc_tail = dsc_q_table_tails_wr_data_a_r2;
-    end
-    if (pkt_q_table_a_tails_rd_en_r2) begin
-        f2c_pkt_tail = pkt_q_table_a_tails.rd_data[RB_AWIDTH-1:0];
-    end else begin
-        f2c_pkt_tail = pkt_q_table_tails_wr_data_a_r2;
-    end
-
-    if (dsc_q_table_a_heads_rd_en_r2) begin
-        f2c_dsc_head = dsc_q_table_a_heads.rd_data[RB_AWIDTH-1:0];
-    end else begin
-        // return the delayed concurrent write
-        f2c_dsc_head = dsc_q_table_heads_wr_data_b_r2;
-    end
-    if (pkt_q_table_a_heads_rd_en_r2) begin
-        f2c_pkt_head = pkt_q_table_a_heads.rd_data[RB_AWIDTH-1:0];
-    end else begin
-        // return the delayed concurrent write
-        f2c_pkt_head = pkt_q_table_heads_wr_data_b_r2;
-    end
-
-    f2c_dsc_buf_addr[31:0] = dsc_q_table_a_l_addrs.rd_data;
-    f2c_dsc_buf_addr[63:32] = dsc_q_table_a_h_addrs.rd_data;
-    f2c_pkt_buf_addr[31:0] = pkt_q_table_a_l_addrs.rd_data;
-    f2c_pkt_buf_addr[63:32] = pkt_q_table_a_h_addrs.rd_data;
 end
 
 jtag_mmio_arbiter jtag_mmio_arbiter_inst (
@@ -338,14 +114,14 @@ jtag_mmio_arbiter jtag_mmio_arbiter_inst (
     .status_writedata      (status_writedata),
     .status_readdata       (status_readdata),
     .status_readdata_valid (status_readdata_valid),
-    .dsc_q_table_tails     (dsc_q_table_b_tails.user),
-    .dsc_q_table_heads     (dsc_q_table_b_heads.user),
-    .dsc_q_table_l_addrs   (dsc_q_table_b_l_addrs.user),
-    .dsc_q_table_h_addrs   (dsc_q_table_b_h_addrs.user),
-    .pkt_q_table_tails     (pkt_q_table_b_tails.user),
-    .pkt_q_table_heads     (pkt_q_table_b_heads.user),
-    .pkt_q_table_l_addrs   (pkt_q_table_b_l_addrs.user),
-    .pkt_q_table_h_addrs   (pkt_q_table_b_h_addrs.user),
+    .dsc_q_table_tails     (dsc_q_table_tails.user),
+    .dsc_q_table_heads     (dsc_q_table_heads.user),
+    .dsc_q_table_l_addrs   (dsc_q_table_l_addrs.user),
+    .dsc_q_table_h_addrs   (dsc_q_table_h_addrs.user),
+    .pkt_q_table_tails     (pkt_q_table_tails.user),
+    .pkt_q_table_heads     (pkt_q_table_heads.user),
+    .pkt_q_table_l_addrs   (pkt_q_table_l_addrs.user),
+    .pkt_q_table_h_addrs   (pkt_q_table_h_addrs.user),
     .control_regs          (control_regs)
 );
 
@@ -360,24 +136,16 @@ fpga2cpu_pcie f2c_inst (
     .desc_buf_wr_en         (pcie_desc_buf_wr_en),
     .desc_buf_in_ready      (pcie_desc_buf_in_ready),
     .desc_buf_occup         (pcie_desc_buf_occup),
-    .in_dsc_head            (f2c_dsc_head),
-    .in_dsc_tail            (f2c_dsc_tail),
-    .in_dsc_buf_addr        (f2c_dsc_buf_addr),
-    .in_pkt_head            (f2c_pkt_head),
-    .in_pkt_tail            (f2c_pkt_tail),
-    .in_pkt_q_needs_dsc     (f2c_pkt_q_needs_dsc),
-    .in_pkt_buf_addr        (f2c_pkt_buf_addr),
-    .rd_pkt_queue           (f2c_rd_pkt_queue),
-    .rd_dsc_queue           (f2c_rd_dsc_queue),
-    .queue_ready            (f2c_queue_ready),
-    .out_dsc_tail           (new_dsc_tail),
-    .out_pkt_tail           (new_pkt_tail),
-    .wr_pkt_queue           (f2c_wr_pkt_queue),
-    .wr_dsc_queue           (f2c_wr_dsc_queue),
-    .queue_rd_en            (queue_rd_en),
-    .tail_wr_en             (tail_wr_en),
     .dsc_rb_size            ({5'b0, dsc_rb_size}),
     .pkt_rb_size            ({5'b0, pkt_rb_size}),
+    .dsc_q_table_tails      (dsc_q_table_tails.owner),
+    .dsc_q_table_heads      (dsc_q_table_heads.owner),
+    .dsc_q_table_l_addrs    (dsc_q_table_l_addrs.owner),
+    .dsc_q_table_h_addrs    (dsc_q_table_h_addrs.owner),
+    .pkt_q_table_tails      (pkt_q_table_tails.owner),
+    .pkt_q_table_heads      (pkt_q_table_heads.owner),
+    .pkt_q_table_l_addrs    (pkt_q_table_l_addrs.owner),
+    .pkt_q_table_h_addrs    (pkt_q_table_h_addrs.owner),
     .pcie_bas_waitrequest   (pcie_bas_waitrequest),
     .pcie_bas_address       (pcie_bas_address),
     .pcie_bas_byteenable    (pcie_bas_byteenable),
@@ -388,6 +156,8 @@ fpga2cpu_pcie f2c_inst (
     .pcie_bas_writedata     (pcie_bas_writedata),
     .pcie_bas_burstcount    (pcie_bas_burstcount),
     .pcie_bas_response      (pcie_bas_response),
+    .queue_updated          (queue_updated),
+    .updated_queue_idx      (updated_queue_idx),
     .sw_reset               (sw_reset),
     .dma_queue_full_cnt     (dma_queue_full_cnt),
     .cpu_dsc_buf_full_cnt   (cpu_dsc_buf_full_cnt),
@@ -415,175 +185,5 @@ fpga2cpu_pcie f2c_inst (
 //     .c2f_write              (pcie_write_1),
 //     .c2f_address            (pcie_address_1[14:6])
 // );
-
-
-////////////////////////
-// Packet Queue BRAMs //
-////////////////////////
-
-bram_true2port #(
-    .AWIDTH(PKT_Q_TABLE_AWIDTH),
-    .DWIDTH(PKT_Q_TABLE_TAILS_DWIDTH),
-    .DEPTH(PKT_Q_TABLE_DEPTH)
-)
-pkt_q_table_tails_bram (
-    .address_a  (pkt_q_table_a_tails.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (pkt_q_table_b_tails.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .clock      (pcie_clk),
-    .data_a     (pkt_q_table_a_tails.wr_data),
-    .data_b     (pkt_q_table_b_tails.wr_data),
-    .rden_a     (pkt_q_table_a_tails.rd_en),
-    .rden_b     (pkt_q_table_b_tails.rd_en),
-    .wren_a     (pkt_q_table_a_tails.wr_en),
-    .wren_b     (pkt_q_table_b_tails.wr_en),
-    .q_a        (pkt_q_table_a_tails.rd_data),
-    .q_b        (pkt_q_table_b_tails.rd_data)
-);
-
-bram_true2port #(
-    .AWIDTH(PKT_Q_TABLE_AWIDTH),
-    .DWIDTH(PKT_Q_TABLE_HEADS_DWIDTH),
-    .DEPTH(PKT_Q_TABLE_DEPTH)
-)
-pkt_q_table_heads_bram (
-    .address_a  (pkt_q_table_a_heads.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (pkt_q_table_b_heads.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .clock      (pcie_clk),
-    .data_a     (pkt_q_table_a_heads.wr_data),
-    .data_b     (pkt_q_table_b_heads.wr_data),
-    .rden_a     (pkt_q_table_a_heads.rd_en),
-    .rden_b     (pkt_q_table_b_heads.rd_en),
-    .wren_a     (pkt_q_table_a_heads.wr_en),
-    .wren_b     (pkt_q_table_b_heads.wr_en),
-    .q_a        (pkt_q_table_a_heads.rd_data),
-    .q_b        (pkt_q_table_b_heads.rd_data)
-);
-
-bram_true2port #(
-    .AWIDTH(PKT_Q_TABLE_AWIDTH),
-    .DWIDTH(PKT_Q_TABLE_L_ADDRS_DWIDTH),
-    .DEPTH(PKT_Q_TABLE_DEPTH)
-)
-pkt_q_table_l_addrs_bram (
-    .address_a  (pkt_q_table_a_l_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (pkt_q_table_b_l_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .clock      (pcie_clk),
-    .data_a     (pkt_q_table_a_l_addrs.wr_data),
-    .data_b     (pkt_q_table_b_l_addrs.wr_data),
-    .rden_a     (pkt_q_table_a_l_addrs.rd_en),
-    .rden_b     (pkt_q_table_b_l_addrs.rd_en),
-    .wren_a     (pkt_q_table_a_l_addrs.wr_en),
-    .wren_b     (pkt_q_table_b_l_addrs.wr_en),
-    .q_a        (pkt_q_table_a_l_addrs.rd_data),
-    .q_b        (pkt_q_table_b_l_addrs.rd_data)
-);
-
-bram_true2port #(
-    .AWIDTH(PKT_Q_TABLE_AWIDTH),
-    .DWIDTH(PKT_Q_TABLE_H_ADDRS_DWIDTH),
-    .DEPTH(PKT_Q_TABLE_DEPTH)
-)
-pkt_q_table_h_addrs_bram (
-    .address_a  (pkt_q_table_a_h_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (pkt_q_table_b_h_addrs.addr[PKT_Q_TABLE_AWIDTH-1:0]),
-    .clock      (pcie_clk),
-    .data_a     (pkt_q_table_a_h_addrs.wr_data),
-    .data_b     (pkt_q_table_b_h_addrs.wr_data),
-    .rden_a     (pkt_q_table_a_h_addrs.rd_en),
-    .rden_b     (pkt_q_table_b_h_addrs.rd_en),
-    .wren_a     (pkt_q_table_a_h_addrs.wr_en),
-    .wren_b     (pkt_q_table_b_h_addrs.wr_en),
-    .q_a        (pkt_q_table_a_h_addrs.rd_data),
-    .q_b        (pkt_q_table_b_h_addrs.rd_data)
-);
-
-
-////////////////////////////
-// Descriptor Queue BRAMs //
-////////////////////////////
-
-bram_true2port #(
-    .AWIDTH(DSC_Q_TABLE_AWIDTH),
-    .DWIDTH(DSC_Q_TABLE_TAILS_DWIDTH),
-    .DEPTH(DSC_Q_TABLE_DEPTH)
-)
-dsc_q_table_tails_bram (
-    .address_a  (dsc_q_table_a_tails.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (dsc_q_table_b_tails.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .clock      (pcie_clk),
-    .data_a     (dsc_q_table_a_tails.wr_data),
-    .data_b     (dsc_q_table_b_tails.wr_data),
-    .rden_a     (dsc_q_table_a_tails.rd_en),
-    .rden_b     (dsc_q_table_b_tails.rd_en),
-    .wren_a     (dsc_q_table_a_tails.wr_en),
-    .wren_b     (dsc_q_table_b_tails.wr_en),
-    .q_a        (dsc_q_table_a_tails.rd_data),
-    .q_b        (dsc_q_table_b_tails.rd_data)
-);
-
-bram_true2port #(
-    .AWIDTH(DSC_Q_TABLE_AWIDTH),
-    .DWIDTH(DSC_Q_TABLE_HEADS_DWIDTH),
-    .DEPTH(DSC_Q_TABLE_DEPTH)
-)
-dsc_q_table_heads_bram (
-    .address_a  (dsc_q_table_a_heads.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (dsc_q_table_b_heads.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .clock      (pcie_clk),
-    .data_a     (dsc_q_table_a_heads.wr_data),
-    .data_b     (dsc_q_table_b_heads.wr_data),
-    .rden_a     (dsc_q_table_a_heads.rd_en),
-    .rden_b     (dsc_q_table_b_heads.rd_en),
-    .wren_a     (dsc_q_table_a_heads.wr_en),
-    .wren_b     (dsc_q_table_b_heads.wr_en),
-    .q_a        (dsc_q_table_a_heads.rd_data),
-    .q_b        (dsc_q_table_b_heads.rd_data)
-);
-
-bram_true2port #(
-    .AWIDTH(DSC_Q_TABLE_AWIDTH),
-    .DWIDTH(DSC_Q_TABLE_L_ADDRS_DWIDTH),
-    .DEPTH(DSC_Q_TABLE_DEPTH)
-)
-dsc_q_table_l_addrs_bram (
-    .address_a  (dsc_q_table_a_l_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (dsc_q_table_b_l_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .clock      (pcie_clk),
-    .data_a     (dsc_q_table_a_l_addrs.wr_data),
-    .data_b     (dsc_q_table_b_l_addrs.wr_data),
-    .rden_a     (dsc_q_table_a_l_addrs.rd_en),
-    .rden_b     (dsc_q_table_b_l_addrs.rd_en),
-    .wren_a     (dsc_q_table_a_l_addrs.wr_en),
-    .wren_b     (dsc_q_table_b_l_addrs.wr_en),
-    .q_a        (dsc_q_table_a_l_addrs.rd_data),
-    .q_b        (dsc_q_table_b_l_addrs.rd_data)
-);
-
-bram_true2port #(
-    .AWIDTH(DSC_Q_TABLE_AWIDTH),
-    .DWIDTH(DSC_Q_TABLE_H_ADDRS_DWIDTH),
-    .DEPTH(DSC_Q_TABLE_DEPTH)
-)
-dsc_q_table_h_addrs_bram (
-    .address_a  (dsc_q_table_a_h_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .address_b  (dsc_q_table_b_h_addrs.addr[DSC_Q_TABLE_AWIDTH-1:0]),
-    .clock      (pcie_clk),
-    .data_a     (dsc_q_table_a_h_addrs.wr_data),
-    .data_b     (dsc_q_table_b_h_addrs.wr_data),
-    .rden_a     (dsc_q_table_a_h_addrs.rd_en),
-    .rden_b     (dsc_q_table_b_h_addrs.rd_en),
-    .wren_a     (dsc_q_table_a_h_addrs.wr_en),
-    .wren_b     (dsc_q_table_b_h_addrs.wr_en),
-    .q_a        (dsc_q_table_a_h_addrs.rd_data),
-    .q_b        (dsc_q_table_b_h_addrs.rd_data)
-);
-
-// unused inputs
-assign dsc_q_table_a_heads.wr_data = 32'bx;
-assign dsc_q_table_a_l_addrs.wr_data = 32'bx;
-assign dsc_q_table_a_h_addrs.wr_data = 32'bx;
-assign pkt_q_table_a_heads.wr_data = 32'bx;
-assign pkt_q_table_a_l_addrs.wr_data = 32'bx;
-assign pkt_q_table_a_h_addrs.wr_data = 32'bx;
 
 endmodule
