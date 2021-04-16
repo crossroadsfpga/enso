@@ -57,20 +57,24 @@ logic [25:0] dsc_rb_size;
 logic [25:0] pkt_rb_size;
 
 // descriptor queue table interface signals
+// port a
 bram_interface_io dsc_q_table_a_tails();
 bram_interface_io dsc_q_table_a_heads();
 bram_interface_io dsc_q_table_a_l_addrs();
 bram_interface_io dsc_q_table_a_h_addrs();
+// port b
 bram_interface_io dsc_q_table_b_tails();
 bram_interface_io dsc_q_table_b_heads();
 bram_interface_io dsc_q_table_b_l_addrs();
 bram_interface_io dsc_q_table_b_h_addrs();
 
-// packet queue tables interface signals
+// packet queue table interface signals
+// port a
 bram_interface_io pkt_q_table_a_tails();
 bram_interface_io pkt_q_table_a_heads();
 bram_interface_io pkt_q_table_a_l_addrs();
 bram_interface_io pkt_q_table_a_h_addrs();
+// port b
 bram_interface_io pkt_q_table_b_tails();
 bram_interface_io pkt_q_table_b_heads();
 bram_interface_io pkt_q_table_b_l_addrs();
