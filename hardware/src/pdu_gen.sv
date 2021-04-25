@@ -15,9 +15,9 @@ module pdu_gen(
         output var flit_lite_t pcie_pkt_buf_wr_data,
         output logic           pcie_pkt_buf_wr_en,
         input  logic           pcie_pkt_buf_in_ready,
-        output var pkt_dsc_t   pcie_desc_buf_wr_data,
-        output logic           pcie_desc_buf_wr_en,
-        input  logic           pcie_desc_buf_in_ready
+        output var pkt_meta_t  pcie_meta_buf_wr_data,
+        output logic           pcie_meta_buf_wr_en,
+        input  logic           pcie_meta_buf_in_ready
 	);
 
 logic [511:0] pdu_data;
@@ -106,14 +106,14 @@ assign pcie_pkt_buf_wr_data.data = pdu_data_swap;
 // It is only safe to write if we can fit a packet with the maximum size and
 // there are at least 5 slots available (due to pipeline delays).
 logic almost_full;
-assign almost_full = !pcie_pkt_buf_in_ready | !pcie_desc_buf_in_ready;
+assign almost_full = !pcie_pkt_buf_in_ready | !pcie_meta_buf_in_ready;
 assign in_ready = !almost_full;
 
 always @(posedge clk) begin
     pcie_pkt_buf_wr_en <= 0;
     pcie_pkt_buf_wr_data.sop <= 0;
     pcie_pkt_buf_wr_data.eop <= 0;
-    pcie_desc_buf_wr_en <= 0;
+    pcie_meta_buf_wr_en <= 0;
     in_meta_ready <= 0;
 
     if (rst) begin
@@ -137,15 +137,15 @@ always @(posedge clk) begin
                 pcie_pkt_buf_wr_data.eop <= 1;
 
                 // write descriptor
-                pcie_desc_buf_wr_data.dsc_queue_id <=
+                pcie_meta_buf_wr_data.dsc_queue_id <=
                     in_meta_data.dsc_queue_id[APP_IDX_WIDTH-1:0];
-                pcie_desc_buf_wr_data.pkt_queue_id <=
+                pcie_meta_buf_wr_data.pkt_queue_id <=
                     in_meta_data.pkt_queue_id[FLOW_IDX_WIDTH-1:0];
 
                 // TODO(sadok) specify size in bytes instead of flits
-                pcie_desc_buf_wr_data.size <= pdu_flit;
+                pcie_meta_buf_wr_data.size <= pdu_flit;
                 in_meta_ready <= 1;
-                pcie_desc_buf_wr_en <= 1;
+                pcie_meta_buf_wr_en <= 1;
             end
         end
     end

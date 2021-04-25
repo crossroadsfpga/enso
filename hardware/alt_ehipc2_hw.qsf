@@ -252,6 +252,11 @@ set_global_assignment -name OPTIMIZATION_MODE "SUPERIOR PERFORMANCE WITH MAXIMUM
 set_global_assignment -name ENABLE_SIGNALTAP ON
 set_global_assignment -name USE_SIGNALTAP_FILE stp4.stp
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/pcie_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/pcie_consts.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/bram_mux.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/queue_manager.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/dsc_queue_manager.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/pkt_queue_manager.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_table_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/jtag_mmio_arbiter.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/cpu2fpga_pcie.sv
@@ -269,7 +274,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe_rst.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe_root.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hash_func.sv
-set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/fpga2cpu_pcie.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/fpga_to_cpu.sv
 set_global_assignment -name VERILOG_FILE src/common/prefetch_rb.sv -hdl_version SystemVerilog_2009
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_director_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/esram_wrapper.sv

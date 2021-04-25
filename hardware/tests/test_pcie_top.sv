@@ -61,13 +61,13 @@ logic [511:0]               pcie_readdata_0;
 logic [511:0]               pcie_writedata_0;
 logic [63:0]                pcie_byteenable_0;
 
-flit_lite_t            pcie_pkt_buf_wr_data;
-logic                  pcie_pkt_buf_wr_en;
+flit_lite_t               pcie_pkt_buf_wr_data;
+logic                     pcie_pkt_buf_wr_en;
 logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup;
 
-pkt_dsc_t             pcie_desc_buf_wr_data;
-logic                  pcie_desc_buf_wr_en;
-logic [F2C_RB_AWIDTH-1:0] pcie_desc_buf_occup;
+pkt_meta_t                pcie_meta_buf_wr_data;
+logic                     pcie_meta_buf_wr_en;
+logic [F2C_RB_AWIDTH-1:0] pcie_meta_buf_occup;
 
 logic                  disable_pcie;
 logic                  sw_reset;
@@ -393,7 +393,7 @@ logic [32:0]               transmit_cycles;
 // Generate requests
 always @(posedge clk) begin
     pcie_pkt_buf_wr_en <= 0;
-    pcie_desc_buf_wr_en <= 0;
+    pcie_meta_buf_wr_en <= 0;
     if (rst) begin
         gen_state <= GEN_START_WAIT;
         flits_written <= 0;
@@ -403,7 +403,7 @@ always @(posedge clk) begin
         transmit_cycles <= 0;
     end else begin
         automatic logic can_insert_pkt = (pcie_pkt_buf_occup < (F2C_RB_DEPTH - 2))
-            && (pcie_desc_buf_occup < (F2C_RB_DEPTH - 2));
+            && (pcie_meta_buf_occup < (F2C_RB_DEPTH - 2));
         case (gen_state)
             GEN_START_WAIT: begin
                 if (startup_ready) begin
@@ -439,10 +439,10 @@ always @(posedge clk) begin
                         flits_written <= 0;
 
                         // write descriptor
-                        pcie_desc_buf_wr_en <= 1;
-                        pcie_desc_buf_wr_data.dsc_queue_id <= dsc_queue_id;
-                        pcie_desc_buf_wr_data.pkt_queue_id <= pkt_queue_id;
-                        pcie_desc_buf_wr_data.size <= (req_size + (16 - 1))/16;
+                        pcie_meta_buf_wr_en <= 1;
+                        pcie_meta_buf_wr_data.dsc_queue_id <= dsc_queue_id;
+                        pcie_meta_buf_wr_data.pkt_queue_id <= pkt_queue_id;
+                        pcie_meta_buf_wr_data.size <= (req_size + (16 - 1))/16;
 
                         if (nb_requests + 1 == target_nb_requests) begin
                             gen_state <= GEN_IDLE;
@@ -634,7 +634,7 @@ assign pcie_bas_response = 0;
 assign pdumeta_cnt = 0;
 
 logic pcie_pkt_buf_in_ready;
-logic pcie_desc_buf_in_ready;
+logic pcie_meta_buf_in_ready;
 logic [31:0] pending_prefetch_cnt;
 
 pcie_top pcie (
@@ -661,10 +661,10 @@ pcie_top pcie (
     .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
     .pcie_pkt_buf_in_ready  (pcie_pkt_buf_in_ready),
     .pcie_pkt_buf_occup     (pcie_pkt_buf_occup),
-    .pcie_desc_buf_wr_data  (pcie_desc_buf_wr_data),
-    .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
-    .pcie_desc_buf_in_ready (pcie_desc_buf_in_ready),
-    .pcie_desc_buf_occup    (pcie_desc_buf_occup),
+    .pcie_meta_buf_wr_data  (pcie_meta_buf_wr_data),
+    .pcie_meta_buf_wr_en    (pcie_meta_buf_wr_en),
+    .pcie_meta_buf_in_ready (pcie_meta_buf_in_ready),
+    .pcie_meta_buf_occup    (pcie_meta_buf_occup),
     .disable_pcie           (disable_pcie),
     .sw_reset               (sw_reset),
     .pdumeta_cpu_data       (pdumeta_cpu_data),

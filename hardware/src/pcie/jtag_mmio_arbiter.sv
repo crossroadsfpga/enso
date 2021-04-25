@@ -6,7 +6,9 @@
  * share the same BRAM ports. PCIe requests have priority over JTAG.
  */
 
-module jtag_mmio_arbiter (
+module jtag_mmio_arbiter #(
+    parameter PKT_QUEUE_RD_DELAY = 2
+)(
     input logic pcie_clk,
     input logic jtag_clk,
     input logic pcie_reset_n,
@@ -79,12 +81,10 @@ logic q_table_pcie_rd_set;
 
 logic dsc_rd_en_r;
 logic dsc_rd_en_r2;
-logic pkt_rd_en_r;
-logic pkt_rd_en_r2;
+logic pkt_rd_en_r [PKT_QUEUE_RD_DELAY];
 
 logic pcie_bram_rd;
-logic pcie_bram_rd_r;
-logic pcie_bram_rd_r2;
+logic pcie_bram_rd_r [PKT_QUEUE_RD_DELAY];
 
 logic [31:0] c2f_head;
 logic [31:0] c2f_tail;
@@ -198,8 +198,8 @@ assign pcie_reg_read = cpu_reg_region & pcie_read_0;
 logic [BRAM_TABLE_IDX_WIDTH-1:0] page_idx;
 assign page_idx = pcie_address_0[12 +: BRAM_TABLE_IDX_WIDTH];
 
-assign q_table_rd_data_b_pcie_ready = 
-    (dsc_rd_en_r2 | pkt_rd_en_r2) & pcie_bram_rd_r2;
+assign q_table_rd_data_b_pcie_ready = (dsc_rd_en_r2 & pcie_bram_rd_r[1]) |
+    (pkt_rd_en_r[PKT_QUEUE_RD_DELAY-1] & pcie_bram_rd_r[PKT_QUEUE_RD_DELAY-1]);
 
 // We share a single BRAM port among: PCIe writes, PCIe reads and JTAG reads.
 // We serve simultaneous requests following this priority. That way, we only
@@ -471,69 +471,73 @@ always @(posedge pcie_clk) begin
     last_rd_b_table_r2 <= last_rd_b_table_r;
 
     dsc_rd_en_r <= dsc_q_table_tails.rd_en | dsc_q_table_heads.rd_en |
-               dsc_q_table_l_addrs.rd_en | dsc_q_table_h_addrs.rd_en;
-
-    pkt_rd_en_r <= pkt_q_table_tails.rd_en | pkt_q_table_heads.rd_en |
-                pkt_q_table_l_addrs.rd_en | pkt_q_table_h_addrs.rd_en;
-
+                   dsc_q_table_l_addrs.rd_en | dsc_q_table_h_addrs.rd_en;
     dsc_rd_en_r2 <= dsc_rd_en_r;
-    pkt_rd_en_r2 <= pkt_rd_en_r;
+
+    pkt_rd_en_r[0] <= pkt_q_table_tails.rd_en | pkt_q_table_heads.rd_en |
+                      pkt_q_table_l_addrs.rd_en | pkt_q_table_h_addrs.rd_en;
+    for (integer i = 0; i < PKT_QUEUE_RD_DELAY-1; i++) begin
+        pkt_rd_en_r[i+1] <= pkt_rd_en_r[i];
+    end
 
     // signals if this is a PCIe (1) or a JTAG (0) read
     pcie_bram_rd <= q_table_pcie_rd_set;
-    pcie_bram_rd_r <= pcie_bram_rd;
-    pcie_bram_rd_r2 <= pcie_bram_rd_r;
 
-    // JTAG read is ready
-    if (!pcie_bram_rd_r2) begin
-        if (dsc_rd_en_r2) begin
-            case (last_rd_b_table_r2)
-                0: begin
-                    q_table_rd_data_b <= dsc_q_table_tails.rd_data;
-                end
-                1: begin
-                    q_table_rd_data_b <= dsc_q_table_heads.rd_data;
-                end
-                2: begin
-                    q_table_rd_data_b <= dsc_q_table_l_addrs.rd_data;
-                end
-                3: begin
-                    q_table_rd_data_b <= dsc_q_table_h_addrs.rd_data;
-                end
-            endcase
-            q_table_rd_data_b_jtag_ready <= 1;
-        end
+    pcie_bram_rd_r[0] <= pcie_bram_rd;
+    for (integer i = 0; i < PKT_QUEUE_RD_DELAY-1; i++) begin
+        pcie_bram_rd_r[i+1] <= pcie_bram_rd_r[i];
+    end
 
-        if (pkt_rd_en_r2) begin
-            case (last_rd_b_table_r2)
-                0: begin
-                    q_table_rd_data_b <= pkt_q_table_tails.rd_data;
-                end
-                1: begin
-                    q_table_rd_data_b <= pkt_q_table_heads.rd_data;
-                end
-                2: begin
-                    q_table_rd_data_b <= pkt_q_table_l_addrs.rd_data;
-                end
-                3: begin
-                    q_table_rd_data_b <= pkt_q_table_h_addrs.rd_data;
-                end
-            endcase
-            q_table_rd_data_b_jtag_ready <= 1;
-        end
+    // JTAG dsc read is ready
+    if (!pcie_bram_rd_r[1] & dsc_rd_en_r2) begin
+        case (last_rd_b_table_r2)
+            0: begin
+                q_table_rd_data_b <= dsc_q_table_tails.rd_data;
+            end
+            1: begin
+                q_table_rd_data_b <= dsc_q_table_heads.rd_data;
+            end
+            2: begin
+                q_table_rd_data_b <= dsc_q_table_l_addrs.rd_data;
+            end
+            3: begin
+                q_table_rd_data_b <= dsc_q_table_h_addrs.rd_data;
+            end
+        endcase
+        q_table_rd_data_b_jtag_ready <= 1;
+    end
+
+    // JTAG pkt read is ready
+    if (!pcie_bram_rd_r[PKT_QUEUE_RD_DELAY-1] &
+            pkt_rd_en_r[PKT_QUEUE_RD_DELAY-1]) begin
+        case (last_rd_b_table_r2)
+            0: begin
+                q_table_rd_data_b <= pkt_q_table_tails.rd_data;
+            end
+            1: begin
+                q_table_rd_data_b <= pkt_q_table_heads.rd_data;
+            end
+            2: begin
+                q_table_rd_data_b <= pkt_q_table_l_addrs.rd_data;
+            end
+            3: begin
+                q_table_rd_data_b <= pkt_q_table_h_addrs.rd_data;
+            end
+        endcase
+        q_table_rd_data_b_jtag_ready <= 1;
     end
 end
 
 
 // PDU_BUFFER
-// CPU side MMIO read MUX. If pkt_rd_en_r2, we return pkt queue info else, we
-// return dsc queue info.
+// CPU side MMIO read MUX. If pkt_rd_en_r[PKT_QUEUE_RD_DELAY-1], we return pkt
+// queue info else, we return dsc queue info.
 always @(posedge pcie_clk) begin
     if (!pcie_reset_n) begin
         pcie_readdata_0 <= 0;
         pcie_readdatavalid_0 <= 0;
     end else begin
-        if (pkt_rd_en_r2) begin
+        if (pkt_rd_en_r[PKT_QUEUE_RD_DELAY-1]) begin
             pcie_readdata_0 <= {
                 256'h0, c2f_kmem_addr, c2f_head, c2f_tail,
                 pkt_q_table_h_addrs.rd_data, pkt_q_table_l_addrs.rd_data,

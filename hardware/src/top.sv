@@ -246,10 +246,10 @@ logic                     pcie_pkt_buf_in_ready;
 logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup;
 logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup_r;
 
-pkt_dsc_t                pcie_desc_buf_wr_data;
-logic                     pcie_desc_buf_wr_en;
-logic                     pcie_desc_buf_in_ready;
-logic [F2C_RB_AWIDTH-1:0] pcie_desc_buf_occup;
+pkt_meta_t                pcie_meta_buf_wr_data;
+logic                     pcie_meta_buf_wr_en;
+logic                     pcie_meta_buf_in_ready;
+logic [F2C_RB_AWIDTH-1:0] pcie_meta_buf_occup;
 
 logic                    disable_pcie;
 pdu_metadata_t           pdumeta_cpu_data;
@@ -478,7 +478,7 @@ always @(posedge clk_pcie) begin
         if (pcie_meta_valid & pcie_meta_ready) begin
             pcie_meta_cnt <= pcie_meta_cnt + 1;
         end
-        if (pcie_desc_buf_wr_en) begin
+        if (pcie_meta_buf_wr_en) begin
             dma_pkt_cnt <= dma_pkt_cnt + 1;
         end
         if (!pcie_bas_waitrequest && pcie_bas_write_r) begin
@@ -1028,9 +1028,9 @@ pdu_gen pdu_gen_inst(
     .pcie_pkt_buf_wr_data   (pcie_pkt_buf_wr_data),
     .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
     .pcie_pkt_buf_in_ready  (pcie_pkt_buf_in_ready),
-    .pcie_desc_buf_wr_data  (pcie_desc_buf_wr_data),
-    .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
-    .pcie_desc_buf_in_ready (pcie_desc_buf_in_ready)
+    .pcie_meta_buf_wr_data  (pcie_meta_buf_wr_data),
+    .pcie_meta_buf_wr_en    (pcie_meta_buf_wr_en),
+    .pcie_meta_buf_in_ready (pcie_meta_buf_in_ready)
 );
 
 //////////////////// To OUTPUT FIFO //////////////////////////////////
@@ -1123,10 +1123,10 @@ pcie_top pcie (
     .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
     .pcie_pkt_buf_in_ready  (pcie_pkt_buf_in_ready),
     .pcie_pkt_buf_occup     (pcie_pkt_buf_occup),
-    .pcie_desc_buf_wr_data  (pcie_desc_buf_wr_data),
-    .pcie_desc_buf_wr_en    (pcie_desc_buf_wr_en),
-    .pcie_desc_buf_in_ready (pcie_desc_buf_in_ready),
-    .pcie_desc_buf_occup    (pcie_desc_buf_occup),
+    .pcie_meta_buf_wr_data  (pcie_meta_buf_wr_data),
+    .pcie_meta_buf_wr_en    (pcie_meta_buf_wr_en),
+    .pcie_meta_buf_in_ready (pcie_meta_buf_in_ready),
+    .pcie_meta_buf_occup    (pcie_meta_buf_occup),
     .disable_pcie           (disable_pcie),
     .sw_reset               (sw_reset),
     .pdumeta_cpu_data       (pdumeta_cpu_data),

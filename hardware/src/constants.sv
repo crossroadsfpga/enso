@@ -87,7 +87,11 @@ localparam MAX_PKT_SIZE = 24; // in 512 bits
 // TODO(sadok): expose these values from JTAG so that software and the tcl
 // script can adapt to the bitstream that is loaded at given moment.
 localparam MAX_NB_APPS = 256;
-localparam MAX_NB_FLOWS = 8192;
+localparam MAX_NB_FLOWS = 8192*2;
+
+// Define the number of packet queue managers that we instantiate.
+localparam NB_PKT_QUEUE_MANAGERS = 4;
+localparam PKT_QM_ID_WIDTH = $clog2(NB_PKT_QUEUE_MANAGERS);
 
 localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));
 localparam FLOW_IDX_WIDTH = ($clog2(MAX_NB_FLOWS));
@@ -151,17 +155,10 @@ typedef struct packed
 
 typedef struct packed
 {
-    logic [31:0] f2c_tail;
-    logic [31:0] f2c_head;
-    logic [63:0] f2c_kmem_addr;
-} queue_state_t;
-
-typedef struct packed
-{
     logic [APP_IDX_WIDTH-1:0]      dsc_queue_id;
     logic [FLOW_IDX_WIDTH-1:0]     pkt_queue_id;
     logic [$clog2(MAX_PKT_SIZE):0] size; // in number of flits
-} pkt_dsc_t;
+} pkt_meta_t;
 
 typedef struct packed
 {
