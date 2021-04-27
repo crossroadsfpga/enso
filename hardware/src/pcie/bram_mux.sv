@@ -40,8 +40,16 @@ generate;
     end    
 endgenerate
 
+localparam NON_NEG_BRAM_ID_MSB = BRAM_ID_WIDTH ? BRAM_ID_WIDTH - 1 : 0;
+
 always @(posedge clk) begin
-    automatic logic [BRAM_ID_WIDTH-1:0] bram_id = in.addr[0 +: BRAM_ID_WIDTH];
+    automatic logic [NON_NEG_BRAM_ID_MSB:0] bram_id;
+
+    if (BRAM_ID_WIDTH > 0) begin
+        bram_id = in.addr[NON_NEG_BRAM_ID_MSB:0];
+    end else begin
+        bram_id = 0;
+    end
 
     for (integer i = 0; i < NB_BRAMS; i++) begin
         out_rd_en[i] <= 0;
@@ -57,7 +65,7 @@ always @(posedge clk) begin
     rd_en_r2 <= rd_en_r;
 
     bram_id_r <= bram_id;
-    bram_id_r2 <= bram_id;
+    bram_id_r2 <= bram_id_r;
 
     if (rd_en_r2) begin
         in.rd_data <= out_rd_data[bram_id_r2];

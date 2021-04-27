@@ -82,25 +82,25 @@ bram_interface_io #(
 ) pqm_pkt_q_table_h_addrs[NB_PKT_QUEUE_MANAGERS]();
 
 bram_mux #( .NB_BRAMS(NB_PKT_QUEUE_MANAGERS) ) pkt_q_table_tails_mux (
-    .clk (clk),
+    .clk (pcie_clk),
     .in  (pkt_q_table_tails),
     .out (pqm_pkt_q_table_tails)
 );
 
 bram_mux #( .NB_BRAMS(NB_PKT_QUEUE_MANAGERS) ) pkt_q_table_heads_mux (
-    .clk (clk),
+    .clk (pcie_clk),
     .in  (pkt_q_table_heads),
     .out (pqm_pkt_q_table_heads)
 );
 
 bram_mux #( .NB_BRAMS(NB_PKT_QUEUE_MANAGERS) ) pkt_q_table_l_addrs_mux (
-    .clk (clk),
+    .clk (pcie_clk),
     .in  (pkt_q_table_l_addrs),
     .out (pqm_pkt_q_table_l_addrs)
 );
 
 bram_mux #( .NB_BRAMS(NB_PKT_QUEUE_MANAGERS) ) pkt_q_table_h_addrs_mux (
-    .clk (clk),
+    .clk (pcie_clk),
     .in  (pkt_q_table_h_addrs),
     .out (pqm_pkt_q_table_h_addrs)
 );
@@ -121,7 +121,10 @@ logic [BRAM_TABLE_IDX_WIDTH-1:0] updated_queue_idx [NB_PKT_QUEUE_MANAGERS];
 assign queue_idx = pcie_address_0[12 +: BRAM_TABLE_IDX_WIDTH];
 
 logic head_upd;
-assign head_upd = pcie_byteenable_0[1*REG_SIZE +:REG_SIZE] == {REG_SIZE{1'b1}};
+assign head_upd = pcie_byteenable_0[1*REG_SIZE +: REG_SIZE] == {REG_SIZE{1'b1}};
+
+// use to default ranges to a single bit when using a single pkt queue manager.
+localparam NON_NEG_PKT_QM_MSB = PKT_QM_ID_WIDTH ? PKT_QM_ID_WIDTH - 1 : 0;
 
 // Monitor PCIe writes to detect updates to a pkt queue head.
 always @(posedge pcie_clk) begin
@@ -130,11 +133,15 @@ always @(posedge pcie_clk) begin
     end
 
     // Got a PCIe write to a packet queue head.
-    if (pcie_write_0 && queue_idx < MAX_NB_FLOWS && head_upd) begin
-        automatic logic [PKT_QM_ID_WIDTH-1:0] pkt_qm_id;
+    if (pcie_write_0 && (queue_idx < MAX_NB_FLOWS) && head_upd) begin
+        automatic logic [NON_NEG_PKT_QM_MSB:0] pkt_qm_id;
 
         // Use packet queue index's LSBs to choose the queue manager.
-        pkt_qm_id = queue_idx[PKT_QM_ID_WIDTH-1:0];
+        if (PKT_QM_ID_WIDTH > 0) begin
+            pkt_qm_id = queue_idx[NON_NEG_PKT_QM_MSB:0];
+        end else begin
+            pkt_qm_id = 0;
+        end
 
         updated_queue_idx[pkt_qm_id] <=
             queue_idx[BRAM_TABLE_IDX_WIDTH-1:PKT_QM_ID_WIDTH];
@@ -189,8 +196,11 @@ always_comb begin
             pcie_meta_buf_wr_data.pkt_queue_id;
         pkt_q_mngr_in_meta_data[i].size = pcie_meta_buf_wr_data.size;
 
-        pkt_q_mngr_in_meta_valid[i] = pcie_meta_buf_wr_en 
-            && (pcie_meta_buf_wr_data.pkt_queue_id[0 +: PKT_QM_ID_WIDTH] == i);
+        pkt_q_mngr_in_meta_valid[i] = pcie_meta_buf_wr_en;
+        if (PKT_QM_ID_WIDTH > 0) begin
+            pkt_q_mngr_in_meta_valid[i] &= (pcie_meta_buf_wr_data.pkt_queue_id[
+                NON_NEG_PKT_QM_MSB:0] == i);
+        end
 
         // TODO(sadok) This only allows input when ALL paquet queue managers are
         // ready. Therefore, having a small queue on the packet manager's input

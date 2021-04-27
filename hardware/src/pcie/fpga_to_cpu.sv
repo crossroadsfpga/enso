@@ -55,7 +55,7 @@ flit_lite_t pkt_buf_out_data;
 logic       pkt_buf_out_ready;
 logic       pkt_buf_out_valid;
 
-pkt_meta_t  metadata_buf_out_data;
+pkt_meta_with_queues_t  metadata_buf_out_data;
 logic       metadata_buf_out_ready;
 logic       metadata_buf_out_valid;
 
@@ -221,8 +221,6 @@ always @(posedge clk) begin
                 if (can_start_transfer) begin
                     automatic transf_meta_t next_transf_meta;
 
-                    $display("Can start transfer! (cur_meta.needs_dsc: %b)", cur_meta.needs_dsc);
-                    $display("pcie_bas_write: %b  pcie_bas_write_r: %b", pcie_bas_write, pcie_bas_write_r);
                     next_transf_meta = start_burst(pkt_buf_out_data, cur_meta);
                     transf_meta <= next_transf_meta;
 
@@ -235,14 +233,12 @@ always @(posedge clk) begin
                     end else if (cur_meta.needs_dsc) begin
                         state <= SEND_DESCRIPTOR;
                     end else begin
-                        $display("-> START_TRANSFER");
                         state <= START_TRANSFER;
                     end
                 end
             end
             COMPLETE_BURST: begin
                 if (can_continue_transfer) begin
-                    $display("COMPLETE_BURST: Can continue transfer!");
                     // Setting flits_in_transfer to 0 indicates that this is
                     // continuing a burst.
                     transf_meta.pkt_meta <= 
@@ -267,7 +263,6 @@ always @(posedge clk) begin
                 // issue new bursts to the same transfer.
 
                 if (can_continue_transfer) begin
-                    $display("START_BURST: Can continue transfer!");
                     transf_meta <=
                         start_burst(pkt_buf_out_data, transf_meta.pkt_meta);
 
@@ -284,7 +279,6 @@ always @(posedge clk) begin
                 if (can_continue_transfer) begin
                     automatic pcie_pkt_dsc_t pcie_pkt_desc;
 
-                    $display("SEND_DESCRIPTOR: Can continue transfer!");
                     pcie_pkt_desc.signal = 1;
                     pcie_pkt_desc.tail = {
                         {{$bits(pcie_pkt_desc.tail) - RB_AWIDTH}{1'b0}},
@@ -365,7 +359,7 @@ pkt_buf (
 // packets are min-sized. We may use a smaller buffer here to save BRAM.
 fifo_wrapper_infill #(
     .SYMBOLS_PER_BEAT(1),
-    .BITS_PER_SYMBOL($bits(pkt_meta_t)),
+    .BITS_PER_SYMBOL($bits(pkt_meta_with_queues_t)),
     .FIFO_DEPTH(F2C_RB_DEPTH)
 )
 metadata_buf (

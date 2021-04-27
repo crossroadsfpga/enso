@@ -86,24 +86,27 @@ assign concurrent_rd_wr = tail_wr_en & queue_rd_en;
 
 logic pkt_sender_ready;
 // If concurrent_rd_wr is set, there is a pending write and we must wait.
-assign pkt_sender_ready = !concurrent_rd_wr;
+assign pkt_sender_ready = !concurrent_rd_wr & out_meta_ready;
 assign in_meta_ready = pkt_sender_ready;
 
 // Read fetched queue states and push metadata out
 always @(posedge clk) begin
     tail_wr_en <= 0;
-    out_meta_valid <= 0;
+    
+    // Ensure previous transfer is done before unsetting out_meta_valid
+    if (out_meta_ready) begin
+        out_meta_valid <= 0;
+    end
 
     if (rst) begin
         // set last states to invalid so we ignore those in the beginning.
         last_states[0].valid <= 0;
         last_states[1].valid <= 0;
+        out_meta_valid <= 0;
     end else begin
         if (next_states[0].valid & pkt_sender_ready) begin
             automatic internal_queue_state_t cur_state = next_states[0];
 
-            $display("Got meta (UNIT_POINTER: %d)", UNIT_POINTER);
-            $display("in_pass_through: %b", in_pass_through);
             // The queue tail may be outdated if any of the last two packets
             // were directed to the current queue. Therefore, we save the last
             // two queue states and grab the most up to date tail value if any
