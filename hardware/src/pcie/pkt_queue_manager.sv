@@ -1,4 +1,3 @@
-`include "../constants.sv"
 `include "pcie_consts.sv"
 
 /*
@@ -20,7 +19,7 @@ module pkt_queue_manager #(
     output var pkt_meta_with_queues_t out_meta_data,
     output logic                      out_meta_valid,
     input  logic                      out_meta_ready,
-    
+
     // BRAM signals for queues
     bram_interface_io.owner q_table_tails,
     bram_interface_io.owner q_table_heads,

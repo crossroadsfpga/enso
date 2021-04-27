@@ -1,4 +1,3 @@
-`include "../constants.sv"
 `include "pcie_consts.sv"
 
 /*
