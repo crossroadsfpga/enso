@@ -18,9 +18,11 @@ localparam BRAM_ID_WIDTH = $clog2(NB_BRAMS);
 
 logic [BRAM_ID_WIDTH-1:0] bram_id_r;
 logic [BRAM_ID_WIDTH-1:0] bram_id_r2;
+logic [BRAM_ID_WIDTH-1:0] bram_id_r3;
 
 logic rd_en_r;
 logic rd_en_r2;
+logic rd_en_r3;
 
 // We cannot use a non-constant index to index an instance array, so we use the
 // following as a workaround.
@@ -63,11 +65,13 @@ always @(posedge clk) begin
 
     rd_en_r <= in.rd_en;
     rd_en_r2 <= rd_en_r;
+    rd_en_r3 <= rd_en_r2;
 
     bram_id_r <= bram_id;
     bram_id_r2 <= bram_id_r;
+    bram_id_r3 <= bram_id_r2;
 
-    if (rd_en_r2) begin
+    if (rd_en_r3) begin
         in.rd_data <= out_rd_data[bram_id_r2];
     end
 end
