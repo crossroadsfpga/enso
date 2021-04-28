@@ -50,10 +50,17 @@ output_if_error() {
 
 for t in ${tests[@]}; do
     echo "Running test: $t"
-    vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
-        -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver \
-        -voptargs="+acc" -c -do "run -all" $t > out.txt
-    output_if_error "$t test"
+    if [ "$1" = "--gui" ]; then
+        # Use the following to activate the modelsim GUI.
+        vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
+            -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver \
+            -voptargs="+acc" $t
+    else
+        vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
+            -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver \
+            -voptargs="+acc" -c -do "run -all" $t  > out.txt
+    fi
+    output_if_error $t
 done
 
 printf "${GREEN}All tests passed${NC}\n"
