@@ -1,7 +1,7 @@
 `include "pcie_consts.sv"
 
 /*
- * Streaming multiplexer that takes an "order" stream that indicates that order
+ * Streaming multiplexer that takes an "order" stream that indicates the order
  * that it should serve each stream.
  */
 
