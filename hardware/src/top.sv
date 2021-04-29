@@ -240,16 +240,16 @@ logic          pdumeta_cpu_out_ready;
 logic          pdumeta_cpu_ready;
 logic [31:0]   pdumeta_cpu_csr_readdata;
 
-flit_lite_t               pcie_pkt_buf_wr_data;
-logic                     pcie_pkt_buf_wr_en;
-logic                     pcie_pkt_buf_in_ready;
-logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup;
-logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup_r;
+flit_lite_t             pcie_pkt_buf_data;
+logic                   pcie_pkt_buf_valid;
+logic                   pcie_pkt_buf_ready;
+logic [F2C_RB_AWIDTH:0] pcie_pkt_buf_occup;
+logic [F2C_RB_AWIDTH:0] pcie_pkt_buf_occup_r;
 
-pkt_meta_t                pcie_meta_buf_wr_data;
-logic                     pcie_meta_buf_wr_en;
-logic                     pcie_meta_buf_in_ready;
-logic [F2C_RB_AWIDTH-1:0] pcie_meta_buf_occup;
+pkt_meta_t              pcie_meta_buf_data;
+logic                   pcie_meta_buf_valid;
+logic                   pcie_meta_buf_ready;
+logic [F2C_RB_AWIDTH:0] pcie_meta_buf_occup;
 
 logic                    disable_pcie;
 pdu_metadata_t           pdumeta_cpu_data;
@@ -478,7 +478,7 @@ always @(posedge clk_pcie) begin
         if (pcie_meta_valid & pcie_meta_ready) begin
             pcie_meta_cnt <= pcie_meta_cnt + 1;
         end
-        if (pcie_meta_buf_wr_en) begin
+        if (pcie_meta_buf_valid) begin
             dma_pkt_cnt <= dma_pkt_cnt + 1;
         end
         if (!pcie_bas_waitrequest && pcie_bas_write_r) begin
@@ -807,29 +807,29 @@ parser_out_fifo (
 );
 
 flow_table_wrapper flow_table_wrapper_0 (
-     .clk               (clk),
-     .rst               (rst),
-     .in_meta_data      (parser_out_fifo_out_data),
-     .in_meta_valid     (parser_out_fifo_out_valid),
-     .in_meta_ready     (parser_out_fifo_out_ready),
-     .out_meta_data     (flow_table_wrapper_out_meta_data),
-     .out_meta_valid    (flow_table_wrapper_out_meta_valid),
-     .out_meta_ready    (flow_table_wrapper_out_ready),
-    .in_control_data   (pdumeta_cpu_out_data),
-    .in_control_valid  (pdumeta_cpu_out_valid),
-     .in_control_ready  (pdumeta_cpu_out_ready),
-     .out_control_done  (flow_table_wrapper_out_control_done)
+    .clk              (clk),
+    .rst              (rst),
+    .in_meta_data     (parser_out_fifo_out_data),
+    .in_meta_valid    (parser_out_fifo_out_valid),
+    .in_meta_ready    (parser_out_fifo_out_ready),
+    .out_meta_data    (flow_table_wrapper_out_meta_data),
+    .out_meta_valid   (flow_table_wrapper_out_meta_valid),
+    .out_meta_ready   (flow_table_wrapper_out_ready),
+    .in_control_data  (pdumeta_cpu_out_data),
+    .in_control_valid (pdumeta_cpu_out_valid),
+    .in_control_ready (pdumeta_cpu_out_ready),
+    .out_control_done (flow_table_wrapper_out_control_done)
  );
 
 flow_director_wrapper flow_director_inst (
-    .clk                     (clk),                        
-    .rst                     (rst),              
-    .in_meta_data            (fdw_in_meta_data),                
-    .in_meta_valid           (fdw_in_meta_valid),               
-    .in_meta_ready           (fdw_in_meta_ready),               
-    .out_meta_data           (fdw_out_meta_data),          
-    .out_meta_valid          (fdw_out_meta_valid),         
-    .out_meta_ready          (fdw_out_meta_ready)        
+    .clk            (clk),                        
+    .rst            (rst),              
+    .in_meta_data   (fdw_in_meta_data),                
+    .in_meta_valid  (fdw_in_meta_valid),               
+    .in_meta_ready  (fdw_in_meta_ready),               
+    .out_meta_data  (fdw_out_meta_data),          
+    .out_meta_valid (fdw_out_meta_valid),         
+    .out_meta_ready (fdw_out_meta_ready)        
 );
 
 dc_fifo_wrapper_infill  #(
@@ -1014,23 +1014,23 @@ dm2pcie_meta_fifo (
 //////////////////// Datamover To PDU_GEN //////////////////////////////////
 
 pdu_gen pdu_gen_inst(
-    .clk                    (clk_pcie),                                     
-    .rst                    (rst_pcie),                                  
-    .in_sop                 (pcie_pkt_sop),          
-    .in_eop                 (pcie_pkt_eop),            
-    .in_data                (pcie_pkt_data),                    
-    .in_empty               (pcie_pkt_empty),                    
-    .in_valid               (pcie_pkt_valid), 
-    .in_ready               (pcie_pkt_ready), 
-    .in_meta_valid          (pcie_meta_valid),
-    .in_meta_data           (pcie_meta_data),
-    .in_meta_ready          (pcie_meta_ready),
-    .pcie_pkt_buf_wr_data   (pcie_pkt_buf_wr_data),
-    .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
-    .pcie_pkt_buf_in_ready  (pcie_pkt_buf_in_ready),
-    .pcie_meta_buf_wr_data  (pcie_meta_buf_wr_data),
-    .pcie_meta_buf_wr_en    (pcie_meta_buf_wr_en),
-    .pcie_meta_buf_in_ready (pcie_meta_buf_in_ready)
+    .clk                 (clk_pcie),                                     
+    .rst                 (rst_pcie),                                  
+    .in_sop              (pcie_pkt_sop),          
+    .in_eop              (pcie_pkt_eop),            
+    .in_data             (pcie_pkt_data),                    
+    .in_empty            (pcie_pkt_empty),                    
+    .in_valid            (pcie_pkt_valid), 
+    .in_ready            (pcie_pkt_ready), 
+    .in_meta_valid       (pcie_meta_valid),
+    .in_meta_data        (pcie_meta_data),
+    .in_meta_ready       (pcie_meta_ready),
+    .pcie_pkt_buf_data   (pcie_pkt_buf_data),
+    .pcie_pkt_buf_valid  (pcie_pkt_buf_valid),
+    .pcie_pkt_buf_ready  (pcie_pkt_buf_ready),
+    .pcie_meta_buf_data  (pcie_meta_buf_data),
+    .pcie_meta_buf_valid (pcie_meta_buf_valid),
+    .pcie_meta_buf_ready (pcie_meta_buf_ready)
 );
 
 //////////////////// To OUTPUT FIFO //////////////////////////////////
@@ -1119,13 +1119,13 @@ pcie_top pcie (
     .pcie_readdata_0        (pcie_readdata_0), 
     .pcie_writedata_0       (pcie_writedata_0), 
     .pcie_byteenable_0      (pcie_byteenable_0),
-    .pcie_pkt_buf_wr_data   (pcie_pkt_buf_wr_data),
-    .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
-    .pcie_pkt_buf_in_ready  (pcie_pkt_buf_in_ready),
+    .pcie_pkt_buf_data      (pcie_pkt_buf_data),
+    .pcie_pkt_buf_valid     (pcie_pkt_buf_valid),
+    .pcie_pkt_buf_ready     (pcie_pkt_buf_ready),
     .pcie_pkt_buf_occup     (pcie_pkt_buf_occup),
-    .pcie_meta_buf_wr_data  (pcie_meta_buf_wr_data),
-    .pcie_meta_buf_wr_en    (pcie_meta_buf_wr_en),
-    .pcie_meta_buf_in_ready (pcie_meta_buf_in_ready),
+    .pcie_meta_buf_data     (pcie_meta_buf_data),
+    .pcie_meta_buf_valid    (pcie_meta_buf_valid),
+    .pcie_meta_buf_ready    (pcie_meta_buf_ready),
     .pcie_meta_buf_occup    (pcie_meta_buf_occup),
     .disable_pcie           (disable_pcie),
     .sw_reset               (sw_reset),
@@ -1135,7 +1135,7 @@ pcie_top pcie (
     .dma_queue_full_cnt     (dma_queue_full_cnt),
     .cpu_dsc_buf_full_cnt   (cpu_dsc_buf_full_cnt),
     .cpu_pkt_buf_full_cnt   (cpu_pkt_buf_full_cnt),
-    .pending_prefetch_cnt        (pending_prefetch_cnt),
+    .pending_prefetch_cnt   (pending_prefetch_cnt),
     .clk_status             (clk_status),
     .status_addr            (status_addr),
     .status_read            (status_read),
