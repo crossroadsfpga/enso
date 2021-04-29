@@ -39,9 +39,13 @@ queue_state_t out_q_state;
 
 // Consider only the MSBs that we need to index NB_QUEUES, this lets us use the
 // LSBs outside the module as an index to the packet queue manager instance.
-logic [$clog2(NB_QUEUES)-1:0] local_queue_id;
-assign local_queue_id = in_meta_data.pkt_queue_id[
+logic [$clog2(NB_QUEUES)-1:0] in_local_queue_id;
+logic [$clog2(NB_QUEUES)-1:0] out_local_queue_id;
+assign in_local_queue_id = in_meta_data.pkt_queue_id[
     $bits(in_meta_data.pkt_queue_id)-1 -: $clog2(NB_QUEUES)];
+
+assign out_local_queue_id = out_meta_extra.pkt_queue_id[
+    $bits(out_meta_extra.pkt_queue_id)-1 -: $clog2(NB_QUEUES)];
 
 queue_manager #(
     .NB_QUEUES(NB_QUEUES),
@@ -52,7 +56,7 @@ queue_manager_inst (
     .clk             (clk),
     .rst             (rst),
     .in_pass_through (1'b0),
-    .in_queue_id     (local_queue_id),
+    .in_queue_id     (in_local_queue_id),
     .in_size         (in_meta_data.size),
     .in_meta_extra   (in_meta_data),
     .in_meta_valid   (in_meta_valid),
@@ -75,7 +79,7 @@ logic [NB_QUEUES-1:0] pkt_q_status;
 // update pkt_q_status to indicate if a pkt queue needs a descriptor
 always @(posedge clk) begin
     if (out_meta_valid & out_meta_ready) begin
-        pkt_q_status[local_queue_id] <= 1'b1;
+        pkt_q_status[out_local_queue_id] <= 1'b1;
     end
 
     if (rst) begin
@@ -105,7 +109,7 @@ end
 always_comb begin
     out_meta_data = out_meta_extra;
     out_meta_data.pkt_q_state = out_q_state;
-    out_meta_data.needs_dsc = !pkt_q_status[local_queue_id];
+    out_meta_data.needs_dsc = !pkt_q_status[out_local_queue_id];
 end
 
 endmodule

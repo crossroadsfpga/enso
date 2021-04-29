@@ -23,14 +23,14 @@ module pcie_top (
     input  logic [511:0]               pcie_writedata_0,
     input  logic [63:0]                pcie_byteenable_0,
 
-    input  var flit_lite_t           pcie_pkt_buf_wr_data,
-    input  logic                     pcie_pkt_buf_wr_en,
-    output logic                     pcie_pkt_buf_in_ready,
-    output logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup,
-    input  var pkt_meta_t            pcie_meta_buf_wr_data,
-    input  logic                     pcie_meta_buf_wr_en,
-    output logic                     pcie_meta_buf_in_ready,
-    output logic [F2C_RB_AWIDTH-1:0] pcie_meta_buf_occup,
+    input  var flit_lite_t         pcie_pkt_buf_data,
+    input  logic                   pcie_pkt_buf_valid,
+    output logic                   pcie_pkt_buf_ready,
+    output logic [F2C_RB_AWIDTH:0] pcie_pkt_buf_occup,
+    input  var pkt_meta_t          pcie_meta_buf_data,
+    input  logic                   pcie_meta_buf_valid,
+    output logic                   pcie_meta_buf_ready,
+    output logic [F2C_RB_AWIDTH:0] pcie_meta_buf_occup,
 
     output logic                  disable_pcie,
     output logic                  sw_reset,
@@ -187,25 +187,29 @@ logic                  pkt_q_mngr_out_meta_valid [NB_PKT_QUEUE_MANAGERS];
 logic                  pkt_q_mngr_in_meta_ready [NB_PKT_QUEUE_MANAGERS];
 logic                  pkt_q_mngr_out_meta_ready [NB_PKT_QUEUE_MANAGERS];
 
+logic st_mux_ord_ready;
+
+logic [NON_NEG_PKT_QM_MSB:0] pkt_q_mngr_id;
+assign pkt_q_mngr_id = !pcie_meta_buf_valid 
+                       | pcie_meta_buf_data.pkt_queue_id[NON_NEG_PKT_QM_MSB:0];
+
 always_comb begin
-    pcie_meta_buf_in_ready = 1;
+    pcie_meta_buf_ready = 1;
     for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
         pkt_q_mngr_in_meta_data[i].dsc_queue_id = 
-            pcie_meta_buf_wr_data.dsc_queue_id;
+            pcie_meta_buf_data.dsc_queue_id;
         pkt_q_mngr_in_meta_data[i].pkt_queue_id = 
-            pcie_meta_buf_wr_data.pkt_queue_id;
-        pkt_q_mngr_in_meta_data[i].size = pcie_meta_buf_wr_data.size;
+            pcie_meta_buf_data.pkt_queue_id;
+        pkt_q_mngr_in_meta_data[i].size = pcie_meta_buf_data.size;
 
-        pkt_q_mngr_in_meta_valid[i] = pcie_meta_buf_wr_en;
+        pcie_meta_buf_ready &= 
+            pkt_q_mngr_in_meta_ready[pkt_q_mngr_id] & st_mux_ord_ready;
+
+        pkt_q_mngr_in_meta_valid[i] = pcie_meta_buf_valid & pcie_meta_buf_ready;
         if (PKT_QM_ID_WIDTH > 0) begin
-            pkt_q_mngr_in_meta_valid[i] &= (pcie_meta_buf_wr_data.pkt_queue_id[
+            pkt_q_mngr_in_meta_valid[i] &= (pcie_meta_buf_data.pkt_queue_id[
                 NON_NEG_PKT_QM_MSB:0] == i);
         end
-
-        // TODO(sadok) This only allows input when ALL paquet queue managers are
-        // ready. Therefore, having a small queue on the packet manager's input
-        // may be benefitial to allow parallelism.
-        pcie_meta_buf_in_ready &= pkt_q_mngr_in_meta_ready[i];
     end
 end
 
@@ -230,7 +234,6 @@ pkt_queue_manager_inst [NB_PKT_QUEUE_MANAGERS] (
     .rb_size           (pkt_rb_size)
 );
 
-
 pkt_meta_with_queues_t dsc_q_mngr_in_meta_data;
 logic dsc_q_mngr_in_meta_valid;
 logic dsc_q_mngr_in_meta_ready;
@@ -239,41 +242,22 @@ pkt_meta_with_queues_t f2c_in_meta_data;
 logic f2c_in_meta_valid;
 logic f2c_in_meta_ready;
 
-pkt_meta_with_queues_t in_data  [PKT_QM_ID_WIDTH+1][NB_PKT_QUEUE_MANAGERS];
-logic                  in_valid [PKT_QM_ID_WIDTH+1][NB_PKT_QUEUE_MANAGERS];
-logic                  in_ready [PKT_QM_ID_WIDTH+1][NB_PKT_QUEUE_MANAGERS];
-
-// Tree of muxes to merge the packet queue manager outputs.
-generate
-    for (genvar i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
-        assign in_data[0][i] = pkt_q_mngr_out_meta_data[i];
-        assign in_valid[0][i] = pkt_q_mngr_out_meta_valid[i];
-        assign pkt_q_mngr_out_meta_ready[i] = in_ready[0][i];
-    end
-    for (genvar i = 0; i < PKT_QM_ID_WIDTH; i++) begin
-        for (genvar j = 0; j < NB_PKT_QUEUE_MANAGERS/(2 << i); j++) begin
-            st_multiplexer #(
-                .DWIDTH($bits(pkt_meta_with_queues_t))
-            ) st_mux (
-                .out_channel (),
-                .out_valid   (in_valid[i+1][j]),
-                .out_ready   (in_ready[i+1][j]),
-                .out_data    (in_data[i+1][j]),
-                .in0_valid   (in_valid[i][j*2]),
-                .in0_ready   (in_ready[i][j*2]),
-                .in0_data    (in_data[i][j*2]),
-                .in1_valid   (in_valid[i][j*2+1]),
-                .in1_ready   (in_ready[i][j*2+1]),
-                .in1_data    (in_data[i][j*2+1]),
-                .clk         (pcie_clk),
-                .reset_n     (!rst)
-            );
-        end
-    end
-    assign dsc_q_mngr_in_meta_data = in_data[PKT_QM_ID_WIDTH][0];
-    assign dsc_q_mngr_in_meta_valid = in_valid[PKT_QM_ID_WIDTH][0];
-    assign in_ready[PKT_QM_ID_WIDTH][0] = dsc_q_mngr_in_meta_ready;
-endgenerate
+st_ordered_multiplexer #(
+    .NB_IN(NB_PKT_QUEUE_MANAGERS),
+    .DWIDTH($bits(pkt_meta_with_queues_t))
+) st_mux (
+    .clk         (pcie_clk),
+    .rst         (!pcie_reset_n),
+    .in_valid    (pkt_q_mngr_out_meta_valid),
+    .in_ready    (pkt_q_mngr_out_meta_ready),
+    .in_data     (pkt_q_mngr_out_meta_data),
+    .out_valid   (dsc_q_mngr_in_meta_valid),
+    .out_ready   (dsc_q_mngr_in_meta_ready),
+    .out_data    (dsc_q_mngr_in_meta_data),
+    .order_valid (pcie_meta_buf_valid & pcie_meta_buf_ready),
+    .order_ready (st_mux_ord_ready),
+    .order_data  (pkt_q_mngr_id)
+);
 
 dsc_queue_manager #(
     .NB_QUEUES(MAX_NB_APPS)
@@ -297,9 +281,9 @@ dsc_queue_manager_inst (
 fpga_to_cpu fpga_to_cpu_inst (
     .clk                    (pcie_clk),
     .rst                    (!pcie_reset_n),
-    .pkt_buf_in_data        (pcie_pkt_buf_wr_data),
-    .pkt_buf_in_valid       (pcie_pkt_buf_wr_en),
-    .pkt_buf_in_ready       (pcie_pkt_buf_in_ready),
+    .pkt_buf_in_data        (pcie_pkt_buf_data),
+    .pkt_buf_in_valid       (pcie_pkt_buf_valid),
+    .pkt_buf_in_ready       (pcie_pkt_buf_ready),
     .pkt_buf_occup          (pcie_pkt_buf_occup),
     .metadata_buf_in_data   (f2c_in_meta_data),
     .metadata_buf_in_valid  (f2c_in_meta_valid),

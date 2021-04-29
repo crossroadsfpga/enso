@@ -55,14 +55,13 @@ always_comb begin
 end
 
 always @(posedge clk) begin
-    next_stream_id_valid <= 0;
-
     if (out_ready) begin
         out_valid <= 0;
     end
 
     if (rst) begin
         out_valid <= 0;
+        next_stream_id_valid <= 0;
     end else begin
         if (next_stream_is_ready) begin
             out_data <= in_data[next_stream_id];

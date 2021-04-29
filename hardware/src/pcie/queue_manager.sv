@@ -11,7 +11,9 @@ module queue_manager #(
     parameter NB_QUEUES,
     parameter EXTRA_META_BITS, // Number fo bits in the extra metadata
     parameter UNIT_POINTER=0, // Set it to 1 to advance pointer by a single unit
-    parameter QUEUE_ID_WIDTH=$clog2(NB_QUEUES)
+    parameter QUEUE_ID_WIDTH=$clog2(NB_QUEUES),
+    parameter OUT_FIFO_DEPTH=64,
+    parameter ALMOST_FULL_THRESHOLD=OUT_FIFO_DEPTH - MAX_PKT_SIZE * 2
 )(
     input logic clk,
     input logic rst,
@@ -50,6 +52,7 @@ bram_interface_io q_table_a_h_addrs();
 logic                      queue_ready;
 logic [QUEUE_ID_WIDTH-1:0] rd_queue;
 logic [QUEUE_ID_WIDTH-1:0] rd_queue_r;
+logic [QUEUE_ID_WIDTH-1:0] rd_queue_r2;
 logic [QUEUE_ID_WIDTH-1:0] wr_queue;
 logic [RB_AWIDTH-1:0]      new_tail;
 logic [RB_AWIDTH-1:0]      head;
@@ -71,11 +74,32 @@ typedef struct packed
 typedef struct packed {
     logic [$clog2(MAX_PKT_SIZE):0] pkt_size; // in number of flits
     logic [EXTRA_META_BITS-1:0]    meta_extra;
+    logic                          pass_through;
 } pkt_metadata_t;
 
-internal_queue_state_t last_states [2];
-internal_queue_state_t next_states [2];
-pkt_metadata_t         next_metadata [2];
+internal_queue_state_t last_states [3];
+
+logic [31:0] next_state_queue_occup;
+logic next_state_queue_almost_full;
+assign next_state_queue_almost_full = next_state_queue_occup > 4;
+
+internal_queue_state_t in_next_state_data;
+pkt_metadata_t         in_next_metadata_data;
+logic                  in_next_state_ready;
+logic                  in_next_state_valid;
+internal_queue_state_t out_next_state_data;
+pkt_metadata_t         out_next_metadata_data;
+logic                  out_next_state_ready;
+logic                  out_next_state_valid;
+
+queue_state_t               out_queue_q_state;
+logic [EXTRA_META_BITS-1:0] out_queue_meta_extra;
+logic                       out_queue_meta_valid;
+logic                       out_queue_meta_ready;
+
+logic [31:0] out_queue_occup;
+logic out_queue_almost_full;
+assign out_queue_almost_full = out_queue_occup > ALMOST_FULL_THRESHOLD;
 
 // We can only read or write at a given time, when both are issued in the same
 // cycle, the write is ignored and must be repeated in the following cycle. We
@@ -84,34 +108,32 @@ pkt_metadata_t         next_metadata [2];
 logic concurrent_rd_wr;
 assign concurrent_rd_wr = tail_wr_en & queue_rd_en;
 
-logic pkt_sender_ready;
 // If concurrent_rd_wr is set, there is a pending write and we must wait.
-assign pkt_sender_ready = !concurrent_rd_wr & out_meta_ready;
-assign in_meta_ready = pkt_sender_ready;
+assign out_next_state_ready = !out_queue_almost_full & !concurrent_rd_wr;
 
 // Read fetched queue states and push metadata out
 always @(posedge clk) begin
     tail_wr_en <= 0;
-    
-    // Ensure previous transfer is done before unsetting out_meta_valid
-    if (out_meta_ready) begin
-        out_meta_valid <= 0;
-    end
+
+    out_queue_meta_valid <= 0;
 
     if (rst) begin
         // set last states to invalid so we ignore those in the beginning.
         last_states[0].valid <= 0;
         last_states[1].valid <= 0;
-        out_meta_valid <= 0;
+        last_states[2].valid <= 0;
     end else begin
-        if (next_states[0].valid & pkt_sender_ready) begin
-            automatic internal_queue_state_t cur_state = next_states[0];
+        if (out_next_state_ready & out_next_state_valid) begin
+            automatic internal_queue_state_t cur_state = out_next_state_data;
 
             // The queue tail may be outdated if any of the last two packets
             // were directed to the current queue. Therefore, we save the last
             // two queue states and grab the most up to date tail value if any
             // of those match the current queue.
-            if (last_states[1].valid && 
+            if (last_states[2].valid && 
+                    last_states[2].queue == cur_state.queue) begin
+                cur_state.tail = last_states[2].tail;
+            end else if (last_states[1].valid &&
                     last_states[1].queue == cur_state.queue) begin
                 cur_state.tail = last_states[1].tail;
             end else if (last_states[0].valid &&
@@ -119,27 +141,31 @@ always @(posedge clk) begin
                 cur_state.tail = last_states[0].tail;
             end
 
+            // Output metadata.
+            out_queue_q_state.tail <= cur_state.tail;
+            out_queue_q_state.head <= cur_state.head;
+            out_queue_q_state.kmem_addr <= cur_state.addr;
+            out_queue_meta_extra <= out_next_metadata_data.meta_extra;
+            out_queue_meta_valid <= 1;
+
+            // Increment tail only if not pass through
+            if (!out_next_metadata_data.pass_through) begin
+                tail_wr_en <= 1;
+                if (UNIT_POINTER) begin
+                    cur_state.tail = get_new_pointer(cur_state.tail, 1,
+                                                     rb_size);
+                end else begin
+                    cur_state.tail = get_new_pointer(cur_state.tail,
+                        out_next_metadata_data.pkt_size, rb_size);
+                end
+                new_tail <= cur_state.tail;
+                wr_queue <= cur_state.queue;
+            end
+
             // Advance last states pipeline.
             last_states[0] <= last_states[1];
-            last_states[1] <= cur_state;
-
-            // Output metadata.
-            out_q_state.tail <= cur_state.tail;
-            out_q_state.head <= cur_state.head;
-            out_q_state.kmem_addr <= cur_state.addr;
-            out_meta_extra <= next_metadata[0].meta_extra;
-            out_meta_valid <= 1;
-
-            // write updated tail to BRAM only if not pass through
-            if (!in_pass_through) begin
-                tail_wr_en <= 1;
-            end
-            if (UNIT_POINTER) begin
-                new_tail <= get_new_pointer(cur_state.tail, 1, rb_size);
-            end else begin
-                new_tail <= get_new_pointer(cur_state.tail,
-                    next_metadata[0].pkt_size, rb_size);
-            end
+            last_states[1] <= last_states[2];
+            last_states[2] <= cur_state;
         end
 
         // If we write in the same cycle as a read, it will be ignored. We need
@@ -152,45 +178,85 @@ end
 
 // We use this signal to hold the packet metadata while we are fetching its
 // associated state from BRAM.
-pkt_metadata_t delayed_metadata [2];
+pkt_metadata_t delayed_metadata [3];
+
+assign in_meta_ready = !next_state_queue_almost_full;
 
 // State fetcher: Read queue state for next available queue descriptor
 always @(posedge clk) begin
     queue_rd_en <= 0;
     delayed_metadata[0] <= delayed_metadata[1];
+    delayed_metadata[1] <= delayed_metadata[2];
+    rd_queue_r2 <= rd_queue_r;
     rd_queue_r <= rd_queue;
+    in_next_state_valid <= 0;
 
     if (rst) begin
-        next_states[0].valid <= 0;
-        next_states[1].valid <= 0;
     end else begin
-        if (pkt_sender_ready) begin
-            // advance pipeline of states
-            next_states[0] <= next_states[1];
-            next_states[1].valid <= 0;
-
-            next_metadata[0] <= next_metadata[1];
-
-            if (in_meta_valid) begin
-                // fetch next state
-                rd_queue <= in_queue_id;
-                queue_rd_en <= 1;
-                delayed_metadata[1].pkt_size <= in_size;
-                delayed_metadata[1].meta_extra <= in_meta_extra;
-            end
+        // if (!next_state_queue_almost_full) begin
+        if (in_meta_ready & in_meta_valid) begin
+            // fetch next state
+            rd_queue <= in_queue_id;
+            queue_rd_en <= 1;
+            delayed_metadata[2].pkt_size <= in_size;
+            delayed_metadata[2].meta_extra <= in_meta_extra;
+            delayed_metadata[2].pass_through <= in_pass_through;
         end
 
         if (queue_ready) begin
-            next_states[1].valid <= 1;
-            next_states[1].head <= head;
-            next_states[1].tail <= tail;
-            next_states[1].addr <= buf_addr;
-            next_states[1].queue <= rd_queue_r;
+            in_next_state_data.valid <= 1;
+            in_next_state_data.head <= head;
+            in_next_state_data.tail <= tail;
+            in_next_state_data.addr <= buf_addr;
+            in_next_state_data.queue <= rd_queue_r2;
 
-            next_metadata[1] <= delayed_metadata[0];
+            in_next_metadata_data <= delayed_metadata[0];
+            in_next_state_valid <= 1;
         end
     end
 end
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(internal_queue_state_t) + $bits(pkt_metadata_t)),
+    .FIFO_DEPTH(8)
+)
+next_state_queue (
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (next_state_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       ({in_next_state_data, in_next_metadata_data}),
+    .in_valid      (in_next_state_valid),
+    .in_ready      (in_next_state_ready),
+    .out_data      ({out_next_state_data, out_next_metadata_data}),
+    .out_valid     (out_next_state_valid),
+    .out_ready     (out_next_state_ready)
+);
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(out_q_state) + $bits(out_meta_extra)),
+    .FIFO_DEPTH(OUT_FIFO_DEPTH)
+)
+out_queue (
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (out_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       ({out_queue_q_state, out_queue_meta_extra}),
+    .in_valid      (out_queue_meta_valid),
+    .in_ready      (out_queue_meta_ready),
+    .out_data      ({out_q_state, out_meta_extra}),
+    .out_valid     (out_meta_valid),
+    .out_ready     (out_meta_ready)
+);
 
 logic q_table_a_tails_rd_en_r;
 logic q_table_a_tails_rd_en_r2;
@@ -245,8 +311,7 @@ always_comb begin
     if (queue_rd_en) begin
         // when reading and writing the same queue, we avoid reading the tail
         // and use the new written tail instead
-        q_table_a_tails.rd_en = !tail_wr_en 
-            || (rd_queue != wr_queue);
+        q_table_a_tails.rd_en = !tail_wr_en || (rd_queue != wr_queue);
         q_table_a_heads.rd_en = 1;
         q_table_a_l_addrs.rd_en = 1;
         q_table_a_h_addrs.rd_en = 1;

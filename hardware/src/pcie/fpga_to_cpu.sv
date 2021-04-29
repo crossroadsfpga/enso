@@ -10,16 +10,16 @@ module fpga_to_cpu (
     input logic rst,
 
     // packet buffer input and status
-    input  var flit_lite_t           pkt_buf_in_data,
-    input  logic                     pkt_buf_in_valid,
-    output logic                     pkt_buf_in_ready,
-    output logic [F2C_RB_AWIDTH-1:0] pkt_buf_occup,
+    input  var flit_lite_t         pkt_buf_in_data,
+    input  logic                   pkt_buf_in_valid,
+    output logic                   pkt_buf_in_ready,
+    output logic [F2C_RB_AWIDTH:0] pkt_buf_occup,
 
     // metadata buffer input and status
     input  var pkt_meta_with_queues_t metadata_buf_in_data,
     input  logic                      metadata_buf_in_valid,
     output logic                      metadata_buf_in_ready,
-    output logic [F2C_RB_AWIDTH-1:0]  metadata_buf_occup,
+    output logic [F2C_RB_AWIDTH:0]    metadata_buf_occup,
 
     // CPU ring buffer config signals
     input  logic [25:0] pkt_rb_size,
@@ -56,8 +56,8 @@ logic       pkt_buf_out_ready;
 logic       pkt_buf_out_valid;
 
 pkt_meta_with_queues_t  metadata_buf_out_data;
-logic       metadata_buf_out_ready;
-logic       metadata_buf_out_valid;
+logic                   metadata_buf_out_ready;
+logic                   metadata_buf_out_valid;
 
 logic [31:0] dma_queue_full_cnt_r;
 logic [31:0] cpu_dsc_buf_full_cnt_r;
@@ -278,22 +278,24 @@ always @(posedge clk) begin
             SEND_DESCRIPTOR: begin
                 if (can_continue_transfer) begin
                     automatic pcie_pkt_dsc_t pcie_pkt_desc;
+                    automatic queue_state_t dsc_q_state;
+                    automatic queue_state_t pkt_q_state;
+
+                    dsc_q_state = transf_meta.pkt_meta.dsc_q_state;
+                    pkt_q_state = transf_meta.pkt_meta.pkt_q_state;
 
                     pcie_pkt_desc.signal = 1;
                     pcie_pkt_desc.tail = {
                         {{$bits(pcie_pkt_desc.tail) - RB_AWIDTH}{1'b0}},
-                        transf_meta.pkt_meta.pkt_q_state.tail
+                        pkt_q_state.tail
                     };
                     pcie_pkt_desc.queue_id = transf_meta.pkt_meta.pkt_queue_id;
                     pcie_pkt_desc.pad = 0;
 
                     // Skip DMA when addresses are not set
-                    if (transf_meta.pkt_meta.pkt_q_state.kmem_addr
-                        && transf_meta.pkt_meta.dsc_q_state.kmem_addr)
-                    begin
+                    if (pkt_q_state.kmem_addr & dsc_q_state.kmem_addr) begin
                         pcie_bas_address_r <= 
-                            transf_meta.pkt_meta.dsc_q_state.kmem_addr
-                            + 64 * transf_meta.pkt_meta.dsc_q_state.tail;
+                            dsc_q_state.kmem_addr + 64 * dsc_q_state.tail;
                         pcie_bas_byteenable_r <= 64'hffffffffffffffff;
                         pcie_bas_writedata_r <= pcie_pkt_desc;
                         pcie_bas_write_r <= 1;
@@ -334,6 +336,12 @@ always_comb begin
                         (can_continue_transfer && (state != SEND_DESCRIPTOR));
 end
 
+logic [31:0] pkt_buf_csr_readdata;
+logic [31:0] metadata_buf_csr_readdata;
+
+assign pkt_buf_occup = pkt_buf_csr_readdata[F2C_RB_AWIDTH:0];
+assign metadata_buf_occup = metadata_buf_csr_readdata[F2C_RB_AWIDTH:0];
+
 fifo_wrapper_infill #(
     .SYMBOLS_PER_BEAT(1),
     .BITS_PER_SYMBOL($bits(flit_lite_t)),
@@ -345,7 +353,7 @@ pkt_buf (
     .csr_address   (2'b0),
     .csr_read      (1'b1),
     .csr_write     (1'b0),
-    .csr_readdata  (pkt_buf_occup),
+    .csr_readdata  (pkt_buf_csr_readdata),
     .csr_writedata (32'b0),
     .in_data       (pkt_buf_in_data),
     .in_valid      (pkt_buf_in_valid),
@@ -368,7 +376,7 @@ metadata_buf (
     .csr_address   (2'b0),
     .csr_read      (1'b1),
     .csr_write     (1'b0),
-    .csr_readdata  (metadata_buf_occup),
+    .csr_readdata  (metadata_buf_csr_readdata),
     .csr_writedata (32'b0),
     .in_data       (metadata_buf_in_data),
     .in_valid      (metadata_buf_in_valid),
