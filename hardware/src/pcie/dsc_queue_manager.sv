@@ -41,7 +41,7 @@ queue_manager #(
 queue_manager_inst (
     .clk             (clk),
     .rst             (rst),
-    .in_pass_through (in_meta_data.needs_dsc),
+    .in_pass_through (!in_meta_data.needs_dsc),
     .in_queue_id     (in_meta_data.dsc_queue_id),
     .in_size         (in_meta_data.size),
     .in_meta_extra   (in_meta_data),
