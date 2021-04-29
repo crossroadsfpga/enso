@@ -579,7 +579,6 @@ always @(posedge clk_pcie) begin
             end
             PCIE_READ_F2C_PKT_QUEUE_WAIT: begin
                 if (pcie_readdatavalid_0) begin
-                    $display("pcie_readdata_0[64 +: 64]: %h", pcie_readdata_0[64 +: 64]);
                     assert(pcie_readdata_0[64 +: 64] == 64'ha000000080000000) 
                         else $fatal;
                     
