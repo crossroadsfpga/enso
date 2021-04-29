@@ -4,11 +4,11 @@
 module test_pcie_top;
 
 `ifndef NB_DSC_QUEUES
-`define NB_DSC_QUEUES 1
+`define NB_DSC_QUEUES 2
 `endif
 
 `ifndef NB_PKT_QUEUES
-`define NB_PKT_QUEUES 16
+`define NB_PKT_QUEUES 4
 `endif
 
 generate
@@ -61,12 +61,16 @@ logic [511:0]               pcie_readdata_0;
 logic [511:0]               pcie_writedata_0;
 logic [63:0]                pcie_byteenable_0;
 
-flit_lite_t               pcie_pkt_buf_wr_data;
-logic                     pcie_pkt_buf_wr_en;
+logic pcie_pkt_buf_ready;
+logic pcie_meta_buf_ready;
+logic [31:0] pending_prefetch_cnt;
+
+flit_lite_t               pcie_pkt_buf_data;
+logic                     pcie_pkt_buf_valid;
 logic [F2C_RB_AWIDTH-1:0] pcie_pkt_buf_occup;
 
-pkt_meta_t                pcie_meta_buf_wr_data;
-logic                     pcie_meta_buf_wr_en;
+pkt_meta_t                pcie_meta_buf_data;
+logic                     pcie_meta_buf_valid;
 logic [F2C_RB_AWIDTH-1:0] pcie_meta_buf_occup;
 
 logic                  disable_pcie;
@@ -255,6 +259,7 @@ always @(posedge clk) begin
                                   + burst_offset;
 
                     if (cur_queue < nb_pkt_queues) begin // pkt queue
+                        $display("            cur_queue: %d  expected_pkt_queue: %d", cur_queue, expected_pkt_queue);
                         assert(cur_queue == expected_pkt_queue) else $fatal;
 
                         pdu_flit_cnt = pdu_flit_cnt + 1;
@@ -383,6 +388,22 @@ typedef enum
     GEN_DATA
 } gen_state_t;
 
+flit_lite_t  out_pkt_queue_data;
+logic        out_pkt_queue_valid;
+logic        out_pkt_queue_ready;
+logic [31:0] out_pkt_queue_occup;
+
+pkt_meta_t   out_meta_queue_data;
+logic        out_meta_queue_valid;
+logic        out_meta_queue_ready;
+logic [31:0] out_meta_queue_occup;
+
+logic out_pkt_queue_alm_full;
+assign out_pkt_queue_alm_full = out_pkt_queue_occup > 8;
+
+logic out_meta_queue_alm_full;
+assign out_meta_queue_alm_full = out_meta_queue_occup > 8;
+
 gen_state_t                gen_state;
 logic [FLOW_IDX_WIDTH-1:0] pkt_queue_id;
 logic [APP_IDX_WIDTH-1:0]  dsc_queue_id;
@@ -390,10 +411,14 @@ logic [31:0]               nb_requests;
 logic [F2C_RB_AWIDTH-1:0]     flits_written;
 logic [32:0]               transmit_cycles;
 
+logic can_insert_pkt;
+assign can_insert_pkt = !out_pkt_queue_alm_full & !out_meta_queue_alm_full;
+
 // Generate requests
 always @(posedge clk) begin
-    pcie_pkt_buf_wr_en <= 0;
-    pcie_meta_buf_wr_en <= 0;
+    out_pkt_queue_valid <= 0;
+    out_meta_queue_valid <= 0;
+
     if (rst) begin
         gen_state <= GEN_START_WAIT;
         flits_written <= 0;
@@ -402,8 +427,6 @@ always @(posedge clk) begin
         nb_requests <= 0;
         transmit_cycles <= 0;
     end else begin
-        automatic logic can_insert_pkt = (pcie_pkt_buf_occup < (F2C_RB_DEPTH - 2))
-            && (pcie_meta_buf_occup < (F2C_RB_DEPTH - 2));
         case (gen_state)
             GEN_START_WAIT: begin
                 if (startup_ready) begin
@@ -420,8 +443,8 @@ always @(posedge clk) begin
             end
             GEN_DATA: begin
                 if (can_insert_pkt) begin
-                    pcie_pkt_buf_wr_en <= 1;
-                    pcie_pkt_buf_wr_data.data <= {
+                    out_pkt_queue_valid <= 1;
+                    out_pkt_queue_data.data <= {
                         nb_requests, 32'h00000000, 64'h0000babe0000face, 
                         64'h0000babe0000face, 64'h0000babe0000face,
                         64'h0000babe0000face, 64'h0000babe0000face, 
@@ -431,18 +454,18 @@ always @(posedge clk) begin
                     flits_written <= flits_written + 1;
 
                     // first block
-                    pcie_pkt_buf_wr_data.sop <= (flits_written == 0);
+                    out_pkt_queue_data.sop <= (flits_written == 0);
 
                     if ((flits_written + 1) * 16 >= req_size) begin
-                        pcie_pkt_buf_wr_data.eop <= 1; // last block
+                        out_pkt_queue_data.eop <= 1; // last block
                         nb_requests <= nb_requests + 1;
                         flits_written <= 0;
 
                         // write descriptor
-                        pcie_meta_buf_wr_en <= 1;
-                        pcie_meta_buf_wr_data.dsc_queue_id <= dsc_queue_id;
-                        pcie_meta_buf_wr_data.pkt_queue_id <= pkt_queue_id;
-                        pcie_meta_buf_wr_data.size <= (req_size + (16 - 1))/16;
+                        out_meta_queue_valid <= 1;
+                        out_meta_queue_data.dsc_queue_id <= dsc_queue_id;
+                        out_meta_queue_data.pkt_queue_id <= pkt_queue_id;
+                        out_meta_queue_data.size <= (req_size + (16 - 1))/16;
 
                         if (nb_requests + 1 == target_nb_requests) begin
                             gen_state <= GEN_IDLE;
@@ -456,7 +479,7 @@ always @(posedge clk) begin
                             dsc_queue_id = pkt_queue_id / pkt_per_dsc_queue;
                         end
                     end else begin
-                        pcie_pkt_buf_wr_data.eop <= 0;
+                        out_pkt_queue_data.eop <= 0;
                     end
                 end
             end
@@ -470,6 +493,48 @@ always @(posedge clk) begin
         end
     end
 end
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(pcie_pkt_buf_data)),
+    .FIFO_DEPTH(16)
+)
+out_pkt_queue (
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (out_pkt_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       (out_pkt_queue_data),
+    .in_valid      (out_pkt_queue_valid),
+    .in_ready      (out_pkt_queue_ready),
+    .out_data      (pcie_pkt_buf_data),
+    .out_valid     (pcie_pkt_buf_valid),
+    .out_ready     (pcie_pkt_buf_ready)
+);
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(pcie_meta_buf_data)),
+    .FIFO_DEPTH(16)
+)
+out_meta_queue (
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (out_meta_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       (out_meta_queue_data),
+    .in_valid      (out_meta_queue_valid),
+    .in_ready      (out_meta_queue_ready),
+    .out_data      (pcie_meta_buf_data),
+    .out_valid     (pcie_meta_buf_valid),
+    .out_ready     (pcie_meta_buf_ready)
+);
 
 typedef enum{
     CONFIGURE_0,
@@ -633,10 +698,6 @@ assign pcie_bas_response = 0;
 
 assign pdumeta_cnt = 0;
 
-logic pcie_pkt_buf_in_ready;
-logic pcie_meta_buf_in_ready;
-logic [31:0] pending_prefetch_cnt;
-
 pcie_top pcie (
     .pcie_clk               (clk),
     .pcie_reset_n           (!rst),
@@ -657,13 +718,13 @@ pcie_top pcie (
     .pcie_readdata_0        (pcie_readdata_0),
     .pcie_writedata_0       (pcie_writedata_0),
     .pcie_byteenable_0      (pcie_byteenable_0),
-    .pcie_pkt_buf_wr_data   (pcie_pkt_buf_wr_data),
-    .pcie_pkt_buf_wr_en     (pcie_pkt_buf_wr_en),
-    .pcie_pkt_buf_in_ready  (pcie_pkt_buf_in_ready),
+    .pcie_pkt_buf_data      (pcie_pkt_buf_data),
+    .pcie_pkt_buf_valid     (pcie_pkt_buf_valid),
+    .pcie_pkt_buf_ready     (pcie_pkt_buf_ready),
     .pcie_pkt_buf_occup     (pcie_pkt_buf_occup),
-    .pcie_meta_buf_wr_data  (pcie_meta_buf_wr_data),
-    .pcie_meta_buf_wr_en    (pcie_meta_buf_wr_en),
-    .pcie_meta_buf_in_ready (pcie_meta_buf_in_ready),
+    .pcie_meta_buf_data     (pcie_meta_buf_data),
+    .pcie_meta_buf_valid    (pcie_meta_buf_valid),
+    .pcie_meta_buf_ready    (pcie_meta_buf_ready),
     .pcie_meta_buf_occup    (pcie_meta_buf_occup),
     .disable_pcie           (disable_pcie),
     .sw_reset               (sw_reset),
