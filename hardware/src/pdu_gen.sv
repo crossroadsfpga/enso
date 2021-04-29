@@ -1,6 +1,9 @@
 `timescale 1 ps / 1 ps
 `include "./constants.sv"
-module pdu_gen(
+module pdu_gen #(
+    parameter OUT_FIFO_DEPTH=64,
+    parameter ALMOST_FULL_THRESHOLD=OUT_FIFO_DEPTH - MAX_PKT_SIZE * 2
+)(
 		input  logic           clk,
 		input  logic           rst,
 		input  logic           in_sop,
@@ -12,12 +15,12 @@ module pdu_gen(
         input  logic           in_meta_valid,
         input  var metadata_t  in_meta_data,
         output logic           in_meta_ready,
-        output var flit_lite_t pcie_pkt_buf_wr_data,
-        output logic           pcie_pkt_buf_wr_en,
-        input  logic           pcie_pkt_buf_in_ready,
-        output var pkt_meta_t  pcie_meta_buf_wr_data,
-        output logic           pcie_meta_buf_wr_en,
-        input  logic           pcie_meta_buf_in_ready
+        output var flit_lite_t pcie_pkt_buf_data,
+        output logic           pcie_pkt_buf_valid,
+        input  logic           pcie_pkt_buf_ready,
+        output var pkt_meta_t  pcie_meta_buf_data,
+        output logic           pcie_meta_buf_valid,
+        input  logic           pcie_meta_buf_ready
 	);
 
 logic [511:0] pdu_data;
@@ -101,30 +104,44 @@ assign pdu_data_swap = {
     pdu_data[511:504]
 };
 
-assign pcie_pkt_buf_wr_data.data = pdu_data_swap;
+assign out_pkt_queue_data.data = pdu_data_swap;
 
-// It is only safe to write if we can fit a packet with the maximum size and
-// there are at least 5 slots available (due to pipeline delays).
+flit_lite_t  out_pkt_queue_data;
+logic        out_pkt_queue_valid;
+logic        out_pkt_queue_ready;
+logic [31:0] out_pkt_queue_occup;
+
+pkt_meta_t   out_meta_queue_data;
+logic        out_meta_queue_valid;
+logic        out_meta_queue_ready;
+logic [31:0] out_meta_queue_occup;
+
+logic out_pkt_queue_alm_full;
+assign out_pkt_queue_alm_full = out_pkt_queue_occup > ALMOST_FULL_THRESHOLD;
+
+logic out_meta_queue_alm_full;
+assign out_meta_queue_alm_full = out_meta_queue_occup > ALMOST_FULL_THRESHOLD;
+
 logic almost_full;
-assign almost_full = !pcie_pkt_buf_in_ready | !pcie_meta_buf_in_ready;
-assign in_ready = !almost_full;
+assign almost_full = out_pkt_queue_alm_full | out_meta_queue_alm_full;
+assign in_ready = !almost_full & in_meta_valid;
+assign in_meta_ready = !almost_full & in_valid;
 
 always @(posedge clk) begin
-    pcie_pkt_buf_wr_en <= 0;
-    pcie_pkt_buf_wr_data.sop <= 0;
-    pcie_pkt_buf_wr_data.eop <= 0;
-    pcie_meta_buf_wr_en <= 0;
-    in_meta_ready <= 0;
+    out_pkt_queue_valid <= 0;
+    out_pkt_queue_data.sop <= 0;
+    out_pkt_queue_data.eop <= 0;
+    out_meta_queue_valid <= 0;
 
     if (rst) begin
         pdu_flit = 0;
     end else begin
-        if (in_valid && in_meta_valid && !almost_full) begin
-            pcie_pkt_buf_wr_en <= 1;
+        if (in_ready & in_meta_ready) begin
+            out_pkt_queue_valid <= 1;
             pdu_data <= in_data;
 
             if (in_sop) begin
-                pcie_pkt_buf_wr_data.sop <= 1;
+                out_pkt_queue_data.sop <= 1;
                 pdu_size = 0;
                 pdu_flit = 0;
             end
@@ -134,21 +151,62 @@ always @(posedge clk) begin
 
             if (in_eop) begin
                 pdu_size = pdu_size - in_empty;
-                pcie_pkt_buf_wr_data.eop <= 1;
+                out_pkt_queue_data.eop <= 1;
 
                 // write descriptor
-                pcie_meta_buf_wr_data.dsc_queue_id <=
+                out_meta_queue_data.dsc_queue_id <=
                     in_meta_data.dsc_queue_id[APP_IDX_WIDTH-1:0];
-                pcie_meta_buf_wr_data.pkt_queue_id <=
+                out_meta_queue_data.pkt_queue_id <=
                     in_meta_data.pkt_queue_id[FLOW_IDX_WIDTH-1:0];
 
                 // TODO(sadok) specify size in bytes instead of flits
-                pcie_meta_buf_wr_data.size <= pdu_flit;
-                in_meta_ready <= 1;
-                pcie_meta_buf_wr_en <= 1;
+                out_meta_queue_data.size <= pdu_flit;
+                out_meta_queue_valid <= 1;
             end
         end
     end
 end
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(pcie_pkt_buf_data)),
+    .FIFO_DEPTH(16)
+)
+out_pkt_queue (
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (out_pkt_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       (out_pkt_queue_data),
+    .in_valid      (out_pkt_queue_valid),
+    .in_ready      (out_pkt_queue_ready),
+    .out_data      (pcie_pkt_buf_data),
+    .out_valid     (pcie_pkt_buf_valid),
+    .out_ready     (pcie_pkt_buf_ready)
+);
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(pcie_meta_buf_data)),
+    .FIFO_DEPTH(16)
+)
+out_meta_queue (
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (out_meta_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       (out_meta_queue_data),
+    .in_valid      (out_meta_queue_valid),
+    .in_ready      (out_meta_queue_ready),
+    .out_data      (pcie_meta_buf_data),
+    .out_valid     (pcie_meta_buf_valid),
+    .out_ready     (pcie_meta_buf_ready)
+);
 
 endmodule
