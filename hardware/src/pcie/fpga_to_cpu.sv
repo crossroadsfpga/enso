@@ -263,11 +263,18 @@ always @(posedge clk) begin
                 // issue new bursts to the same transfer.
 
                 if (can_continue_transfer) begin
-                    transf_meta <=
+                    automatic transf_meta_t next_transf_meta;
+                    next_transf_meta =
                         start_burst(pkt_buf_out_data, transf_meta.pkt_meta);
 
-                    if (transf_meta.pkt_meta.size > 1) begin
+                    transf_meta <= next_transf_meta;
+
+                    if (next_transf_meta.missing_flits_in_transfer != 0) begin
                         state <= COMPLETE_BURST;
+                    end else if (transf_meta.pkt_meta.size > 1) begin
+                        // When we can only send a single packet in a burst, we
+                        // need to jump directly to START_BURST.
+                        state <= START_BURST;
                     end else if (transf_meta.pkt_meta.needs_dsc) begin
                         state <= SEND_DESCRIPTOR;
                     end else begin
