@@ -61,12 +61,12 @@ int event_queue_loop(event_kthread_data_t* data) {
                 continue;
             }
 
+/*
             // TODO (soup) read cur_desc somehow
-            /*
             if (cur_desc->signal == 1) {
                 handle_event(queue_id);
             }
-            */
+*/
         }
     }
     return 0;

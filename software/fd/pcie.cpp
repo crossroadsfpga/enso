@@ -140,6 +140,7 @@ static void* get_huge_pages(int app_id, size_t size) {
     return virt_addr;
 }
 
+// TODO fix this entire thing
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues)
 {
     void* uio_mmap_bar2_addr;
@@ -180,8 +181,8 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         }
 	printf("dsc buf from dma_init: 0x%x\n", socket_entry->dsc_buf);
         uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->dsc_buf);
-        uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
-        uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
+        // uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
+        // uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
 
         socket_entry->pkt_buf =
             (uint32_t*) get_huge_pages(app_id, ALIGNED_F2C_PKT_BUF_SIZE);
@@ -191,8 +192,8 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
             return -1;
         }
         phys_addr = (uint64_t) virt_to_phys(socket_entry->pkt_buf);
-        uio_data_bar2->pkt_buf_mem_low = (uint32_t) phys_addr;
-        uio_data_bar2->pkt_buf_mem_high = (uint32_t) (phys_addr >> 32);
+        // uio_data_bar2->pkt_buf_mem_low = (uint32_t) phys_addr;
+        // uio_data_bar2->pkt_buf_mem_high = (uint32_t) (phys_addr >> 32);
     } else {
         // TODO (soup) check fd, also offset??
         void *base_addr =
@@ -207,14 +208,14 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 	printf("dsc buf from dma_init: 0x%x\n", socket_entry->dsc_buf);
 
         uint64_t phys_addr = (uint64_t) virt_to_phys(base_addr);
-        uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
-        uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
+        // uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
+        // uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
 
-        socket_entry->pkt_buf = (uint32_t*) base_addr + F2C_DSC_BUF_SIZE * 16;
+        // socket_entry->pkt_buf = (uint32_t*) base_addr + F2C_DSC_BUF_SIZE * 16;
 
-        phys_addr += F2C_DSC_BUF_SIZE * 64;
-        uio_data_bar2->pkt_buf_mem_low = (uint32_t) phys_addr;
-        uio_data_bar2->pkt_buf_mem_high = (uint32_t) (phys_addr >> 32);
+        // phys_addr += F2C_DSC_BUF_SIZE * 64;
+        // uio_data_bar2->pkt_buf_mem_low = (uint32_t) phys_addr;
+        // uio_data_bar2->pkt_buf_mem_high = (uint32_t) (phys_addr >> 32);
     }
 
     socket_entry->dsc_buf_head_ptr = &uio_data_bar2->dsc_buf_head;
@@ -255,6 +256,10 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 
 	printf("dereference cur_desc / dsc_buf\n");
     	printf("dereference dsc_buf: 0x%x\n", dsc_buf);
+	printf("cur_desc->signal = %d\n", cur_desc->signal);
+	printf("cur_desc->queue_id = %d\n", cur_desc->queue_id);
+	printf("\n");
+
         // check if the next descriptor was updated by the FPGA
         if (unlikely(cur_desc->signal == 0)) {
             break;

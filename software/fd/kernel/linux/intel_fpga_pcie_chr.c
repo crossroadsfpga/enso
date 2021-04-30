@@ -306,10 +306,12 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
     unsigned int size;
     pgoff_t pgoff;
     struct kmem_info old_info;
+    pcie_block_t *mmio_struct; 
     void *__iomem mmio_addr;
     uint32_t kmem_addr_l, kmem_addr_h;
     kern_sock_norman_t *mysock;
     int sock_id = -1;
+
     printk(KERN_INFO "chr_mmap!\n");
 
     // Get the correct socket
@@ -374,17 +376,22 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
     kmem_addr_l = dev_bk->kmem_info.bus_addr & 0xFFFFFFFF;
     kmem_addr_h = (dev_bk->kmem_info.bus_addr >> 32) & 0xFFFFFFFF;
     mmio_addr = dev_bk->bar[2].base_addr;
+    mmio_struct = (pcie_block_t *) mmio_addr;
 
+/*
     iowrite32(kmem_addr_l, mmio_addr + FPGA2CPU_OFFSET + sock_id * PAGE_SIZE);
     iowrite32(kmem_addr_h, mmio_addr + FPGA2CPU_OFFSET + 4 + sock_id * PAGE_SIZE);
+*/
+    iowrite32(kmem_addr_l, &(mmio_struct->dsc_buf_mem_low));
+    iowrite32(kmem_addr_h, &(mmio_struct->dsc_buf_mem_high));
 
     // TODO get f2c_dsc_buf_size from somewhere
     if (sock_id == 0) {
-        iowrite32(kmem_addr_l + F2C_DSC_BUF_SIZE, mmio_addr + CPU2FPGA_OFFSET);
+        iowrite32(kmem_addr_l + F2C_DSC_BUF_SIZE, &(mmio_struct->pkt_buf_mem_low));
         if ((kmem_addr_l + F2C_DSC_BUF_SIZE) < kmem_addr_l) {
             ++kmem_addr_h;
         }
-        iowrite32(kmem_addr_h, mmio_addr + CPU2FPGA_OFFSET + 4);
+        iowrite32(kmem_addr_h, &(mmio_struct->pkt_buf_mem_high));
     }
 
     vma->vm_ops = &intel_fpga_vm_ops;
@@ -403,7 +410,7 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
         return -ENXIO;
     }
 
-    printk(KERN_INFO "mmap: %p\n", ret);
+    printk(KERN_INFO "mmap ret: %p\n", ret);
 
     return ret;
 }

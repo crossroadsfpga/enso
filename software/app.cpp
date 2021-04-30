@@ -89,6 +89,8 @@ int main(int argc, const char* argv[])
 		
         }
 
+	return 0;
+
         #ifdef ZERO_COPY
             unsigned char* buf;
         #else
