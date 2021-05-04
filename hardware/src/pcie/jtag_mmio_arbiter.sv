@@ -104,8 +104,7 @@ logic [AWIDTH_NB_TABLES-1:0] q_table_jtag;
 logic [AWIDTH_NB_TABLES-1:0] q_table_pcie;
 logic [AWIDTH_NB_TABLES-1:0] q_table_jtag_pending;
 logic [AWIDTH_NB_TABLES-1:0] last_rd_b_table;
-logic [AWIDTH_NB_TABLES-1:0] last_rd_b_table_r;
-logic [AWIDTH_NB_TABLES-1:0] last_rd_b_table_r2;
+logic [AWIDTH_NB_TABLES-1:0] last_rd_b_table_r [PKT_QUEUE_RD_DELAY];
 
 logic [31:0] pkt_q_table_pcie_out;
 logic [31:0] pkt_q_table_pcie_out_r;
@@ -115,6 +114,8 @@ assign q_table_pcie =
     pkt_q_table_pcie_out[BRAM_TABLE_IDX_WIDTH +: AWIDTH_NB_TABLES];
 assign q_table_wr = pkt_q_table_pcie_out[31]; // 0 = rd, 1 = wr
 
+logic [31:0] control_regs_r4 [NB_CONTROL_REGS];
+logic [31:0] control_regs_r3 [NB_CONTROL_REGS];
 logic [31:0] control_regs_r2 [NB_CONTROL_REGS];
 logic [31:0] control_regs_r  [NB_CONTROL_REGS];
 
@@ -122,6 +123,8 @@ logic [31:0] control_regs_r  [NB_CONTROL_REGS];
 always @(posedge pcie_clk) begin
     integer i;
     for (i = 0; i < NB_CONTROL_REGS; i = i + 1) begin
+        control_regs_r3[i] <= control_regs_r4[i];
+        control_regs_r2[i] <= control_regs_r3[i];
         control_regs_r[i] <= control_regs_r2[i];
         control_regs[i] <= control_regs_r[i];
     end
@@ -146,7 +149,7 @@ always@(posedge jtag_clk) begin
     if (!pcie_reset_n) begin
         integer i;
         for (i = 0; i < NB_CONTROL_REGS; i = i + 1) begin
-            control_regs_r2[i] <= 0;
+            control_regs_r4[i] <= 0;
         end
     end
 
@@ -158,7 +161,7 @@ always@(posedge jtag_clk) begin
 
     if (status_addr_sel_r == PCIE & status_read_r) begin
         if (jtag_reg < NB_CONTROL_REGS) begin
-            status_readdata <= control_regs_r2[jtag_reg];
+            status_readdata <= control_regs_r4[jtag_reg];
             status_readdata_valid <= 1;
         end else begin
             q_table_jtag <= {jtag_reg-NB_CONTROL_REGS}[AWIDTH_NB_TABLES-1:0];
@@ -170,7 +173,7 @@ always@(posedge jtag_clk) begin
         end
     end else if (status_addr_sel_r == PCIE & status_write_r) begin
         if (jtag_reg < NB_CONTROL_REGS) begin
-            control_regs_r2[jtag_reg] <= status_writedata_r;
+            control_regs_r4[jtag_reg] <= status_writedata_r;
         end else begin
             q_table_jtag <= {jtag_reg-NB_CONTROL_REGS}[AWIDTH_NB_TABLES-1:0];
             q_table_data_jtag <= status_writedata_r;
@@ -259,8 +262,6 @@ always @(posedge pcie_clk) begin
         q_table_jtag_wr_set <= 0;
         q_table_jtag_wr_data_set <= 0;
         q_table_jtag_rd_set <= 0;
-        q_table_rd_data_b <= 0;
-        c2f_kmem_addr <= 0;
     end else if (pcie_write_0) begin // PCIe write
         if (page_idx < MAX_NB_FLOWS) begin
             automatic logic [BRAM_TABLE_IDX_WIDTH-1:0] address = page_idx;
@@ -466,8 +467,10 @@ always @(posedge pcie_clk) begin
         
     end
 
-    last_rd_b_table_r <= last_rd_b_table;
-    last_rd_b_table_r2 <= last_rd_b_table_r;
+    last_rd_b_table_r[0] <= last_rd_b_table;
+    for (integer i = 0; i < PKT_QUEUE_RD_DELAY-1; i++) begin
+        last_rd_b_table_r[i+1] <= last_rd_b_table_r[i];
+    end
 
     dsc_rd_en_r <= dsc_q_table_tails.rd_en | dsc_q_table_heads.rd_en |
                    dsc_q_table_l_addrs.rd_en | dsc_q_table_h_addrs.rd_en;
@@ -489,7 +492,7 @@ always @(posedge pcie_clk) begin
 
     // JTAG dsc read is ready
     if (!pcie_bram_rd_r[1] & dsc_rd_en_r2) begin
-        case (last_rd_b_table_r2)
+        case (last_rd_b_table_r[1])
             0: begin
                 q_table_rd_data_b <= dsc_q_table_tails.rd_data;
             end
@@ -509,7 +512,7 @@ always @(posedge pcie_clk) begin
     // JTAG pkt read is ready
     if (!pcie_bram_rd_r[PKT_QUEUE_RD_DELAY-1] &
             pkt_rd_en_r[PKT_QUEUE_RD_DELAY-1]) begin
-        case (last_rd_b_table_r2)
+        case (last_rd_b_table_r[PKT_QUEUE_RD_DELAY-1])
             0: begin
                 q_table_rd_data_b <= pkt_q_table_tails.rd_data;
             end
