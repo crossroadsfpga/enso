@@ -48,7 +48,7 @@ module fifo_wrapper_infill #(
 		.USE_ALMOST_FULL_IF  (USE_ALMOST_FULL_IF),
 		.USE_ALMOST_EMPTY_IF (USE_ALMOST_EMPTY_IF),
 		.EMPTY_WIDTH         (1),
-		.SYNC_RESET          (0)
+		.SYNC_RESET          (1)
 	) sc_fifo_0 (
 		.clk               (clk),           //   input,   width = 1,       clk.clk
 		.reset             (reset),         //   input,   width = 1, clk_reset.reset
