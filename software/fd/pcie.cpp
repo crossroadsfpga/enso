@@ -93,54 +93,6 @@ static void* virt_to_phys(void* virt) {
                     + ((uintptr_t) virt) % pagesize);
 }
 
-// adapted from ixy
-static void* get_huge_pages(int app_id, size_t size) {
-    int fd;
-    char huge_pages_path[128];
-
-    snprintf(huge_pages_path, 128, "/mnt/huge/fd:%i", app_id);
-
-    fd = open(huge_pages_path, O_CREAT | O_RDWR, S_IRWXU);
-    if (fd == -1) {
-        std::cerr << "(" << errno
-                  << ") Problem opening huge page file descriptor" << std::endl;
-        return NULL;
-    }
-
-    if (ftruncate(fd, (off_t) size)) {
-        std::cerr << "(" << errno << ") Could not truncate huge page to size: "
-                  << size << std::endl;
-        close(fd);
-        unlink(huge_pages_path);
-        return NULL;
-    }
-
-    void* virt_addr = (void*) mmap(NULL, size,
-        PROT_READ | PROT_WRITE, MAP_SHARED | MAP_HUGETLB, fd, 0);
-
-    if (virt_addr == (void*) -1) {
-        std::cerr << "(" << errno << ") Could not mmap huge page" << std::endl;
-        close(fd);
-        unlink(huge_pages_path);
-        return NULL;
-    }
-
-    if (mlock(virt_addr, size)) {
-        std::cerr << "(" << errno << ") Could not lock huge page" << std::endl;
-        munmap(virt_addr, size);
-        close(fd);
-        unlink(huge_pages_path);
-        return NULL;
-    }
-
-    // don't keep it around in the hugetlbfs
-    close(fd);
-    unlink(huge_pages_path);
-
-    return virt_addr;
-}
-
-// TODO fix this entire thing
 int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues)
 {
     void* uio_mmap_bar2_addr;
@@ -181,19 +133,9 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         }
 	printf("dsc buf from dma_init: 0x%x\n", socket_entry->dsc_buf);
         uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->dsc_buf);
-        // uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
-        // uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
 
-        socket_entry->pkt_buf =
-            (uint32_t*) get_huge_pages(app_id, ALIGNED_F2C_PKT_BUF_SIZE);
-
-        if (socket_entry->pkt_buf == NULL) {
-            std::cerr << "Could not get huge page" << std::endl;
-            return -1;
-        }
-        phys_addr = (uint64_t) virt_to_phys(socket_entry->pkt_buf);
-        // uio_data_bar2->pkt_buf_mem_low = (uint32_t) phys_addr;
-        // uio_data_bar2->pkt_buf_mem_high = (uint32_t) (phys_addr >> 32);
+        socket_entry->pkt_buf = (uint32_t *)socket_entry->pkt_buf 
+				+ F2C_DSC_BUF_SIZE * 16;
     } else {
         // TODO (soup) check fd, also offset??
         void *base_addr =
@@ -207,26 +149,40 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         socket_entry->dsc_buf = (pcie_pkt_desc_t*) base_addr;
 	printf("dsc buf from dma_init: 0x%x\n", socket_entry->dsc_buf);
 
-        uint64_t phys_addr = (uint64_t) virt_to_phys(base_addr);
-        // uio_data_bar2->dsc_buf_mem_low = (uint32_t) phys_addr;
-        // uio_data_bar2->dsc_buf_mem_high = (uint32_t) (phys_addr >> 32);
-
-        // socket_entry->pkt_buf = (uint32_t*) base_addr + F2C_DSC_BUF_SIZE * 16;
-
-        // phys_addr += F2C_DSC_BUF_SIZE * 64;
-        // uio_data_bar2->pkt_buf_mem_low = (uint32_t) phys_addr;
-        // uio_data_bar2->pkt_buf_mem_high = (uint32_t) (phys_addr >> 32);
+        socket_entry->pkt_buf = (uint32_t*) base_addr
+				+ F2C_DSC_BUF_SIZE * 16;
     }
 
-    socket_entry->dsc_buf_head_ptr = &uio_data_bar2->dsc_buf_head;
-    socket_entry->pkt_buf_head_ptr = &uio_data_bar2->pkt_buf_head;
+	// TODO fix (soup)
+    socket_entry->dsc_buf_head_ptr = socket_entry->dsc_buf;
+    socket_entry->pkt_buf_head_ptr = NULL;
 
     socket_entry->app_id = app_id;
-    socket_entry->dsc_buf_head = uio_data_bar2->dsc_buf_head;
-    socket_entry->pkt_buf_head = uio_data_bar2->pkt_buf_head;
+    socket_entry->dsc_buf_head = 0;
+    socket_entry->pkt_buf_head = 0;
     socket_entry->active = true;
 
     return 0;
+}
+
+static void get_new_tails(socket_internal* socket_entry)
+{
+    pcie_pkt_desc_t* dsc_buf = socket_entry->dsc_buf;
+    uint32_t dsc_buf_head = socket_entry->dsc_buf_head;
+
+    for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
+	pcie_pkt_desc_t *cur_desc = dsc_buf + dsc_buf_head;
+
+	if (unlikely(cur_desc->signal == 0)) {
+	    break;
+	}
+
+        cur_desc->signal = 0;
+        dsc_buf_head = (dsc_buf_head + 1) % F2C_DSC_BUF_SIZE;
+
+        uint32_t pkt_queue_id = cur_desc->queue_id - pkt_queue_id_offset;
+	// TODO left off here soup soup SOUP
+    }
 }
 
 /**
@@ -237,14 +193,20 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
  */
 int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 {
-    pcie_pkt_desc_t* dsc_buf = socket_entry->dsc_buf;
     uint32_t* pkt_buf = socket_entry->pkt_buf;
-    uint32_t dsc_buf_head = socket_entry->dsc_buf_head;
-    uint32_t pkt_buf_head = socket_entry->pkt_buf_head;
+    uint32_t* pkt_buf_head_ptr = socket_entry->pkt_buf_head_ptr;
+    int app_id = socket_entry->app_id;
 
     // 16 = CACHE_LINE_SIZE / sizeof(*pkt_buf)
     *buf = &pkt_buf[pkt_buf_head * 16];
-    uint8_t* my_buf = (uint8_t*) *buf;
+
+    get_new_tails();
+
+    uint32_t pkt_buf_tail = pending_pkt_tails[app_id];
+
+    if (pkt_buf_tail == pkt_buf_head) {
+	return 0;
+    }
 
     uint32_t total_size = 0;
     uint32_t total_flits = 0;
@@ -252,10 +214,9 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
         // TODO(sadok) right now we have one descriptor queue per packet queue,
         // we will need to consider the queue id once this changes
-        pcie_pkt_desc_t* cur_desc = dsc_buf + dsc_buf_head;
+        pcie_pkt_desc_t* cur_desc = dsc_buf_head_ptr;
 
-	printf("dereference cur_desc / dsc_buf\n");
-    	printf("dereference dsc_buf: 0x%x\n", dsc_buf);
+    	printf("dsc_buf: 0x%x\n", dsc_buf);
 	printf("cur_desc->signal = %d\n", cur_desc->signal);
 	printf("cur_desc->queue_id = %d\n", cur_desc->queue_id);
 	printf("\n");
