@@ -31,7 +31,7 @@ module queue_manager #(
     output logic [EXTRA_META_BITS-1:0]    out_meta_extra,
     output logic                          out_meta_valid,
     input  logic                          out_meta_ready,
-    
+
     // BRAM signals for queues
     bram_interface_io.owner q_table_tails,
     bram_interface_io.owner q_table_heads,
@@ -39,7 +39,7 @@ module queue_manager #(
     bram_interface_io.owner q_table_h_addrs,
 
     // config signals
-    input logic [25:0] rb_size
+    input logic [RB_AWIDTH:0] rb_size
 );
 
 // The BRAM port b's are exposed outside the module while port a's are only used
@@ -70,14 +70,21 @@ typedef struct packed
     logic                      valid;
     logic [QUEUE_ID_WIDTH-1:0] queue;
 } internal_queue_state_t;
-    
+
+typedef struct packed
+{
+    logic [RB_AWIDTH-1:0]      tail;
+    logic                      valid;
+    logic [QUEUE_ID_WIDTH-1:0] queue;
+} internal_last_queue_state_t;
+
 typedef struct packed {
     logic [$clog2(MAX_PKT_SIZE):0] pkt_size; // in number of flits
     logic [EXTRA_META_BITS-1:0]    meta_extra;
     logic                          pass_through;
 } pkt_metadata_t;
 
-internal_queue_state_t last_states [3];
+internal_last_queue_state_t last_states [2];
 
 logic [31:0] next_state_queue_occup;
 logic next_state_queue_almost_full;
@@ -93,9 +100,17 @@ logic                  out_next_state_ready;
 logic                  out_next_state_valid;
 
 queue_state_t               out_queue_q_state;
+queue_state_t               out_queue_q_state_r;
+queue_state_t               out_queue_q_state_r2;
 logic [EXTRA_META_BITS-1:0] out_queue_meta_extra;
+logic [EXTRA_META_BITS-1:0] out_queue_meta_extra_r;
+logic [EXTRA_META_BITS-1:0] out_queue_meta_extra_r2;
 logic                       out_queue_meta_valid;
+logic                       out_queue_meta_valid_r;
+logic                       out_queue_meta_valid_r2;
 logic                       out_queue_meta_ready;
+
+logic [QUEUE_ID_WIDTH-1:0] last_queue;
 
 logic [31:0] out_queue_occup;
 logic out_queue_almost_full;
@@ -111,17 +126,27 @@ assign concurrent_rd_wr = tail_wr_en & queue_rd_en;
 // If concurrent_rd_wr is set, there is a pending write and we must wait.
 assign out_next_state_ready = !out_queue_almost_full & !concurrent_rd_wr;
 
+logic [RB_AWIDTH-1:0] rb_mask;
+always @(posedge clk) begin
+    rb_mask <= rb_size - 1;
+end
+
 // Read fetched queue states and push metadata out
 always @(posedge clk) begin
     tail_wr_en <= 0;
-
     out_queue_meta_valid <= 0;
+
+    out_queue_q_state_r2 <= out_queue_q_state_r;
+    out_queue_q_state_r <= out_queue_q_state;
+    out_queue_meta_extra_r2 <= out_queue_meta_extra_r;
+    out_queue_meta_extra_r <= out_queue_meta_extra;
+    out_queue_meta_valid_r2 <= out_queue_meta_valid_r;
+    out_queue_meta_valid_r <= out_queue_meta_valid;
 
     if (rst) begin
         // set last states to invalid so we ignore those in the beginning.
         last_states[0].valid <= 0;
         last_states[1].valid <= 0;
-        last_states[2].valid <= 0;
     end else begin
         if (out_next_state_ready & out_next_state_valid) begin
             automatic internal_queue_state_t cur_state = out_next_state_data;
@@ -130,9 +155,12 @@ always @(posedge clk) begin
             // were directed to the current queue. Therefore, we save the last
             // two queue states and grab the most up to date tail value if any
             // of those match the current queue.
-            if (last_states[2].valid && 
-                    last_states[2].queue == cur_state.queue) begin
-                cur_state.tail = last_states[2].tail;
+            // if (last_states[2].valid &&
+            //         last_states[2].queue == cur_state.queue) begin
+            //     cur_state.tail = last_states[2].tail;
+            // end else 
+            if (out_queue_meta_valid && last_queue == cur_state.queue) begin
+                cur_state.tail = new_tail;
             end else if (last_states[1].valid &&
                     last_states[1].queue == cur_state.queue) begin
                 cur_state.tail = last_states[1].tail;
@@ -147,16 +175,16 @@ always @(posedge clk) begin
             out_queue_q_state.kmem_addr <= cur_state.addr;
             out_queue_meta_extra <= out_next_metadata_data.meta_extra;
             out_queue_meta_valid <= 1;
+            last_queue <= cur_state.queue;
 
             // Increment tail only if not pass through
             if (!out_next_metadata_data.pass_through) begin
                 tail_wr_en <= 1;
                 if (UNIT_POINTER) begin
-                    cur_state.tail = get_new_pointer(cur_state.tail, 1,
-                                                     rb_size);
+                    cur_state.tail = (cur_state.tail + 1) & rb_mask;
                 end else begin
-                    cur_state.tail = get_new_pointer(cur_state.tail,
-                        out_next_metadata_data.pkt_size, rb_size);
+                    cur_state.tail = (cur_state.tail 
+                        + out_next_metadata_data.pkt_size) & rb_mask;
                 end
                 new_tail <= cur_state.tail;
                 wr_queue <= cur_state.queue;
@@ -164,8 +192,9 @@ always @(posedge clk) begin
 
             // Advance last states pipeline.
             last_states[0] <= last_states[1];
-            last_states[1] <= last_states[2];
-            last_states[2] <= cur_state;
+            last_states[1].valid <= 1;
+            last_states[1].queue <= cur_state.queue;
+            last_states[1].tail <= cur_state.tail;
         end
 
         // If we write in the same cycle as a read, it will be ignored. We need
@@ -193,7 +222,6 @@ always @(posedge clk) begin
 
     if (rst) begin
     end else begin
-        // if (!next_state_queue_almost_full) begin
         if (in_meta_ready & in_meta_valid) begin
             // fetch next state
             rd_queue <= in_queue_id;
@@ -250,8 +278,8 @@ out_queue (
     .csr_write     (1'b0),
     .csr_readdata  (out_queue_occup),
     .csr_writedata (32'b0),
-    .in_data       ({out_queue_q_state, out_queue_meta_extra}),
-    .in_valid      (out_queue_meta_valid),
+    .in_data       ({out_queue_q_state_r2, out_queue_meta_extra_r2}),
+    .in_valid      (out_queue_meta_valid_r2),
     .in_ready      (out_queue_meta_ready),
     .out_data      ({out_q_state, out_meta_extra}),
     .out_valid     (out_meta_valid),
@@ -319,7 +347,7 @@ always_comb begin
         // Concurrent head write from PCIe or JTAG, we bypass the read and use
         // the new written value instead. This is done to prevent concurrent
         // read and write to the same address, which causes undefined behavior.
-        if ((q_table_a_heads.addr == q_table_heads.addr) 
+        if ((q_table_a_heads.addr == q_table_heads.addr)
                 && q_table_heads.wr_en) begin
             q_table_a_heads.rd_en = 0;
         end
@@ -328,10 +356,9 @@ always_comb begin
         q_table_a_tails.addr = wr_queue;
     end
 
-    queue_ready = 
+    queue_ready =
         q_table_a_tails_rd_en_r2   || q_table_a_heads_rd_en_r2   ||
         q_table_a_l_addrs_rd_en_r2 || q_table_a_h_addrs_rd_en_r2;
-
 
     if (q_table_a_tails_rd_en_r2) begin
         tail = q_table_a_tails.rd_data[RB_AWIDTH-1:0];

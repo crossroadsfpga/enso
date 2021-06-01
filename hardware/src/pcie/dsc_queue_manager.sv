@@ -27,7 +27,7 @@ module dsc_queue_manager #(
     bram_interface_io.owner q_table_h_addrs,
 
     // config signals
-    input logic [25:0] rb_size
+    input logic [RB_AWIDTH:0] rb_size
 );
 
 pkt_meta_with_queues_t out_meta_extra;

@@ -7,7 +7,7 @@ set PCIE_BASE    0x2A000000
 # These **must be kept in sync** with the variables with the same name on 
 # `hardware/src/constants.sv` and `software/fd/pcie.h`.
 set MAX_NB_APPS 256
-set MAX_NB_FLOWS 8192
+set MAX_NB_FLOWS 65536
 
 set REGS_PER_QUEUE 4
 

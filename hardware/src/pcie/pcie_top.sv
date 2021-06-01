@@ -52,8 +52,8 @@ module pcie_top (
     output logic        status_readdata_valid
 );
 
-logic [25:0] dsc_rb_size;
-logic [25:0] pkt_rb_size;
+logic [RB_AWIDTH:0] dsc_rb_size;
+logic [RB_AWIDTH:0] pkt_rb_size;
 
 // descriptor queue table interface signals
 bram_interface_io dsc_q_table_tails();
@@ -108,12 +108,12 @@ bram_mux #( .NB_BRAMS(NB_PKT_QUEUE_MANAGERS) ) pkt_q_table_h_addrs_mux (
 logic [31:0] control_regs [NB_CONTROL_REGS];
 
 assign disable_pcie = control_regs[0][0];
-assign pkt_rb_size = control_regs[0][26:1];
+assign pkt_rb_size = control_regs[0][1 +: RB_AWIDTH+1];
 
 // Use to reset stats from software. Must also be unset from software
 assign sw_reset = control_regs[0][27];
 
-assign dsc_rb_size = control_regs[1][25:0];
+assign dsc_rb_size = control_regs[1][0 +: RB_AWIDTH+1];
 
 logic queue_updated [NB_PKT_QUEUE_MANAGERS];
 logic [BRAM_TABLE_IDX_WIDTH-1:0] queue_idx;

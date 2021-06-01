@@ -22,8 +22,8 @@ module fpga_to_cpu (
     output logic [F2C_RB_AWIDTH:0]    metadata_buf_occup,
 
     // CPU ring buffer config signals
-    input  logic [25:0] pkt_rb_size,
-    input  logic [25:0] dsc_rb_size,
+    input  logic [RB_AWIDTH:0] pkt_rb_size,
+    input  logic [RB_AWIDTH:0] dsc_rb_size,
 
     // PCIe BAS
     input  logic         pcie_bas_waitrequest,
@@ -46,18 +46,29 @@ module fpga_to_cpu (
     output logic [31:0] cpu_dsc_buf_full_cnt
 );
 
-// assign wr_base_addr = 0;
-// assign wr_base_addr_valid = 0;
-// assign almost_full = 0;
 assign pcie_bas_read = 0;
+
+logic [RB_AWIDTH:0]   dsc_rb_size_r;
+logic [RB_AWIDTH:0]   pkt_rb_size_r;
+logic [RB_AWIDTH-1:0] dsc_rb_mask;
+logic [RB_AWIDTH-1:0] pkt_rb_mask;
+
+always @(posedge clk) begin
+    dsc_rb_size_r <= dsc_rb_size;
+    pkt_rb_size_r <= pkt_rb_size;
+    dsc_rb_mask <= dsc_rb_size - 1;
+    pkt_rb_mask <= pkt_rb_size - 1;
+end
 
 flit_lite_t pkt_buf_out_data;
 logic       pkt_buf_out_ready;
 logic       pkt_buf_out_valid;
 
 pkt_meta_with_queues_t  metadata_buf_out_data;
-logic                   metadata_buf_out_ready;
+pkt_meta_with_queues_t  metadata_buf_out_data_r;
 logic                   metadata_buf_out_valid;
+logic                   metadata_buf_out_valid_r;
+logic                   metadata_buf_out_ready;
 
 logic [31:0] dma_queue_full_cnt_r;
 logic [31:0] cpu_dsc_buf_full_cnt_r;
@@ -77,15 +88,13 @@ typedef struct packed
 
 transf_meta_t transf_meta;
 
-function pkt_meta_with_queues_t dma_pkt(
+function void dma_pkt(
     flit_lite_t            data,
     pkt_meta_with_queues_t meta,
     logic [3:0]            flits_in_transfer
     // TODO(sadok) expose byteenable?
 );
     if (meta.pkt_q_state.kmem_addr && meta.dsc_q_state.kmem_addr) begin
-        automatic pkt_meta_with_queues_t return_meta;
-
         // Assume that it is a burst when flits_in_transfer == 0, no need to set 
         // address.
         if (flits_in_transfer != 0) begin
@@ -97,23 +106,17 @@ function pkt_meta_with_queues_t dma_pkt(
         pcie_bas_writedata_r <= data.data;
         pcie_bas_write_r <= 1;
         pcie_bas_burstcount_r <= flits_in_transfer;
-
-        return_meta = meta;
-        return_meta.pkt_q_state.tail = get_new_pointer(
-            meta.pkt_q_state.tail, 1, pkt_rb_size[RB_AWIDTH-1:0]
-        );
-        return_meta.size = meta.size - 1;
-
-        return return_meta;
+        
+        transf_meta.pkt_meta.pkt_q_state.tail <= 
+            (meta.pkt_q_state.tail + 1) & pkt_rb_mask;
+        transf_meta.pkt_meta.size <= meta.size - 1;
     end
-    return meta;
 endfunction
 
-function transf_meta_t start_burst(
+function logic [3:0] start_burst(
     flit_lite_t            data,
     pkt_meta_with_queues_t meta
 );
-    automatic transf_meta_t return_meta;
     // Skip when addresses are not defined.
     if (meta.pkt_q_state.kmem_addr && meta.dsc_q_state.kmem_addr) begin
         automatic logic [3:0] flits_in_transfer;
@@ -130,62 +133,18 @@ function transf_meta_t start_burst(
         end
 
         // The DMA transfer cannot go across the buffer limit.
-        if (flits_in_transfer > (pkt_rb_size[RB_AWIDTH-1:0] 
+        if (flits_in_transfer > (pkt_rb_size_r[RB_AWIDTH-1:0] 
                                 - meta.pkt_q_state.tail)) begin
-            flits_in_transfer = pkt_rb_size[RB_AWIDTH-1:0]
+            flits_in_transfer = pkt_rb_size_r[RB_AWIDTH-1:0]
                                 - meta.pkt_q_state.tail;
         end
 
-        return_meta.pkt_meta = dma_pkt(data, meta, flits_in_transfer);
-        return_meta.missing_flits_in_transfer = flits_in_transfer - 1;
+        dma_pkt(data, meta, flits_in_transfer);
+        return flits_in_transfer - 1;
     end else begin
-        return_meta.pkt_meta = meta;
-        return_meta.missing_flits_in_transfer = 0;
+        return 0;
     end
-    return return_meta; 
 endfunction
-
-logic [RB_AWIDTH-1:0] dsc_free_slot;
-logic [RB_AWIDTH-1:0] pkt_free_slot;
-
-// TODO(sadok) We should check if there is room much earlier in the pipeline.
-// The way it is currently implemented, we are advancing the ring buffer
-// pointers in the queue management modules so when we get here we have no
-// choice -- we must DMA the packet. The problem is that this may cause
-// head-of-line blocking.
-function logic is_ready_to_dma(
-    pkt_meta_with_queues_t meta
-);
-    // Always have at least one slot not occupied in both the
-    // descriptor ring buffer and the packet ring buffer
-    if (meta.dsc_q_state.tail >= meta.dsc_q_state.head) begin
-        dsc_free_slot = dsc_rb_size[RB_AWIDTH-1:0] - meta.dsc_q_state.tail
-                        + meta.dsc_q_state.head - 1'b1;
-    end else begin
-        dsc_free_slot = meta.dsc_q_state.head - meta.dsc_q_state.tail - 1'b1;
-    end
-    if (meta.pkt_q_state.tail >= meta.pkt_q_state.head) begin
-        pkt_free_slot = pkt_rb_size[RB_AWIDTH-1:0] - meta.pkt_q_state.tail
-                        + meta.pkt_q_state.head - 1'b1;
-    end else begin
-        pkt_free_slot = meta.pkt_q_state.head - meta.pkt_q_state.tail - 1'b1;
-    end
-
-    // We may set the writing signals even when pcie_bas_waitrequest
-    // is set, but we must make sure that they remain active until
-    // pcie_bas_waitrequest is unset. So we are checking this signal
-    // not to ensure that we are able to write but instead to make
-    // sure that any write request in the previous cycle is complete
-    return (pkt_free_slot >= meta.size) && (dsc_free_slot != 0)
-        && pkt_buf_out_valid && metadata_buf_out_valid && !pcie_bas_waitrequest;
-endfunction
-
-pkt_meta_with_queues_t cur_meta;
-
-logic can_start_transfer;
-logic can_continue_transfer;
-
-logic rst_r;
 
 typedef enum
 {
@@ -196,6 +155,40 @@ typedef enum
 } state_t;
 
 state_t state;
+logic rst_r;
+
+// We may set the writing signals even when pcie_bas_waitrequest is set, but we
+// must make sure that they remain active until pcie_bas_waitrequest is unset.
+// So we are checking this signal not to ensure that we are able to write but
+// instead to ensure that any write request in the previous cycle is complete.
+logic can_continue_dma;
+assign can_continue_dma = pkt_buf_out_valid && !pcie_bas_waitrequest;
+
+// TODO(sadok) We should check if there is room much earlier in the pipeline.
+// The way it is currently implemented, we are advancing the ring buffer
+// pointers in the queue management modules so when we get here we have no
+// choice -- we must DMA the packet. The problem is that this may cause
+// head-of-line blocking.
+function logic is_ready_to_start_dma(
+    pkt_meta_with_queues_t meta
+);
+    automatic logic [RB_AWIDTH-1:0] dsc_free_slot;
+    automatic logic [RB_AWIDTH-1:0] pkt_free_slot;
+
+    // Always have at least one slot not occupied in both the
+    // descriptor ring buffer and the packet ring buffer
+    dsc_free_slot = (meta.dsc_q_state.head - meta.dsc_q_state.tail - 1) 
+        & dsc_rb_mask;
+    pkt_free_slot = (meta.pkt_q_state.head - meta.pkt_q_state.tail - 1) 
+        & pkt_rb_mask;
+
+    return (pkt_free_slot >= meta.size) && (dsc_free_slot != 0) 
+           && can_continue_dma && metadata_buf_out_valid_r;
+endfunction
+
+pkt_meta_with_queues_t cur_meta;
+
+logic can_start_transfer;
 
 // Consume requests and issue DMAs
 always @(posedge clk) begin
@@ -219,12 +212,15 @@ always @(posedge clk) begin
         case (state)
             START_TRANSFER: begin
                 if (can_start_transfer) begin
-                    automatic transf_meta_t next_transf_meta;
+                    automatic logic [3:0] missing_flits_in_transfer;
 
-                    next_transf_meta = start_burst(pkt_buf_out_data, cur_meta);
-                    transf_meta <= next_transf_meta;
+                    transf_meta.pkt_meta <= cur_meta;
+                    missing_flits_in_transfer = 
+                        start_burst(pkt_buf_out_data, cur_meta);
+                    transf_meta.missing_flits_in_transfer <= 
+                        missing_flits_in_transfer;
 
-                    if (next_transf_meta.missing_flits_in_transfer != 0) begin
+                    if (missing_flits_in_transfer != 0) begin
                         state <= COMPLETE_BURST;
                     end else if (cur_meta.size > 1) begin
                         // When we can only send a single packet in a burst, we
@@ -238,11 +234,10 @@ always @(posedge clk) begin
                 end
             end
             COMPLETE_BURST: begin
-                if (can_continue_transfer) begin
+                if (can_continue_dma) begin
                     // Setting flits_in_transfer to 0 indicates that this is
                     // continuing a burst.
-                    transf_meta.pkt_meta <= 
-                        dma_pkt(pkt_buf_out_data, transf_meta.pkt_meta, 0);
+                    dma_pkt(pkt_buf_out_data, transf_meta.pkt_meta, 0);
                     transf_meta.missing_flits_in_transfer <=
                         transf_meta.missing_flits_in_transfer - 1;
 
@@ -261,15 +256,15 @@ always @(posedge clk) begin
             START_BURST: begin
                 // Some transfers need multiple bursts, we use this state to
                 // issue new bursts to the same transfer.
+                if (can_continue_dma) begin
+                    automatic logic [3:0] missing_flits_in_transfer;
 
-                if (can_continue_transfer) begin
-                    automatic transf_meta_t next_transf_meta;
-                    next_transf_meta =
-                        start_burst(pkt_buf_out_data, transf_meta.pkt_meta);
+                    missing_flits_in_transfer = start_burst(
+                        pkt_buf_out_data, transf_meta.pkt_meta);
+                    transf_meta.missing_flits_in_transfer <= 
+                        missing_flits_in_transfer;
 
-                    transf_meta <= next_transf_meta;
-
-                    if (next_transf_meta.missing_flits_in_transfer != 0) begin
+                    if (missing_flits_in_transfer != 0) begin
                         state <= COMPLETE_BURST;
                     end else if (transf_meta.pkt_meta.size > 1) begin
                         // When we can only send a single packet in a burst, we
@@ -283,7 +278,7 @@ always @(posedge clk) begin
                 end
             end
             SEND_DESCRIPTOR: begin
-                if (can_continue_transfer) begin
+                if (!pcie_bas_waitrequest) begin
                     automatic pcie_pkt_dsc_t pcie_pkt_desc;
                     automatic queue_state_t dsc_q_state;
                     automatic queue_state_t pkt_q_state;
@@ -318,29 +313,36 @@ end
 
 // Extra registers to help with timing.
 always @(posedge clk) begin
-    if (!pcie_bas_waitrequest) begin
-        pcie_bas_address <= pcie_bas_address_r;
-        pcie_bas_byteenable <= pcie_bas_byteenable_r;
-        pcie_bas_write <= pcie_bas_write_r;
-        pcie_bas_writedata <= pcie_bas_writedata_r;
-        pcie_bas_burstcount <= pcie_bas_burstcount_r;
+    if (rst_r | sw_reset) begin
+        metadata_buf_out_valid_r <= 0;
+    end else begin
+        if (!pcie_bas_waitrequest) begin
+            pcie_bas_address <= pcie_bas_address_r;
+            pcie_bas_byteenable <= pcie_bas_byteenable_r;
+            pcie_bas_write <= pcie_bas_write_r;
+            pcie_bas_writedata <= pcie_bas_writedata_r;
+            pcie_bas_burstcount <= pcie_bas_burstcount_r;
 
-        dma_queue_full_cnt <= dma_queue_full_cnt_r;
-        cpu_dsc_buf_full_cnt <= cpu_dsc_buf_full_cnt_r;
-        cpu_pkt_buf_full_cnt <= cpu_pkt_buf_full_cnt_r;
+            dma_queue_full_cnt <= dma_queue_full_cnt_r;
+            cpu_dsc_buf_full_cnt <= cpu_dsc_buf_full_cnt_r;
+            cpu_pkt_buf_full_cnt <= cpu_pkt_buf_full_cnt_r;
+        end
+        if (metadata_buf_out_ready | !metadata_buf_out_valid_r) begin
+            metadata_buf_out_data_r <= metadata_buf_out_data;
+            metadata_buf_out_valid_r <= metadata_buf_out_valid;
+        end
     end
 end
 
 // Check if we are able to DMA the packet or descriptor
 always_comb begin
-    cur_meta = metadata_buf_out_data;
+    cur_meta = metadata_buf_out_data_r;
 
-    can_start_transfer = is_ready_to_dma(cur_meta);
-    can_continue_transfer = is_ready_to_dma(transf_meta.pkt_meta);
+    can_start_transfer = is_ready_to_start_dma(cur_meta);
 
     metadata_buf_out_ready = can_start_transfer && (state == START_TRANSFER);
-    pkt_buf_out_ready = metadata_buf_out_ready ||
-                        (can_continue_transfer && (state != SEND_DESCRIPTOR));
+    pkt_buf_out_ready = metadata_buf_out_ready || (can_continue_dma
+        && (state != SEND_DESCRIPTOR) && (state != START_TRANSFER));
 end
 
 logic [31:0] pkt_buf_csr_readdata;
@@ -390,7 +392,7 @@ metadata_buf (
     .in_ready      (metadata_buf_in_ready),
     .out_data      (metadata_buf_out_data),
     .out_valid     (metadata_buf_out_valid),
-    .out_ready     (metadata_buf_out_ready)
+    .out_ready     (metadata_buf_out_ready | !metadata_buf_out_valid_r)
 );
 
 endmodule

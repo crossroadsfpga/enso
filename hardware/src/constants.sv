@@ -71,7 +71,7 @@ localparam PCIE_ADDR_WIDTH = 30;
 //indicating CPU info. 
 //The higher half is used for CPU ring buffer registers
 //The bottom half is used as PDU header for each PDU transfer.
-localparam MAX_RB_DEPTH = 1048575; // in 512 bits.
+localparam MAX_RB_DEPTH = 1048576; // in 512 bits (power of two).
 localparam RB_AWIDTH = ($clog2(MAX_RB_DEPTH));
 
 localparam C2F_RB_DEPTH = 512; // in 512 bits.
@@ -87,10 +87,11 @@ localparam MAX_PKT_SIZE = 24; // in 512 bits
 // TODO(sadok): expose these values from JTAG so that software and the tcl
 // script can adapt to the bitstream that is loaded at given moment.
 localparam MAX_NB_APPS = 256;
-localparam MAX_NB_FLOWS = 8192*2;
+localparam MAX_NB_FLOWS = 65536;
 
 // Define the number of packet queue managers that we instantiate.
-localparam NB_PKT_QUEUE_MANAGERS = 4;
+// localparam NB_PKT_QUEUE_MANAGERS = 32;
+localparam NB_PKT_QUEUE_MANAGERS = 16;
 localparam PKT_QM_ID_WIDTH = $clog2(NB_PKT_QUEUE_MANAGERS);
 
 localparam APP_IDX_WIDTH = ($clog2(MAX_NB_APPS));

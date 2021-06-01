@@ -720,6 +720,8 @@ always @(posedge clk_pcie) begin
 
                         // Shoud not receive a descriptor to the same queue
                         // before software advanced the head for this queue.
+                        // TODO(sadok) enable this check once we restore the
+                        // logic that filters descriptors
                         assert(pending_pkt_tails_valid[
                             pcie_pkt_desc.queue_id] == 0) else $fatal;
 
@@ -860,9 +862,12 @@ always @(posedge clk_status) begin
                 end
             end
             READ_PCIE_START: begin
-                // s_read <= 1;
-                // conf_state <= READ_PCIE_PKT_Q;
-                conf_state <= IDLE;
+                s_read <= 1;
+                s_addr <= 30'h2A00_0000;
+                conf_state <= READ_PCIE_PKT_Q;
+                
+                // uncomment to skip read_pcie
+                // conf_state <= IDLE;
                 $display("read_pcie:");
                 $display("status + pkt queues:");
             end

@@ -43,29 +43,46 @@ logic                     out_order_ready;
 // I could not pick a less misleading name...
 logic [$clog2(NB_IN)-1:0] next_stream_id;
 logic                     next_stream_id_valid;
-logic                     next_stream_is_ready;
+logic                     next_stream_valid;
+
+logic              out_fifo_in_ready;
+logic              out_fifo_in_valid;
+logic              out_fifo_in_valid_r;
+logic              out_fifo_in_valid_r2;
+logic [DWIDTH-1:0] out_fifo_in_data;
+logic [DWIDTH-1:0] out_fifo_in_data_r;
+logic [DWIDTH-1:0] out_fifo_in_data_r2;
+logic [31:0]       out_fifo_occup;
+logic              out_fifo_almost_full;
+
+assign out_fifo_almost_full = out_fifo_occup > 16;
+
 
 always_comb begin
-    next_stream_is_ready = 
-        out_ready & next_stream_id_valid & in_valid[next_stream_id];
-    out_order_ready = !next_stream_id_valid | next_stream_is_ready;
+    next_stream_valid = !out_fifo_almost_full & next_stream_id_valid 
+                         & in_valid[next_stream_id];
+    out_order_ready = !next_stream_id_valid | next_stream_valid;
     for (integer i = 0; i < NB_IN; i++) begin
-        in_ready[i] = out_ready & next_stream_id_valid & (i == next_stream_id); 
+        in_ready[i] = !out_fifo_almost_full & next_stream_id_valid 
+                       & (i == next_stream_id); 
     end
 end
 
 always @(posedge clk) begin
-    if (out_ready) begin
-        out_valid <= 0;
-    end
+    out_fifo_in_valid <= 0;
+
+    out_fifo_in_data_r2 <= out_fifo_in_data_r;
+    out_fifo_in_data_r <= out_fifo_in_data;
+
+    out_fifo_in_valid_r2 <= out_fifo_in_valid_r;
+    out_fifo_in_valid_r <= out_fifo_in_valid;
 
     if (rst) begin
-        out_valid <= 0;
         next_stream_id_valid <= 0;
     end else begin
-        if (next_stream_is_ready) begin
-            out_data <= in_data[next_stream_id];
-            out_valid <= 1;
+        if (next_stream_valid) begin
+            out_fifo_in_data <= in_data[next_stream_id];
+            out_fifo_in_valid <= 1;
             next_stream_id_valid <= 0;
         end
 
@@ -76,7 +93,7 @@ always @(posedge clk) begin
     end
 end
 
-logic [31:0] occup;
+logic [31:0] order_queue_occup;
 
 fifo_wrapper_infill_mlab #(
     .SYMBOLS_PER_BEAT(1),
@@ -97,6 +114,27 @@ order_queue (
     .out_data      (out_order_data),
     .out_valid     (out_order_valid),
     .out_ready     (out_order_ready)
+);
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL(DWIDTH),
+    .FIFO_DEPTH(32)
+)
+out_fifo (
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (out_fifo_occup),
+    .csr_writedata (32'b0),
+    .in_data       (out_fifo_in_data_r2),
+    .in_valid      (out_fifo_in_valid_r2),
+    .in_ready      (out_fifo_in_ready),
+    .out_data      (out_data),
+    .out_valid     (out_valid),
+    .out_ready     (out_ready)
 );
 
 endmodule
