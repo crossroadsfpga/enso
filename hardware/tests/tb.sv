@@ -253,9 +253,7 @@ typedef enum{
     DMA_QUEUE_FULL,
     CPU_DSC_BUF_FULL,
     CPU_PKT_BUF_FULL,
-    PENDING_PREFETCH,
-    MAX_PCIE_RB,
-    MAX_DMA_QUEUE
+    MAX_PCIE_FIFO
 } c_state_t;
 
 c_state_t conf_state;
@@ -318,7 +316,6 @@ begin
         pktID <= 0;
         nb_cycles <= 0;
     end else begin
-        nb_cycles <= nb_cycles + 1;
         if(l8_rx_startofpacket & l8_rx_valid)begin
             pktID <= pktID + 1;
             nb_cycles <= nb_cycles + 1;
@@ -364,7 +361,10 @@ begin
                 l8_rx_valid <= 1;
             end else if (!stop && stop_cnt == 0) begin
                 l8_rx_valid <= 0;
-                stop_cnt <= STOP_DELAY; 
+                stop_cnt <= STOP_DELAY;
+                $display("Number of cycles: %d", nb_cycles);
+                $display("Duration: %d", nb_cycles * period_rx);
+                $display("Flits: %d", hi);
             end
         end else begin
             l8_rx_valid <= 0;
@@ -382,9 +382,7 @@ begin
         if (stop_cnt == 1) begin
             stop <= 1;
             $display("STOP READING!");
-                $display("Number of cycles: %d", nb_cycles);
-                $display("Duration: %d", nb_cycles * period_rx);
-                $display("Count: %d", cnt);
+            $display("Count: %d", cnt);
         end
     end
 end
@@ -722,8 +720,8 @@ always @(posedge clk_pcie) begin
                         // before software advanced the head for this queue.
                         // TODO(sadok) enable this check once we restore the
                         // logic that filters descriptors
-                        assert(pending_pkt_tails_valid[
-                            pcie_pkt_desc.queue_id] == 0) else $fatal;
+                        // assert(pending_pkt_tails_valid[
+                        //     pcie_pkt_desc.queue_id] == 0) else $fatal;
 
                         // save tail so we can advance the head later
                         pending_pkt_tails[pcie_pkt_desc.queue_id] <= pcie_pkt_desc.tail;
@@ -1134,34 +1132,16 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("CPU_PKT_BUF_FULL:\t%d",top_readdata);
-                    conf_state <= PENDING_PREFETCH;
+                    conf_state <= MAX_PCIE_FIFO;
                     s_read <= 1;
                     s_addr <= 30'h2200_001A;
                 end
             end
-            PENDING_PREFETCH: begin
+            MAX_PCIE_FIFO: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PENDING_PREFETCH:\t%d",top_readdata);
-                    conf_state <= MAX_PCIE_RB;
-                    s_read <= 1;
-                    s_addr <= 30'h2200_001B;
-                end
-            end
-            MAX_PCIE_RB: begin
-                s_read <= 0;
-                if(top_readdata_valid)begin
-                    $display("MAX_PCIE_RB:\t\t%d",top_readdata);
-                    conf_state <= MAX_DMA_QUEUE;
-                    s_read <= 1;
-                    s_addr <= 30'h2200_001C;
-                end
-            end
-            MAX_DMA_QUEUE: begin
-                s_read <= 0;
-                if(top_readdata_valid)begin
-                    $display("MAX_DMA_QUEUE:\t%d",top_readdata);
-                    $display("done");
+                    $display("MAX_PCIE_FIFO:\t%d",top_readdata);
+                    $display("done -");
                     $finish;
                 end
             end

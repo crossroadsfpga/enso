@@ -109,9 +109,7 @@ logic [31:0] rule_set_cnt_status;
 logic [31:0] dma_queue_full_cnt_status;
 logic [31:0] cpu_dsc_buf_full_cnt_status;
 logic [31:0] cpu_pkt_buf_full_cnt_status;
-logic [31:0] pending_prefetch_cnt_status;
-logic [31:0] max_pcie_rb_status;
-logic [31:0] max_dma_queue_occup_status;
+logic [31:0] max_pcie_fifo_status;
 
 //Register I/O
 logic  [511:0]  out_data;
@@ -347,16 +345,9 @@ logic [31:0] cpu_dsc_buf_full_cnt_r2;
 logic [31:0] cpu_pkt_buf_full_cnt;
 logic [31:0] cpu_pkt_buf_full_cnt_r1;
 logic [31:0] cpu_pkt_buf_full_cnt_r2;
-logic [31:0] pending_prefetch_cnt;
-logic [31:0] pending_prefetch_cnt_r1;
-logic [31:0] pending_prefetch_cnt_r2;
-logic [31:0] dma_queue_occup;
-logic [31:0] max_pcie_rb;
-logic [31:0] max_pcie_rb_r1;
-logic [31:0] max_pcie_rb_r2;
-logic [31:0] max_dma_queue_occup;
-logic [31:0] max_dma_queue_occup_r1;
-logic [31:0] max_dma_queue_occup_r2;
+logic [31:0] max_pcie_fifo;
+logic [31:0] max_pcie_fifo_r1;
+logic [31:0] max_pcie_fifo_r2;
 
 logic pcie_bas_write_r;
 
@@ -466,12 +457,8 @@ always @(posedge clk_pcie) begin
         dma_pkt_cnt <= 0;
         dma_request_cnt <= 0;
         rule_set_cnt <= 0;
-        dma_queue_occup <= 0;
-        max_pcie_rb <= 0;
-        max_dma_queue_occup <= 0;
+        max_pcie_fifo <= 0;
     end else begin
-        // automatic logic non_prio_desc_cons = pcie_wrdm_tx_valid &&
-        //                                      !pcie_wrdm_tx_data[8]; // priority
         if (pcie_pkt_valid & pcie_pkt_ready & pcie_pkt_eop) begin
             pcie_pkt_cnt <= pcie_pkt_cnt + 1;
         end
@@ -487,11 +474,8 @@ always @(posedge clk_pcie) begin
         if (pdumeta_cpu_valid) begin
             rule_set_cnt <= rule_set_cnt + 1;
         end
-        if (pcie_pkt_buf_occup_r > max_pcie_rb) begin
-            max_pcie_rb <= pcie_pkt_buf_occup_r;
-        end
-        if (dma_queue_occup > max_dma_queue_occup) begin
-            max_dma_queue_occup <= dma_queue_occup;
+        if (pcie_pkt_buf_occup_r > max_pcie_fifo) begin
+            max_pcie_fifo <= pcie_pkt_buf_occup_r;
         end
     end
 
@@ -580,15 +564,9 @@ always @(posedge clk_status) begin
     cpu_pkt_buf_full_cnt_r1         <= cpu_pkt_buf_full_cnt;
     cpu_pkt_buf_full_cnt_r2         <= cpu_pkt_buf_full_cnt_r1;
     cpu_pkt_buf_full_cnt_status     <= cpu_pkt_buf_full_cnt_r2;
-    pending_prefetch_cnt_r1              <= pending_prefetch_cnt;
-    pending_prefetch_cnt_r2              <= pending_prefetch_cnt_r1;
-    pending_prefetch_cnt_status          <= pending_prefetch_cnt_r2;
-    max_pcie_rb_r1                  <= max_pcie_rb;
-    max_pcie_rb_r2                  <= max_pcie_rb_r1;
-    max_pcie_rb_status              <= max_pcie_rb_r2;
-    max_dma_queue_occup_r1          <= max_dma_queue_occup;
-    max_dma_queue_occup_r2          <= max_dma_queue_occup_r1;
-    max_dma_queue_occup_status      <= max_dma_queue_occup_r2;
+    max_pcie_fifo_r1                <= max_pcie_fifo;
+    max_pcie_fifo_r2                <= max_pcie_fifo_r1;
+    max_pcie_fifo_status            <= max_pcie_fifo_r2;
 end
 
 //registers
@@ -631,9 +609,7 @@ always @(posedge clk_status) begin
                 8'd23 : status_readdata_top <= dma_queue_full_cnt_status;
                 8'd24 : status_readdata_top <= cpu_dsc_buf_full_cnt_status;
                 8'd25 : status_readdata_top <= cpu_pkt_buf_full_cnt_status;
-                8'd26 : status_readdata_top <= pending_prefetch_cnt_status;
-                8'd27 : status_readdata_top <= max_pcie_rb_status;
-                8'd28 : status_readdata_top <= max_dma_queue_occup_status;
+                8'd26 : status_readdata_top <= max_pcie_fifo_status;
 
                 default : status_readdata_top <= 32'h345;
             endcase
@@ -1135,7 +1111,6 @@ pcie_top pcie (
     .dma_queue_full_cnt     (dma_queue_full_cnt),
     .cpu_dsc_buf_full_cnt   (cpu_dsc_buf_full_cnt),
     .cpu_pkt_buf_full_cnt   (cpu_pkt_buf_full_cnt),
-    .pending_prefetch_cnt   (pending_prefetch_cnt),
     .clk_status             (clk_status),
     .status_addr            (status_addr),
     .status_read            (status_read),

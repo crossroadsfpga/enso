@@ -40,7 +40,6 @@ module pcie_top (
     output logic [31:0]           dma_queue_full_cnt,
     output logic [31:0]           cpu_dsc_buf_full_cnt,
     output logic [31:0]           cpu_pkt_buf_full_cnt,
-    output logic [31:0]           pending_prefetch_cnt,
 
     // status register bus
     input  logic        clk_status,
@@ -183,9 +182,15 @@ jtag_mmio_arbiter_inst (
 pkt_meta_with_queues_t pkt_q_mngr_in_meta_data [NB_PKT_QUEUE_MANAGERS];
 pkt_meta_with_queues_t pkt_q_mngr_out_meta_data [NB_PKT_QUEUE_MANAGERS];
 logic                  pkt_q_mngr_in_meta_valid [NB_PKT_QUEUE_MANAGERS];
+pkt_meta_with_queues_t pkt_q_mngr_in_meta_data   [NB_PKT_QUEUE_MANAGERS];
+pkt_meta_with_queues_t pkt_q_mngr_out_meta_data  [NB_PKT_QUEUE_MANAGERS];
+logic                  pkt_q_mngr_in_meta_valid  [NB_PKT_QUEUE_MANAGERS];
 logic                  pkt_q_mngr_out_meta_valid [NB_PKT_QUEUE_MANAGERS];
-logic                  pkt_q_mngr_in_meta_ready [NB_PKT_QUEUE_MANAGERS];
+logic                  pkt_q_mngr_in_meta_ready  [NB_PKT_QUEUE_MANAGERS];
 logic                  pkt_q_mngr_out_meta_ready [NB_PKT_QUEUE_MANAGERS];
+
+logic [31:0] pkt_full_counters [NB_PKT_QUEUE_MANAGERS];
+logic [31:0] cpu_pkt_buf_full_cnt_r;
 
 logic st_mux_ord_ready;
 
@@ -195,6 +200,7 @@ assign pkt_q_mngr_id = !pcie_meta_buf_valid
 
 always_comb begin
     pcie_meta_buf_ready = 1;
+    cpu_pkt_buf_full_cnt_r = 0;
     for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
         pkt_q_mngr_in_meta_data[i].dsc_queue_id = 
             pcie_meta_buf_data.dsc_queue_id;
@@ -203,14 +209,20 @@ always_comb begin
         pkt_q_mngr_in_meta_data[i].size = pcie_meta_buf_data.size;
 
         pcie_meta_buf_ready &= 
-            pkt_q_mngr_in_meta_ready[pkt_q_mngr_id] & st_mux_ord_ready;
+            pkt_q_mngr_in_meta_ready[i] & st_mux_ord_ready;
 
         pkt_q_mngr_in_meta_valid[i] = pcie_meta_buf_valid & pcie_meta_buf_ready;
         if (PKT_QM_ID_WIDTH > 0) begin
             pkt_q_mngr_in_meta_valid[i] &= (pcie_meta_buf_data.pkt_queue_id[
                 NON_NEG_PKT_QM_MSB:0] == i);
         end
+
+        cpu_pkt_buf_full_cnt_r += pkt_full_counters[i];
     end
+end
+
+always @(posedge pcie_clk) begin
+    cpu_pkt_buf_full_cnt <= cpu_pkt_buf_full_cnt_r;
 end
 
 pkt_queue_manager #(
@@ -231,7 +243,8 @@ pkt_queue_manager_inst [NB_PKT_QUEUE_MANAGERS] (
     .q_table_h_addrs   (pqm_pkt_q_table_h_addrs),
     .queue_updated     (queue_updated),
     .updated_queue_idx (updated_queue_idx),
-    .rb_size           (pkt_rb_size)
+    .rb_size           (pkt_rb_size),
+    .full_cnt          (pkt_full_counters)
 );
 
 pkt_meta_with_queues_t dsc_q_mngr_in_meta_data;
@@ -275,7 +288,8 @@ dsc_queue_manager_inst (
     .q_table_heads   (dsc_q_table_heads.owner),
     .q_table_l_addrs (dsc_q_table_l_addrs.owner),
     .q_table_h_addrs (dsc_q_table_h_addrs.owner),
-    .rb_size         (dsc_rb_size)
+    .rb_size         (dsc_rb_size),
+    .full_cnt        (cpu_dsc_buf_full_cnt)
 );
 
 fpga_to_cpu fpga_to_cpu_inst (
@@ -302,9 +316,7 @@ fpga_to_cpu fpga_to_cpu_inst (
     .pcie_bas_burstcount    (pcie_bas_burstcount),
     .pcie_bas_response      (pcie_bas_response),
     .sw_reset               (sw_reset),
-    .dma_queue_full_cnt     (dma_queue_full_cnt),
-    .cpu_pkt_buf_full_cnt   (cpu_pkt_buf_full_cnt),
-    .cpu_dsc_buf_full_cnt   (cpu_dsc_buf_full_cnt)
+    .dma_queue_full_cnt     (dma_queue_full_cnt)
 );
 
 // cpu2fpga_pcie c2f_inst (

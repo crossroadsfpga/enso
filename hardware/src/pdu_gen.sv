@@ -116,16 +116,23 @@ logic        out_meta_queue_valid;
 logic        out_meta_queue_ready;
 logic [31:0] out_meta_queue_occup;
 
+metadata_t in_meta_data_r;
+
 logic out_pkt_queue_alm_full;
 assign out_pkt_queue_alm_full = out_pkt_queue_occup > ALMOST_FULL_THRESHOLD;
 
 logic out_meta_queue_alm_full;
 assign out_meta_queue_alm_full = out_meta_queue_occup > ALMOST_FULL_THRESHOLD;
 
+logic needs_meta;
 logic almost_full;
 assign almost_full = out_pkt_queue_alm_full | out_meta_queue_alm_full;
-assign in_ready = !almost_full & in_meta_valid;
-assign in_meta_ready = !almost_full & in_valid;
+assign in_meta_ready = !almost_full & needs_meta;
+
+// Can only receive packets if we already have a metadata or we are receiving
+// one at the same time.
+assign in_ready =
+    !almost_full & (!needs_meta | (in_meta_valid & in_meta_ready));
 
 always @(posedge clk) begin
     out_pkt_queue_valid <= 0;
@@ -135,8 +142,23 @@ always @(posedge clk) begin
 
     if (rst) begin
         pdu_flit = 0;
+        needs_meta <= 1;
     end else begin
-        if (in_ready & in_meta_ready) begin
+        automatic metadata_t meta;
+        if (in_meta_ready & in_meta_valid) begin
+            in_meta_data_r <= in_meta_data;
+            needs_meta <= 0;
+        end
+
+        // If we just got a new metadata, we should use it. Otherwise, use the
+        // saved one.
+        if (needs_meta) begin
+            meta = in_meta_data;
+        end else begin
+            meta = in_meta_data_r;
+        end
+
+        if (in_ready & in_valid) begin
             out_pkt_queue_valid <= 1;
             pdu_data <= in_data;
 
@@ -155,13 +177,15 @@ always @(posedge clk) begin
 
                 // write descriptor
                 out_meta_queue_data.dsc_queue_id <=
-                    in_meta_data.dsc_queue_id[APP_IDX_WIDTH-1:0];
+                    meta.dsc_queue_id[APP_IDX_WIDTH-1:0];
                 out_meta_queue_data.pkt_queue_id <=
-                    in_meta_data.pkt_queue_id[FLOW_IDX_WIDTH-1:0];
+                    meta.pkt_queue_id[FLOW_IDX_WIDTH-1:0];
 
                 // TODO(sadok) specify size in bytes instead of flits
                 out_meta_queue_data.size <= pdu_flit;
                 out_meta_queue_valid <= 1;
+
+                needs_meta <= 1;
             end
         end
     end

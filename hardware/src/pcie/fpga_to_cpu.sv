@@ -40,10 +40,8 @@ module fpga_to_cpu (
     // Counter reset
     input logic sw_reset,
 
-    // Counters TODO(sadok) MAKE SURE TO INCREMENT THOSE!
-    output logic [31:0] dma_queue_full_cnt,
-    output logic [31:0] cpu_pkt_buf_full_cnt,
-    output logic [31:0] cpu_dsc_buf_full_cnt
+    // Counters
+    output logic [31:0] dma_queue_full_cnt
 );
 
 assign pcie_bas_read = 0;
@@ -71,8 +69,6 @@ logic                   metadata_buf_out_valid_r;
 logic                   metadata_buf_out_ready;
 
 logic [31:0] dma_queue_full_cnt_r;
-logic [31:0] cpu_dsc_buf_full_cnt_r;
-logic [31:0] cpu_pkt_buf_full_cnt_r;
 
 logic [63:0]  pcie_bas_address_r;
 logic [63:0]  pcie_bas_byteenable_r;
@@ -106,6 +102,10 @@ function void dma_pkt(
         pcie_bas_writedata_r <= data.data;
         pcie_bas_write_r <= 1;
         pcie_bas_burstcount_r <= flits_in_transfer;
+
+        if (meta.drop) begin
+            pcie_bas_write_r <= 0;
+        end
         
         transf_meta.pkt_meta.pkt_q_state.tail <= 
             (meta.pkt_q_state.tail + 1) & pkt_rb_mask;
@@ -164,30 +164,7 @@ logic rst_r;
 logic can_continue_dma;
 assign can_continue_dma = pkt_buf_out_valid && !pcie_bas_waitrequest;
 
-// TODO(sadok) We should check if there is room much earlier in the pipeline.
-// The way it is currently implemented, we are advancing the ring buffer
-// pointers in the queue management modules so when we get here we have no
-// choice -- we must DMA the packet. The problem is that this may cause
-// head-of-line blocking.
-function logic is_ready_to_start_dma(
-    pkt_meta_with_queues_t meta
-);
-    automatic logic [RB_AWIDTH-1:0] dsc_free_slot;
-    automatic logic [RB_AWIDTH-1:0] pkt_free_slot;
-
-    // Always have at least one slot not occupied in both the
-    // descriptor ring buffer and the packet ring buffer
-    dsc_free_slot = (meta.dsc_q_state.head - meta.dsc_q_state.tail - 1) 
-        & dsc_rb_mask;
-    pkt_free_slot = (meta.pkt_q_state.head - meta.pkt_q_state.tail - 1) 
-        & pkt_rb_mask;
-
-    return (pkt_free_slot >= meta.size) && (dsc_free_slot != 0) 
-           && can_continue_dma && metadata_buf_out_valid_r;
-endfunction
-
 pkt_meta_with_queues_t cur_meta;
-
 logic can_start_transfer;
 
 // Consume requests and issue DMAs
@@ -205,8 +182,6 @@ always @(posedge clk) begin
     if (rst_r | sw_reset) begin
         state <= START_TRANSFER;
         dma_queue_full_cnt_r <= 0;
-        cpu_dsc_buf_full_cnt_r <= 0;
-        cpu_pkt_buf_full_cnt_r <= 0;
         pcie_bas_write_r <= 0;
     end else begin
         case (state)
@@ -223,7 +198,7 @@ always @(posedge clk) begin
                     if (missing_flits_in_transfer != 0) begin
                         state <= COMPLETE_BURST;
                     end else if (cur_meta.size > 1) begin
-                        // When we can only send a single packet in a burst, we
+                        // When we can only send a single flit in a burst, we
                         // need to jump directly to START_BURST.
                         state <= START_BURST;
                     end else if (cur_meta.needs_dsc) begin
@@ -324,8 +299,6 @@ always @(posedge clk) begin
             pcie_bas_burstcount <= pcie_bas_burstcount_r;
 
             dma_queue_full_cnt <= dma_queue_full_cnt_r;
-            cpu_dsc_buf_full_cnt <= cpu_dsc_buf_full_cnt_r;
-            cpu_pkt_buf_full_cnt <= cpu_pkt_buf_full_cnt_r;
         end
         if (metadata_buf_out_ready | !metadata_buf_out_valid_r) begin
             metadata_buf_out_data_r <= metadata_buf_out_data;
@@ -338,7 +311,7 @@ end
 always_comb begin
     cur_meta = metadata_buf_out_data_r;
 
-    can_start_transfer = is_ready_to_start_dma(cur_meta);
+    can_start_transfer = can_continue_dma && metadata_buf_out_valid_r;
 
     metadata_buf_out_ready = can_start_transfer && (state == START_TRANSFER);
     pkt_buf_out_ready = metadata_buf_out_ready || (can_continue_dma

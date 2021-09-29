@@ -8,7 +8,8 @@ trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
 declare -a tests=(
     'test_pcie_top'
-    'test_prefetch_rb'
+    'test_queue_manager'
+    # 'test_prefetch_rb'
 )
 
 sim_lib_path="$HOME/sim_lib/verilog_libs"
@@ -33,7 +34,7 @@ vlib work
 vlog ./src/**/*.sv -sv
 for t in ${tests[@]}; do
     echo "Compiling $t"
-    vlog "./tests/$t.sv" -sv -lint | grep --color -e 'Error' -e '^'
+    vlog "./tests/$t.sv" -sv -lint -source | grep --color -e 'Error' -e '^'
 done
 vlog ./src/common/*.v
 
@@ -42,12 +43,12 @@ output_if_error() {
     if grep -q -e "Errors: [^0]" out.txt; then
         grep --color -e 'Error' -e '^' out.txt
         printf "${RED}$1 failed!${NC}\n"
-        rm out.txt
         return 1
     fi
     return 0
 }
 
+touch out.txt
 for t in ${tests[@]}; do
     echo "Running test: $t"
     if [ "$1" = "--gui" ]; then

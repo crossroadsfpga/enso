@@ -24,7 +24,7 @@ localparam status_period = 10;
 localparam nb_dsc_queues = `NB_DSC_QUEUES;
 localparam nb_pkt_queues = `NB_PKT_QUEUES;
 localparam pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
-localparam pkt_size = 64;
+localparam pkt_size = 128;
 localparam req_size = pkt_size/4; // in dwords
 
 // #cycles to wait before updating the head pointer for the packet queue
@@ -63,7 +63,6 @@ logic [63:0]                pcie_byteenable_0;
 
 logic pcie_pkt_buf_ready;
 logic pcie_meta_buf_ready;
-logic [31:0] pending_prefetch_cnt;
 
 flit_lite_t               pcie_pkt_buf_data;
 logic                     pcie_pkt_buf_valid;
@@ -259,7 +258,6 @@ always @(posedge clk) begin
                                   + burst_offset;
 
                     if (cur_queue < nb_pkt_queues) begin // pkt queue
-                        $display("            cur_queue: %d  expected_pkt_queue: %d", cur_queue, expected_pkt_queue);
                         assert(cur_queue == expected_pkt_queue) else $fatal;
 
                         pdu_flit_cnt = pdu_flit_cnt + 1;
@@ -319,9 +317,6 @@ always @(posedge clk) begin
                         pending_pkt_tails[pcie_pkt_desc.queue_id] <= pcie_pkt_desc.tail;
                         pending_pkt_tails_valid[pcie_pkt_desc.queue_id] <= 1'b1;
                     end 
-
-                    $display("%d:%d+%d", cur_queue, 
-                        pcie_bas_address[6 +: RAM_ADDR_LEN], burst_offset);
 
                     // check if address out of bound
                     if (cur_address > RAM_SIZE) begin
@@ -631,7 +626,6 @@ always @(posedge clk_status) begin
             end
             READ_PCIE_START: begin
                 if (stop || error_termination) begin
-                    $display("transmit_cycles: %d", transmit_cycles);
                     status_read <= 1;
                     status_addr <= 30'h2A00_0000;
                     conf_state <= READ_PCIE_PKT_Q;
@@ -663,7 +657,6 @@ always @(posedge clk_status) begin
                             + 30'd4 * nb_dsc_queues + 30'd2)) begin
                         read_pcie_cnt <= read_pcie_cnt + 1;
                         if (read_pcie_cnt == 1) begin
-                            $display("done");
                             $finish;
                         end else begin
                             status_addr = 30'h2A00_0000;
@@ -734,7 +727,6 @@ pcie_top pcie (
     .dma_queue_full_cnt     (dma_queue_full_cnt),
     .cpu_dsc_buf_full_cnt   (cpu_dsc_buf_full_cnt),
     .cpu_pkt_buf_full_cnt   (cpu_pkt_buf_full_cnt),
-    .pending_prefetch_cnt   (pending_prefetch_cnt),
     .clk_status             (clk_status),
     .status_addr            (status_addr),
     .status_read            (status_read),

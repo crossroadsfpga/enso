@@ -68,9 +68,7 @@ set RULE_SET            22
 set DMA_QUEUE_FULL      23
 set CPU_DSC_BUF_FULL    24
 set CPU_PKT_BUF_FULL    25
-set PENDING_PREFETCH    26
-set MAX_PCIE_RB         27
-set MAX_DMA_QUEUE       28
+set MAX_PCIE_FIFO       26
 
 #PCIE reg
 set PCIE_CTRL_REG       0
@@ -484,9 +482,7 @@ proc get_top_stats {} {
     global DMA_QUEUE_FULL
     global CPU_DSC_BUF_FULL
     global CPU_PKT_BUF_FULL
-    global PENDING_PREFETCH
-    global MAX_PCIE_RB
-    global MAX_DMA_QUEUE
+    global MAX_PCIE_FIFO
 
     set fp [open "top_stats.txt" w+]
     read_top_reg IN_PKT            $IN_PKT            $fp
@@ -515,9 +511,7 @@ proc get_top_stats {} {
     read_top_reg DMA_QUEUE_FULL    $DMA_QUEUE_FULL    $fp
     read_top_reg CPU_DSC_BUF_FULL  $CPU_DSC_BUF_FULL  $fp
     read_top_reg CPU_PKT_BUF_FULL  $CPU_PKT_BUF_FULL  $fp
-    read_top_reg PENDING_PREFETCH  $PENDING_PREFETCH  $fp
-    read_top_reg MAX_PCIE_RB       $MAX_PCIE_RB       $fp
-    read_top_reg MAX_DMA_QUEUE     $MAX_DMA_QUEUE     $fp
+    read_top_reg MAX_PCIE_FIFO     $MAX_PCIE_FIFO     $fp
 
     close $fp
 }

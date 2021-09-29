@@ -22,16 +22,16 @@ NB_PKTS=$2
 PKT_SIZE=$3
 NB_DSC_QS=$4
 NB_PKT_QS=$5
-PKT_FILE="./input_gen/${NB_PKTS}_${PKT_SIZE}_${NB_DSC_QS}_${NB_PKT_QS}.pkt"
+PKT_FILE_BASE_NAME="${NB_PKTS}_${PKT_SIZE}_${NB_DSC_QS}_${NB_PKT_QS}"
+PKT_FILE="./input_gen/${PKT_FILE_BASE_NAME}.pkt"
 if [[ -f "$PKT_FILE" ]]; then
     echo "$PKT_FILE exists, using cache"
 else
     echo "Generating $PKT_FILE"
     cd "./input_gen"
     ./generate_synthetic_trace.py ${NB_PKTS} ${PKT_SIZE} ${NB_DSC_QS} \
-        ${NB_PKT_QS} "${NB_PKTS}_${PKT_SIZE}_${NB_DSC_QS}_${NB_PKT_QS}.pcap"
-    ./run.sh "${NB_PKTS}_${PKT_SIZE}_${NB_DSC_QS}_${NB_PKT_QS}.pcap" \
-        "${NB_PKTS}_${PKT_SIZE}_${NB_DSC_QS}_${NB_PKT_QS}.pkt"
+        ${NB_PKT_QS} "${PKT_FILE_BASE_NAME}.pcap"
+    ./run.sh "${PKT_FILE_BASE_NAME}.pcap" "${PKT_FILE_BASE_NAME}.pkt"
     cd -
 fi
 
@@ -55,14 +55,14 @@ vlog +define+SIM \
      +define+NB_DSC_QUEUES=$NB_DSC_QS \
      +define+NB_PKT_QUEUES=$NB_PKT_QS \
      +define+PKT_SIZE=$PKT_SIZE \
-     ./tests/tb.sv -sv 
+     ./tests/tb.sv -sv
 
 if [ "$6" = "--gui" ]; then
     # Use the following to activate the modelsim GUI.
     vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
         -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver \
         -voptargs="+acc" tb
-else 
+else
     vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
         -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver \
         -voptargs="+acc" -c -do "run -all" tb | grep --color -e 'Error' -e '^'

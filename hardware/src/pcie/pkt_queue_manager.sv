@@ -31,11 +31,15 @@ module pkt_queue_manager #(
     input  logic [BRAM_TABLE_IDX_WIDTH-1:0] updated_queue_idx,
 
     // config signals
-    input logic [RB_AWIDTH:0] rb_size
+    input logic [RB_AWIDTH:0] rb_size,
+
+    // counters
+    output logic [31:0] full_cnt
 );
 
 pkt_meta_with_queues_t out_meta_extra;
 queue_state_t out_q_state;
+logic out_drop;
 
 localparam QUEUE_ID_WIDTH = $clog2(NB_QUEUES);
 
@@ -72,7 +76,7 @@ pkt_meta_with_queues_t     delayed_metadata [3];
 logic                      pkt_q_status_interf_a_rd_en_r [2];
 
 logic [QUEUE_ID_WIDTH-1:0] delayed_queue [3];
-logic [QUEUE_ID_WIDTH:0]   last_queues [3]; // Extra bit to represent invalid.
+logic [QUEUE_ID_WIDTH:0]   last_queues [3];  // Extra bit to represent invalid.
 
 // fetch next pkt queue status
 // FIXME(sadok) this will only work if the queue eventually
@@ -85,12 +89,18 @@ logic [QUEUE_ID_WIDTH:0]   last_queues [3]; // Extra bit to represent invalid.
 // a queue with `descriptor requests` to send to the fpga2cpu so
 // that it can send these descriptor when it has a chance -- it
 // may even ignore some of them if it receives a new packet for
-// the queue. Another tricky part is that there may be some race
-// conditions, where this part of the design thinks that the
-// queue is updated but the fpga2cpu is processing a new packet
-// and will not send a descriptor. To overcome this, fpga2cpu
-// should make sure pcie_top has the latest tail, before it
-// decides if it needs to send the descriptor.
+// the queue. (Alternatively, we can use dummy packets that
+// cause only the descriptor to be sent. To avoid wasting
+// cycles, we may modify the START_TRANSFER state in fpga_to_cpu
+// to directly send a descriptor in such case) Another tricky
+// part is that there may be some race conditions, where this
+// part of the design thinks that the queue is updated but the
+// fpga2cpu is processing a new packet and will not send a
+// descriptor. To overcome this, fpga2cpu should make sure
+// pcie_top has the latest tail, before it decides if it needs
+// to send the descriptor. (or the decision of whether to send a
+// descriptor or not should be made in the same place as we
+// decide to send extra descriptors)
 always @(posedge clk) begin
     pkt_q_status_interf_a.rd_en <= 0;
     pkt_q_status_interf_a.wr_en <= 0;
@@ -186,6 +196,7 @@ queue_manager_inst (
     .in_meta_valid   (out_queue_valid),
     .in_meta_ready   (out_queue_ready),
     .out_q_state     (out_q_state),
+    .out_drop        (out_drop),
     .out_meta_extra  (out_meta_extra),
     .out_meta_valid  (out_meta_valid),
     .out_meta_ready  (out_meta_ready),
@@ -193,12 +204,15 @@ queue_manager_inst (
     .q_table_heads   (q_table_heads),
     .q_table_l_addrs (q_table_l_addrs),
     .q_table_h_addrs (q_table_h_addrs),
-    .rb_size         (rb_size)
+    .rb_size         (rb_size),
+    .full_cnt        (full_cnt)
 );
 
 always_comb begin
     out_meta_data = out_meta_extra;
     out_meta_data.pkt_q_state = out_q_state;
+    out_meta_data.drop = out_drop;
+    out_meta_data.needs_dsc = out_meta_extra.needs_dsc & !out_drop;
 end
 
 logic no_confl_pkt_q_status_interf_a_rd_en;
@@ -215,7 +229,6 @@ always_comb begin
         & (pkt_q_status_interf_a.addr == pkt_q_status_interf_b.addr);
     if (conflict_rd_wr) begin
         no_confl_pkt_q_status_interf_a_rd_en = 0;
-        $display("Conflict!");
     end else begin
         no_confl_pkt_q_status_interf_a_rd_en = pkt_q_status_interf_a.rd_en;
     end
