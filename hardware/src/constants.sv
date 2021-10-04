@@ -85,7 +85,7 @@ localparam MAX_PKT_SIZE = 24; // in 512 bits
 // These **must be kept in sync** with the variables with the same name on 
 // `hardware_test/hwtest/my_stats.tcl` and `software/fd/pcie.h`.
 // TODO(sadok): expose these values from JTAG so that software and the tcl
-// script can adapt to the bitstream that is loaded at given moment.
+// script can adapt to the bitstream that is loaded at a given moment.
 localparam MAX_NB_APPS = 256;
 localparam MAX_NB_FLOWS = 65536;
 

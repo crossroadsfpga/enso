@@ -99,7 +99,7 @@ module alt_ehipc2_hw (
     // ARST conditional upon ninit_done from S10 IP reset. Ninit_done is active low. ninit_done=0 => s10 is good to go
     // assign arst = ~user_mode_sync | ~cpu_resetn | ~iopll_locked | source_reset | ninit_done ;
     // assign arst = ~user_mode_sync | ~cpu_resetn | ~iopll_locked | source_reset | ninit_done | ~user_pll_locked;
-    assign arst = ~user_mode_sync | ~cpu_resetn | ~iopll_locked 
+    assign arst = ~user_mode_sync | ~cpu_resetn | ~iopll_locked
                   | ~user_pll_locked;
 
     assign i_reconfig_reset = arst;
@@ -207,6 +207,24 @@ module alt_ehipc2_hw (
     logic         pcie_clk;
     logic         pcie_reset_n;
 
+    logic         pcie_wrdm_desc_ready;
+    logic         pcie_wrdm_desc_valid;
+    logic [173:0] pcie_wrdm_desc_data;
+    logic         pcie_wrdm_prio_ready;
+    logic         pcie_wrdm_prio_valid;
+    logic [173:0] pcie_wrdm_prio_data;
+    logic         pcie_wrdm_tx_valid;
+    logic [31:0]  pcie_wrdm_tx_data;
+
+    logic         pcie_rddm_desc_ready;
+    logic         pcie_rddm_desc_valid;
+    logic [173:0] pcie_rddm_desc_data;
+    logic         pcie_rddm_prio_ready;
+    logic         pcie_rddm_prio_valid;
+    logic [173:0] pcie_rddm_prio_data;
+    logic         pcie_rddm_tx_valid;
+    logic [31:0]  pcie_rddm_tx_data;
+
     logic         pcie_bas_waitrequest;
     logic [63:0]  pcie_bas_address;
     logic [63:0]  pcie_bas_byteenable;
@@ -218,13 +236,21 @@ module alt_ehipc2_hw (
     logic [3:0]   pcie_bas_burstcount;
     logic [1:0]   pcie_bas_response;
 
-    logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_0;
-    logic         pcie_write_0;
-    logic         pcie_read_0;
-    logic         pcie_readdatavalid_0;
-    logic [511:0] pcie_readdata_0;
-    logic [511:0] pcie_writedata_0;
-    logic [63:0]  pcie_byteenable_0;
+    logic [PCIE_ADDR_WIDTH-1:0] pcie_address_0;
+    logic                       pcie_write_0;
+    logic                       pcie_read_0;
+    logic                       pcie_readdatavalid_0;
+    logic [511:0]               pcie_readdata_0;
+    logic [511:0]               pcie_writedata_0;
+    logic [63:0]                pcie_byteenable_0;
+
+    logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1;
+    logic                       pcie_write_1;
+    logic                       pcie_read_1;
+    logic                       pcie_readdatavalid_1;
+    logic [511:0]               pcie_readdata_1;
+    logic [511:0]               pcie_writedata_1;
+    logic [63:0]                pcie_byteenable_1;
 
     // eSRAM signals
     logic                      clk_datamover;
@@ -324,47 +350,47 @@ module alt_ehipc2_hw (
     wire [43:0]  i_xcvr_reconfig_address;
 
     // Reconfig Decoding XCVR 0
-    wire xcvr0_cs = ((status_addr_r >= 20'h10000) 
+    wire xcvr0_cs = ((status_addr_r >= 20'h10000)
                     && (status_addr_r <= 20'h10FFF)) && !custom;
     wire xcvr0_read = status_read_r && xcvr0_cs;
     wire xcvr0_write = status_write_r && xcvr0_cs;
     assign i_xcvr_reconfig_address[10:0] = (xcvr0_read || xcvr0_write) ?
                                            status_addr_r[10:0] : 11'b0;
-    assign xcvr_reconfig_readdata_valid[0] = xcvr0_read 
+    assign xcvr_reconfig_readdata_valid[0] = xcvr0_read
                                              && !o_xcvr_reconfig_waitrequest[0];
 
     // Reconfig Decoding XCVR 1
-    wire xcvr1_cs = ((status_addr_r >= 20'h11000) 
+    wire xcvr1_cs = ((status_addr_r >= 20'h11000)
                     && (status_addr_r <= 20'h11FFF)) && !custom;
     wire xcvr1_read = status_read_r && xcvr1_cs;
     wire xcvr1_write = status_write_r && xcvr1_cs;
-    assign i_xcvr_reconfig_address[21:11] = (xcvr1_read || xcvr1_write) ? 
+    assign i_xcvr_reconfig_address[21:11] = (xcvr1_read || xcvr1_write) ?
                                             status_addr_r[10:0] : 11'b0;
-    assign xcvr_reconfig_readdata_valid[1] = xcvr1_read 
+    assign xcvr_reconfig_readdata_valid[1] = xcvr1_read
                                              && !o_xcvr_reconfig_waitrequest[1];
 
     // Reconfig Decoding XCVR 2
-    wire xcvr2_cs = ((status_addr_r >= 20'h12000) 
+    wire xcvr2_cs = ((status_addr_r >= 20'h12000)
                     && (status_addr_r <= 20'h12FFF)) && !custom;
     wire xcvr2_read = status_read_r && xcvr2_cs;
     wire xcvr2_write = status_write_r && xcvr2_cs;
     assign i_xcvr_reconfig_address[32:22] = (xcvr2_read || xcvr2_write) ?
                                             status_addr_r[10:0] : 11'b0;
-    assign xcvr_reconfig_readdata_valid[2] = xcvr2_read 
+    assign xcvr_reconfig_readdata_valid[2] = xcvr2_read
                                              && !o_xcvr_reconfig_waitrequest[2];
 
     // Reconfig Decoding XCVR 3
-    wire xcvr3_cs = ((status_addr_r >= 20'h13000) 
+    wire xcvr3_cs = ((status_addr_r >= 20'h13000)
                     && (status_addr_r <= 20'h13FFF)) && !custom;
     wire xcvr3_read = status_read_r && xcvr3_cs;
     wire xcvr3_write = status_write_r && xcvr3_cs;
     assign i_xcvr_reconfig_address[43:33] = (xcvr3_read ||xcvr3_write) ?
                                             status_addr_r[10:0] : 11'b0;
-    assign xcvr_reconfig_readdata_valid[3] = xcvr3_read 
+    assign xcvr_reconfig_readdata_valid[3] = xcvr3_read
                                              && !o_xcvr_reconfig_waitrequest[3];
 
     // Reconfig Decoding Eth
-    wire eth_cs = ((status_addr_r >= 20'h00000) 
+    wire eth_cs = ((status_addr_r >= 20'h00000)
                   && (status_addr_r <= 20'h00FFF)) && !custom;
     wire eth_read = status_read_r && eth_cs;
     wire eth_write = status_write_r && eth_cs;
@@ -591,6 +617,22 @@ module alt_ehipc2_hw (
         .reg_out_empty                (top_out_empty),
 
         // PCIe
+        .pcie_wrdm_desc_ready         (pcie_wrdm_desc_ready),
+        .pcie_wrdm_desc_valid         (pcie_wrdm_desc_valid),
+        .pcie_wrdm_desc_data          (pcie_wrdm_desc_data),
+        .pcie_wrdm_prio_ready         (pcie_wrdm_prio_ready),
+        .pcie_wrdm_prio_valid         (pcie_wrdm_prio_valid),
+        .pcie_wrdm_prio_data          (pcie_wrdm_prio_data),
+        .pcie_wrdm_tx_valid           (pcie_wrdm_tx_valid),
+        .pcie_wrdm_tx_data            (pcie_wrdm_tx_data),
+        .pcie_rddm_desc_ready         (pcie_rddm_desc_ready),
+        .pcie_rddm_desc_valid         (pcie_rddm_desc_valid),
+        .pcie_rddm_desc_data          (pcie_rddm_desc_data),
+        .pcie_rddm_prio_ready         (pcie_rddm_prio_ready),
+        .pcie_rddm_prio_valid         (pcie_rddm_prio_valid),
+        .pcie_rddm_prio_data          (pcie_rddm_prio_data),
+        .pcie_rddm_tx_valid           (pcie_rddm_tx_valid),
+        .pcie_rddm_tx_data            (pcie_rddm_tx_data),
         .pcie_bas_waitrequest         (pcie_bas_waitrequest),
         .pcie_bas_address             (pcie_bas_address),
         .pcie_bas_byteenable          (pcie_bas_byteenable),
@@ -608,6 +650,13 @@ module alt_ehipc2_hw (
         .pcie_readdata_0              (pcie_readdata_0),
         .pcie_writedata_0             (pcie_writedata_0),
         .pcie_byteenable_0            (pcie_byteenable_0),
+        .pcie_address_1               (pcie_address_1),
+        .pcie_write_1                 (pcie_write_1),
+        .pcie_read_1                  (pcie_read_1),
+        .pcie_readdatavalid_1         (pcie_readdatavalid_1),
+        .pcie_readdata_1              (pcie_readdata_1),
+        .pcie_writedata_1             (pcie_writedata_1),
+        .pcie_byteenable_1            (pcie_byteenable_1),
 
         // eSRAM
         .reg_esram_pkt_buf_wren       (esram_pkt_buf_wren),
@@ -729,6 +778,22 @@ module alt_ehipc2_hw (
         .refclk_clk          (refclk_clk),
         .pcie_rstn_npor      (pcie_rstn_npor),
         .pcie_rstn_pin_perst (pcie_rstn_pin_perst),
+        .wrdm_desc_ready     (pcie_wrdm_desc_ready),
+        .wrdm_desc_valid     (pcie_wrdm_desc_valid),
+        .wrdm_desc_data      (pcie_wrdm_desc_data),
+        .wrdm_prio_ready     (pcie_wrdm_prio_ready),
+        .wrdm_prio_valid     (pcie_wrdm_prio_valid),
+        .wrdm_prio_data      (pcie_wrdm_prio_data),
+        .wrdm_tx_valid       (pcie_wrdm_tx_valid),
+        .wrdm_tx_data        (pcie_wrdm_tx_data),
+        .rddm_desc_ready     (pcie_rddm_desc_ready),
+        .rddm_desc_valid     (pcie_rddm_desc_valid),
+        .rddm_desc_data      (pcie_rddm_desc_data),
+        .rddm_prio_ready     (pcie_rddm_prio_ready),
+        .rddm_prio_valid     (pcie_rddm_prio_valid),
+        .rddm_prio_data      (pcie_rddm_prio_data),
+        .rddm_tx_valid       (pcie_rddm_tx_valid),
+        .rddm_tx_data        (pcie_rddm_tx_data),
         .bas_waitrequest     (pcie_bas_waitrequest),
         .bas_address         (pcie_bas_address),
         .bas_byteenable      (pcie_bas_byteenable),
@@ -779,7 +844,14 @@ module alt_ehipc2_hw (
         .address_0           (pcie_address_0),
         .write_0             (pcie_write_0),
         .read_0              (pcie_read_0),
-        .byteenable_0        (pcie_byteenable_0)
+        .byteenable_0        (pcie_byteenable_0),
+        .readdata_1          (pcie_readdata_1),
+        .readdatavalid_1     (pcie_readdatavalid_1),
+        .writedata_1         (pcie_writedata_1),
+        .address_1           (pcie_address_1),
+        .write_1             (pcie_write_1),
+        .read_1              (pcie_read_1),
+        .byteenable_1        (pcie_byteenable_1)
     );
 `endif
 

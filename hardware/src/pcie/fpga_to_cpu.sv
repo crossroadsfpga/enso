@@ -1,7 +1,7 @@
 `include "pcie_consts.sv"
 
 /*
- * This module fetches reads the packet data and metadata and issues DMAs to 
+ * This module reads the next packet data and metadata and issues DMAs to 
  * write both the packet and the descriptor to main memory.
  */
 
@@ -171,19 +171,18 @@ logic can_start_transfer;
 always @(posedge clk) begin
     rst_r <= rst;
 
-    // Make sure the previous transfer is complete before setting
-    // pcie_bas_write_r to 0.
-    if (!pcie_bas_waitrequest) begin
-        pcie_bas_write_r <= 0;
-    end else begin
-        dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
-    end
-
     if (rst_r | sw_reset) begin
         state <= START_TRANSFER;
         dma_queue_full_cnt_r <= 0;
         pcie_bas_write_r <= 0;
     end else begin
+        // Make sure the previous transfer is complete before setting
+        // pcie_bas_write_r to 0.
+        if (!pcie_bas_waitrequest) begin
+            pcie_bas_write_r <= 0;
+        end else begin
+            dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
+        end
         case (state)
             START_TRANSFER: begin
                 if (can_start_transfer) begin

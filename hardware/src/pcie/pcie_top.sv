@@ -5,16 +5,35 @@ module pcie_top (
     input logic pcie_clk,
     input logic pcie_reset_n,
 
-    input  logic                       pcie_bas_waitrequest,
-    output logic [63:0]                pcie_bas_address,
-    output logic [63:0]                pcie_bas_byteenable,
-    output logic                       pcie_bas_read,
-    input  logic [511:0]               pcie_bas_readdata,
-    input  logic                       pcie_bas_readdatavalid,
-    output logic                       pcie_bas_write,
-    output logic [511:0]               pcie_bas_writedata,
-    output logic [3:0]                 pcie_bas_burstcount,
-    input  logic [1:0]                 pcie_bas_response,
+    input  logic         pcie_wrdm_desc_ready,
+    output logic         pcie_wrdm_desc_valid,
+    output logic [173:0] pcie_wrdm_desc_data,
+    input  logic         pcie_wrdm_prio_ready,
+    output logic         pcie_wrdm_prio_valid,
+    output logic [173:0] pcie_wrdm_prio_data,
+    input  logic         pcie_wrdm_tx_valid,
+    input  logic [31:0]  pcie_wrdm_tx_data,
+    
+    input  logic         pcie_rddm_desc_ready,
+    output logic         pcie_rddm_desc_valid,
+    output logic [173:0] pcie_rddm_desc_data,
+    input  logic         pcie_rddm_prio_ready,
+    output logic         pcie_rddm_prio_valid,
+    output logic [173:0] pcie_rddm_prio_data,
+    input  logic         pcie_rddm_tx_valid,
+    input  logic [31:0]  pcie_rddm_tx_data,
+
+    input  logic         pcie_bas_waitrequest,
+    output logic [63:0]  pcie_bas_address,
+    output logic [63:0]  pcie_bas_byteenable,
+    output logic         pcie_bas_read,
+    input  logic [511:0] pcie_bas_readdata,
+    input  logic         pcie_bas_readdatavalid,
+    output logic         pcie_bas_write,
+    output logic [511:0] pcie_bas_writedata,
+    output logic [3:0]   pcie_bas_burstcount,
+    input  logic [1:0]   pcie_bas_response,
+
     input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_0,
     input  logic                       pcie_write_0,
     input  logic                       pcie_read_0,
@@ -22,6 +41,14 @@ module pcie_top (
     output logic [511:0]               pcie_readdata_0,
     input  logic [511:0]               pcie_writedata_0,
     input  logic [63:0]                pcie_byteenable_0,
+
+    input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1,
+    input  logic                       pcie_write_1,
+    input  logic                       pcie_read_1,
+    output logic                       pcie_readdatavalid_1,
+    output logic [511:0]               pcie_readdata_1,
+    input  logic [511:0]               pcie_writedata_1,
+    input  logic [63:0]                pcie_byteenable_1,
 
     input  var flit_lite_t         pcie_pkt_buf_data,
     input  logic                   pcie_pkt_buf_valid,
@@ -179,9 +206,54 @@ jtag_mmio_arbiter_inst (
     .control_regs          (control_regs)
 );
 
-pkt_meta_with_queues_t pkt_q_mngr_in_meta_data [NB_PKT_QUEUE_MANAGERS];
-pkt_meta_with_queues_t pkt_q_mngr_out_meta_data [NB_PKT_QUEUE_MANAGERS];
-logic                  pkt_q_mngr_in_meta_valid [NB_PKT_QUEUE_MANAGERS];
+// TODO move packet buffer here.
+// // Input packet buffer.
+// fifo_wrapper_infill #(
+//     .SYMBOLS_PER_BEAT(1),
+//     .BITS_PER_SYMBOL($bits(flit_lite_t)),
+//     .FIFO_DEPTH(F2C_RB_DEPTH)
+// )
+// pkt_buf (
+//     .clk           (clk),
+//     .reset         (rst),
+//     .csr_address   (2'b0),
+//     .csr_read      (1'b1),
+//     .csr_write     (1'b0),
+//     .csr_readdata  (pkt_buf_csr_readdata),
+//     .csr_writedata (32'b0),
+//     .in_data       (pkt_buf_in_data),
+//     .in_valid      (pkt_buf_in_valid),
+//     .in_ready      (pkt_buf_in_ready),
+//     .out_data      (pkt_buf_out_data),
+//     .out_valid     (pkt_buf_out_valid),
+//     .out_ready     (pkt_buf_out_ready)
+// );
+
+// assign pcie_pkt_buf_occup = pkt_buf_csr_readdata[F2C_RB_AWIDTH:0];
+
+// // Input metadata buffer. This was sized considering the worst case -- where all
+// // packets are min-sized. We may use a smaller buffer here to save BRAM.
+// fifo_wrapper_infill #(
+//     .SYMBOLS_PER_BEAT(1),
+//     .BITS_PER_SYMBOL($bits(pkt_meta_with_queues_t)),
+//     .FIFO_DEPTH(F2C_RB_DEPTH)
+// )
+// metadata_buf (
+//     .clk           (clk),
+//     .reset         (rst),
+//     .csr_address   (2'b0),
+//     .csr_read      (1'b1),
+//     .csr_write     (1'b0),
+//     .csr_readdata  (metadata_buf_csr_readdata),
+//     .csr_writedata (32'b0),
+//     .in_data       (metadata_buf_in_data),
+//     .in_valid      (metadata_buf_in_valid),
+//     .in_ready      (metadata_buf_in_ready),
+//     .out_data      (metadata_buf_out_data),
+//     .out_valid     (metadata_buf_out_valid),
+//     .out_ready     (metadata_buf_out_ready | !metadata_buf_out_valid_r)
+// );
+
 pkt_meta_with_queues_t pkt_q_mngr_in_meta_data   [NB_PKT_QUEUE_MANAGERS];
 pkt_meta_with_queues_t pkt_q_mngr_out_meta_data  [NB_PKT_QUEUE_MANAGERS];
 logic                  pkt_q_mngr_in_meta_valid  [NB_PKT_QUEUE_MANAGERS];
@@ -318,6 +390,13 @@ fpga_to_cpu fpga_to_cpu_inst (
     .sw_reset               (sw_reset),
     .dma_queue_full_cnt     (dma_queue_full_cnt)
 );
+
+// TODO(sadok): remove this when using WRDM and RDDM
+assign pcie_wrdm_desc_valid = 0;
+assign pcie_wrdm_prio_valid = 0;
+assign pcie_rddm_desc_valid = 0;
+assign pcie_rddm_prio_valid = 0;
+assign pcie_readdatavalid_1 = 0;
 
 // cpu2fpga_pcie c2f_inst (
 //     .clk                    (pcie_clk),
