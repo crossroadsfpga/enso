@@ -1,7 +1,7 @@
 `include "pcie_consts.sv"
 
 /*
- * This module manages the packet queues. It fetches the appropriate packet
+ * This module manages generic queues. It fetches the appropriate packet
  * queue state and adds it to the packet's metadata. It also advances the
  * queue's pointer. This means that packets cannot be dropped after they go
  * through this module.
@@ -12,8 +12,8 @@ module queue_manager #(
     parameter EXTRA_META_BITS, // Number fo bits in the extra metadata
     parameter UNIT_POINTER=0, // Set it to 1 to advance pointer by a single unit
     parameter QUEUE_ID_WIDTH=$clog2(NB_QUEUES),
-    parameter OUT_FIFO_DEPTH=64,
-    parameter ALMOST_FULL_THRESHOLD=OUT_FIFO_DEPTH - MAX_PKT_SIZE * 2
+    parameter OUT_FIFO_DEPTH=16,
+    parameter ALMOST_FULL_THRESHOLD=(OUT_FIFO_DEPTH - 8)
 )(
     input logic clk,
     input logic rst,
@@ -28,6 +28,7 @@ module queue_manager #(
 
     // output metadata stream
     output var queue_state_t              out_q_state,
+    output logic                          out_drop,
     output logic [EXTRA_META_BITS-1:0]    out_meta_extra,
     output logic                          out_meta_valid,
     input  logic                          out_meta_ready,
@@ -39,7 +40,10 @@ module queue_manager #(
     bram_interface_io.owner q_table_h_addrs,
 
     // config signals
-    input logic [RB_AWIDTH:0] rb_size
+    input logic [RB_AWIDTH:0] rb_size,
+
+    // counters
+    output logic [31:0] full_cnt
 );
 
 // The BRAM port b's are exposed outside the module while port a's are only used
@@ -69,13 +73,15 @@ typedef struct packed
     logic [63:0]               addr;
     logic                      valid;
     logic [QUEUE_ID_WIDTH-1:0] queue;
+    logic                      queue_full;
+    logic [RB_AWIDTH-1:0]      incr_tail;
 } internal_queue_state_t;
 
 typedef struct packed
 {
-    logic [RB_AWIDTH-1:0]      tail;
     logic                      valid;
     logic [QUEUE_ID_WIDTH-1:0] queue;
+    logic [RB_AWIDTH-1:0]      tail;
 } internal_last_queue_state_t;
 
 typedef struct packed {
@@ -86,22 +92,12 @@ typedef struct packed {
 
 internal_last_queue_state_t last_states [2];
 
-logic [31:0] next_state_queue_occup;
-logic next_state_queue_almost_full;
-assign next_state_queue_almost_full = next_state_queue_occup > 4;
-
-internal_queue_state_t in_next_state_data;
-pkt_metadata_t         in_next_metadata_data;
-logic                  in_next_state_ready;
-logic                  in_next_state_valid;
-internal_queue_state_t out_next_state_data;
-pkt_metadata_t         out_next_metadata_data;
-logic                  out_next_state_ready;
-logic                  out_next_state_valid;
-
 queue_state_t               out_queue_q_state;
 queue_state_t               out_queue_q_state_r;
 queue_state_t               out_queue_q_state_r2;
+logic                       out_queue_drop;
+logic                       out_queue_drop_r;
+logic                       out_queue_drop_r2;
 logic [EXTRA_META_BITS-1:0] out_queue_meta_extra;
 logic [EXTRA_META_BITS-1:0] out_queue_meta_extra_r;
 logic [EXTRA_META_BITS-1:0] out_queue_meta_extra_r2;
@@ -116,114 +112,155 @@ logic [31:0] out_queue_occup;
 logic out_queue_almost_full;
 assign out_queue_almost_full = out_queue_occup > ALMOST_FULL_THRESHOLD;
 
-// We can only read or write at a given time, when both are issued in the same
-// cycle, the write is ignored and must be repeated in the following cycle. We
-// use the following signal so that the writer knows if it needs to reissue the
-// write.
-logic concurrent_rd_wr;
-assign concurrent_rd_wr = tail_wr_en & queue_rd_en;
+// We use this signal to hold the packet metadata while we are fetching its
+// associated state from BRAM.
+pkt_metadata_t delayed_metadata [3];
+pkt_metadata_t cur_metadata;
+assign cur_metadata = delayed_metadata[0];
 
-// If concurrent_rd_wr is set, there is a pending write and we must wait.
-assign out_next_state_ready = !out_queue_almost_full & !concurrent_rd_wr;
+logic may_write;
+assign may_write = queue_ready & !cur_metadata.pass_through;
+
+// Can only issue a read when there is no write in a given cycle.
+assign in_meta_ready = !out_queue_almost_full & !may_write;
 
 logic [RB_AWIDTH-1:0] rb_mask;
 always @(posedge clk) begin
     rb_mask <= rb_size - 1;
 end
 
-// Read fetched queue states and push metadata out
+logic queue_full;
+logic last_queue_full_0;
+logic last_queue_full_1;
+
+logic [RB_AWIDTH-1:0] incr_tail;
+logic [RB_AWIDTH-1:0] last_incr_tail_0;
+logic [RB_AWIDTH-1:0] last_incr_tail_1;
+
+// Logic to determine if the software ring buffer is full.
+always_comb begin
+    automatic logic [RB_AWIDTH-1:0] free_slot;
+    automatic logic [RB_AWIDTH-1:0] last_free_slot_0;
+    automatic logic [RB_AWIDTH-1:0] last_free_slot_1;
+
+    free_slot = (head - tail - 1) & rb_mask;
+
+    // Free slots for last states. These are only correct if the current queue
+    // is the same -- which is the only case that we care about.
+    last_free_slot_0 = (head - last_states[0].tail - 1) & rb_mask;
+    last_free_slot_1 = (head - last_states[1].tail - 1) & rb_mask;
+
+    // Check if there is enough room in the queue and calculate incremented tail
+    // for every possibility.
+    if (UNIT_POINTER) begin
+        queue_full = (free_slot == 0) & !cur_metadata.pass_through;
+        last_queue_full_0 = (last_free_slot_0 == 0)
+                            & !cur_metadata.pass_through;
+        last_queue_full_1 = (last_free_slot_1 == 0)
+                            & !cur_metadata.pass_through;
+
+        incr_tail = (tail + 1) & rb_mask;
+        last_incr_tail_0 = (last_states[0].tail + 1) & rb_mask;
+        last_incr_tail_1 = (last_states[1].tail + 1) & rb_mask;
+    end else begin
+        queue_full = (free_slot < cur_metadata.pkt_size)
+                     & !cur_metadata.pass_through;
+        last_queue_full_0 = (last_free_slot_0 < cur_metadata.pkt_size)
+                            & !cur_metadata.pass_through;
+        last_queue_full_1 = (last_free_slot_1 < cur_metadata.pkt_size)
+                            & !cur_metadata.pass_through;
+        incr_tail = (tail + cur_metadata.pkt_size) & rb_mask;
+        last_incr_tail_0 =
+            (last_states[0].tail + cur_metadata.pkt_size) & rb_mask;
+        last_incr_tail_1 =
+            (last_states[1].tail + cur_metadata.pkt_size) & rb_mask;
+    end
+end
+
+// Read fetched queue states and push metadata out.
 always @(posedge clk) begin
     tail_wr_en <= 0;
     out_queue_meta_valid <= 0;
 
     out_queue_q_state_r2 <= out_queue_q_state_r;
     out_queue_q_state_r <= out_queue_q_state;
+    out_queue_drop_r2 <= out_queue_drop_r;
+    out_queue_drop_r <= out_queue_drop;
     out_queue_meta_extra_r2 <= out_queue_meta_extra_r;
     out_queue_meta_extra_r <= out_queue_meta_extra;
     out_queue_meta_valid_r2 <= out_queue_meta_valid_r;
     out_queue_meta_valid_r <= out_queue_meta_valid;
 
+    queue_rd_en <= 0;
+    delayed_metadata[0] <= delayed_metadata[1];
+    delayed_metadata[1] <= delayed_metadata[2];
+    rd_queue_r2 <= rd_queue_r;
+    rd_queue_r <= rd_queue;
+
+    out_queue_drop <= 0;
+    last_states[1].valid <= 0;
+
     if (rst) begin
-        // set last states to invalid so we ignore those in the beginning.
+        // Set last states to invalid so we ignore those in the beginning.
         last_states[0].valid <= 0;
-        last_states[1].valid <= 0;
     end else begin
-        if (out_next_state_ready & out_next_state_valid) begin
-            automatic internal_queue_state_t cur_state = out_next_state_data;
+        // A fetched queue state just became ready. We must consume it in this
+        // cycle.
+        if (queue_ready) begin
+            automatic internal_queue_state_t cur_state;
+            cur_state.head = head;
+            cur_state.tail = tail;
+            cur_state.addr = buf_addr;
+            cur_state.queue = rd_queue_r2;
+            cur_state.queue_full = queue_full;
+            cur_state.incr_tail = incr_tail;
 
             // The queue tail may be outdated if any of the last two packets
             // were directed to the current queue. Therefore, we save the last
             // two queue states and grab the most up to date tail value if any
             // of those match the current queue.
-            // if (last_states[2].valid &&
-            //         last_states[2].queue == cur_state.queue) begin
-            //     cur_state.tail = last_states[2].tail;
-            // end else 
-            if (out_queue_meta_valid && last_queue == cur_state.queue) begin
-                cur_state.tail = new_tail;
-            end else if (last_states[1].valid &&
-                    last_states[1].queue == cur_state.queue) begin
+            if (last_states[1].valid &
+                (last_states[1].queue == cur_state.queue))
+            begin
                 cur_state.tail = last_states[1].tail;
-            end else if (last_states[0].valid &&
-                    last_states[0].queue == cur_state.queue) begin
+                cur_state.queue_full = last_queue_full_1;
+                cur_state.incr_tail = last_incr_tail_1;
+            end else if (last_states[0].valid &
+                         (last_states[0].queue == cur_state.queue)) begin
                 cur_state.tail = last_states[0].tail;
+                cur_state.queue_full = last_queue_full_0;
+                cur_state.incr_tail = last_incr_tail_0;
             end
 
             // Output metadata.
             out_queue_q_state.tail <= cur_state.tail;
             out_queue_q_state.head <= cur_state.head;
             out_queue_q_state.kmem_addr <= cur_state.addr;
-            out_queue_meta_extra <= out_next_metadata_data.meta_extra;
+            out_queue_meta_extra <= cur_metadata.meta_extra;
             out_queue_meta_valid <= 1;
             last_queue <= cur_state.queue;
 
-            // Increment tail only if not pass through
-            if (!out_next_metadata_data.pass_through) begin
-                tail_wr_en <= 1;
-                if (UNIT_POINTER) begin
-                    cur_state.tail = (cur_state.tail + 1) & rb_mask;
-                end else begin
-                    cur_state.tail = (cur_state.tail 
-                        + out_next_metadata_data.pkt_size) & rb_mask;
+            if (cur_state.queue_full) begin
+                // No space left in the host buffer. Must drop the packet.
+                out_queue_drop <= 1;
+            end else begin
+                // Increment tail only if not pass through.
+                if (!cur_metadata.pass_through) begin
+                    tail_wr_en <= 1;
+                    cur_state.tail = cur_state.incr_tail;
                 end
-                new_tail <= cur_state.tail;
-                wr_queue <= cur_state.queue;
             end
+            new_tail <= cur_state.tail;
+            wr_queue <= cur_state.queue;
 
-            // Advance last states pipeline.
-            last_states[0] <= last_states[1];
             last_states[1].valid <= 1;
             last_states[1].queue <= cur_state.queue;
             last_states[1].tail <= cur_state.tail;
         end
 
-        // If we write in the same cycle as a read, it will be ignored. We need
-        // to try again.
-        if (concurrent_rd_wr) begin
-            tail_wr_en <= 1;
-        end
-    end
-end
-
-// We use this signal to hold the packet metadata while we are fetching its
-// associated state from BRAM.
-pkt_metadata_t delayed_metadata [3];
-
-assign in_meta_ready = !next_state_queue_almost_full;
-
-// State fetcher: Read queue state for next available queue descriptor
-always @(posedge clk) begin
-    queue_rd_en <= 0;
-    delayed_metadata[0] <= delayed_metadata[1];
-    delayed_metadata[1] <= delayed_metadata[2];
-    rd_queue_r2 <= rd_queue_r;
-    rd_queue_r <= rd_queue;
-    in_next_state_valid <= 0;
-
-    if (rst) begin
-    end else begin
+        // Consume input and issue a queue state read.
         if (in_meta_ready & in_meta_valid) begin
-            // fetch next state
+            // Fetch next state.
             rd_queue <= in_queue_id;
             queue_rd_en <= 1;
             delayed_metadata[2].pkt_size <= in_size;
@@ -231,43 +268,31 @@ always @(posedge clk) begin
             delayed_metadata[2].pass_through <= in_pass_through;
         end
 
-        if (queue_ready) begin
-            in_next_state_data.valid <= 1;
-            in_next_state_data.head <= head;
-            in_next_state_data.tail <= tail;
-            in_next_state_data.addr <= buf_addr;
-            in_next_state_data.queue <= rd_queue_r2;
+        // Advance last states pipeline.
+        last_states[0] <= last_states[1];
+    end
+end
 
-            in_next_metadata_data <= delayed_metadata[0];
-            in_next_state_valid <= 1;
+logic [31:0] full_cnt_r1;
+logic [31:0] full_cnt_r2;
+
+// Keep track of dropped packets.
+always @(posedge clk) begin
+    full_cnt <= full_cnt_r1;
+    full_cnt_r1 <= full_cnt_r2;
+
+    if (rst) begin
+        full_cnt_r2 <= 0;
+    end else begin
+        if (out_queue_drop) begin
+            full_cnt_r2 <= full_cnt_r2 + 1;
         end
     end
 end
 
 fifo_wrapper_infill_mlab #(
     .SYMBOLS_PER_BEAT(1),
-    .BITS_PER_SYMBOL($bits(internal_queue_state_t) + $bits(pkt_metadata_t)),
-    .FIFO_DEPTH(8)
-)
-next_state_queue (
-    .clk           (clk),
-    .reset         (rst),
-    .csr_address   (2'b0),
-    .csr_read      (1'b1),
-    .csr_write     (1'b0),
-    .csr_readdata  (next_state_queue_occup),
-    .csr_writedata (32'b0),
-    .in_data       ({in_next_state_data, in_next_metadata_data}),
-    .in_valid      (in_next_state_valid),
-    .in_ready      (in_next_state_ready),
-    .out_data      ({out_next_state_data, out_next_metadata_data}),
-    .out_valid     (out_next_state_valid),
-    .out_ready     (out_next_state_ready)
-);
-
-fifo_wrapper_infill_mlab #(
-    .SYMBOLS_PER_BEAT(1),
-    .BITS_PER_SYMBOL($bits(out_q_state) + $bits(out_meta_extra)),
+    .BITS_PER_SYMBOL($bits(out_q_state) + 1 + $bits(out_meta_extra)),
     .FIFO_DEPTH(OUT_FIFO_DEPTH)
 )
 out_queue (
@@ -278,10 +303,11 @@ out_queue (
     .csr_write     (1'b0),
     .csr_readdata  (out_queue_occup),
     .csr_writedata (32'b0),
-    .in_data       ({out_queue_q_state_r2, out_queue_meta_extra_r2}),
+    .in_data       ({
+        out_queue_q_state_r2, out_queue_drop_r2, out_queue_meta_extra_r2}),
     .in_valid      (out_queue_meta_valid_r2),
     .in_ready      (out_queue_meta_ready),
-    .out_data      ({out_q_state, out_meta_extra}),
+    .out_data      ({out_q_state, out_drop, out_meta_extra}),
     .out_valid     (out_meta_valid),
     .out_ready     (out_meta_ready)
 );
@@ -310,8 +336,8 @@ always @(posedge clk) begin
     q_table_a_h_addrs_rd_en_r <= q_table_a_h_addrs.rd_en;
     q_table_a_h_addrs_rd_en_r2 <= q_table_a_h_addrs_rd_en_r;
 
-    // we used the delayed wr signals for head and tail to use when there are
-    // concurrent reads
+    // We used the delayed wr signals for head and tail to use when there are
+    // concurrent reads.
     q_table_heads_wr_data_b_r <= q_table_heads.wr_data[RB_AWIDTH-1:0];
     q_table_heads_wr_data_b_r2 <= q_table_heads_wr_data_b_r;
     q_table_tails_wr_data_a_r <= q_table_a_tails.wr_data[RB_AWIDTH-1:0];
@@ -337,8 +363,8 @@ always_comb begin
     q_table_a_tails.wr_data = new_tail;
 
     if (queue_rd_en) begin
-        // when reading and writing the same queue, we avoid reading the tail
-        // and use the new written tail instead
+        // When reading and writing the same queue, we avoid reading the tail
+        // and use the new written tail instead.
         q_table_a_tails.rd_en = !tail_wr_en || (rd_queue != wr_queue);
         q_table_a_heads.rd_en = 1;
         q_table_a_l_addrs.rd_en = 1;
@@ -369,7 +395,7 @@ always_comb begin
     if (q_table_a_heads_rd_en_r2) begin
         head = q_table_a_heads.rd_data[RB_AWIDTH-1:0];
     end else begin
-        // return the delayed concurrent write
+        // Return the delayed concurrent write.
         head = q_table_heads_wr_data_b_r2;
     end
 
