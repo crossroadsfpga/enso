@@ -9,10 +9,12 @@ set PCIE_BASE    0x2A000000
 set MAX_NB_APPS 256
 set MAX_NB_FLOWS 65536
 
-set REGS_PER_QUEUE 4
+set REGS_PER_PKT_QUEUE 4
+set REGS_PER_DSC_QUEUE 8
 
 set PKT_QUEUE_OFFSET 2
-set DSC_QUEUE_OFFSET [expr $PKT_QUEUE_OFFSET + $MAX_NB_FLOWS * $REGS_PER_QUEUE]
+set DSC_QUEUE_OFFSET [
+    expr $PKT_QUEUE_OFFSET + $MAX_NB_FLOWS * $REGS_PER_PKT_QUEUE]
 
 set SCRATCH     0
 set REG_CTRL    1
@@ -668,25 +670,25 @@ proc read_pcie {{nb_regs 16}} {
 
 proc read_pkt_queue {queue_id} {
     global PCIE_BASE
-    global REGS_PER_QUEUE
+    global REGS_PER_PKT_QUEUE
     global PKT_QUEUE_OFFSET
 
 
-    for { set a 0 } { $a < $REGS_PER_QUEUE } {incr a} {
+    for { set a 0 } { $a < $REGS_PER_PKT_QUEUE } {incr a} {
         set rdata [reg_read $PCIE_BASE [
-            expr $PKT_QUEUE_OFFSET + $queue_id * $REGS_PER_QUEUE + $a]]
+            expr $PKT_QUEUE_OFFSET + $queue_id * $REGS_PER_PKT_QUEUE + $a]]
         puts "$a : $rdata"
     }
 }
 
 proc read_dsc_queue {queue_id} {
     global PCIE_BASE
-    global REGS_PER_QUEUE
+    global REGS_PER_DSC_QUEUE
     global DSC_QUEUE_OFFSET
 
-    for { set a 0 } { $a < $REGS_PER_QUEUE } {incr a} {
+    for { set a 0 } { $a < $REGS_PER_DSC_QUEUE } {incr a} {
         set rdata [reg_read $PCIE_BASE [
-            expr $DSC_QUEUE_OFFSET + $queue_id * $REGS_PER_QUEUE + $a]]
+            expr $DSC_QUEUE_OFFSET + $queue_id * $REGS_PER_DSC_QUEUE + $a]]
         puts "$a : $rdata"
     }
 }
