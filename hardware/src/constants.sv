@@ -105,7 +105,7 @@ localparam MMIO_OFFSET = (MAX_NB_APPS + MAX_NB_FLOWS) * FLITS_PER_PAGE;
 
 localparam REG_SIZE = 4; // in bytes
 localparam REGS_PER_PKT_Q = 4;
-localparam REGS_PER_DSC_Q = 4;
+localparam REGS_PER_DSC_Q = 8;
 localparam NB_CONTROL_REGS = 2;
 localparam NB_QUEUE_REGS = MAX_NB_APPS * REGS_PER_DSC_Q 
                          + MAX_NB_FLOWS * REGS_PER_PKT_Q;

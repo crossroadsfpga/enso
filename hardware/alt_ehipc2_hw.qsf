@@ -255,7 +255,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/pcie_consts.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/bram_mux.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/bram_interface.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/queue_manager.sv
-set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/dsc_queue_manager.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/rx_dsc_queue_manager.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/tx_dsc_queue_manager.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/pkt_queue_manager.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/st_ordered_multiplexer.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_table_wrapper.sv

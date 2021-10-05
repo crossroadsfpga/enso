@@ -190,12 +190,12 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         }
         uint64_t phys_addr = (uint64_t) virt_to_phys(dsc_queue.buf);
 
-        dsc_queue_regs->buf_mem_low = (uint32_t) phys_addr;
-        dsc_queue_regs->buf_mem_high = (uint32_t) (phys_addr >> 32);
+        dsc_queue_regs->f2c_mem_low = (uint32_t) phys_addr;
+        dsc_queue_regs->f2c_mem_high = (uint32_t) (phys_addr >> 32);
 
-        dsc_queue.buf_head_ptr = &dsc_queue_regs->buf_head;
-        dsc_queue.buf_head = dsc_queue_regs->buf_head;
-        dsc_queue.old_buf_head = dsc_queue.buf_head;
+        dsc_queue.buf_head_ptr = &dsc_queue_regs->f2c_head;
+        dsc_queue.f2c_head = dsc_queue_regs->f2c_head;
+        dsc_queue.old_buf_head = dsc_queue.f2c_head;
 
         // HACK(sadok) assuming that we know the number of queues beforehand
         pending_pkt_tails = (uint32_t*) malloc(
@@ -225,15 +225,15 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     }
     uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->pkt_queue.buf);
 
-    pkt_queue_regs->buf_mem_low = (uint32_t) phys_addr;
-    pkt_queue_regs->buf_mem_high = (uint32_t) (phys_addr >> 32);
+    pkt_queue_regs->f2c_mem_low = (uint32_t) phys_addr;
+    pkt_queue_regs->f2c_mem_high = (uint32_t) (phys_addr >> 32);
 
     socket_entry->app_id = app_id;
-    socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->buf_head;
-    socket_entry->pkt_queue.buf_head = pkt_queue_regs->buf_head;
+    socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->f2c_head;
+    socket_entry->pkt_queue.f2c_head = pkt_queue_regs->f2c_head;
 
     // make sure the last tail matches the current head
-    pending_pkt_tails[socket_id] = socket_entry->pkt_queue.buf_head;
+    pending_pkt_tails[socket_id] = socket_entry->pkt_queue.f2c_head;
 
     return 0;
 }
@@ -241,7 +241,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 static inline void get_new_tails()
 {
     pcie_pkt_dsc_t* dsc_buf = dsc_queue.buf;
-    uint32_t dsc_buf_head = dsc_queue.buf_head;
+    uint32_t dsc_buf_head = dsc_queue.f2c_head;
 
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
         pcie_pkt_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
@@ -267,14 +267,14 @@ static inline void get_new_tails()
     asm volatile ("" : : : "memory"); // compiler memory barrier
     *(dsc_queue.buf_head_ptr) = dsc_buf_head;
 
-    dsc_queue.buf_head = dsc_buf_head;
+    dsc_queue.f2c_head = dsc_buf_head;
 }
 
 static inline int consume_queue(socket_internal* socket_entry, void** buf,
                                 size_t len)
 {
     uint32_t* pkt_buf = socket_entry->pkt_queue.buf;
-    uint32_t pkt_buf_head = socket_entry->pkt_queue.buf_head;
+    uint32_t pkt_buf_head = socket_entry->pkt_queue.f2c_head;
     int app_id = socket_entry->app_id;
 
     *buf = &pkt_buf[pkt_buf_head * 16];
@@ -285,6 +285,9 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
         return 0;
     }
 
+    // TODO(sadok): map the same page back to the end of the buffer so that we
+    // can handle this case while avoiding that we trim the request to the end
+    // of the buffer.
     // To ensure that we can return a contiguous region, we ceil the tail to 
     // F2C_PKT_BUF_SIZE
     uint32_t ceiled_tail;
@@ -304,7 +307,7 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
 
     pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % F2C_PKT_BUF_SIZE;
 
-    socket_entry->pkt_queue.buf_head = pkt_buf_head;
+    socket_entry->pkt_queue.f2c_head = pkt_buf_head;
     return flit_aligned_size;
 }
 
@@ -319,7 +322,7 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
                    size_t len)
 {
     pcie_pkt_dsc_t* dsc_buf = dsc_queue.buf;
-    uint32_t dsc_buf_head = dsc_queue.buf_head;
+    uint32_t dsc_buf_head = dsc_queue.f2c_head;
     uint32_t old_buf_head = dsc_queue.old_buf_head;
 
     pcie_pkt_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
@@ -347,7 +350,7 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
         *(dsc_queue.buf_head_ptr) = dsc_buf_head;
         dsc_queue.old_buf_head = dsc_buf_head;
     }
-    dsc_queue.buf_head = dsc_buf_head;
+    dsc_queue.f2c_head = dsc_buf_head;
 
     *sockfd = pkt_queue_id;
     socket_internal* socket_entry = &socket_entries[pkt_queue_id];
@@ -356,9 +359,9 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
 
 void advance_ring_buffer(socket_internal* socket_entry)
 {
-    uint32_t buf_head = socket_entry->pkt_queue.buf_head;
+    uint32_t f2c_head = socket_entry->pkt_queue.f2c_head;
     asm volatile ("" : : : "memory"); // compiler memory barrier
-    *(socket_entry->pkt_queue.buf_head_ptr) = buf_head;
+    *(socket_entry->pkt_queue.buf_head_ptr) = f2c_head;
 }
 
 // FIXME(sadok) This should be in the kernel
@@ -406,8 +409,8 @@ void advance_ring_buffer(socket_internal* socket_entry)
 int dma_finish(socket_internal* socket_entry)
 {
     queue_regs_t* pkt_queue_regs = socket_entry->pkt_queue.regs;
-    pkt_queue_regs->buf_mem_low = 0;
-    pkt_queue_regs->buf_mem_high = 0;
+    pkt_queue_regs->f2c_mem_low = 0;
+    pkt_queue_regs->f2c_mem_high = 0;
 
     munmap(socket_entry->pkt_queue.buf, ALIGNED_F2C_PKT_BUF_SIZE);
 
@@ -416,8 +419,8 @@ int dma_finish(socket_internal* socket_entry)
     }
 
     if (--(dsc_queue.ref_cnt) == 0) {
-        dsc_queue.regs->buf_mem_low = 0;
-        dsc_queue.regs->buf_mem_high = 0;
+        dsc_queue.regs->f2c_mem_low = 0;
+        dsc_queue.regs->f2c_mem_high = 0;
         munmap(dsc_queue.buf, ALIGNED_F2C_DSC_BUF_SIZE);
         free(pending_pkt_tails);
     }
@@ -446,16 +449,16 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs)
 
 void print_queue_regs(queue_regs* regs)
 {
-    printf("buf_tail = %d \n", regs->buf_tail);
-    printf("dsc_buf_head = %d \n", regs->buf_head);
-    printf("dsc_buf_mem_low = 0x%08x \n", regs->buf_mem_low);
-    printf("dsc_buf_mem_high = 0x%08x \n", regs->buf_mem_high);
+    printf("f2c_tail = %d \n", regs->f2c_tail);
+    printf("dsc_buf_head = %d \n", regs->f2c_head);
+    printf("dsc_buf_mem_low = 0x%08x \n", regs->f2c_mem_low);
+    printf("dsc_buf_mem_high = 0x%08x \n", regs->f2c_mem_high);
 
     #ifdef CONTROL_MSG
     printf("c2f_tail = %d \n", regs->c2f_tail);
     printf("c2f_head = %d \n", regs->c2f_head);
-    printf("c2f_kmem_low = 0x%08x \n", regs->c2f_kmem_low);
-    printf("2f_kmem_high = 0x%08x \n", regs->c2f_kmem_high);
+    printf("c2f_mem_low = 0x%08x \n", regs->c2f_mem_low);
+    printf("2f_kmem_high = 0x%08x \n", regs->c2f_mem_high);
     #endif // CONTROL_MSG
 }
 

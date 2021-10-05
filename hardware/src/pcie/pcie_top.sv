@@ -82,10 +82,14 @@ logic [RB_AWIDTH:0] dsc_rb_size;
 logic [RB_AWIDTH:0] pkt_rb_size;
 
 // descriptor queue table interface signals
-bram_interface_io dsc_q_table_tails();
-bram_interface_io dsc_q_table_heads();
-bram_interface_io dsc_q_table_l_addrs();
-bram_interface_io dsc_q_table_h_addrs();
+bram_interface_io rx_dsc_q_table_tails();
+bram_interface_io rx_dsc_q_table_heads();
+bram_interface_io rx_dsc_q_table_l_addrs();
+bram_interface_io rx_dsc_q_table_h_addrs();
+bram_interface_io tx_dsc_q_table_tails();
+bram_interface_io tx_dsc_q_table_heads();
+bram_interface_io tx_dsc_q_table_l_addrs();
+bram_interface_io tx_dsc_q_table_h_addrs();
 
 // packet queue table interface signals (used by the JTAG MMIO arbiter)
 bram_interface_io pkt_q_table_tails();
@@ -179,31 +183,35 @@ jtag_mmio_arbiter #(
     .PKT_QUEUE_RD_DELAY(4)  // 2 cycle BRAM read + 2 cycle bram mux read.
 )
 jtag_mmio_arbiter_inst (
-    .pcie_clk              (pcie_clk),
-    .jtag_clk              (clk_status),
-    .pcie_reset_n          (pcie_reset_n),
-    .pcie_address_0        (pcie_address_0),
-    .pcie_write_0          (pcie_write_0),
-    .pcie_read_0           (pcie_read_0),
-    .pcie_readdatavalid_0  (pcie_readdatavalid_0),
-    .pcie_readdata_0       (pcie_readdata_0),
-    .pcie_writedata_0      (pcie_writedata_0),
-    .pcie_byteenable_0     (pcie_byteenable_0),
-    .status_addr           (status_addr),
-    .status_read           (status_read),
-    .status_write          (status_write),
-    .status_writedata      (status_writedata),
-    .status_readdata       (status_readdata),
-    .status_readdata_valid (status_readdata_valid),
-    .dsc_q_table_tails     (dsc_q_table_tails.user),
-    .dsc_q_table_heads     (dsc_q_table_heads.user),
-    .dsc_q_table_l_addrs   (dsc_q_table_l_addrs.user),
-    .dsc_q_table_h_addrs   (dsc_q_table_h_addrs.user),
-    .pkt_q_table_tails     (pkt_q_table_tails.user),
-    .pkt_q_table_heads     (pkt_q_table_heads.user),
-    .pkt_q_table_l_addrs   (pkt_q_table_l_addrs.user),
-    .pkt_q_table_h_addrs   (pkt_q_table_h_addrs.user),
-    .control_regs          (control_regs)
+    .pcie_clk               (pcie_clk),
+    .jtag_clk               (clk_status),
+    .pcie_reset_n           (pcie_reset_n),
+    .pcie_address_0         (pcie_address_0),
+    .pcie_write_0           (pcie_write_0),
+    .pcie_read_0            (pcie_read_0),
+    .pcie_readdatavalid_0   (pcie_readdatavalid_0),
+    .pcie_readdata_0        (pcie_readdata_0),
+    .pcie_writedata_0       (pcie_writedata_0),
+    .pcie_byteenable_0      (pcie_byteenable_0),
+    .status_addr            (status_addr),
+    .status_read            (status_read),
+    .status_write           (status_write),
+    .status_writedata       (status_writedata),
+    .status_readdata        (status_readdata),
+    .status_readdata_valid  (status_readdata_valid),
+    .rx_dsc_q_table_tails   (rx_dsc_q_table_tails.user),
+    .rx_dsc_q_table_heads   (rx_dsc_q_table_heads.user),
+    .rx_dsc_q_table_l_addrs (rx_dsc_q_table_l_addrs.user),
+    .rx_dsc_q_table_h_addrs (rx_dsc_q_table_h_addrs.user),
+    .tx_dsc_q_table_tails   (tx_dsc_q_table_tails.user),
+    .tx_dsc_q_table_heads   (tx_dsc_q_table_heads.user),
+    .tx_dsc_q_table_l_addrs (tx_dsc_q_table_l_addrs.user),
+    .tx_dsc_q_table_h_addrs (tx_dsc_q_table_h_addrs.user),
+    .pkt_q_table_tails      (pkt_q_table_tails.user),
+    .pkt_q_table_heads      (pkt_q_table_heads.user),
+    .pkt_q_table_l_addrs    (pkt_q_table_l_addrs.user),
+    .pkt_q_table_h_addrs    (pkt_q_table_h_addrs.user),
+    .control_regs           (control_regs)
 );
 
 // TODO move packet buffer here.
@@ -344,10 +352,10 @@ st_ordered_multiplexer #(
     .order_data  (pkt_q_mngr_id)
 );
 
-dsc_queue_manager #(
+rx_dsc_queue_manager #(
     .NB_QUEUES(MAX_NB_APPS)
 )
-dsc_queue_manager_inst (
+rx_dsc_queue_manager_inst (
     .clk             (pcie_clk),
     .rst             (!pcie_reset_n),
     .in_meta_data    (dsc_q_mngr_in_meta_data),
@@ -356,10 +364,10 @@ dsc_queue_manager_inst (
     .out_meta_data   (f2c_in_meta_data),
     .out_meta_valid  (f2c_in_meta_valid),
     .out_meta_ready  (f2c_in_meta_ready),
-    .q_table_tails   (dsc_q_table_tails.owner),
-    .q_table_heads   (dsc_q_table_heads.owner),
-    .q_table_l_addrs (dsc_q_table_l_addrs.owner),
-    .q_table_h_addrs (dsc_q_table_h_addrs.owner),
+    .q_table_tails   (rx_dsc_q_table_tails.owner),
+    .q_table_heads   (rx_dsc_q_table_heads.owner),
+    .q_table_l_addrs (rx_dsc_q_table_l_addrs.owner),
+    .q_table_h_addrs (rx_dsc_q_table_h_addrs.owner),
     .rb_size         (dsc_rb_size),
     .full_cnt        (cpu_dsc_buf_full_cnt)
 );
@@ -389,6 +397,19 @@ fpga_to_cpu fpga_to_cpu_inst (
     .pcie_bas_response      (pcie_bas_response),
     .sw_reset               (sw_reset),
     .dma_queue_full_cnt     (dma_queue_full_cnt)
+);
+
+tx_dsc_queue_manager #(
+    .NB_QUEUES(MAX_NB_APPS)
+)
+tx_dsc_queue_manager_inst (
+    .clk             (pcie_clk),
+    .rst             (!pcie_reset_n),
+    .q_table_tails   (tx_dsc_q_table_tails.owner),
+    .q_table_heads   (tx_dsc_q_table_heads.owner),
+    .q_table_l_addrs (tx_dsc_q_table_l_addrs.owner),
+    .q_table_h_addrs (tx_dsc_q_table_h_addrs.owner),
+    .rb_size         (dsc_rb_size) // TODO(sadok): use different rb size?
 );
 
 // TODO(sadok): remove this when using WRDM and RDDM

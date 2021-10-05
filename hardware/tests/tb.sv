@@ -871,7 +871,8 @@ always @(posedge clk_status) begin
             end
             READ_PCIE_PKT_Q: begin
                 if (top_readdata_valid) begin
-                    $display("%d: 0x%8h", s_addr[15:0], top_readdata);
+                    $display("%d: 0x%8h", s_addr[JTAG_ADDR_WIDTH-1:0],
+                             top_readdata);
                     s_addr = s_addr + 1;
                     s_read <= 1;
                     if (s_addr == (
@@ -885,10 +886,11 @@ always @(posedge clk_status) begin
             end
             READ_PCIE_DSC_Q: begin
                 if (top_readdata_valid) begin
-                    $display("%d: 0x%8h", s_addr[15:0], top_readdata);
+                    $display("%d: 0x%8h", s_addr[JTAG_ADDR_WIDTH-1:0],
+                             top_readdata);
                     s_addr = s_addr + 1;
                     if (s_addr == (30'h2A00_0000 + 30'd4 * MAX_NB_FLOWS 
-                            + 30'd4 * nb_dsc_queues + 30'd2)) begin
+                            + 30'd8 * nb_dsc_queues + 30'd2)) begin
                         conf_state <= IDLE;
                     end else begin
                         s_read <= 1;

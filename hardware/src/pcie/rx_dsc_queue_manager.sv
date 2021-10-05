@@ -1,10 +1,10 @@
 `include "pcie_consts.sv"
 
 /*
- * This module specializes the generic queue manager to descriptor queues.
+ * This module specializes the generic queue manager to RX descriptor queues.
  */
 
-module dsc_queue_manager #(
+module rx_dsc_queue_manager #(
     parameter NB_QUEUES
 )(
     input logic clk,

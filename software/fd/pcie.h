@@ -75,14 +75,14 @@
 
 #define REGISTERS_PER_APP 8
 typedef struct queue_regs {
-    uint32_t buf_tail;
-    uint32_t buf_head;
-    uint32_t buf_mem_low;
-    uint32_t buf_mem_high;
+    uint32_t f2c_tail;
+    uint32_t f2c_head;
+    uint32_t f2c_mem_low;
+    uint32_t f2c_mem_high;
     uint32_t c2f_tail;
     uint32_t c2f_head;
-    uint32_t c2f_kmem_low;
-    uint32_t c2f_kmem_high;
+    uint32_t c2f_mem_low;
+    uint32_t c2f_mem_high;
     uint32_t padding[8];
 } queue_regs_t;
 
@@ -111,7 +111,7 @@ typedef struct {
     pcie_pkt_dsc_t* buf;
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
-    uint32_t buf_head;
+    uint32_t f2c_head;
     uint32_t old_buf_head;
     uint32_t ref_cnt;
 } dsc_queue_t;
@@ -120,7 +120,7 @@ typedef struct {
     uint32_t* buf;
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
-    uint32_t buf_head;
+    uint32_t f2c_head;
 } pkt_queue_t;
 
 typedef struct {
