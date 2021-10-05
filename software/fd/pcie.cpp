@@ -190,12 +190,12 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         }
         uint64_t phys_addr = (uint64_t) virt_to_phys(dsc_queue.buf);
 
-        dsc_queue_regs->f2c_mem_low = (uint32_t) phys_addr;
-        dsc_queue_regs->f2c_mem_high = (uint32_t) (phys_addr >> 32);
+        dsc_queue_regs->rx_mem_low = (uint32_t) phys_addr;
+        dsc_queue_regs->rx_mem_high = (uint32_t) (phys_addr >> 32);
 
-        dsc_queue.buf_head_ptr = &dsc_queue_regs->f2c_head;
-        dsc_queue.f2c_head = dsc_queue_regs->f2c_head;
-        dsc_queue.old_buf_head = dsc_queue.f2c_head;
+        dsc_queue.buf_head_ptr = &dsc_queue_regs->rx_head;
+        dsc_queue.rx_head = dsc_queue_regs->rx_head;
+        dsc_queue.old_buf_head = dsc_queue.rx_head;
 
         // HACK(sadok) assuming that we know the number of queues beforehand
         pending_pkt_tails = (uint32_t*) malloc(
@@ -225,15 +225,15 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     }
     uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->pkt_queue.buf);
 
-    pkt_queue_regs->f2c_mem_low = (uint32_t) phys_addr;
-    pkt_queue_regs->f2c_mem_high = (uint32_t) (phys_addr >> 32);
+    pkt_queue_regs->rx_mem_low = (uint32_t) phys_addr;
+    pkt_queue_regs->rx_mem_high = (uint32_t) (phys_addr >> 32);
 
     socket_entry->app_id = app_id;
-    socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->f2c_head;
-    socket_entry->pkt_queue.f2c_head = pkt_queue_regs->f2c_head;
+    socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->rx_head;
+    socket_entry->pkt_queue.rx_head = pkt_queue_regs->rx_head;
 
     // make sure the last tail matches the current head
-    pending_pkt_tails[socket_id] = socket_entry->pkt_queue.f2c_head;
+    pending_pkt_tails[socket_id] = socket_entry->pkt_queue.rx_head;
 
     return 0;
 }
@@ -241,7 +241,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 static inline void get_new_tails()
 {
     pcie_pkt_dsc_t* dsc_buf = dsc_queue.buf;
-    uint32_t dsc_buf_head = dsc_queue.f2c_head;
+    uint32_t dsc_buf_head = dsc_queue.rx_head;
 
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
         pcie_pkt_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
@@ -267,14 +267,14 @@ static inline void get_new_tails()
     asm volatile ("" : : : "memory"); // compiler memory barrier
     *(dsc_queue.buf_head_ptr) = dsc_buf_head;
 
-    dsc_queue.f2c_head = dsc_buf_head;
+    dsc_queue.rx_head = dsc_buf_head;
 }
 
 static inline int consume_queue(socket_internal* socket_entry, void** buf,
                                 size_t len)
 {
     uint32_t* pkt_buf = socket_entry->pkt_queue.buf;
-    uint32_t pkt_buf_head = socket_entry->pkt_queue.f2c_head;
+    uint32_t pkt_buf_head = socket_entry->pkt_queue.rx_head;
     int app_id = socket_entry->app_id;
 
     *buf = &pkt_buf[pkt_buf_head * 16];
@@ -307,7 +307,7 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
 
     pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % F2C_PKT_BUF_SIZE;
 
-    socket_entry->pkt_queue.f2c_head = pkt_buf_head;
+    socket_entry->pkt_queue.rx_head = pkt_buf_head;
     return flit_aligned_size;
 }
 
@@ -322,7 +322,7 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
                    size_t len)
 {
     pcie_pkt_dsc_t* dsc_buf = dsc_queue.buf;
-    uint32_t dsc_buf_head = dsc_queue.f2c_head;
+    uint32_t dsc_buf_head = dsc_queue.rx_head;
     uint32_t old_buf_head = dsc_queue.old_buf_head;
 
     pcie_pkt_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
@@ -350,7 +350,7 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
         *(dsc_queue.buf_head_ptr) = dsc_buf_head;
         dsc_queue.old_buf_head = dsc_buf_head;
     }
-    dsc_queue.f2c_head = dsc_buf_head;
+    dsc_queue.rx_head = dsc_buf_head;
 
     *sockfd = pkt_queue_id;
     socket_internal* socket_entry = &socket_entries[pkt_queue_id];
@@ -359,9 +359,9 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
 
 void advance_ring_buffer(socket_internal* socket_entry)
 {
-    uint32_t f2c_head = socket_entry->pkt_queue.f2c_head;
+    uint32_t rx_head = socket_entry->pkt_queue.rx_head;
     asm volatile ("" : : : "memory"); // compiler memory barrier
-    *(socket_entry->pkt_queue.buf_head_ptr) = f2c_head;
+    *(socket_entry->pkt_queue.buf_head_ptr) = rx_head;
 }
 
 // FIXME(sadok) This should be in the kernel
@@ -394,10 +394,10 @@ void advance_ring_buffer(socket_internal* socket_entry)
 //         // std::cout << "Setting rule: " << nb_rules << std::endl;
 //         // print_block(&block);
 
-//         socket_entry->c2f_cpu_tail = c2f_copy_head(socket_entry->c2f_cpu_tail,
+//         socket_entry->tx_cpu_tail = tx_copy_head(socket_entry->tx_cpu_tail,
 //             global_block, &block, socket_entry->kdata);
 //         asm volatile ("" : : : "memory"); // compiler memory barrier
-//         uio_data_bar2->c2f_tail = socket_entry->c2f_cpu_tail;
+//         uio_data_bar2->tx_tail = socket_entry->tx_cpu_tail;
 
 //         // asm volatile ("" : : : "memory"); // compiler memory barrier
 //         // print_queue_regs(uio_data_bar2);
@@ -409,8 +409,8 @@ void advance_ring_buffer(socket_internal* socket_entry)
 int dma_finish(socket_internal* socket_entry)
 {
     queue_regs_t* pkt_queue_regs = socket_entry->pkt_queue.regs;
-    pkt_queue_regs->f2c_mem_low = 0;
-    pkt_queue_regs->f2c_mem_high = 0;
+    pkt_queue_regs->rx_mem_low = 0;
+    pkt_queue_regs->rx_mem_high = 0;
 
     munmap(socket_entry->pkt_queue.buf, ALIGNED_F2C_PKT_BUF_SIZE);
 
@@ -419,8 +419,8 @@ int dma_finish(socket_internal* socket_entry)
     }
 
     if (--(dsc_queue.ref_cnt) == 0) {
-        dsc_queue.regs->f2c_mem_low = 0;
-        dsc_queue.regs->f2c_mem_high = 0;
+        dsc_queue.regs->rx_mem_low = 0;
+        dsc_queue.regs->rx_mem_high = 0;
         munmap(dsc_queue.buf, ALIGNED_F2C_DSC_BUF_SIZE);
         free(pending_pkt_tails);
     }
@@ -449,16 +449,16 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs)
 
 void print_queue_regs(queue_regs* regs)
 {
-    printf("f2c_tail = %d \n", regs->f2c_tail);
-    printf("dsc_buf_head = %d \n", regs->f2c_head);
-    printf("dsc_buf_mem_low = 0x%08x \n", regs->f2c_mem_low);
-    printf("dsc_buf_mem_high = 0x%08x \n", regs->f2c_mem_high);
+    printf("rx_tail = %d \n", regs->rx_tail);
+    printf("dsc_buf_head = %d \n", regs->rx_head);
+    printf("dsc_buf_mem_low = 0x%08x \n", regs->rx_mem_low);
+    printf("dsc_buf_mem_high = 0x%08x \n", regs->rx_mem_high);
 
     #ifdef CONTROL_MSG
-    printf("c2f_tail = %d \n", regs->c2f_tail);
-    printf("c2f_head = %d \n", regs->c2f_head);
-    printf("c2f_mem_low = 0x%08x \n", regs->c2f_mem_low);
-    printf("2f_kmem_high = 0x%08x \n", regs->c2f_mem_high);
+    printf("tx_tail = %d \n", regs->tx_tail);
+    printf("tx_head = %d \n", regs->tx_head);
+    printf("tx_mem_low = 0x%08x \n", regs->tx_mem_low);
+    printf("tx_mem_high = 0x%08x \n", regs->tx_mem_high);
     #endif // CONTROL_MSG
 }
 
@@ -475,39 +475,39 @@ void print_buffer(uint32_t* buf, uint32_t nb_flits)
     }
 }
 
-// uint32_t c2f_copy_head(uint32_t c2f_tail, queue_regs *global_block, 
+// uint32_t tx_copy_head(uint32_t tx_tail, queue_regs *global_block, 
 //         block_s *block, uint32_t *kdata) {
 //     // uint32_t pdu_flit;
 //     // uint32_t copy_flit;
 //     uint32_t free_slot;
-//     uint32_t c2f_head;
+//     uint32_t tx_head;
 //     // uint32_t copy_size;
 //     uint32_t base_addr;
 
-//     c2f_head = global_block->c2f_head;
+//     tx_head = global_block->tx_head;
 //     // calculate free_slot
-//     if (c2f_tail < c2f_head) {
-//         free_slot = c2f_head - c2f_tail - 1;
+//     if (tx_tail < tx_head) {
+//         free_slot = tx_head - tx_tail - 1;
 //     } else {
 //         //CPU2FPGA ring buffer does not have the global register. 
 //         //the free_slot should be at most one slot smaller than CPU2FPGA ring buffer.
-//         free_slot = C2F_BUFFER_SIZE - c2f_tail + c2f_head - 1;
+//         free_slot = C2F_BUFFER_SIZE - tx_tail + tx_head - 1;
 //     }
-//     //printf("free_slot = %d; c2f_head = %d; c2f_tail = %d\n", 
-//     //        free_slot, c2f_head, c2f_tail);   
+//     //printf("free_slot = %d; tx_head = %d; tx_tail = %d\n", 
+//     //        free_slot, tx_head, tx_tail);   
 //     //block when the CPU2FPGA ring buffer is almost full
 //     while (free_slot < 1) { 
 //         //recalculate free_slot
-//     	c2f_head = global_block->c2f_head;
-//     	if (c2f_tail < c2f_head) {
-//     	    free_slot = c2f_head - c2f_tail - 1;
+//     	tx_head = global_block->tx_head;
+//     	if (tx_tail < tx_head) {
+//     	    free_slot = tx_head - tx_tail - 1;
 //     	} else {
-//     	    free_slot = C2F_BUFFER_SIZE - c2f_tail + c2f_head - 1;
+//     	    free_slot = C2F_BUFFER_SIZE - tx_tail + tx_head - 1;
 //     	}
 //     }
-//     base_addr = C2F_BUFFER_OFFSET + c2f_tail * 16;
+//     base_addr = C2F_BUFFER_OFFSET + tx_tail * 16;
 
-//     // printf("c2f base addr: 0x%08x\n", base_addr);
+//     // printf("tx base addr: 0x%08x\n", base_addr);
 
 //     //memcpy(&kdata[base_addr], src_addr, 16*4); //each flit is 512 bit
 
@@ -527,11 +527,11 @@ void print_buffer(uint32_t* buf, uint32_t nb_flits)
     
 //     // print_slot(kdata, base_addr/16, 1);
 
-//     //update c2f_tail
-//     if(c2f_tail == C2F_BUFFER_SIZE-1){
-//         c2f_tail = 0;
+//     //update tx_tail
+//     if(tx_tail == C2F_BUFFER_SIZE-1){
+//         tx_tail = 0;
 //     } else {
-//         c2f_tail += 1;
+//         tx_tail += 1;
 //     }
-//     return c2f_tail;
+//     return tx_tail;
 // }

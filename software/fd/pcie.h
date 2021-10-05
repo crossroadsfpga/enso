@@ -75,14 +75,14 @@
 
 #define REGISTERS_PER_APP 8
 typedef struct queue_regs {
-    uint32_t f2c_tail;
-    uint32_t f2c_head;
-    uint32_t f2c_mem_low;
-    uint32_t f2c_mem_high;
-    uint32_t c2f_tail;
-    uint32_t c2f_head;
-    uint32_t c2f_mem_low;
-    uint32_t c2f_mem_high;
+    uint32_t rx_tail;
+    uint32_t rx_head;
+    uint32_t rx_mem_low;
+    uint32_t rx_mem_high;
+    uint32_t tx_tail;
+    uint32_t tx_head;
+    uint32_t tx_mem_low;
+    uint32_t tx_mem_high;
     uint32_t padding[8];
 } queue_regs_t;
 
@@ -111,7 +111,7 @@ typedef struct {
     pcie_pkt_dsc_t* buf;
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
-    uint32_t f2c_head;
+    uint32_t rx_head;
     uint32_t old_buf_head;
     uint32_t ref_cnt;
 } dsc_queue_t;
@@ -120,7 +120,7 @@ typedef struct {
     uint32_t* buf;
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
-    uint32_t f2c_head;
+    uint32_t rx_head;
 } pkt_queue_t;
 
 typedef struct {
@@ -143,7 +143,7 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs);
 void print_buffer(uint32_t* buf, uint32_t nb_flits);
 void print_block(block_s *block);
 void fill_block(uint32_t *addr, block_s *block);
-uint32_t c2f_copy_head(uint32_t c2f_tail, queue_regs_t *global_block, 
+uint32_t tx_copy_head(uint32_t tx_tail, queue_regs_t *global_block, 
                        block_s *block, uint32_t *kdata);
 
 #endif // PCIE_H

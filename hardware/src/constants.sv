@@ -215,7 +215,7 @@ typedef struct packed
     logic [PADDING_WIDTH-1:0] padding;
 } metadata_t; //Metadata
 
-// F2C_RB_DEPTH is the number of 512 bits for fpga side f2c ring buffer
+// F2C_RB_DEPTH is the number of 512 bits for fpga side rx ring buffer
 // (must be a power of two)
 localparam F2C_RB_DEPTH = 16384;
 localparam F2C_RB_AWIDTH = ($clog2(F2C_RB_DEPTH));

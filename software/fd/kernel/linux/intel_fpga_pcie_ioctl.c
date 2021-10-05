@@ -487,7 +487,7 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
     }
 
     core_id = karg.core_id;
-    size = karg.f2c_size + karg.c2f_size;
+    size = karg.rx_size + karg.tx_size;
 
     if (unlikely(down_interruptible(&dev_bk->sem))) {
         INTEL_FPGA_PCIE_DEBUG("interrupted while attempting to obtain "
@@ -539,10 +539,10 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg)
     iowrite32(kmem_addr_h, ep_addr + FPGA2CPU_OFFSET + 4 + core_id * PAGE_SIZE);
 
     if (core_id == 0) {
-        iowrite32(kmem_addr_l + karg.f2c_size, ep_addr + CPU2FPGA_OFFSET);
+        iowrite32(kmem_addr_l + karg.rx_size, ep_addr + CPU2FPGA_OFFSET);
 
         // kmem_addr_h should have an offset of 1 if kmem_addr_l overflows
-        if ((kmem_addr_l + karg.f2c_size) < kmem_addr_l) {
+        if ((kmem_addr_l + karg.rx_size) < kmem_addr_l) {
             ++kmem_addr_h;
         }
         iowrite32(kmem_addr_h, ep_addr + CPU2FPGA_OFFSET + 4); 

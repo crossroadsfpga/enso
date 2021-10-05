@@ -67,13 +67,13 @@ struct intel_fpga_pcie_arg {
  * struct intel_fpga_pcie_ksize - Structure used by SET_KMEM_SIZE call
  */
 struct intel_fpga_pcie_ksize {
-    /** @f2c_size: size of the allocated memory region. Passing in a size of 0
+    /** @rx_size: size of the allocated memory region. Passing in a size of 0
      * will free the currently allocated memory. */
-    unsigned int f2c_size;
+    unsigned int rx_size;
 
-    /** @c2f_size: size of the allocated memory region. Passing in a size of 0
+    /** @tx_size: size of the allocated memory region. Passing in a size of 0
      * will free the currently allocated memory. */
-    unsigned int c2f_size;
+    unsigned int tx_size;
 
     /** @core_id: core id of the user process. */
     int core_id;

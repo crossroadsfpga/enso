@@ -356,8 +356,8 @@ int intel_fpga_pcie_dev::set_sriov_numvfs(unsigned int num_vfs)
     return result == 0;
 }
 
-int intel_fpga_pcie_dev::set_kmem_size(unsigned int f2c_size,
-                                       unsigned int c2f_size,
+int intel_fpga_pcie_dev::set_kmem_size(unsigned int rx_size,
+                                       unsigned int tx_size,
                                        unsigned int app_id)
 {
     int result;
@@ -366,12 +366,12 @@ int intel_fpga_pcie_dev::set_kmem_size(unsigned int f2c_size,
     struct intel_fpga_pcie_ksize arg;
 
     // Ensure that size is at least a page
-    if ((f2c_size + c2f_size) < page_size) {
-        f2c_size = page_size - c2f_size;
+    if ((rx_size + tx_size) < page_size) {
+        rx_size = page_size - tx_size;
     }
 
-    arg.f2c_size = f2c_size;
-    arg.c2f_size = c2f_size;
+    arg.rx_size = rx_size;
+    arg.tx_size = tx_size;
     // FIXME(sadok) must also change arg.core_id to arg.app_id
     // FIXME(sadok) how to check if the application should have access here?
     arg.core_id = app_id;
@@ -379,7 +379,7 @@ int intel_fpga_pcie_dev::set_kmem_size(unsigned int f2c_size,
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SET_KMEM_SIZE, &arg);
     
     if (result == 0) {
-        m_kmem_size = f2c_size + c2f_size;
+        m_kmem_size = rx_size + tx_size;
     }
     return result == 0;
 }
