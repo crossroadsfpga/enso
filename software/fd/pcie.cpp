@@ -154,8 +154,8 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     intel_fpga_pcie_dev *dev = socket_entry->dev;
 
     printf("Running with BATCH_SIZE: %i\n", BATCH_SIZE);
-    printf("Running with F2C_DSC_BUF_SIZE: %i\n", F2C_DSC_BUF_SIZE);
-    printf("Running with F2C_PKT_BUF_SIZE: %i\n", F2C_PKT_BUF_SIZE);
+    printf("Running with DSC_BUF_SIZE: %i\n", DSC_BUF_SIZE);
+    printf("Running with PKT_BUF_SIZE: %i\n", PKT_BUF_SIZE);
 
     // FIXME(sadok) should find a better identifier than core id
     app_id = sched_getcpu() * nb_queues + socket_id;
@@ -183,15 +183,20 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
         dsc_queue.regs = dsc_queue_regs;
         dsc_queue.buf =
-            (pcie_pkt_dsc_t*) get_huge_pages(app_id, ALIGNED_F2C_DSC_BUF_SIZE);
+            (pcie_pkt_dsc_t*) get_huge_pages(app_id, ALIGNED_DSC_BUF_PAIR_SIZE);
         if (dsc_queue.buf == NULL) {
             std::cerr << "Could not get huge page" << std::endl;
             return -1;
         }
         uint64_t phys_addr = (uint64_t) virt_to_phys(dsc_queue.buf);
 
+        // Use first half of the huge page for RX and second half for TX.
         dsc_queue_regs->rx_mem_low = (uint32_t) phys_addr;
         dsc_queue_regs->rx_mem_high = (uint32_t) (phys_addr >> 32);
+
+        phys_addr += ALIGNED_DSC_BUF_PAIR_SIZE / 2;
+        dsc_queue_regs->tx_mem_low = (uint32_t) phys_addr;
+        dsc_queue_regs->tx_mem_high = (uint32_t) (phys_addr >> 32);
 
         dsc_queue.buf_head_ptr = &dsc_queue_regs->rx_head;
         dsc_queue.rx_head = dsc_queue_regs->rx_head;
@@ -218,7 +223,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     socket_entry->pkt_queue.regs = pkt_queue_regs;
 
     socket_entry->pkt_queue.buf = 
-        (uint32_t*) get_huge_pages(app_id, ALIGNED_F2C_PKT_BUF_SIZE);
+        (uint32_t*) get_huge_pages(app_id, ALIGNED_PKT_BUF_SIZE);
     if (socket_entry->pkt_queue.buf == NULL) {
         std::cerr << "Could not get huge page" << std::endl;
         return -1;
@@ -252,7 +257,7 @@ static inline void get_new_tails()
         }
 
         cur_desc->signal = 0;
-        dsc_buf_head = (dsc_buf_head + 1) % F2C_DSC_BUF_SIZE;
+        dsc_buf_head = (dsc_buf_head + 1) % DSC_BUF_SIZE;
 
         uint32_t pkt_queue_id = cur_desc->queue_id - pkt_queue_id_offset;
         pending_pkt_tails[pkt_queue_id] = (uint32_t) cur_desc->tail;
@@ -289,13 +294,13 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
     // can handle this case while avoiding that we trim the request to the end
     // of the buffer.
     // To ensure that we can return a contiguous region, we ceil the tail to 
-    // F2C_PKT_BUF_SIZE
+    // PKT_BUF_SIZE
     uint32_t ceiled_tail;
     
     if (pkt_buf_tail > pkt_buf_head) {
         ceiled_tail = pkt_buf_tail;
     } else {
-        ceiled_tail = F2C_PKT_BUF_SIZE;
+        ceiled_tail = PKT_BUF_SIZE;
     }
 
     uint32_t flit_aligned_size = (ceiled_tail - pkt_buf_head) * 64;
@@ -305,7 +310,7 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
         flit_aligned_size = len & 0xffffffc0; // align len to 64 bytes
     }
 
-    pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % F2C_PKT_BUF_SIZE;
+    pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % PKT_BUF_SIZE;
 
     socket_entry->pkt_queue.rx_head = pkt_buf_head;
     return flit_aligned_size;
@@ -333,7 +338,7 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
     }
 
     cur_desc->signal = 0;
-    dsc_buf_head = (dsc_buf_head + 1) % F2C_DSC_BUF_SIZE;
+    dsc_buf_head = (dsc_buf_head + 1) % DSC_BUF_SIZE;
 
     uint32_t pkt_queue_id = cur_desc->queue_id - pkt_queue_id_offset;
     pending_pkt_tails[pkt_queue_id] = (uint32_t) cur_desc->tail;
@@ -343,7 +348,7 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
     // (2) pass the current queue as argument and prefetch packets for it,
     //     including potentially old packets.
 
-    uint32_t head_gap = (dsc_buf_head - old_buf_head) % F2C_PKT_BUF_SIZE;
+    uint32_t head_gap = (dsc_buf_head - old_buf_head) % PKT_BUF_SIZE;
     if (head_gap >= BATCH_SIZE) {
         // update descriptor buffer head
         asm volatile ("" : : : "memory"); // compiler memory barrier
@@ -412,7 +417,7 @@ int dma_finish(socket_internal* socket_entry)
     pkt_queue_regs->rx_mem_low = 0;
     pkt_queue_regs->rx_mem_high = 0;
 
-    munmap(socket_entry->pkt_queue.buf, ALIGNED_F2C_PKT_BUF_SIZE);
+    munmap(socket_entry->pkt_queue.buf, ALIGNED_PKT_BUF_SIZE);
 
     if (dsc_queue.ref_cnt == 0) {
         return 0;
@@ -421,7 +426,7 @@ int dma_finish(socket_internal* socket_entry)
     if (--(dsc_queue.ref_cnt) == 0) {
         dsc_queue.regs->rx_mem_low = 0;
         dsc_queue.regs->rx_mem_high = 0;
-        munmap(dsc_queue.buf, ALIGNED_F2C_DSC_BUF_SIZE);
+        munmap(dsc_queue.buf, ALIGNED_DSC_BUF_PAIR_SIZE);
         free(pending_pkt_tails);
     }
 
@@ -450,16 +455,14 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs)
 void print_queue_regs(queue_regs* regs)
 {
     printf("rx_tail = %d \n", regs->rx_tail);
-    printf("dsc_buf_head = %d \n", regs->rx_head);
-    printf("dsc_buf_mem_low = 0x%08x \n", regs->rx_mem_low);
-    printf("dsc_buf_mem_high = 0x%08x \n", regs->rx_mem_high);
+    printf("rx_head = %d \n", regs->rx_head);
+    printf("rx_mem_low = 0x%08x \n", regs->rx_mem_low);
+    printf("rx_mem_high = 0x%08x \n", regs->rx_mem_high);
 
-    #ifdef CONTROL_MSG
     printf("tx_tail = %d \n", regs->tx_tail);
     printf("tx_head = %d \n", regs->tx_head);
     printf("tx_mem_low = 0x%08x \n", regs->tx_mem_low);
     printf("tx_mem_high = 0x%08x \n", regs->tx_mem_high);
-    #endif // CONTROL_MSG
 }
 
 void print_buffer(uint32_t* buf, uint32_t nb_flits)

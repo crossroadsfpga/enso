@@ -23,16 +23,16 @@
 #define BATCH_SIZE 64
 #endif
 
-#ifndef F2C_DSC_BUF_SIZE
+#ifndef DSC_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes)
-#define F2C_DSC_BUF_SIZE 256
+#define DSC_BUF_SIZE 256
 #endif
 
-#ifndef F2C_PKT_BUF_SIZE
+#ifndef PKT_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes)
-#define F2C_PKT_BUF_SIZE 1024
+#define PKT_BUF_SIZE 1024
 #endif
 
 #define C2F_BUFFER_SIZE 512
@@ -41,14 +41,14 @@
 
 // Sizes aligned to the huge page size, but if both buffers fit in a single
 // page, we may put them in the same page
-#define ALIGNED_F2C_DSC_BUF_SIZE ((((F2C_DSC_BUF_SIZE * 64 - 1) \
+#define ALIGNED_DSC_BUF_PAIR_SIZE ((((DSC_BUF_SIZE * 64 * 2 - 1) \
     / BUF_PAGE_SIZE + 1) * BUF_PAGE_SIZE))
-#define ALIGNED_F2C_PKT_BUF_SIZE ((((F2C_PKT_BUF_SIZE * 64 - 1) \
+#define ALIGNED_PKT_BUF_SIZE ((((PKT_BUF_SIZE * 64 - 1) \
     / BUF_PAGE_SIZE + 1) * BUF_PAGE_SIZE))
 
 // In dwords.
 // if changed, should also change the kernel
-#define C2F_BUFFER_OFFSET (ALIGNED_F2C_PKT_BUF_SIZE / 4 + )
+#define C2F_BUFFER_OFFSET (ALIGNED_PKT_BUF_SIZE / 4 + )
 
 // 4 bytes, 1 dword
 #define HEAD_OFFSET 4
