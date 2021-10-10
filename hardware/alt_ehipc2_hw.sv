@@ -246,9 +246,6 @@ module alt_ehipc2_hw (
 
     logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1;
     logic                       pcie_write_1;
-    logic                       pcie_read_1;
-    logic                       pcie_readdatavalid_1;
-    logic [511:0]               pcie_readdata_1;
     logic [511:0]               pcie_writedata_1;
     logic [63:0]                pcie_byteenable_1;
 
@@ -652,9 +649,6 @@ module alt_ehipc2_hw (
         .pcie_byteenable_0            (pcie_byteenable_0),
         .pcie_address_1               (pcie_address_1),
         .pcie_write_1                 (pcie_write_1),
-        .pcie_read_1                  (pcie_read_1),
-        .pcie_readdatavalid_1         (pcie_readdatavalid_1),
-        .pcie_readdata_1              (pcie_readdata_1),
         .pcie_writedata_1             (pcie_writedata_1),
         .pcie_byteenable_1            (pcie_byteenable_1),
 
@@ -772,7 +766,6 @@ module alt_ehipc2_hw (
     assign pcie_write_0 = 0;
     assign pcie_read_0 = 0;
     assign pcie_write_1 = 0;
-    assign pcie_read_1 = 0;
 `else
     pcie_core pcie (
         .refclk_clk          (refclk_clk),
@@ -845,12 +838,9 @@ module alt_ehipc2_hw (
         .write_0             (pcie_write_0),
         .read_0              (pcie_read_0),
         .byteenable_0        (pcie_byteenable_0),
-        .readdata_1          (pcie_readdata_1),
-        .readdatavalid_1     (pcie_readdatavalid_1),
         .writedata_1         (pcie_writedata_1),
         .address_1           (pcie_address_1),
         .write_1             (pcie_write_1),
-        .read_1              (pcie_read_1),
         .byteenable_1        (pcie_byteenable_1)
     );
 `endif

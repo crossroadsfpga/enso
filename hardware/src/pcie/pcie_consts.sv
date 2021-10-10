@@ -56,12 +56,12 @@ typedef struct packed
     logic [13:0] pad;
     logic [7:0]  descriptor_id;
     logic [2:0]  app_spec;
-    logic        single_dst;  // When unset, dst address in incremented at every
+    logic        single_dst;  // When unset, dst address is incremented at every
                               // transfer.
     logic [1:0]  reserved;
     logic [17:0] nb_dwords;  // Up to 1MB.
     logic [63:0] dst_addr;  // Avalon address.
     logic [63:0] src_addr;  // PCIe address.
-} rddm_desc;
+} rddm_desc_t;
 
 `endif // PCIE_CONSTS_SV

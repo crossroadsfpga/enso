@@ -74,6 +74,7 @@ logic                       pcie_bas_write;
 logic [511:0]               pcie_bas_writedata;
 logic [3:0]                 pcie_bas_burstcount;
 logic [1:0]                 pcie_bas_response;
+
 logic [PCIE_ADDR_WIDTH-1:0] pcie_address_0;
 logic                       pcie_write_0;
 logic                       pcie_read_0;
@@ -81,6 +82,11 @@ logic                       pcie_readdatavalid_0;
 logic [511:0]               pcie_readdata_0;
 logic [511:0]               pcie_writedata_0;
 logic [63:0]                pcie_byteenable_0;
+
+logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1;
+logic                       pcie_write_1;
+logic [511:0]               pcie_writedata_1;
+logic [63:0]                pcie_byteenable_1;
 
 logic pcie_pkt_buf_ready;
 logic pcie_meta_buf_ready;
@@ -117,9 +123,9 @@ logic [31:0] stop_cnt;
 // Host RAM
 logic [511:0] ram[nb_pkt_queues + nb_dsc_queues * 2][RAM_SIZE];
 
-logic [BRAM_TABLE_IDX_WIDTH-1:0] expected_pkt_queue;
-logic [BRAM_TABLE_IDX_WIDTH-1:0] cfg_queue;
-logic [nb_pkt_queues-1:0]        pending_pkt_tails_valid;
+logic [BRAM_TABLE_IDX_WIDTH:0] expected_pkt_queue;  // Extra bit on purpose.
+logic [BRAM_TABLE_IDX_WIDTH:0] cfg_queue;  // Extra bit on purpose.
+logic [nb_pkt_queues-1:0] pending_pkt_tails_valid;
 logic [31:0] pending_pkt_tails[nb_pkt_queues];
 logic [31:0] last_pkt_heads[nb_pkt_queues];
 logic [31:0] tx_pkt_heads[nb_pkt_queues];
@@ -128,7 +134,7 @@ logic [31:0] tx_dsc_heads[nb_dsc_queues];
 
 logic [31:0] last_upd_pkt_q;
 logic [31:0] last_upd_dsc_q;
-logic [31:0] head_upd_delay_cnt;
+logic [31:0] pkt_q_consume_delay_cnt;
 logic [63:0] rx_cnt;
 logic [63:0] req_cnt;
 logic [63:0] start_wait;
@@ -138,6 +144,21 @@ logic [3:0]  burst_size;
 logic [$clog2(MAX_PKT_SIZE)-1:0] pdu_flit_cnt;
 
 logic tx_dsc_tail_pending;
+logic dma_write_pending;
+
+logic [$bits(pcie_rddm_desc_data)-1:0] rddm_desc_queue_data;
+logic        rddm_desc_queue_valid;
+logic        rddm_desc_queue_ready;
+logic [31:0] rddm_desc_queue_occup;
+
+logic [$bits(pcie_rddm_desc_data)-1:0] rddm_prio_queue_data;
+logic        rddm_prio_queue_valid;
+logic        rddm_prio_queue_ready;
+logic [31:0] rddm_prio_queue_occup;
+
+logic [17:0] pending_dma_write_dwords;
+logic [63:0] pending_dma_write_dst_addr;
+logic [63:0] pending_dma_write_src_addr;
 
 initial cnt = 0;
 initial clk = 0;
@@ -148,6 +169,10 @@ initial error_termination = 0;
 
 always #(pcie_period) clk = ~clk;
 always #(status_period) clk_status = ~clk_status;
+
+assign dma_write_pending = pending_dma_write_dwords > 0;
+assign rddm_prio_queue_ready = !dma_write_pending;
+assign rddm_desc_queue_ready = !dma_write_pending & !rddm_prio_queue_valid;
 
 typedef enum
 {
@@ -165,6 +190,8 @@ always @(posedge clk) begin
 
   next_pcie_write_0 = 0;
   pcie_read_0 <= 0;
+
+  pcie_write_1 <= 0;
 
   if (cnt < 10) begin // reset
     automatic integer c;
@@ -189,11 +216,13 @@ always @(posedge clk) begin
 
     last_upd_pkt_q <= 0;
     last_upd_dsc_q <= 0;
-    head_upd_delay_cnt <= 0;
+    pkt_q_consume_delay_cnt <= 0;
 
     pending_pkt_tails_valid <= 0;
 
     tx_dsc_tail_pending <= 0;
+
+    pending_dma_write_dwords <= 0;
 
     for (c = 0; c < nb_pkt_queues; c++) begin
       pending_pkt_tails[c] <= 0;
@@ -287,7 +316,7 @@ always @(posedge clk) begin
         automatic logic [31:0] cur_queue;
         automatic logic [31:0] cur_address;
 
-        cur_queue = pcie_bas_address[32 +: BRAM_TABLE_IDX_WIDTH];
+        cur_queue = pcie_bas_address[32 +: BRAM_TABLE_IDX_WIDTH+1];
 
         if (pcie_bas_burstcount != 0) begin
           burst_offset = 0;
@@ -368,8 +397,8 @@ always @(posedge clk) begin
         rx_cnt <= rx_cnt + 1;
       end
 
-      if (head_upd_delay_cnt != 0) begin
-        head_upd_delay_cnt--;
+      if (pkt_q_consume_delay_cnt != 0) begin
+        pkt_q_consume_delay_cnt--;
       end
 
       // If not trying to write anything, we can try to advance one of
@@ -392,7 +421,7 @@ always @(posedge clk) begin
 
         // Enqueue TX descriptor with latest available data for one
         // of the queues.
-        end else if (head_upd_delay_cnt == 0) begin
+        end else if (pkt_q_consume_delay_cnt == 0) begin
           for (i = 0; i < nb_pkt_queues; i++) begin
             automatic integer pkt_q = (i + last_upd_pkt_q) % nb_pkt_queues;
             automatic integer dsc_q = pkt_q / pkt_per_dsc_queue;
@@ -470,21 +499,77 @@ always @(posedge clk) begin
           end
 
           if (last_upd_pkt_q == nb_pkt_queues - 1) begin
-            head_upd_delay_cnt <= update_head_delay;
+            pkt_q_consume_delay_cnt <= update_head_delay;
           end
         end
       end
 
-      // TODO(sadok): can only be done once we can inform the NIC what
-      // the latest pointer is without advancing it.
-      // Transmit back all received packets (zero copy):
-      // - Enqueue descriptor with all packets currently in the RX 
-      //   buffer (TX request can only go until the end, so it does
-      //   not wrap around).
-      // - Once FPGA consumes packets, we can advance the pointer
+      // RDDM Mock:
 
-      // RDDM Mock
+      // If DMA is larger than a flit, we need to send multiple writes. If
+      // `dma_write_pending` is set, there are some writes pending.
+      if (dma_write_pending) begin
+        automatic logic [31:0] cur_queue;
+        automatic logic [31:0] cur_address;
 
+        cur_queue = pending_dma_write_src_addr[32 +: BRAM_TABLE_IDX_WIDTH+1];
+        cur_address = pending_dma_write_src_addr[6 +: RAM_ADDR_LEN];
+
+        // Write data using RDDM Avalon-MM interface.
+        pcie_write_1 <= 1;
+        pcie_address_1 <= pending_dma_write_dst_addr;
+        pcie_byteenable_1  <= 64'hffffffffffffffff;
+        pcie_writedata_1 <= ram[cur_queue][cur_address];
+
+        if (pending_dma_write_dwords > 16) begin
+          pending_dma_write_dwords <= pending_dma_write_dwords - 16;
+          pending_dma_write_src_addr <= pending_dma_write_src_addr + 64;
+        end else begin
+          pending_dma_write_dwords <= 0;
+        end
+      end else if ((rddm_desc_queue_ready & rddm_desc_queue_valid)
+          | (rddm_prio_queue_ready & rddm_prio_queue_valid)) begin
+        automatic logic [31:0] cur_queue;
+        automatic logic [31:0] cur_address;
+        automatic rddm_desc_t rddm_desc;
+        
+        // `prio` queue has priority over `desc` queue.
+        if (rddm_desc_queue_valid) begin
+          rddm_desc = rddm_prio_queue_data;
+        end else begin
+          rddm_desc = rddm_desc_queue_data;
+        end
+
+        cur_queue = rddm_desc.src_addr[32 +: BRAM_TABLE_IDX_WIDTH+1];
+        cur_address = rddm_desc.src_addr[6 +: RAM_ADDR_LEN];
+
+        // Address must be aligned to double dword but here we assume cache line
+        // alignment to make thing easier.
+        assert(cur_address[5:0] == 0) else $fatal;
+        assert(rddm_desc.nb_dwords[3:0] == 0) else $fatal;
+
+        // Only single_dst is implemented in this mock.
+        assert(rddm_desc.single_dst) else $fatal; 
+
+        // Write data to FPGA using RDDM Avalon-MM interface.
+        pcie_write_1 <= 1;
+        pcie_address_1 <= rddm_desc.dst_addr; // from descriptor
+        pcie_byteenable_1  <= 64'hffffffffffffffff;
+        pcie_writedata_1 <= ram[cur_queue][cur_address];
+
+        // If DMA is larger than a flit, we need to send multiple writes.
+        if (rddm_desc.nb_dwords > 16) begin
+          pending_dma_write_dwords <= rddm_desc.nb_dwords - 16;
+          pending_dma_write_dst_addr <= rddm_desc.dst_addr;
+          pending_dma_write_src_addr <= rddm_desc.src_addr + 64;
+        end else begin
+          pending_dma_write_dwords <= 0;
+        end
+      end
+
+      // TODO(sadok): Advance head pointer for corresponding pkt queue.
+      // if (next_pcie_write_0 == 0) begin
+      // end
      end
     endcase
   end
@@ -495,11 +580,6 @@ always @(posedge clk) begin
       stop <= 1;
     end
   end
-
-  // if (!stop && !error_termination) begin
-  //     $display("cnt: %d", cnt);
-  //     $display("------------------------------------------------");
-  // end
 
   pcie_write_0 <= next_pcie_write_0;
 end
@@ -616,6 +696,50 @@ always @(posedge clk) begin
     end
   end
 end
+
+// Queue that holds incoming RDDM descriptors with regular prioity (desc).
+fifo_wrapper_infill_mlab #(
+  .SYMBOLS_PER_BEAT(1),
+  .BITS_PER_SYMBOL($bits(pcie_rddm_desc_data)),
+  .FIFO_DEPTH(16)
+)
+rddm_desc_queue (
+  .clk           (clk),
+  .reset         (rst),
+  .csr_address   (2'b0),
+  .csr_read      (1'b1),
+  .csr_write     (1'b0),
+  .csr_readdata  (rddm_desc_queue_occup),
+  .csr_writedata (32'b0),
+  .in_data       (pcie_rddm_desc_data),
+  .in_valid      (pcie_rddm_desc_valid),
+  .in_ready      (pcie_rddm_desc_ready),
+  .out_data      (rddm_desc_queue_data),
+  .out_valid     (rddm_desc_queue_valid),
+  .out_ready     (rddm_desc_queue_ready)
+);
+
+// Queue that holds incoming RDDM descriptors with elevated priority (prio).
+fifo_wrapper_infill_mlab #(
+  .SYMBOLS_PER_BEAT(1),
+  .BITS_PER_SYMBOL($bits(pcie_rddm_desc_data)),
+  .FIFO_DEPTH(16)
+)
+rddm_prio_queue (
+  .clk           (clk),
+  .reset         (rst),
+  .csr_address   (2'b0),
+  .csr_read      (1'b1),
+  .csr_write     (1'b0),
+  .csr_readdata  (rddm_prio_queue_occup),
+  .csr_writedata (32'b0),
+  .in_data       (pcie_rddm_prio_data),
+  .in_valid      (pcie_rddm_prio_valid),
+  .in_ready      (pcie_rddm_prio_ready),
+  .out_data      (rddm_prio_queue_data),
+  .out_valid     (rddm_prio_queue_valid),
+  .out_ready     (rddm_prio_queue_ready)
+);
 
 fifo_wrapper_infill_mlab #(
   .SYMBOLS_PER_BEAT(1),
@@ -880,6 +1004,10 @@ pcie_top pcie (
   .pcie_readdata_0        (pcie_readdata_0),
   .pcie_writedata_0       (pcie_writedata_0),
   .pcie_byteenable_0      (pcie_byteenable_0),
+  .pcie_address_1         (pcie_address_1),
+  .pcie_write_1           (pcie_write_1),
+  .pcie_writedata_1       (pcie_writedata_1),
+  .pcie_byteenable_1      (pcie_byteenable_1),
   .pcie_pkt_buf_data      (pcie_pkt_buf_data),
   .pcie_pkt_buf_valid     (pcie_pkt_buf_valid),
   .pcie_pkt_buf_ready     (pcie_pkt_buf_ready),

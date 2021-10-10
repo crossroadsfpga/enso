@@ -73,12 +73,9 @@ module pcie_core (
         output logic                       read_0,
         output logic [63:0]                byteenable_0,
 
-        input  logic [511:0]               readdata_1,
-        input  logic                       readdatavalid_1,
         output logic [511:0]               writedata_1,
         output logic [PCIE_ADDR_WIDTH-1:0] address_1,
         output logic                       write_1,
-        output logic                       read_1,
         output logic [63:0]                byteenable_1
     );
 logic         hip_ctrl_simu_mode_pipe;
@@ -1266,13 +1263,13 @@ pcie_ed pcie (
     .mm_bridge_0_m0_byteenable               (byteenable_0),
     .mm_bridge_0_m0_debugaccess              (),
     .mm_bridge_1_m0_waitrequest              (1'b0),
-    .mm_bridge_1_m0_readdata                 (readdata_1),
-    .mm_bridge_1_m0_readdatavalid            (readdatavalid_1),
+    .mm_bridge_1_m0_readdata                 (),
+    .mm_bridge_1_m0_readdatavalid            (),
     .mm_bridge_1_m0_burstcount               (),
     .mm_bridge_1_m0_writedata                (writedata_1),
     .mm_bridge_1_m0_address                  (address_1),
     .mm_bridge_1_m0_write                    (write_1),
-    .mm_bridge_1_m0_read                     (read_1),
+    .mm_bridge_1_m0_read                     (),
     .mm_bridge_1_m0_byteenable               (byteenable_1),
     .mm_bridge_1_m0_debugaccess              ()
 );

@@ -42,11 +42,9 @@ module pcie_top (
     input  logic [511:0]               pcie_writedata_0,
     input  logic [63:0]                pcie_byteenable_0,
 
+    // RDDM Avalon-MM signals
     input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1,
     input  logic                       pcie_write_1,
-    input  logic                       pcie_read_1,
-    output logic                       pcie_readdatavalid_1,
-    output logic [511:0]               pcie_readdata_1,
     input  logic [511:0]               pcie_writedata_1,
     input  logic [63:0]                pcie_byteenable_1,
 
