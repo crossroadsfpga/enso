@@ -180,14 +180,6 @@ typedef struct packed
 
 localparam PDU_META_WIDTH=(TUPLE_DWIDTH+64);
 
-typedef struct packed
-{
-    logic [319:0] pad;
-    logic [63:0]  tail;
-    logic [63:0]  queue_id;
-    logic [63:0]  signal; // should always be 0x1
-} pcie_pkt_dsc_t;
-
 //1 + 96 + 64 = 195
 localparam FT_DWIDTH = (1+TUPLE_DWIDTH+64);
 typedef struct packed

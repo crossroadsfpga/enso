@@ -195,7 +195,7 @@ logic                      reg_esram_pkt_buf_rd_valid;
 logic [519:0]              reg_esram_pkt_buf_rddata;
 
 //JTAG
-logic [29:0] s_addr;
+logic [PCIE_ADDR_WIDTH-1:0] s_addr;
 logic s_read;
 logic s_write;
 logic [31:0] s_writedata;
@@ -698,7 +698,7 @@ always @(posedge clk_pcie) begin
                         pdu_flit_cnt <= pdu_flit_cnt + 1;
                     end else begin // dsc queue
                         automatic logic [31:0] pkt_per_dsc_queue;
-                        automatic pcie_pkt_dsc_t pcie_pkt_desc = 
+                        automatic pcie_rx_dsc_t pcie_pkt_desc = 
                             pcie_bas_writedata;
 
                         // dsc queues can receive only one flit per burst
@@ -876,8 +876,12 @@ always @(posedge clk_status) begin
                     s_addr = s_addr + 1;
                     s_read <= 1;
                     if (s_addr == (
-                            30'h2A00_0000 + 30'd4 * nb_pkt_queues + 30'd2)) begin
-                        s_addr <= 30'h2A00_0000 + 30'd4 * MAX_NB_FLOWS + 30'd2;
+                            30'h2A00_0000 + REGS_PER_PKT_Q * nb_pkt_queues
+                            + NB_CONTROL_REGS)
+                        ) begin
+                        s_addr <= 30'h2A00_0000
+                            + REGS_PER_PKT_Q * MAX_NB_FLOWS
+                            + NB_CONTROL_REGS;
                         s_writedata <= 0;
                         conf_state <= READ_PCIE_DSC_Q;
                         $display("dsc queues:");
@@ -889,8 +893,11 @@ always @(posedge clk_status) begin
                     $display("%d: 0x%8h", s_addr[JTAG_ADDR_WIDTH-1:0],
                              top_readdata);
                     s_addr = s_addr + 1;
-                    if (s_addr == (30'h2A00_0000 + 30'd4 * MAX_NB_FLOWS 
-                            + 30'd8 * nb_dsc_queues + 30'd2)) begin
+                    if (s_addr == (30'h2A00_0000
+                            + REGS_PER_PKT_Q * MAX_NB_FLOWS 
+                            + REGS_PER_DSC_Q * nb_dsc_queues
+                            + NB_CONTROL_REGS)
+                        ) begin
                         conf_state <= IDLE;
                     end else begin
                         s_read <= 1;

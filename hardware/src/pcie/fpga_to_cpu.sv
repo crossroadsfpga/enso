@@ -253,7 +253,7 @@ always @(posedge clk) begin
             end
             SEND_DESCRIPTOR: begin
                 if (!pcie_bas_waitrequest) begin
-                    automatic pcie_pkt_dsc_t pcie_pkt_desc;
+                    automatic pcie_rx_dsc_t pcie_pkt_desc;
                     automatic queue_state_t dsc_q_state;
                     automatic queue_state_t pkt_q_state;
 

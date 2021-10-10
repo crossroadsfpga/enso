@@ -3,6 +3,9 @@
 
 `include "../constants.sv"
 
+localparam PCIE_WRDM_BASE_ADDR = 32'h4000_0000;
+localparam PCIE_RDDM_BASE_ADDR = 32'h4000_0000;
+
 function logic [RB_AWIDTH-1:0] get_new_pointer(
     logic [RB_AWIDTH-1:0] pointer,
     logic [RB_AWIDTH-1:0] upd_sz,
@@ -32,5 +35,33 @@ typedef struct packed
     queue_state_t                  dsc_q_state;
     queue_state_t                  pkt_q_state;
 } pkt_meta_with_queues_t;
+
+typedef struct packed
+{
+    logic [319:0] pad;
+    logic [63:0]  tail;
+    logic [63:0]  queue_id;
+    logic [63:0]  signal; // should always be 0x1
+} pcie_rx_dsc_t;
+
+typedef struct packed
+{
+    logic [383:0] pad;
+    logic [63:0]  length;
+    logic [63:0]  addr; // Physical address of the data.
+} pcie_tx_dsc_t;
+
+typedef struct packed
+{
+    logic [13:0] pad;
+    logic [7:0]  descriptor_id;
+    logic [2:0]  app_spec;
+    logic        single_dst;  // When unset, dst address in incremented at every
+                              // transfer.
+    logic [1:0]  reserved;
+    logic [17:0] nb_dwords;  // Up to 1MB.
+    logic [63:0] dst_addr;  // Avalon address.
+    logic [63:0] src_addr;  // PCIe address.
+} rddm_desc;
 
 `endif // PCIE_CONSTS_SV
