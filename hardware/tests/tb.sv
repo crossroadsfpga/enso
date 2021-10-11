@@ -1,7 +1,7 @@
 `timescale 1 ns/10 ps  // time-unit = 1 ns, precision = 10 ps
 `include "../src/constants.sv"
+`include "../src/pcie/pcie_consts.sv"
 module tb;
-
 
 `ifndef PKT_FILE
 `define PKT_FILE "./input_gen/m10_100.pkt"
@@ -167,9 +167,6 @@ logic [511:0] pcie_writedata_0;
 logic [63:0]  pcie_byteenable_0;
 logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_1;
 logic         pcie_write_1;
-logic         pcie_read_1;
-logic         pcie_readdatavalid_1;
-logic [511:0] pcie_readdata_1;
 logic [511:0] pcie_writedata_1;
 logic [63:0]  pcie_byteenable_1;
 logic         error_termination;
@@ -478,7 +475,6 @@ always @(posedge clk_pcie) begin
 
     pcie_address_1 <= 0;
     pcie_write_1 <= 0;
-    pcie_read_1 <= 0; // not used at the moment
 
     pcie_writedata_1 <= 0;
     pcie_byteenable_1 <= 0; // not used at the moment
@@ -1231,9 +1227,6 @@ top top_inst (
     .pcie_byteenable_0            (pcie_byteenable_0),
     .pcie_address_1               (pcie_address_1),
     .pcie_write_1                 (pcie_write_1),
-    .pcie_read_1                  (pcie_read_1),
-    .pcie_readdatavalid_1         (pcie_readdatavalid_1),
-    .pcie_readdata_1              (pcie_readdata_1),
     .pcie_writedata_1             (pcie_writedata_1),
     .pcie_byteenable_1            (pcie_byteenable_1),
     //eSRAM
@@ -1374,84 +1367,6 @@ my_stats stats(
     .status_readdata_valid(s_readdata_valid)
 );
 
-`ifndef SIM
-pcie_core pcie (
-    .refclk_clk             (1'b0),
-    .pcie_rstn_npor         (1'b1),
-    .pcie_rstn_pin_perst    (1'b0),
-    .xcvr_rx_in0            (1'b0),
-    .bas_waitrequest        (pcie_bas_waitrequest),
-    .bas_address            (pcie_bas_address),
-    .bas_byteenable         (pcie_bas_byteenable),
-    .bas_read               (pcie_bas_read),
-    .bas_readdata           (pcie_bas_readdata),
-    .bas_readdatavalid      (pcie_bas_readdatavalid),
-    .bas_write              (pcie_bas_write),
-    .bas_writedata          (pcie_bas_writedata),
-    .bas_burstcount         (pcie_bas_burstcount),
-    .bas_response           (pcie_bas_response),
-    .xcvr_rx_in1            (1'b0),
-    .xcvr_rx_in2            (1'b0),
-    .xcvr_rx_in3            (1'b0),
-    .xcvr_rx_in4            (1'b0),
-    .xcvr_rx_in5            (1'b0),
-    .xcvr_rx_in6            (1'b0),
-    .xcvr_rx_in7            (1'b0),
-    .xcvr_rx_in8            (1'b0),
-    .xcvr_rx_in9            (1'b0),
-    .xcvr_rx_in10           (1'b0),
-    .xcvr_rx_in11           (1'b0),
-    .xcvr_rx_in12           (1'b0),
-    .xcvr_rx_in13           (1'b0),
-    .xcvr_rx_in14           (1'b0),
-    .xcvr_rx_in15           (1'b0),
-    .xcvr_tx_out0           (),
-    .xcvr_tx_out1           (),
-    .xcvr_tx_out2           (),
-    .xcvr_tx_out3           (),
-    .xcvr_tx_out4           (),
-    .xcvr_tx_out5           (),
-    .xcvr_tx_out6           (),
-    .xcvr_tx_out7           (),
-    .xcvr_tx_out8           (),
-    .xcvr_tx_out9           (),
-    .xcvr_tx_out10          (),
-    .xcvr_tx_out11          (),
-    .xcvr_tx_out12          (),
-    .xcvr_tx_out13          (),
-    .xcvr_tx_out14          (),
-    .xcvr_tx_out15          (),
-    .pcie_clk               (clk_pcie),
-    .pcie_reset_n           (!rst),
-    // .rddm_desc_ready        (pcie_rddm_desc_ready),
-    // .rddm_desc_valid        (pcie_rddm_desc_valid),
-    // .rddm_desc_data         (pcie_rddm_desc_data),
-    // .wrdm_desc_ready        (pcie_wrdm_desc_ready),
-    // .wrdm_desc_valid        (pcie_wrdm_desc_valid),
-    // .wrdm_desc_data         (pcie_wrdm_desc_data),
-    // .wrdm_prio_ready        (pcie_wrdm_prio_ready),
-    // .wrdm_prio_valid        (pcie_wrdm_prio_valid),
-    // .wrdm_prio_data         (pcie_wrdm_prio_data),
-    // .rddm_tx_valid          (pcie_rddm_tx_valid),
-    // .rddm_tx_data           (pcie_rddm_tx_data),
-    // .wrdm_tx_valid          (pcie_wrdm_tx_valid),
-    // .wrdm_tx_data           (pcie_wrdm_tx_data),
-    .address_0              (pcie_address_0),
-    .write_0                (pcie_write_0),
-    .read_0                 (pcie_read_0),
-    .readdatavalid_0        (pcie_readdatavalid_0),
-    .readdata_0             (pcie_readdata_0),
-    .writedata_0            (pcie_writedata_0),
-    .byteenable_0           (pcie_byteenable_0),
-    .address_1              (pcie_address_1),
-    .write_1                (pcie_write_1),
-    .read_1                 (pcie_read_1),
-    .readdatavalid_1        (pcie_readdatavalid_1),
-    .readdata_1             (pcie_readdata_1),
-    .writedata_1            (pcie_writedata_1),
-    .byteenable_1           (pcie_byteenable_1)
-);
-`endif
 esram_wrapper esram_pkt_buffer(
     .clk_esram_ref  (clk_esram_ref), //100 MHz
     .esram_pll_lock (esram_pll_lock),
