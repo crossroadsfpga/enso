@@ -1,7 +1,7 @@
 `timescale 1 ps / 1 ps
 `include "./constants.sv"
 module top (
-    //clk & rst
+    // clk & rst.
     input  logic         clk,
     input  logic         rst,
     input  logic         clk_datamover,
@@ -9,7 +9,7 @@ module top (
     input  logic         clk_pcie,
     input  logic         rst_pcie,
 
-    //Ethernet In & out
+    // Ethernet In & out.
     input  logic         in_sop,
     input  logic         in_eop,
     input  logic [511:0] in_data,
@@ -51,19 +51,21 @@ module top (
     output logic [3:0]   pcie_bas_burstcount,
     input  logic [1:0]   pcie_bas_response,
 
-    input  logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_0,
-    input  logic         pcie_write_0,
-    input  logic         pcie_read_0,
-    output logic         pcie_readdatavalid_0,
-    output logic [511:0] pcie_readdata_0,
-    input  logic [511:0] pcie_writedata_0,
-    input  logic [63:0]  pcie_byteenable_0,
-    input  logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_1,
-    input  logic         pcie_write_1,
-    input  logic [511:0] pcie_writedata_1,
-    input  logic [63:0]  pcie_byteenable_1,
+    input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_0,
+    input  logic                       pcie_write_0,
+    input  logic                       pcie_read_0,
+    output logic                       pcie_readdatavalid_0,
+    output logic [511:0]               pcie_readdata_0,
+    input  logic [511:0]               pcie_writedata_0,
+    input  logic [63:0]                pcie_byteenable_0,
 
-    //eSRAM
+    // RDDM Avalon-MM signals.
+    input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1,
+    input  logic                       pcie_write_1,
+    input  logic [511:0]               pcie_writedata_1,
+    input  logic [63:0]                pcie_byteenable_1,
+
+    // eSRAM
     output  logic                     reg_esram_pkt_buf_wren,
     output  logic [PKTBUF_AWIDTH-1:0] reg_esram_pkt_buf_wraddress,
     output  logic [519:0]             reg_esram_pkt_buf_wrdata,
@@ -72,7 +74,7 @@ module top (
     input   logic                     esram_pkt_buf_rd_valid,
     input   logic [519:0]             esram_pkt_buf_rddata,
 
-    //JTAG
+    // JTAG
     input   logic                    clk_status,
     input   logic   [29:0]           status_addr,
     input   logic                    status_read,
@@ -100,7 +102,7 @@ logic [31:0] pkt_pcie_status;
 logic [31:0] max_dm2pcie_fifo_status;
 logic [31:0] pcie_pkt_cnt_status;
 logic [31:0] pcie_meta_cnt_status;
-logic [31:0] dm_pcie_pkt_cnt_status;
+logic [31:0] dm_pcie_rx_pkt_cnt_status;
 logic [31:0] dm_pcie_meta_cnt_status;
 logic [31:0] dm_eth_pkt_cnt_status;
 logic [31:0] dma_pkt_cnt_status;
@@ -201,17 +203,17 @@ logic          dm_in_meta_valid;
 metadata_t     dm_in_meta_data;
 logic          dm_in_meta_ready;
 
-logic          dm_pcie_pkt_valid;
-logic  [511:0] dm_pcie_pkt_data;
-logic          dm_pcie_pkt_ready;
-logic          dm_pcie_pkt_almost_full;
-logic          dm_pcie_pkt_sop;
-logic          dm_pcie_pkt_eop;
-logic  [5:0]   dm_pcie_pkt_empty;
+logic          dm_pcie_rx_pkt_valid;
+logic  [511:0] dm_pcie_rx_pkt_data;
+logic          dm_pcie_rx_pkt_ready;
+logic          dm_pcie_rx_pkt_almost_full;
+logic          dm_pcie_rx_pkt_sop;
+logic          dm_pcie_rx_pkt_eop;
+logic  [5:0]   dm_pcie_rx_pkt_empty;
 logic          dm_pcie_meta_valid;
 metadata_t     dm_pcie_meta_data;
 logic          dm_pcie_meta_ready;
-logic [31:0]   dm_pcie_pkt_in_csr_readdata;
+logic [31:0]   dm_pcie_rx_pkt_in_csr_readdata;
 
 logic          dm_eth_pkt_valid;
 logic  [511:0] dm_eth_pkt_data;
@@ -318,9 +320,9 @@ logic [31:0] pcie_pkt_cnt_r2;
 logic [31:0] pcie_meta_cnt;
 logic [31:0] pcie_meta_cnt_r1;
 logic [31:0] pcie_meta_cnt_r2;
-logic [31:0] dm_pcie_pkt_cnt;
-logic [31:0] dm_pcie_pkt_cnt_r1;
-logic [31:0] dm_pcie_pkt_cnt_r2;
+logic [31:0] dm_pcie_rx_pkt_cnt;
+logic [31:0] dm_pcie_rx_pkt_cnt_r1;
+logic [31:0] dm_pcie_rx_pkt_cnt_r2;
 logic [31:0] dm_pcie_meta_cnt;
 logic [31:0] dm_pcie_meta_cnt_r1;
 logic [31:0] dm_pcie_meta_cnt_r2;
@@ -395,7 +397,7 @@ always @(posedge clk_datamover) begin
         pkt_drop <= 0;
         pkt_pcie <= 0;
         max_dm2pcie_fifo <= 0;
-        dm_pcie_pkt_cnt <= 0;
+        dm_pcie_rx_pkt_cnt <= 0;
         dm_pcie_meta_cnt <= 0;
         dm_eth_pkt_cnt <= 0;
     end else begin
@@ -431,12 +433,12 @@ always @(posedge clk_datamover) begin
             endcase
         end
 
-        if(max_dm2pcie_fifo < dm_pcie_pkt_in_csr_readdata)begin
-            max_dm2pcie_fifo <= dm_pcie_pkt_in_csr_readdata;
+        if(max_dm2pcie_fifo < dm_pcie_rx_pkt_in_csr_readdata)begin
+            max_dm2pcie_fifo <= dm_pcie_rx_pkt_in_csr_readdata;
         end
 
-        if(dm_pcie_pkt_valid & dm_pcie_pkt_ready & dm_pcie_pkt_eop)begin
-            dm_pcie_pkt_cnt <= dm_pcie_pkt_cnt + 1;
+        if(dm_pcie_rx_pkt_valid & dm_pcie_rx_pkt_ready & dm_pcie_rx_pkt_eop)begin
+            dm_pcie_rx_pkt_cnt <= dm_pcie_rx_pkt_cnt + 1;
         end
 
         if(dm_pcie_meta_valid & dm_pcie_meta_ready)begin
@@ -537,9 +539,9 @@ always @(posedge clk_status) begin
     pcie_meta_cnt_r1                <= pcie_meta_cnt;
     pcie_meta_cnt_r2                <= pcie_meta_cnt_r1;
     pcie_meta_cnt_status            <= pcie_meta_cnt_r2;
-    dm_pcie_pkt_cnt_r1              <= dm_pcie_pkt_cnt;
-    dm_pcie_pkt_cnt_r2              <= dm_pcie_pkt_cnt_r1;
-    dm_pcie_pkt_cnt_status          <= dm_pcie_pkt_cnt_r2;
+    dm_pcie_rx_pkt_cnt_r1           <= dm_pcie_rx_pkt_cnt;
+    dm_pcie_rx_pkt_cnt_r2           <= dm_pcie_rx_pkt_cnt_r1;
+    dm_pcie_rx_pkt_cnt_status       <= dm_pcie_rx_pkt_cnt_r2;
     dm_pcie_meta_cnt_r1             <= dm_pcie_meta_cnt;
     dm_pcie_meta_cnt_r2             <= dm_pcie_meta_cnt_r1;
     dm_pcie_meta_cnt_status         <= dm_pcie_meta_cnt_r2;
@@ -600,7 +602,7 @@ always @(posedge clk_status) begin
                 8'd14 : status_readdata_top <= max_dm2pcie_fifo_status;
                 8'd15 : status_readdata_top <= pcie_pkt_cnt_status;
                 8'd16 : status_readdata_top <= pcie_meta_cnt_status;
-                8'd17 : status_readdata_top <= dm_pcie_pkt_cnt_status;
+                8'd17 : status_readdata_top <= dm_pcie_rx_pkt_cnt_status;
                 8'd18 : status_readdata_top <= dm_pcie_meta_cnt_status;
                 8'd19 : status_readdata_top <= dm_eth_pkt_cnt_status;
                 8'd20 : status_readdata_top <= dma_pkt_cnt_status;
@@ -852,36 +854,36 @@ bp_flow_director_out_fifo (
 );
 
 basic_data_mover data_mover_0 (
-    .clk                    (clk_datamover),
-    .rst                    (rst_datamover),
-    .meta_valid             (dm_in_meta_valid),
-    .meta_data              (dm_in_meta_data),
-    .meta_ready             (dm_in_meta_ready),
-    .pkt_buffer_address     (esram_pkt_buf_rdaddress),
-    .pkt_buffer_read        (esram_pkt_buf_rden),
-    .pkt_buffer_readvalid   (reg_esram_pkt_buf_rd_valid),
-    .pkt_buffer_readdata    (reg_esram_pkt_buf_rddata),
-    .emptylist_in_data      (emptylist_in_data),
-    .emptylist_in_valid     (emptylist_in_valid),
-    .emptylist_in_ready     (emptylist_in_ready),
-    .disable_pcie           (dm_disable_pcie),
-    .pcie_pkt_sop           (dm_pcie_pkt_sop),
-    .pcie_pkt_eop           (dm_pcie_pkt_eop),
-    .pcie_pkt_valid         (dm_pcie_pkt_valid),
-    .pcie_pkt_data          (dm_pcie_pkt_data),
-    .pcie_pkt_empty         (dm_pcie_pkt_empty),
-    .pcie_pkt_ready         (dm_pcie_pkt_ready),
-    .pcie_pkt_almost_full   (dm_pcie_pkt_almost_full),
-    .pcie_meta_valid        (dm_pcie_meta_valid),
-    .pcie_meta_data         (dm_pcie_meta_data),
-    .pcie_meta_ready        (dm_pcie_meta_ready),
-    .eth_pkt_sop            (dm_eth_pkt_sop),
-    .eth_pkt_eop            (dm_eth_pkt_eop),
-    .eth_pkt_valid          (dm_eth_pkt_valid),
-    .eth_pkt_data           (dm_eth_pkt_data),
-    .eth_pkt_empty          (dm_eth_pkt_empty),
-    .eth_pkt_ready          (dm_eth_pkt_ready),
-    .eth_pkt_almost_full    (dm_eth_pkt_almost_full)
+    .clk                     (clk_datamover),
+    .rst                     (rst_datamover),
+    .meta_valid              (dm_in_meta_valid),
+    .meta_data               (dm_in_meta_data),
+    .meta_ready              (dm_in_meta_ready),
+    .pkt_buffer_address      (esram_pkt_buf_rdaddress),
+    .pkt_buffer_read         (esram_pkt_buf_rden),
+    .pkt_buffer_readvalid    (reg_esram_pkt_buf_rd_valid),
+    .pkt_buffer_readdata     (reg_esram_pkt_buf_rddata),
+    .emptylist_in_data       (emptylist_in_data),
+    .emptylist_in_valid      (emptylist_in_valid),
+    .emptylist_in_ready      (emptylist_in_ready),
+    .disable_pcie            (dm_disable_pcie),
+    .pcie_rx_pkt_sop         (dm_pcie_rx_pkt_sop),
+    .pcie_rx_pkt_eop         (dm_pcie_rx_pkt_eop),
+    .pcie_rx_pkt_valid       (dm_pcie_rx_pkt_valid),
+    .pcie_rx_pkt_data        (dm_pcie_rx_pkt_data),
+    .pcie_rx_pkt_empty       (dm_pcie_rx_pkt_empty),
+    .pcie_rx_pkt_ready       (dm_pcie_rx_pkt_ready),
+    .pcie_rx_pkt_almost_full (dm_pcie_rx_pkt_almost_full),
+    .pcie_rx_meta_valid      (dm_pcie_meta_valid),
+    .pcie_rx_meta_data       (dm_pcie_meta_data),
+    .pcie_rx_meta_ready      (dm_pcie_meta_ready),
+    .eth_pkt_sop             (dm_eth_pkt_sop),
+    .eth_pkt_eop             (dm_eth_pkt_eop),
+    .eth_pkt_valid           (dm_eth_pkt_valid),
+    .eth_pkt_data            (dm_eth_pkt_data),
+    .eth_pkt_empty           (dm_eth_pkt_empty),
+    .eth_pkt_ready           (dm_eth_pkt_ready),
+    .eth_pkt_almost_full     (dm_eth_pkt_almost_full)
 );
 
 //////////////////// Datamover To PCIe FIFO //////////////////////////////////
@@ -899,14 +901,14 @@ dm2pcie_fifo (
     .in_csr_address    (1'b0),
     .in_csr_read       (1'b1),
     .in_csr_write      (1'b0),
-    .in_csr_readdata   (dm_pcie_pkt_in_csr_readdata),
+    .in_csr_readdata   (dm_pcie_rx_pkt_in_csr_readdata),
     .in_csr_writedata  (32'b0),
-    .in_data           (dm_pcie_pkt_data),
-    .in_valid          (dm_pcie_pkt_valid),
-    .in_ready          (dm_pcie_pkt_ready),
-    .in_startofpacket  (dm_pcie_pkt_sop),
-    .in_endofpacket    (dm_pcie_pkt_eop),
-    .in_empty          (dm_pcie_pkt_empty),
+    .in_data           (dm_pcie_rx_pkt_data),
+    .in_valid          (dm_pcie_rx_pkt_valid),
+    .in_ready          (dm_pcie_rx_pkt_ready),
+    .in_startofpacket  (dm_pcie_rx_pkt_sop),
+    .in_endofpacket    (dm_pcie_rx_pkt_eop),
+    .in_empty          (dm_pcie_rx_pkt_empty),
     .out_data          (pcie_pkt_data),
     .out_valid         (pcie_pkt_valid),
     .out_ready         (pcie_pkt_ready),
@@ -953,9 +955,9 @@ bp_dm2pcie_fifo (
     .csr_address    (),
     .csr_read       (),
     .csr_write      (),
-    .csr_readdata   (dm_pcie_pkt_in_csr_readdata),
+    .csr_readdata   (dm_pcie_rx_pkt_in_csr_readdata),
     .csr_writedata  (),
-    .almost_full    (dm_pcie_pkt_almost_full)
+    .almost_full    (dm_pcie_rx_pkt_almost_full)
 );
 
 dc_fifo_wrapper_infill  #(
