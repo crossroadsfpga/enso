@@ -1264,7 +1264,7 @@ pcie_ed pcie (
     .mm_bridge_0_m0_debugaccess              (),
     .mm_bridge_1_m0_waitrequest              (1'b0),
     .mm_bridge_1_m0_readdata                 (),
-    .mm_bridge_1_m0_readdatavalid            (),
+    .mm_bridge_1_m0_readdatavalid            (1'b0),
     .mm_bridge_1_m0_burstcount               (),
     .mm_bridge_1_m0_writedata                (writedata_1),
     .mm_bridge_1_m0_address                  (address_1),
