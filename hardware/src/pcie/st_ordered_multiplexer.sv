@@ -57,7 +57,6 @@ logic              out_fifo_almost_full;
 
 assign out_fifo_almost_full = out_fifo_occup > 16;
 
-
 always_comb begin
     next_stream_valid = !out_fifo_almost_full & next_stream_id_valid 
                          & in_valid[next_stream_id];
@@ -106,7 +105,7 @@ order_queue (
     .csr_address   (2'b0),
     .csr_read      (1'b1),
     .csr_write     (1'b0),
-    .csr_readdata  (occup),
+    .csr_readdata  (order_queue_occup),
     .csr_writedata (32'b0),
     .in_data       (order_data),
     .in_valid      (order_valid),
