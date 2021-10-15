@@ -27,7 +27,7 @@ localparam status_period = 10;
 localparam nb_dsc_queues = `NB_DSC_QUEUES;
 localparam nb_pkt_queues = `NB_PKT_QUEUES;
 localparam pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
-localparam pkt_size = 64;
+localparam pkt_size = 64; // in bytes
 localparam req_size = pkt_size/4; // in dwords
 
 // #cycles to wait before updating the head pointer for the packet queue
