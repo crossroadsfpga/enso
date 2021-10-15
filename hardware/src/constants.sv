@@ -65,6 +65,9 @@ localparam TX_TRACK = 5'b11_000; //(5'b11000);
 
 localparam PCIE_ADDR_WIDTH = 30;
 
+localparam PCIE_TX_PKT_FIFO_DEPTH = 1024;
+localparam PCIE_TX_PKT_FIFO_ALM_FULL_THRESH = 640;
+
 //Ring buffer 
 //Used for FPGA-CPU communication. Some fields are FPGA read only, used for
 //CPU indicatings FPGA info. Some fields are CPU read only, used for FPGA

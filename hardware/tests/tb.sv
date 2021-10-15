@@ -165,10 +165,10 @@ logic         pcie_readdatavalid_0;
 logic [511:0] pcie_readdata_0;
 logic [511:0] pcie_writedata_0;
 logic [63:0]  pcie_byteenable_0;
-logic [PCIE_ADDR_WIDTH-1:0]  pcie_address_1;
-logic         pcie_write_1;
-logic [511:0] pcie_writedata_1;
-logic [63:0]  pcie_byteenable_1;
+logic [63:0]  pcie_rddm_address;
+logic         pcie_rddm_write;
+logic [511:0] pcie_rddm_writedata;
+logic [63:0]  pcie_rddm_byteenable;
 logic         error_termination;
 logic         error_termination_r;
 logic         stop;
@@ -250,7 +250,8 @@ typedef enum{
     DMA_QUEUE_FULL,
     CPU_DSC_BUF_FULL,
     CPU_PKT_BUF_FULL,
-    MAX_PCIE_FIFO
+    MAX_PCIE_FIFO,
+    PCIE_TX_IGNORED_DSC_CNT
 } c_state_t;
 
 c_state_t conf_state;
@@ -473,11 +474,11 @@ always @(posedge clk_pcie) begin
     pcie_writedata_0 <= 0;
     pcie_byteenable_0 <= 0;
 
-    pcie_address_1 <= 0;
-    pcie_write_1 <= 0;
+    pcie_rddm_address <= 0;
+    pcie_rddm_write <= 0;
 
-    pcie_writedata_1 <= 0;
-    pcie_byteenable_1 <= 0; // not used at the moment
+    pcie_rddm_writedata <= 0;
+    pcie_rddm_byteenable <= 0; // not used at the moment
 
     if (rst) begin
         automatic integer c;
@@ -646,8 +647,8 @@ always @(posedge clk_pcie) begin
             //             32'hc0a80000 + nb_config_queues[31:0],
             //             64'hc0a801011f900050
             //         };
-            //         pcie_writedata_1 <= pdu_hdr;
-            //         pcie_write_1 <= 1;
+            //         pcie_rddm_writedata <= pdu_hdr;
+            //         pcie_rddm_write <= 1;
 
             //         cnt_delay <= cnt + 10;
             //         nb_config_queues <= nb_config_queues + 1;
@@ -665,8 +666,8 @@ always @(posedge clk_pcie) begin
             //         // pdu_hdr.queue_id = 64'h1;
             //         // pdu_hdr.prot = 32'h11;
             //         // pdu_hdr.tuple = 96'hc0a80000c0a801011f900050;
-            //         // pcie_writedata_1 <= pdu_hdr;
-            //         // pcie_write_1 <= 1;
+            //         // pcie_rddm_writedata <= pdu_hdr;
+            //         // pcie_rddm_write <= 1;
 
                     pcie_state <= PCIE_WAIT_DESC;
                     setup_finished <= 1;
@@ -1146,6 +1147,15 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("MAX_PCIE_FIFO:\t%d",top_readdata);
+                    conf_state <= PCIE_TX_IGNORED_DSC_CNT;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_001B;
+                end
+            end
+            PCIE_TX_IGNORED_DSC_CNT: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PCIE_TX_IGNORED_DSC_CNT:\t%d",top_readdata);
                     $display("done -");
                     $finish;
                 end
@@ -1225,10 +1235,10 @@ top top_inst (
     .pcie_readdata_0              (pcie_readdata_0),
     .pcie_writedata_0             (pcie_writedata_0),
     .pcie_byteenable_0            (pcie_byteenable_0),
-    .pcie_address_1               (pcie_address_1),
-    .pcie_write_1                 (pcie_write_1),
-    .pcie_writedata_1             (pcie_writedata_1),
-    .pcie_byteenable_1            (pcie_byteenable_1),
+    .pcie_rddm_address            (pcie_rddm_address),
+    .pcie_rddm_write              (pcie_rddm_write),
+    .pcie_rddm_writedata          (pcie_rddm_writedata),
+    .pcie_rddm_byteenable         (pcie_rddm_byteenable),
     //eSRAM
     .reg_esram_pkt_buf_wren       (esram_pkt_buf_wren),
     .reg_esram_pkt_buf_wraddress  (esram_pkt_buf_wraddress),

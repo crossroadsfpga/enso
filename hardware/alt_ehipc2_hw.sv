@@ -244,10 +244,10 @@ module alt_ehipc2_hw (
     logic [511:0]               pcie_writedata_0;
     logic [63:0]                pcie_byteenable_0;
 
-    logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1;
-    logic                       pcie_write_1;
-    logic [511:0]               pcie_writedata_1;
-    logic [63:0]                pcie_byteenable_1;
+    logic [63:0]  pcie_rddm_address;
+    logic         pcie_rddm_write;
+    logic [511:0] pcie_rddm_writedata;
+    logic [63:0]  pcie_rddm_byteenable;
 
     // eSRAM signals
     logic                      clk_datamover;
@@ -647,10 +647,10 @@ module alt_ehipc2_hw (
         .pcie_readdata_0              (pcie_readdata_0),
         .pcie_writedata_0             (pcie_writedata_0),
         .pcie_byteenable_0            (pcie_byteenable_0),
-        .pcie_address_1               (pcie_address_1),
-        .pcie_write_1                 (pcie_write_1),
-        .pcie_writedata_1             (pcie_writedata_1),
-        .pcie_byteenable_1            (pcie_byteenable_1),
+        .pcie_rddm_address            (pcie_rddm_address),
+        .pcie_rddm_write              (pcie_rddm_write),
+        .pcie_rddm_writedata          (pcie_rddm_writedata),
+        .pcie_rddm_byteenable         (pcie_rddm_byteenable),
 
         // eSRAM
         .reg_esram_pkt_buf_wren       (esram_pkt_buf_wren),
@@ -765,7 +765,7 @@ module alt_ehipc2_hw (
     assign pcie_wrdm_prio_ready = 0;
     assign pcie_write_0 = 0;
     assign pcie_read_0 = 0;
-    assign pcie_write_1 = 0;
+    assign rddm_master_write = 0;
 `else
     pcie_core pcie (
         .refclk_clk          (refclk_clk),
@@ -838,10 +838,10 @@ module alt_ehipc2_hw (
         .write_0             (pcie_write_0),
         .read_0              (pcie_read_0),
         .byteenable_0        (pcie_byteenable_0),
-        .writedata_1         (pcie_writedata_1),
-        .address_1           (pcie_address_1),
-        .write_1             (pcie_write_1),
-        .byteenable_1        (pcie_byteenable_1)
+        .rddm_writedata      (pcie_rddm_writedata),
+        .rddm_address        (pcie_rddm_address),
+        .rddm_write          (pcie_rddm_write),
+        .rddm_byteenable     (pcie_rddm_byteenable)
     );
 `endif
 

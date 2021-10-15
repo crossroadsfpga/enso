@@ -261,7 +261,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/pkt_queue_manager.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/st_ordered_multiplexer.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_table_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/jtag_mmio_arbiter.sv
-set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/cpu2fpga_pcie.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/cpu_to_fpga.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe_fd.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/flow_director.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/top.sv
@@ -355,7 +355,6 @@ set_global_assignment -name QSYS_FILE common/reset_ip.ip
 set_global_assignment -name IP_FILE pcie/pcie_example_design/ip/pcie_ed/pcie_ed_BAR_INTERPRETER.ip
 set_global_assignment -name IP_FILE pcie/pcie_example_design/ip/pcie_ed/pcie_ed_DUT.ip
 set_global_assignment -name IP_FILE pcie/pcie_example_design/ip/pcie_ed/pcie_ed_mm_bridge_0.ip
-set_global_assignment -name IP_FILE pcie/pcie_example_design/ip/pcie_ed/mm_bridge_1.ip
 set_global_assignment -name QSYS_FILE pcie/pcie_example_design/pcie_ed.qsys
 set_global_assignment -name SYSTEMVERILOG_FILE alt_ehipc2_hw.sv
 set_global_assignment -name SDC_ENTITY_FILE ./alt_ehipc2_hw.sdc -entity alt_ehipc2_hw

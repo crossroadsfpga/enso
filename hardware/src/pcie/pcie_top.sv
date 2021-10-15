@@ -13,7 +13,7 @@ module pcie_top (
     output logic [173:0] pcie_wrdm_prio_data,
     input  logic         pcie_wrdm_tx_valid,
     input  logic [31:0]  pcie_wrdm_tx_data,
-    
+
     input  logic         pcie_rddm_desc_ready,
     output logic         pcie_rddm_desc_valid,
     output logic [173:0] pcie_rddm_desc_data,
@@ -42,29 +42,39 @@ module pcie_top (
     input  logic [511:0]               pcie_writedata_0,
     input  logic [63:0]                pcie_byteenable_0,
 
-    // RDDM Avalon-MM signals
-    input  logic [PCIE_ADDR_WIDTH-1:0] pcie_address_1,
-    input  logic                       pcie_write_1,
-    input  logic [511:0]               pcie_writedata_1,
-    input  logic [63:0]                pcie_byteenable_1,
+    // RDDM Avalon-MM signals.
+    input  logic [63:0]  pcie_rddm_address,
+    input  logic         pcie_rddm_write,
+    input  logic [511:0] pcie_rddm_writedata,
+    input  logic [63:0]  pcie_rddm_byteenable,
 
-    input  var flit_lite_t         pcie_pkt_buf_data,
-    input  logic                   pcie_pkt_buf_valid,
-    output logic                   pcie_pkt_buf_ready,
-    output logic [F2C_RB_AWIDTH:0] pcie_pkt_buf_occup,
-    input  var pkt_meta_t          pcie_meta_buf_data,
-    input  logic                   pcie_meta_buf_valid,
-    output logic                   pcie_meta_buf_ready,
-    output logic [F2C_RB_AWIDTH:0] pcie_meta_buf_occup,
+    input  var flit_lite_t         pcie_rx_pkt_buf_data,
+    input  logic                   pcie_rx_pkt_buf_valid,
+    output logic                   pcie_rx_pkt_buf_ready,
+    output logic [F2C_RB_AWIDTH:0] pcie_rx_pkt_buf_occup,
+    input  var pkt_meta_t          pcie_rx_meta_buf_data,
+    input  logic                   pcie_rx_meta_buf_valid,
+    output logic                   pcie_rx_meta_buf_ready,
+    output logic [F2C_RB_AWIDTH:0] pcie_rx_meta_buf_occup,
 
-    output logic                  disable_pcie,
-    output logic                  sw_reset,
-    output var pdu_metadata_t     pdumeta_cpu_data,
-    output logic                  pdumeta_cpu_valid,
-    input  logic [9:0]            pdumeta_cnt,
-    output logic [31:0]           dma_queue_full_cnt,
-    output logic [31:0]           cpu_dsc_buf_full_cnt,
-    output logic [31:0]           cpu_pkt_buf_full_cnt,
+    // Packet buffer output.
+    output logic         pcie_tx_pkt_sop,
+    output logic         pcie_tx_pkt_eop,
+    output logic         pcie_tx_pkt_valid,
+    output logic [511:0] pcie_tx_pkt_data,
+    output logic [5:0]   pcie_tx_pkt_empty,
+    input  logic         pcie_tx_pkt_ready,
+    input  logic [31:0]  pcie_tx_pkt_occup,
+
+    output logic              disable_pcie,
+    output logic              sw_reset,
+    output var pdu_metadata_t pdumeta_cpu_data,
+    output logic              pdumeta_cpu_valid,
+    input  logic [9:0]        pdumeta_cnt,
+    output logic [31:0]       dma_queue_full_cnt,
+    output logic [31:0]       cpu_dsc_buf_full_cnt,
+    output logic [31:0]       cpu_pkt_buf_full_cnt,
+    output logic [31:0]       pcie_tx_ignored_dsc_cnt,
 
     // status register bus
     input  logic        clk_status,
@@ -212,54 +222,6 @@ jtag_mmio_arbiter_inst (
     .control_regs           (control_regs)
 );
 
-// TODO move packet buffer here.
-// // Input packet buffer.
-// fifo_wrapper_infill #(
-//     .SYMBOLS_PER_BEAT(1),
-//     .BITS_PER_SYMBOL($bits(flit_lite_t)),
-//     .FIFO_DEPTH(F2C_RB_DEPTH)
-// )
-// pkt_buf (
-//     .clk           (clk),
-//     .reset         (rst),
-//     .csr_address   (2'b0),
-//     .csr_read      (1'b1),
-//     .csr_write     (1'b0),
-//     .csr_readdata  (pkt_buf_csr_readdata),
-//     .csr_writedata (32'b0),
-//     .in_data       (pkt_buf_in_data),
-//     .in_valid      (pkt_buf_in_valid),
-//     .in_ready      (pkt_buf_in_ready),
-//     .out_data      (pkt_buf_out_data),
-//     .out_valid     (pkt_buf_out_valid),
-//     .out_ready     (pkt_buf_out_ready)
-// );
-
-// assign pcie_pkt_buf_occup = pkt_buf_csr_readdata[F2C_RB_AWIDTH:0];
-
-// // Input metadata buffer. This was sized considering the worst case -- where all
-// // packets are min-sized. We may use a smaller buffer here to save BRAM.
-// fifo_wrapper_infill #(
-//     .SYMBOLS_PER_BEAT(1),
-//     .BITS_PER_SYMBOL($bits(pkt_meta_with_queues_t)),
-//     .FIFO_DEPTH(F2C_RB_DEPTH)
-// )
-// metadata_buf (
-//     .clk           (clk),
-//     .reset         (rst),
-//     .csr_address   (2'b0),
-//     .csr_read      (1'b1),
-//     .csr_write     (1'b0),
-//     .csr_readdata  (metadata_buf_csr_readdata),
-//     .csr_writedata (32'b0),
-//     .in_data       (metadata_buf_in_data),
-//     .in_valid      (metadata_buf_in_valid),
-//     .in_ready      (metadata_buf_in_ready),
-//     .out_data      (metadata_buf_out_data),
-//     .out_valid     (metadata_buf_out_valid),
-//     .out_ready     (metadata_buf_out_ready | !metadata_buf_out_valid_r)
-// );
-
 pkt_meta_with_queues_t pkt_q_mngr_in_meta_data   [NB_PKT_QUEUE_MANAGERS];
 pkt_meta_with_queues_t pkt_q_mngr_out_meta_data  [NB_PKT_QUEUE_MANAGERS];
 logic                  pkt_q_mngr_in_meta_valid  [NB_PKT_QUEUE_MANAGERS];
@@ -273,25 +235,26 @@ logic [31:0] cpu_pkt_buf_full_cnt_r;
 logic st_mux_ord_ready;
 
 logic [NON_NEG_PKT_QM_MSB:0] pkt_q_mngr_id;
-assign pkt_q_mngr_id = !pcie_meta_buf_valid 
-                       | pcie_meta_buf_data.pkt_queue_id[NON_NEG_PKT_QM_MSB:0];
+assign pkt_q_mngr_id = !pcie_rx_meta_buf_valid
+        | pcie_rx_meta_buf_data.pkt_queue_id[NON_NEG_PKT_QM_MSB:0];
 
 always_comb begin
-    pcie_meta_buf_ready = 1;
+    pcie_rx_meta_buf_ready = 1;
     cpu_pkt_buf_full_cnt_r = 0;
     for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
-        pkt_q_mngr_in_meta_data[i].dsc_queue_id = 
-            pcie_meta_buf_data.dsc_queue_id;
-        pkt_q_mngr_in_meta_data[i].pkt_queue_id = 
-            pcie_meta_buf_data.pkt_queue_id;
-        pkt_q_mngr_in_meta_data[i].size = pcie_meta_buf_data.size;
+        pkt_q_mngr_in_meta_data[i].dsc_queue_id =
+            pcie_rx_meta_buf_data.dsc_queue_id;
+        pkt_q_mngr_in_meta_data[i].pkt_queue_id =
+            pcie_rx_meta_buf_data.pkt_queue_id;
+        pkt_q_mngr_in_meta_data[i].size = pcie_rx_meta_buf_data.size;
 
-        pcie_meta_buf_ready &= 
+        pcie_rx_meta_buf_ready &=
             pkt_q_mngr_in_meta_ready[i] & st_mux_ord_ready;
 
-        pkt_q_mngr_in_meta_valid[i] = pcie_meta_buf_valid & pcie_meta_buf_ready;
+        pkt_q_mngr_in_meta_valid[i] =
+            pcie_rx_meta_buf_valid & pcie_rx_meta_buf_ready;
         if (PKT_QM_ID_WIDTH > 0) begin
-            pkt_q_mngr_in_meta_valid[i] &= (pcie_meta_buf_data.pkt_queue_id[
+            pkt_q_mngr_in_meta_valid[i] &= (pcie_rx_meta_buf_data.pkt_queue_id[
                 NON_NEG_PKT_QM_MSB:0] == i);
         end
 
@@ -305,8 +268,7 @@ end
 
 pkt_queue_manager #(
     .NB_QUEUES(MAX_NB_FLOWS/NB_PKT_QUEUE_MANAGERS)
-)
-pkt_queue_manager_inst [NB_PKT_QUEUE_MANAGERS] (
+) pkt_queue_manager_inst [NB_PKT_QUEUE_MANAGERS] (
     .clk               (pcie_clk),
     .rst               (!pcie_reset_n),
     .in_meta_data      (pkt_q_mngr_in_meta_data),
@@ -345,15 +307,14 @@ st_ordered_multiplexer #(
     .out_valid   (dsc_q_mngr_in_meta_valid),
     .out_ready   (dsc_q_mngr_in_meta_ready),
     .out_data    (dsc_q_mngr_in_meta_data),
-    .order_valid (pcie_meta_buf_valid & pcie_meta_buf_ready),
+    .order_valid (pcie_rx_meta_buf_valid & pcie_rx_meta_buf_ready),
     .order_ready (st_mux_ord_ready),
     .order_data  (pkt_q_mngr_id)
 );
 
 rx_dsc_queue_manager #(
     .NB_QUEUES(MAX_NB_APPS)
-)
-rx_dsc_queue_manager_inst (
+) rx_dsc_queue_manager_inst (
     .clk             (pcie_clk),
     .rst             (!pcie_reset_n),
     .in_meta_data    (dsc_q_mngr_in_meta_data),
@@ -373,14 +334,14 @@ rx_dsc_queue_manager_inst (
 fpga_to_cpu fpga_to_cpu_inst (
     .clk                    (pcie_clk),
     .rst                    (!pcie_reset_n),
-    .pkt_buf_in_data        (pcie_pkt_buf_data),
-    .pkt_buf_in_valid       (pcie_pkt_buf_valid),
-    .pkt_buf_in_ready       (pcie_pkt_buf_ready),
-    .pkt_buf_occup          (pcie_pkt_buf_occup),
+    .pkt_buf_in_data        (pcie_rx_pkt_buf_data),
+    .pkt_buf_in_valid       (pcie_rx_pkt_buf_valid),
+    .pkt_buf_in_ready       (pcie_rx_pkt_buf_ready),
+    .pkt_buf_occup          (pcie_rx_pkt_buf_occup),
     .metadata_buf_in_data   (f2c_in_meta_data),
     .metadata_buf_in_valid  (f2c_in_meta_valid),
     .metadata_buf_in_ready  (f2c_in_meta_ready),
-    .metadata_buf_occup     (pcie_meta_buf_occup),
+    .metadata_buf_occup     (pcie_rx_meta_buf_occup),
     .pkt_rb_size            (pkt_rb_size),
     .dsc_rb_size            (dsc_rb_size),
     .pcie_bas_waitrequest   (pcie_bas_waitrequest),
@@ -397,45 +358,40 @@ fpga_to_cpu fpga_to_cpu_inst (
     .dma_queue_full_cnt     (dma_queue_full_cnt)
 );
 
-tx_dsc_queue_manager #(
+cpu_to_fpga #(
     .NB_QUEUES(MAX_NB_APPS)
-)
-tx_dsc_queue_manager_inst (
-    .clk             (pcie_clk),
-    .rst             (!pcie_reset_n),
-    .q_table_tails   (tx_dsc_q_table_tails.owner),
-    .q_table_heads   (tx_dsc_q_table_heads.owner),
-    .q_table_l_addrs (tx_dsc_q_table_l_addrs.owner),
-    .q_table_h_addrs (tx_dsc_q_table_h_addrs.owner),
-    .rb_size         (dsc_rb_size) // TODO(sadok): use different rb size?
+) cpu_to_fpga_inst (
+    .clk                  (pcie_clk),
+    .rst                  (!pcie_reset_n),
+    .out_pkt_sop          (pcie_tx_pkt_sop),
+    .out_pkt_eop          (pcie_tx_pkt_eop),
+    .out_pkt_valid        (pcie_tx_pkt_valid),
+    .out_pkt_data         (pcie_tx_pkt_data),
+    .out_pkt_empty        (pcie_tx_pkt_empty),
+    .out_pkt_ready        (pcie_tx_pkt_ready),
+    .out_pkt_occup        (pcie_tx_pkt_occup),
+    .pcie_rddm_desc_ready (pcie_rddm_desc_ready),
+    .pcie_rddm_desc_valid (pcie_rddm_desc_valid),
+    .pcie_rddm_desc_data  (pcie_rddm_desc_data),
+    .pcie_rddm_prio_ready (pcie_rddm_prio_ready),
+    .pcie_rddm_prio_valid (pcie_rddm_prio_valid),
+    .pcie_rddm_prio_data  (pcie_rddm_prio_data),
+    .pcie_rddm_tx_valid   (pcie_rddm_tx_valid),
+    .pcie_rddm_tx_data    (pcie_rddm_tx_data),
+    .pcie_rddm_address    (pcie_rddm_address),
+    .pcie_rddm_write      (pcie_rddm_write),
+    .pcie_rddm_writedata  (pcie_rddm_writedata),
+    .pcie_rddm_byteenable (pcie_rddm_byteenable),
+    .q_table_tails        (tx_dsc_q_table_tails.owner),
+    .q_table_heads        (tx_dsc_q_table_heads.owner),
+    .q_table_l_addrs      (tx_dsc_q_table_l_addrs.owner),
+    .q_table_h_addrs      (tx_dsc_q_table_h_addrs.owner),
+    .rb_size              (dsc_rb_size),  // TODO(sadok): use different rb size?
+    .ignored_dsc_cnt      (pcie_tx_ignored_dsc_cnt)
 );
 
-// TODO(sadok): remove this when using WRDM and RDDM
+// TODO(sadok): remove these when using WRDM.
 assign pcie_wrdm_desc_valid = 0;
 assign pcie_wrdm_prio_valid = 0;
-assign pcie_rddm_desc_valid = 0;
-assign pcie_rddm_prio_valid = 0;
-assign pcie_readdatavalid_1 = 0;
-
-// cpu2fpga_pcie c2f_inst (
-//     .clk                    (pcie_clk),
-//     .rst                    (!pcie_reset_n),
-//     .pdumeta_cpu_data       (pdumeta_cpu_data),
-//     .pdumeta_cpu_valid      (pdumeta_cpu_valid),
-//     .pdumeta_cnt            (pdumeta_cnt),
-//     .head                   (c2f_head[C2F_RB_AWIDTH-1:0]),
-//     .tail                   (c2f_tail[C2F_RB_AWIDTH-1:0]),
-//     .kmem_addr              (c2f_kmem_addr),
-//     .cpu_c2f_head_addr      (c2f_head_addr),
-//     .wrdm_prio_ready        (pcie_wrdm_prio_ready),
-//     .wrdm_prio_valid        (pcie_wrdm_prio_valid),
-//     .wrdm_prio_data         (pcie_wrdm_prio_data),
-//     .rddm_desc_ready        (pcie_rddm_desc_ready),
-//     .rddm_desc_valid        (pcie_rddm_desc_valid),
-//     .rddm_desc_data         (pcie_rddm_desc_data),
-//     .c2f_writedata          (pcie_writedata_1),
-//     .c2f_write              (pcie_write_1),
-//     .c2f_address            (pcie_address_1[14:6])
-// );
 
 endmodule

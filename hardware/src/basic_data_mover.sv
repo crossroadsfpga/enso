@@ -19,7 +19,7 @@ module basic_data_mover (
     // When set routes all incoming packets back to Ethernet.
     input  logic disable_pcie,
 
-    // RX Packet Data to PCIe.
+    // RX packet data to PCIe.
     output logic         pcie_rx_pkt_sop,
     output logic         pcie_rx_pkt_eop,
     output logic         pcie_rx_pkt_valid,
@@ -28,10 +28,18 @@ module basic_data_mover (
     input  logic         pcie_rx_pkt_ready,
     input  logic         pcie_rx_pkt_almost_full,
 
-    // RX Metadata to PCIe.
+    // RX metadata to PCIe.
     output logic          pcie_rx_meta_valid,
     output var metadata_t pcie_rx_meta_data,
     input  logic          pcie_rx_meta_ready,
+
+    // TX packet data from PCIe.
+    input  logic         pcie_tx_pkt_sop,
+    input  logic         pcie_tx_pkt_eop,
+    input  logic         pcie_tx_pkt_valid,
+    input  logic [511:0] pcie_tx_pkt_data,
+    input  logic [5:0]   pcie_tx_pkt_empty,
+    output logic         pcie_tx_pkt_ready,
 
     output logic         eth_pkt_sop,
     output logic         eth_pkt_eop,
@@ -231,11 +239,20 @@ always @(posedge clk) begin
         pcie_rx_pkt_empty <= 0;
         pcie_rx_pkt_valid <= 0;
 
-        eth_pkt_data <= pkt_buffer_readdata.data;
-        eth_pkt_sop <= 0;
-        eth_pkt_eop <= 0;
-        eth_pkt_empty <= 0;
-        eth_pkt_valid <= 0;
+        // TODO(sadok): Re-enable return path for incoming packets to Ethernet.
+        // Right now Ethernet TX is being used exclusively for PCIe TX.
+        // eth_pkt_data <= pkt_buffer_readdata.data;
+        // eth_pkt_sop <= 0;
+        // eth_pkt_eop <= 0;
+        // eth_pkt_empty <= 0;
+        // eth_pkt_valid <= 0;
+
+        eth_pkt_data <= pcie_tx_pkt_data;
+        eth_pkt_sop <= pcie_tx_pkt_sop;
+        eth_pkt_eop <= pcie_tx_pkt_eop;
+        eth_pkt_empty <= pcie_tx_pkt_empty;
+        eth_pkt_valid <= pcie_tx_pkt_valid;
+        pcie_tx_pkt_ready <= eth_pkt_ready;
 
         if (pkt_buffer_readvalid) begin
             // Send check_pkt to data_fifo.
@@ -245,10 +262,10 @@ always @(posedge clk) begin
                 pcie_rx_pkt_valid <= 1;
                 pcie_rx_pkt_empty <= pkt_buffer_readdata.empty;
             end else begin
-                eth_pkt_sop <= pkt_buffer_readdata.sop;
-                eth_pkt_eop <= pkt_buffer_readdata.eop;
-                eth_pkt_valid <= 1;
-                eth_pkt_empty <= pkt_buffer_readdata.empty;
+                // eth_pkt_sop <= pkt_buffer_readdata.sop;
+                // eth_pkt_eop <= pkt_buffer_readdata.eop;
+                // eth_pkt_valid <= 1;
+                // eth_pkt_empty <= pkt_buffer_readdata.empty;
             end
         end
     end
