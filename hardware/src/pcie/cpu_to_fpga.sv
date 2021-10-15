@@ -545,11 +545,29 @@ logic [DSC_Q_TABLE_TAILS_DWIDTH-1:0] q_table_b_tails_wr_data_r2;
 logic q_table_b_tails_wr_en_r1;
 logic q_table_b_tails_wr_en_r2;
 
+logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr_r1;
+logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr_r2;
+logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr;
+
 always @(posedge clk) begin
   q_table_b_tails_wr_data_r1 <= q_table_tails.wr_data;
   q_table_b_tails_wr_data_r2 <= q_table_b_tails_wr_data_r1;
+
   q_table_b_tails_wr_en_r1 <= q_table_tails.wr_en;
   q_table_b_tails_wr_en_r2 <= q_table_b_tails_wr_en_r1;
+
+  q_table_b_tails_addr_r1 <= q_table_tails.addr[QUEUE_ID_WIDTH-1:0];
+  q_table_b_tails_addr_r2 <= q_table_b_tails_addr_r1;
+end
+
+always_comb begin
+  // Do not delay address when reading. This assumes that JTAG/MMIO will not
+  // read and write the tail at the same time.
+  if (q_table_tails.rd_en) begin
+    q_table_b_tails_addr = q_table_tails.addr[QUEUE_ID_WIDTH-1:0];
+  end else begin
+    q_table_b_tails_addr = q_table_b_tails_addr_r2;
+  end
 end
 
 //////////////////////////////
@@ -562,7 +580,7 @@ bram_true2port #(
   .DEPTH(NB_QUEUES)
 ) q_table_tails_bram (
   .address_a (q_table_a_tails.addr[QUEUE_ID_WIDTH-1:0]),
-  .address_b (q_table_tails.addr[QUEUE_ID_WIDTH-1:0]),
+  .address_b (q_table_b_tails_addr),
   .clock     (clk),
   .data_a    (q_table_a_tails.wr_data),
   .data_b    (q_table_b_tails_wr_data_r2),
