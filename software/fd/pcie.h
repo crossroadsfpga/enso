@@ -16,10 +16,10 @@
 // variables with the same name on `hardware/src/constants.sv` and 
 // `hardware_test/hwtest/my_stats.tcl`.
 #define MAX_NB_APPS 256
-#define MAX_NB_FLOWS 65536
+#define MAX_NB_FLOWS 8192
 
 #ifndef BATCH_SIZE
-// Maximum number of packets to process in call to dma_run
+// Maximum number of packets to process in call to get_next_batch_from_queue
 #define BATCH_SIZE 64
 #endif
 
@@ -36,6 +36,8 @@
 #endif
 
 #define C2F_BUFFER_SIZE 512
+
+#define TX_DSC_LEN_OFFSET 44  // In bits.
 
 #define BUF_PAGE_SIZE (1UL << 21) // using 2MB huge pages (size in bytes)
 
@@ -105,35 +107,53 @@ typedef struct {
     uint64_t queue_id;
     uint64_t tail;
     uint64_t pad[5];
-} pcie_pkt_dsc_t;
+} pcie_rx_dsc_t;
 
 typedef struct {
-    pcie_pkt_dsc_t* buf;
+    uint64_t phys_addr;
+    uint64_t length;  // In bytes (up to 1MB).
+    uint64_t rx_pkt_queue_id; // TODO(sadok): figure out queue from address.
+    uint64_t pad[5];
+} pcie_tx_dsc_t;
+
+typedef struct {
+    pcie_rx_dsc_t* rx_buf;
+    pcie_tx_dsc_t* tx_buf;
     queue_regs_t* regs;
-    uint32_t* buf_head_ptr;
+    uint32_t* rx_head_ptr;
+    uint32_t* tx_head_ptr;
+    uint32_t* tx_tail_ptr;
     uint32_t rx_head;
-    uint32_t old_buf_head;
+    uint32_t tx_head;
+    uint32_t tx_tail;
+    uint32_t old_rx_head;
     uint32_t ref_cnt;
 } dsc_queue_t;
 
 typedef struct {
     uint32_t* buf;
+    uint64_t buf_phys_addr;
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
     uint32_t rx_head;
+    uint32_t old_rx_head;  // The head that HW knows about.
+    uint32_t rx_tail;
 } pkt_queue_t;
 
 typedef struct {
     intel_fpga_pcie_dev* dev;
     pkt_queue_t pkt_queue;
-    int app_id;
+    int app_id; // TODO(sadok): This is a bad name, change it.
 } socket_internal;
 
-int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues);
-int dma_run(socket_internal* socket_entry, void** buf, size_t len);
+int dma_init(socket_internal* socket_entry, unsigned socket_id,
+             unsigned nb_queues);
+int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
+                              size_t len);
 int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
                    size_t len);
-void advance_ring_buffer(socket_internal* socket_entry);
+void advance_ring_buffer(socket_internal* socket_entries,
+                         socket_internal* socket_entry);
 int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
                          unsigned int nb_queues);
 int dma_finish(socket_internal* socket_entry);

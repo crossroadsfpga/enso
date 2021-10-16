@@ -88,7 +88,7 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)
     void* ring_buf;
     socket_internal* socket = &open_sockets[sockfd];
     
-    ssize_t bytes_received = dma_run(socket, &ring_buf, len);
+    ssize_t bytes_received = get_next_batch_from_queue(socket, &ring_buf, len);
 
     if (unlikely(bytes_received <= 0)) {
         return bytes_received;
@@ -96,14 +96,14 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)
 
     memcpy(buf, ring_buf, bytes_received);
 
-    advance_ring_buffer(socket);
+    advance_ring_buffer(open_sockets, socket);
 
     return bytes_received;
 }
 
 ssize_t recv_zc(int sockfd, void **buf, size_t len, int flags __attribute__((unused)))
 {
-    return dma_run(&open_sockets[sockfd], buf, len);
+    return get_next_batch_from_queue(&open_sockets[sockfd], buf, len);
 }
 
 // TODO: should be able to somehow receive the descriptor queue as parameter
@@ -112,9 +112,14 @@ ssize_t recv_select(int* sockfd, void **buf, size_t len, int flags __attribute__
     return get_next_batch(open_sockets, sockfd, buf, len);
 }
 
+// ssize_t send(int sockfd, void *buf, size_t len, int flags __attribute__((unused)))
+// {
+//     return get_next_batch_from_queue(&open_sockets[sockfd], buf, len);
+// }
+
 void free_pkt_buf(int sockfd)
 {
-    advance_ring_buffer(&open_sockets[sockfd]);
+    advance_ring_buffer(open_sockets, &open_sockets[sockfd]);
 }
 
 int shutdown(int sockfd, int how __attribute__((unused)))

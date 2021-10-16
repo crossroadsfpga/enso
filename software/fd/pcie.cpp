@@ -39,6 +39,8 @@
 // #include "intel_fpga_pcie_link_test.hpp"
 #include "pcie.h"
 
+#define SEND_BACK
+
 static dsc_queue_t dsc_queue;
 static uint32_t* pending_pkt_tails;
 
@@ -182,13 +184,16 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         );
 
         dsc_queue.regs = dsc_queue_regs;
-        dsc_queue.buf =
-            (pcie_pkt_dsc_t*) get_huge_pages(app_id, ALIGNED_DSC_BUF_PAIR_SIZE);
-        if (dsc_queue.buf == NULL) {
+        dsc_queue.rx_buf =
+            (pcie_rx_dsc_t*) get_huge_pages(app_id, ALIGNED_DSC_BUF_PAIR_SIZE);
+        if (dsc_queue.rx_buf == NULL) {
             std::cerr << "Could not get huge page" << std::endl;
             return -1;
         }
-        uint64_t phys_addr = (uint64_t) virt_to_phys(dsc_queue.buf);
+        dsc_queue.tx_buf = (pcie_tx_dsc_t*) (
+            (uint64_t) dsc_queue.rx_buf + ALIGNED_DSC_BUF_PAIR_SIZE / 2);
+
+        uint64_t phys_addr = (uint64_t) virt_to_phys(dsc_queue.rx_buf);
 
         // Use first half of the huge page for RX and second half for TX.
         dsc_queue_regs->rx_mem_low = (uint32_t) phys_addr;
@@ -198,9 +203,13 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         dsc_queue_regs->tx_mem_low = (uint32_t) phys_addr;
         dsc_queue_regs->tx_mem_high = (uint32_t) (phys_addr >> 32);
 
-        dsc_queue.buf_head_ptr = &dsc_queue_regs->rx_head;
+        dsc_queue.rx_head_ptr = &dsc_queue_regs->rx_head;
+        dsc_queue.tx_head_ptr = &dsc_queue_regs->tx_head;
+        dsc_queue.tx_tail_ptr = &dsc_queue_regs->tx_tail;
         dsc_queue.rx_head = dsc_queue_regs->rx_head;
-        dsc_queue.old_buf_head = dsc_queue.rx_head;
+        dsc_queue.old_rx_head = dsc_queue.rx_head;
+        dsc_queue.tx_head = dsc_queue_regs->tx_head;
+        dsc_queue.tx_tail = dsc_queue_regs->tx_tail;
 
         // HACK(sadok) assuming that we know the number of queues beforehand
         pending_pkt_tails = (uint32_t*) malloc(
@@ -233,9 +242,13 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     pkt_queue_regs->rx_mem_low = (uint32_t) phys_addr;
     pkt_queue_regs->rx_mem_high = (uint32_t) (phys_addr >> 32);
 
+    socket_entry->pkt_queue.buf_phys_addr = phys_addr;
+
     socket_entry->app_id = app_id;
     socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->rx_head;
     socket_entry->pkt_queue.rx_head = pkt_queue_regs->rx_head;
+    socket_entry->pkt_queue.old_rx_head = socket_entry->pkt_queue.rx_head;
+    socket_entry->pkt_queue.rx_tail = socket_entry->pkt_queue.rx_tail;
 
     // make sure the last tail matches the current head
     pending_pkt_tails[socket_id] = socket_entry->pkt_queue.rx_head;
@@ -245,11 +258,11 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
 static inline void get_new_tails()
 {
-    pcie_pkt_dsc_t* dsc_buf = dsc_queue.buf;
+    pcie_rx_dsc_t* dsc_buf = dsc_queue.rx_buf;
     uint32_t dsc_buf_head = dsc_queue.rx_head;
 
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
-        pcie_pkt_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
+        pcie_rx_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
 
         // check if the next descriptor was updated by the FPGA
         if (cur_desc->signal == 0) {
@@ -270,7 +283,7 @@ static inline void get_new_tails()
 
     // update descriptor buffer head
     asm volatile ("" : : : "memory"); // compiler memory barrier
-    *(dsc_queue.buf_head_ptr) = dsc_buf_head;
+    *(dsc_queue.rx_head_ptr) = dsc_buf_head;
 
     dsc_queue.rx_head = dsc_buf_head;
 }
@@ -312,11 +325,12 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
 
     pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % PKT_BUF_SIZE;
 
-    socket_entry->pkt_queue.rx_head = pkt_buf_head;
+    socket_entry->pkt_queue.rx_tail = pkt_buf_head;
     return flit_aligned_size;
 }
 
-int dma_run(socket_internal* socket_entry, void** buf, size_t len)
+int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
+                              size_t len)
 {
     get_new_tails();
     return consume_queue(socket_entry, buf, len);
@@ -326,11 +340,11 @@ int dma_run(socket_internal* socket_entry, void** buf, size_t len)
 int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
                    size_t len)
 {
-    pcie_pkt_dsc_t* dsc_buf = dsc_queue.buf;
+    pcie_rx_dsc_t* dsc_buf = dsc_queue.rx_buf;
     uint32_t dsc_buf_head = dsc_queue.rx_head;
-    uint32_t old_buf_head = dsc_queue.old_buf_head;
+    uint32_t old_dsc_buf_head = dsc_queue.old_rx_head;
 
-    pcie_pkt_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
+    pcie_rx_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
 
     // check if the next descriptor was updated by the FPGA
     if (unlikely(cur_desc->signal == 0)) {
@@ -348,12 +362,12 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
     // (2) pass the current queue as argument and prefetch packets for it,
     //     including potentially old packets.
 
-    uint32_t head_gap = (dsc_buf_head - old_buf_head) % PKT_BUF_SIZE;
+    uint32_t head_gap = (dsc_buf_head - old_dsc_buf_head) % DSC_BUF_SIZE;
     if (head_gap >= BATCH_SIZE) {
         // update descriptor buffer head
         asm volatile ("" : : : "memory"); // compiler memory barrier
-        *(dsc_queue.buf_head_ptr) = dsc_buf_head;
-        dsc_queue.old_buf_head = dsc_buf_head;
+        *(dsc_queue.rx_head_ptr) = dsc_buf_head;
+        dsc_queue.old_rx_head = dsc_buf_head;
     }
     dsc_queue.rx_head = dsc_buf_head;
 
@@ -362,12 +376,85 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
     return consume_queue(socket_entry, buf, len);
 }
 
-void advance_ring_buffer(socket_internal* socket_entry)
+inline void get_new_tx_head(socket_internal* socket_entries)
 {
-    uint32_t rx_head = socket_entry->pkt_queue.rx_head;
-    asm volatile ("" : : : "memory"); // compiler memory barrier
-    *(socket_entry->pkt_queue.buf_head_ptr) = rx_head;
+    pcie_tx_dsc_t* tx_buf = dsc_queue.tx_buf;
+    uint32_t head = dsc_queue.tx_head;
+    uint32_t new_head = dsc_queue.tx_head = *(dsc_queue.tx_head_ptr);
+
+    // Advance pointer for pkt queues that were already sent.
+    while (head != new_head) {
+        pcie_tx_dsc_t* tx_dsc = tx_buf + head;
+        uint32_t pkt_queue_id = tx_dsc->rx_pkt_queue_id;
+        socket_internal* socket_entry = &socket_entries[pkt_queue_id];
+
+        socket_entry->pkt_queue.old_rx_head += (
+            tx_dsc->length >> TX_DSC_LEN_OFFSET) / 64;
+        *(socket_entry->pkt_queue.buf_head_ptr) = 
+            socket_entry->pkt_queue.old_rx_head;
+
+        head = (head + 1) % DSC_BUF_SIZE;
+    }
 }
+
+// HACK(sadok): socket_entries is used to retrieve new head and should not be
+//              needed.
+void advance_ring_buffer(socket_internal* socket_entries,
+                         socket_internal* socket_entry)
+{
+    uint32_t rx_pkt_tail = socket_entry->pkt_queue.rx_tail;
+    
+    // HACK(sadok): also sending packet here. Should move to a separate
+    //              function.
+#ifdef SEND_BACK
+    uint64_t buf_phys_addr = socket_entry->pkt_queue.buf_phys_addr;
+    uint32_t old_rx_head = socket_entry->pkt_queue.old_rx_head;
+    uint32_t rx_pkt_head = socket_entry->pkt_queue.rx_head;
+    int app_id = socket_entry->app_id;
+    pcie_tx_dsc_t* tx_buf = dsc_queue.tx_buf;
+    uint32_t tx_tail = dsc_queue.tx_tail;
+
+    uint32_t free_slots =
+        (dsc_queue.tx_head - dsc_queue.tx_tail - 1) % DSC_BUF_SIZE;
+
+    // if (free_slots < DSC_BUF_SIZE / 2) {
+        do {
+            get_new_tx_head(socket_entries);
+            free_slots =
+                (dsc_queue.tx_head - dsc_queue.tx_tail - 1) % DSC_BUF_SIZE;
+        } while (free_slots == 0);  // Block until we can send.
+    // }
+
+    pcie_tx_dsc_t* tx_dsc = tx_buf + tx_tail;
+    tx_dsc->phys_addr = buf_phys_addr + rx_pkt_head * 64;
+    uint64_t length = ((rx_pkt_tail - rx_pkt_head) % PKT_BUF_SIZE) * 64;
+    
+    // TODO(sadok): change hardware to avoid shift.
+    tx_dsc->length = length << TX_DSC_LEN_OFFSET;
+    tx_dsc->rx_pkt_queue_id = app_id;
+
+    tx_tail = (tx_tail + 1) % DSC_BUF_SIZE;
+    dsc_queue.tx_tail = tx_tail;
+
+    asm volatile ("" : : : "memory"); // compiler memory barrier
+    *(dsc_queue.tx_tail_ptr) = tx_tail;
+
+    // Hack to force new descriptor to be sent.
+    *(socket_entry->pkt_queue.buf_head_ptr) = old_rx_head;
+#else
+    asm volatile ("" : : : "memory"); // compiler memory barrier
+    *(socket_entry->pkt_queue.buf_head_ptr) = rx_pkt_tail;
+#endif  // SEND_BACK
+
+    socket_entry->pkt_queue.rx_head = rx_pkt_tail;
+}
+
+// // Send a byte buffer through a socket. 
+// // TODO(sadok): Add callback to free address.
+// void send_buffer(socket_internal* socket_entries, void* buf, size_t len)
+// {
+//     // get physical address.
+// }
 
 // FIXME(sadok) This should be in the kernel
 // int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
@@ -426,7 +513,7 @@ int dma_finish(socket_internal* socket_entry)
     if (--(dsc_queue.ref_cnt) == 0) {
         dsc_queue.regs->rx_mem_low = 0;
         dsc_queue.regs->rx_mem_high = 0;
-        munmap(dsc_queue.buf, ALIGNED_DSC_BUF_PAIR_SIZE);
+        munmap(dsc_queue.rx_buf, ALIGNED_DSC_BUF_PAIR_SIZE);
         free(pending_pkt_tails);
     }
 

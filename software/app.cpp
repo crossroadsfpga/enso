@@ -63,6 +63,7 @@ int main(int argc, const char* argv[])
 
         for (int i = 0; i < nb_queues; ++i) {
             // TODO(sadok) can we make this a valid file descriptor?
+            std::cout << "creating queue " << i << std::endl;
             int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
 
             if (socket_fd == -1) {
@@ -106,7 +107,7 @@ int main(int argc, const char* argv[])
                 }
                 // ensuring that we are modifying every cache line
                 for (uint32_t i = 0; i < ((uint32_t) recv_len) / 64; ++i) {
-                    ++buf[i*64];
+                    ++buf[i*64 + 63];
                 }
                 for (uint32_t i = 0; i < nb_cycles; ++i) {
                     asm("nop");
