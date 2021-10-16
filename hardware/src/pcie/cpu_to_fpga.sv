@@ -203,7 +203,8 @@ always @(posedge clk) begin
   dsc_reads_queue_in_valid <= 0;
   last_queues[0][QUEUE_ID_WIDTH] <= 1;  // Invalid queue.
 
-  if (q_table_a_tails_rd_en_r2 && (tail_r2 != q_table_a_tails.rd_data)) begin
+  if (q_table_a_tails_rd_en_r2) begin
+    automatic logic [31:0] head;
     dsc_reads_queue_in_data.queue_id <= queue_id_r2;
     dsc_reads_queue_in_data.tail <= tail_r2;
     dsc_reads_queue_in_data.l_addr <= q_table_a_l_addrs.rd_data;
@@ -213,17 +214,22 @@ always @(posedge clk) begin
     // the packets associated with a descriptor are DMAed from memory. However,
     // the last tail may be outdated as we need two cycles to write to the BRAM.
     if (last_queues[0] == queue_id_r2) begin
-      dsc_reads_queue_in_data.head <= last_tails[0];
+      head = last_tails[0];
     end else if (last_queues[1] == queue_id_r2) begin
-      dsc_reads_queue_in_data.head <= last_tails[1];
+      head = last_tails[1];
     end else begin
-      dsc_reads_queue_in_data.head <= q_table_a_tails.rd_data;
+      head = q_table_a_tails.rd_data;
     end
+
+    dsc_reads_queue_in_data.head <= head;
 
     last_queues[0] <= {1'b0, queue_id_r2};
     last_tails[0] <= tail_r2;
 
-    dsc_reads_queue_in_valid <= 1;
+    // Don't bother sending if there is nothing to read.
+    if (head != tail_r2) begin
+      dsc_reads_queue_in_valid <= 1;
+    end
   end
 
   last_queues[1] <= last_queues[0];
@@ -373,7 +379,7 @@ always_comb begin
 end
 
 logic [QUEUE_ID_WIDTH-1:0] cur_queue;
-logic [QUEUE_ID_WIDTH-1:0] cur_head;
+logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] cur_head;
 
 // Consume packets and send them out setting sop and eop.
 // (Assuming raw sockets for now, that means that headers are populated by
@@ -389,9 +395,7 @@ always @(posedge clk) begin
   if (rst) begin
     pending_bytes <= 0;
   end else begin
-    automatic logic [QUEUE_ID_WIDTH-1:0] head;
     automatic logic [19:0] next_pending_bytes = pending_bytes;
-    head = meta_queue_out_data.head;
 
     if ((pending_bytes > 0) & pkt_queue_out_valid & pkt_queue_out_ready) begin
       // HACK(sadok): hardcode 64-byte packet. Should look at the header in the
@@ -403,11 +407,15 @@ always @(posedge clk) begin
       out_pkt_data <= pkt_queue_out_data;
       out_pkt_empty <= 0;  // TODO(sadok): handle unaligned packets.
       out_pkt_valid <= 1;
-      
+
+      if (next_pending_bytes == 0) begin
+        q_table_a_heads.addr <= cur_queue;
+        q_table_a_heads.wr_data <= (cur_head + 1) & rb_mask;
+        q_table_a_heads.wr_en <= 1;
+      end
     end else if (meta_queue_out_ready & meta_queue_out_valid) begin
       cur_queue <= meta_queue_out_data.queue_id;
       cur_head <= meta_queue_out_data.head;
-      head = meta_queue_out_data.head;
       // HACK(sadok): hardcode 64-byte packet. Should look at the header in the
       //              first flit to determine when to set eop.
       next_pending_bytes = meta_queue_out_data.total_bytes - 64;
@@ -417,12 +425,14 @@ always @(posedge clk) begin
       out_pkt_data <= pkt_queue_out_data;
       out_pkt_empty <= 0;  // TODO(sadok): handle unaligned packets.
       out_pkt_valid <= 1;
+
+      if (next_pending_bytes == 0) begin
+        q_table_a_heads.addr <= meta_queue_out_data.queue_id;
+        q_table_a_heads.wr_data <= (meta_queue_out_data.head + 1) & rb_mask;
+        q_table_a_heads.wr_en <= 1;
+      end
     end
 
-    if (next_pending_bytes == 0) begin
-      q_table_a_heads.wr_data <= (head + 1) & rb_mask;
-      q_table_a_heads.wr_en <= 1;
-    end
     pending_bytes <= next_pending_bytes;
   end
 end
