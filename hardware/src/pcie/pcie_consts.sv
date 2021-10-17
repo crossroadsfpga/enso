@@ -46,9 +46,8 @@ typedef struct packed
 
 typedef struct packed
 {
-    logic [383:0] pad1;
+    logic [427:0] pad;
     logic [19:0]  length; // In bytes (up to 1MB).
-    logic [43:0]  pad2;
     logic [63:0]  addr; // Physical address of the data.
 } pcie_tx_dsc_t;
 

@@ -387,11 +387,15 @@ inline void get_new_tx_head(socket_internal* socket_entries)
         pcie_tx_dsc_t* tx_dsc = tx_buf + head;
         uint32_t pkt_queue_id = tx_dsc->rx_pkt_queue_id;
         socket_internal* socket_entry = &socket_entries[pkt_queue_id];
+        uint32_t old_rx_head = socket_entry->pkt_queue.old_rx_head;
 
-        socket_entry->pkt_queue.old_rx_head += (
-            tx_dsc->length >> TX_DSC_LEN_OFFSET) / 64;
-        *(socket_entry->pkt_queue.buf_head_ptr) = 
-            socket_entry->pkt_queue.old_rx_head;
+        old_rx_head = (
+            old_rx_head + (tx_dsc->length) / 64
+        ) % PKT_BUF_SIZE;
+
+        asm volatile ("" : : : "memory"); // compiler memory barrier
+        *(socket_entry->pkt_queue.buf_head_ptr) = old_rx_head;
+        socket_entry->pkt_queue.old_rx_head = old_rx_head;
 
         head = (head + 1) % DSC_BUF_SIZE;
     }
@@ -408,7 +412,6 @@ void advance_ring_buffer(socket_internal* socket_entries,
     //              function.
 #ifdef SEND_BACK
     uint64_t buf_phys_addr = socket_entry->pkt_queue.buf_phys_addr;
-    uint32_t old_rx_head = socket_entry->pkt_queue.old_rx_head;
     uint32_t rx_pkt_head = socket_entry->pkt_queue.rx_head;
     int app_id = socket_entry->app_id;
     pcie_tx_dsc_t* tx_buf = dsc_queue.tx_buf;
@@ -417,20 +420,19 @@ void advance_ring_buffer(socket_internal* socket_entries,
     uint32_t free_slots =
         (dsc_queue.tx_head - dsc_queue.tx_tail - 1) % DSC_BUF_SIZE;
 
-    // if (free_slots < DSC_BUF_SIZE / 2) {
+    if (free_slots < DSC_BUF_SIZE / 4) {
         do {
             get_new_tx_head(socket_entries);
             free_slots =
                 (dsc_queue.tx_head - dsc_queue.tx_tail - 1) % DSC_BUF_SIZE;
         } while (free_slots == 0);  // Block until we can send.
-    // }
+    }
 
     pcie_tx_dsc_t* tx_dsc = tx_buf + tx_tail;
     tx_dsc->phys_addr = buf_phys_addr + rx_pkt_head * 64;
     uint64_t length = ((rx_pkt_tail - rx_pkt_head) % PKT_BUF_SIZE) * 64;
-    
-    // TODO(sadok): change hardware to avoid shift.
-    tx_dsc->length = length << TX_DSC_LEN_OFFSET;
+
+    tx_dsc->length = length;
     tx_dsc->rx_pkt_queue_id = app_id;
 
     tx_tail = (tx_tail + 1) % DSC_BUF_SIZE;
@@ -439,8 +441,16 @@ void advance_ring_buffer(socket_internal* socket_entries,
     asm volatile ("" : : : "memory"); // compiler memory barrier
     *(dsc_queue.tx_tail_ptr) = tx_tail;
 
+    // Free space in the pkt queue if possible
+    free_slots = 
+        (socket_entry->pkt_queue.old_rx_head - rx_pkt_tail - 1) % PKT_BUF_SIZE;
+    if (free_slots < (PKT_BUF_SIZE / 2)) {
+        get_new_tx_head(socket_entries);
+    }
+
     // Hack to force new descriptor to be sent.
-    *(socket_entry->pkt_queue.buf_head_ptr) = old_rx_head;
+    *(socket_entry->pkt_queue.buf_head_ptr) =
+        socket_entry->pkt_queue.old_rx_head;
 #else
     asm volatile ("" : : : "memory"); // compiler memory barrier
     *(socket_entry->pkt_queue.buf_head_ptr) = rx_pkt_tail;

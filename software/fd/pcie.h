@@ -37,8 +37,6 @@
 
 #define C2F_BUFFER_SIZE 512
 
-#define TX_DSC_LEN_OFFSET 44  // In bits.
-
 #define BUF_PAGE_SIZE (1UL << 21) // using 2MB huge pages (size in bytes)
 
 // Sizes aligned to the huge page size, but if both buffers fit in a single
