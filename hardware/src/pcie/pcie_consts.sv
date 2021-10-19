@@ -41,15 +41,23 @@ typedef struct packed
     logic [319:0] pad;
     logic [63:0]  tail;
     logic [63:0]  queue_id;
-    logic [63:0]  signal; // should always be 0x1
+    logic [63:0]  signal; // Should always be 0x1.
 } pcie_rx_dsc_t;
 
 typedef struct packed
 {
-    logic [427:0] pad;
+    logic [363:0] pad;
     logic [19:0]  length; // In bytes (up to 1MB).
     logic [63:0]  addr; // Physical address of the data.
+    logic [63:0]  signal; // 0x1 if set from software, 0x0 if set from hardware.
 } pcie_tx_dsc_t;
+
+typedef struct packed
+{
+    logic [19:0] length; // In bytes (up to 1MB).
+    logic [63:0] transfer_addr; // Physical address of the data.
+    logic [63:0] descriptor_addr; // Physical address of the descriptor.
+} tx_transfer_t;
 
 typedef struct packed
 {

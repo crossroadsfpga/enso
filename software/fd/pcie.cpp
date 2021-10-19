@@ -1,20 +1,3 @@
-// (C) 2017-2018 Intel Corporation.
-//
-// Intel, the Intel logo, Intel, MegaCore, NIOS II, Quartus and TalkBack words
-// and logos are trademarks of Intel Corporation or its subsidiaries in the
-// U.S. and/or other countries. Other marks and brands may be claimed as the
-// property of others. See Trademarks on intel.com for full list of Intel
-// trademarks or the Trademarks & Brands Names Database (if Intel) or see
-// www.intel.com/legal (if Altera). Your use of Intel Corporation's design
-// tools, logic functions and other software and tools, and its AMPP partner
-// logic functions, and any output files any of the foregoing (including
-// device programming or simulation files), and any associated documentation
-// or information are expressly subject to the terms and conditions of the
-// Altera Program License Subscription Agreement, Intel MegaCore Function
-// License Agreement, or other applicable license agreement, including,
-// without limitation, that your use is for the sole purpose of programming
-// logic devices manufactured by Intel and sold by Intel or its authorized
-// distributors. Please refer to the applicable agreement for further details.
 
 #include <algorithm>
 #include <termios.h>
@@ -43,6 +26,8 @@
 
 static dsc_queue_t dsc_queue;
 static uint32_t* pending_pkt_tails;
+
+static int* rx_pkt_queue_ids;
 
 // HACK(sadok) This is used to decrement the packet queue id and use it as an
 // index to the pending_pkt_tails array. This only works because packet queues
@@ -221,6 +206,15 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         memset(pending_pkt_tails, 0, nb_queues);
 
         pkt_queue_id_offset = app_id - socket_id;
+
+        // HACK(sadok): Holds an associated queue id for every TX descriptor.
+        // TODO(sadok): Figure out queue from address.
+        rx_pkt_queue_ids = (int*) malloc(
+            sizeof(*rx_pkt_queue_ids) * DSC_BUF_SIZE);
+        if (rx_pkt_queue_ids == NULL) {
+            std::cerr << "Could not allocate memory" << std::endl;
+            return -1;
+        }
     }
 
     ++(dsc_queue.ref_cnt);
@@ -256,7 +250,40 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     return 0;
 }
 
-static inline void get_new_tails()
+inline void get_new_tx_head(socket_internal* socket_entries)
+{
+    pcie_tx_dsc_t* tx_buf = dsc_queue.tx_buf;
+    uint32_t head = dsc_queue.tx_head;
+    uint32_t tail = dsc_queue.tx_tail;
+
+    // Advance pointer for pkt queues that were already sent.
+    while (head != tail) {
+        pcie_tx_dsc_t* tx_dsc = tx_buf + head;
+
+        // Descriptor has not yet been consumed by hardware.
+        if (tx_dsc->signal == 1) {
+            break;
+        }
+
+        uint32_t pkt_queue_id = rx_pkt_queue_ids[head];
+        socket_internal* socket_entry = &socket_entries[pkt_queue_id];
+        uint32_t old_pktq_rx_head = socket_entry->pkt_queue.old_rx_head;
+
+        old_pktq_rx_head = (
+            old_pktq_rx_head + (tx_dsc->length) / 64
+        ) % PKT_BUF_SIZE;
+
+        asm volatile ("" : : : "memory"); // compiler memory barrier
+        *(socket_entry->pkt_queue.buf_head_ptr) = old_pktq_rx_head;
+        socket_entry->pkt_queue.old_rx_head = old_pktq_rx_head;
+
+        head = (head + 1) % DSC_BUF_SIZE;
+    }
+
+    dsc_queue.tx_head = head;
+}
+
+static inline void get_new_tails(socket_internal* socket_entries)
 {
     pcie_rx_dsc_t* dsc_buf = dsc_queue.rx_buf;
     uint32_t dsc_buf_head = dsc_queue.rx_head;
@@ -280,6 +307,11 @@ static inline void get_new_tails()
         // (2) pass the current queue as argument and prefetch packets for it,
         //     including potentially old packets.
     }
+
+#ifdef SEND_BACK
+    // HACK(sadok): expose this to applications instead.
+    get_new_tx_head(socket_entries);
+#endif
 
     // update descriptor buffer head
     asm volatile ("" : : : "memory"); // compiler memory barrier
@@ -330,9 +362,9 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
 }
 
 int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
-                              size_t len)
+                              size_t len, socket_internal* socket_entries)
 {
-    get_new_tails();
+    get_new_tails(socket_entries);
     return consume_queue(socket_entry, buf, len);
 }
 
@@ -345,6 +377,11 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
     uint32_t old_dsc_buf_head = dsc_queue.old_rx_head;
 
     pcie_rx_dsc_t* cur_desc = dsc_buf + dsc_buf_head;
+
+#ifdef SEND_BACK
+    // HACK(sadok): expose this to applications instead.
+    get_new_tx_head(socket_entries);
+#endif
 
     // check if the next descriptor was updated by the FPGA
     if (unlikely(cur_desc->signal == 0)) {
@@ -376,31 +413,6 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
     return consume_queue(socket_entry, buf, len);
 }
 
-inline void get_new_tx_head(socket_internal* socket_entries)
-{
-    pcie_tx_dsc_t* tx_buf = dsc_queue.tx_buf;
-    uint32_t head = dsc_queue.tx_head;
-    uint32_t new_head = dsc_queue.tx_head = *(dsc_queue.tx_head_ptr);
-
-    // Advance pointer for pkt queues that were already sent.
-    while (head != new_head) {
-        pcie_tx_dsc_t* tx_dsc = tx_buf + head;
-        uint32_t pkt_queue_id = tx_dsc->rx_pkt_queue_id;
-        socket_internal* socket_entry = &socket_entries[pkt_queue_id];
-        uint32_t old_rx_head = socket_entry->pkt_queue.old_rx_head;
-
-        old_rx_head = (
-            old_rx_head + (tx_dsc->length) / 64
-        ) % PKT_BUF_SIZE;
-
-        asm volatile ("" : : : "memory"); // compiler memory barrier
-        *(socket_entry->pkt_queue.buf_head_ptr) = old_rx_head;
-        socket_entry->pkt_queue.old_rx_head = old_rx_head;
-
-        head = (head + 1) % DSC_BUF_SIZE;
-    }
-}
-
 // HACK(sadok): socket_entries is used to retrieve new head and should not be
 //              needed.
 void advance_ring_buffer(socket_internal* socket_entries,
@@ -417,36 +429,26 @@ void advance_ring_buffer(socket_internal* socket_entries,
     pcie_tx_dsc_t* tx_buf = dsc_queue.tx_buf;
     uint32_t tx_tail = dsc_queue.tx_tail;
 
-    uint32_t free_slots =
-        (dsc_queue.tx_head - dsc_queue.tx_tail - 1) % DSC_BUF_SIZE;
-
-    if (free_slots < DSC_BUF_SIZE / 4) {
-        do {
-            get_new_tx_head(socket_entries);
-            free_slots =
-                (dsc_queue.tx_head - dsc_queue.tx_tail - 1) % DSC_BUF_SIZE;
-        } while (free_slots == 0);  // Block until we can send.
+    uint32_t free_slots = (dsc_queue.tx_head - tx_tail - 1) % DSC_BUF_SIZE;
+    // Block until we can send.
+    while (free_slots == 0) {
+        get_new_tx_head(socket_entries);
+        free_slots = (dsc_queue.tx_head - tx_tail - 1) % DSC_BUF_SIZE;
     }
 
     pcie_tx_dsc_t* tx_dsc = tx_buf + tx_tail;
+    tx_dsc->signal = 1;
     tx_dsc->phys_addr = buf_phys_addr + rx_pkt_head * 64;
     uint64_t length = ((rx_pkt_tail - rx_pkt_head) % PKT_BUF_SIZE) * 64;
 
     tx_dsc->length = length;
-    tx_dsc->rx_pkt_queue_id = app_id;
+    rx_pkt_queue_ids[tx_tail] = app_id;
 
     tx_tail = (tx_tail + 1) % DSC_BUF_SIZE;
     dsc_queue.tx_tail = tx_tail;
 
     asm volatile ("" : : : "memory"); // compiler memory barrier
     *(dsc_queue.tx_tail_ptr) = tx_tail;
-
-    // Free space in the pkt queue if possible
-    free_slots = 
-        (socket_entry->pkt_queue.old_rx_head - rx_pkt_tail - 1) % PKT_BUF_SIZE;
-    if (free_slots < (PKT_BUF_SIZE / 2)) {
-        get_new_tx_head(socket_entries);
-    }
 
     // Hack to force new descriptor to be sent.
     *(socket_entry->pkt_queue.buf_head_ptr) =
@@ -458,55 +460,6 @@ void advance_ring_buffer(socket_internal* socket_entries,
 
     socket_entry->pkt_queue.rx_head = rx_pkt_tail;
 }
-
-// // Send a byte buffer through a socket. 
-// // TODO(sadok): Add callback to free address.
-// void send_buffer(socket_internal* socket_entries, void* buf, size_t len)
-// {
-//     // get physical address.
-// }
-
-// FIXME(sadok) This should be in the kernel
-// int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
-//                          unsigned int nb_queues)
-// {
-//     unsigned next_queue = 0;
-//     block_s block;
-//     queue_regs* global_block = (queue_regs *) socket_entry->kdata;
-//     queue_regs* uio_data_bar2 = socket_entry->uio_data_bar2;
-    
-//     if (socket_entry->app_id != 0) {
-//         std::cerr << "Can only send control messages from app 0" << std::endl;
-//         return -1;
-//     }
-
-//     for (unsigned i = 0; i < nb_rules; ++i) {
-//         block.pdu_id = 0;
-//         block.dst_port = 80;
-//         block.src_port = 8080;
-//         block.dst_ip = 0xc0a80101; // inet_addr("192.168.1.1");
-//         block.src_ip = 0xc0a80000 + i; // inet_addr("192.168.0.0");
-//         block.protocol = 0x11;
-//         block.pdu_size = 0x0;
-//         block.pdu_flit = 0x0;
-//         block.queue_id = next_queue; // FIXME(sadok) specify the relevant queue
-
-//         next_queue = (next_queue + 1) % nb_queues;
-
-//         // std::cout << "Setting rule: " << nb_rules << std::endl;
-//         // print_block(&block);
-
-//         socket_entry->tx_cpu_tail = tx_copy_head(socket_entry->tx_cpu_tail,
-//             global_block, &block, socket_entry->kdata);
-//         asm volatile ("" : : : "memory"); // compiler memory barrier
-//         uio_data_bar2->tx_tail = socket_entry->tx_cpu_tail;
-
-//         // asm volatile ("" : : : "memory"); // compiler memory barrier
-//         // print_queue_regs(uio_data_bar2);
-//     }
-
-//     return 0;
-// }
 
 int dma_finish(socket_internal* socket_entry)
 {
@@ -525,6 +478,7 @@ int dma_finish(socket_internal* socket_entry)
         dsc_queue.regs->rx_mem_high = 0;
         munmap(dsc_queue.rx_buf, ALIGNED_DSC_BUF_PAIR_SIZE);
         free(pending_pkt_tails);
+        free(rx_pkt_queue_ids);
     }
 
     return 0;
@@ -574,64 +528,3 @@ void print_buffer(uint32_t* buf, uint32_t nb_flits)
         printf("\n");
     }
 }
-
-// uint32_t tx_copy_head(uint32_t tx_tail, queue_regs *global_block, 
-//         block_s *block, uint32_t *kdata) {
-//     // uint32_t pdu_flit;
-//     // uint32_t copy_flit;
-//     uint32_t free_slot;
-//     uint32_t tx_head;
-//     // uint32_t copy_size;
-//     uint32_t base_addr;
-
-//     tx_head = global_block->tx_head;
-//     // calculate free_slot
-//     if (tx_tail < tx_head) {
-//         free_slot = tx_head - tx_tail - 1;
-//     } else {
-//         //CPU2FPGA ring buffer does not have the global register. 
-//         //the free_slot should be at most one slot smaller than CPU2FPGA ring buffer.
-//         free_slot = C2F_BUFFER_SIZE - tx_tail + tx_head - 1;
-//     }
-//     //printf("free_slot = %d; tx_head = %d; tx_tail = %d\n", 
-//     //        free_slot, tx_head, tx_tail);   
-//     //block when the CPU2FPGA ring buffer is almost full
-//     while (free_slot < 1) { 
-//         //recalculate free_slot
-//     	tx_head = global_block->tx_head;
-//     	if (tx_tail < tx_head) {
-//     	    free_slot = tx_head - tx_tail - 1;
-//     	} else {
-//     	    free_slot = C2F_BUFFER_SIZE - tx_tail + tx_head - 1;
-//     	}
-//     }
-//     base_addr = C2F_BUFFER_OFFSET + tx_tail * 16;
-
-//     // printf("tx base addr: 0x%08x\n", base_addr);
-
-//     //memcpy(&kdata[base_addr], src_addr, 16*4); //each flit is 512 bit
-
-//     //Fake match
-//     kdata[base_addr + PDU_ID_OFFSET] = block->pdu_id;
-//     //PDU_SIZE
-//     kdata[base_addr + PDU_PORTS_OFFSET] = (((uint32_t) block->src_port) << 16) | ((uint32_t) block->dst_port);
-//     kdata[base_addr + PDU_DST_IP_OFFSET] = block->dst_ip;
-//     kdata[base_addr + PDU_SRC_IP_OFFSET] = block->src_ip;
-//     kdata[base_addr + PDU_PROTOCOL_OFFSET] = block->protocol;
-//     kdata[base_addr + PDU_SIZE_OFFSET] = block->pdu_size;
-//     //exclude the rule flits and header flit
-//     kdata[base_addr + PDU_FLIT_OFFSET] = block->pdu_flit - 1;
-//     kdata[base_addr + ACTION_OFFSET] = ACTION_NO_MATCH;
-//     kdata[base_addr + QUEUE_ID_LO_OFFSET] = block->queue_id & 0xFFFFFFFF;
-//     kdata[base_addr + QUEUE_ID_HI_OFFSET] = (block->queue_id >> 32) & 0xFFFFFFFF;
-    
-//     // print_slot(kdata, base_addr/16, 1);
-
-//     //update tx_tail
-//     if(tx_tail == C2F_BUFFER_SIZE-1){
-//         tx_tail = 0;
-//     } else {
-//         tx_tail += 1;
-//     }
-//     return tx_tail;
-// }

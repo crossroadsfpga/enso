@@ -21,6 +21,12 @@ module cpu_to_fpga  #(
   input  logic         out_pkt_ready,
   input  logic [31:0]  out_pkt_occup,
 
+  // TX completion buffer output.
+  output var tx_transfer_t tx_compl_buf_data,
+  output logic             tx_compl_buf_valid,
+  input  logic             tx_compl_buf_ready,
+  input  logic [31:0]      tx_compl_buf_occup,
+
   // PCIe Read Data Mover (RDDM) signals.
   input  logic         pcie_rddm_desc_ready,
   output logic         pcie_rddm_desc_valid,
@@ -60,6 +66,7 @@ typedef struct packed {
   logic [QUEUE_ID_WIDTH-1:0]           queue_id;
   logic [19:0]                         total_bytes;
   logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] head;
+  logic [63:0]                         transfer_addr;
 } meta_t;
 
 // Used to encode metadata in the destination address used by the RDDM.
@@ -111,6 +118,9 @@ localparam PKT_QUEUE_LEN = 1024;  // In flits.
 logic out_pkt_alm_full;
 assign out_pkt_alm_full = out_pkt_occup > PCIE_TX_PKT_FIFO_ALM_FULL_THRESH;
 
+logic tx_compl_buf_alm_full;
+assign tx_compl_buf_alm_full = tx_compl_buf_occup > 8;
+
 logic dsc_reads_queue_alm_full;
 assign dsc_reads_queue_alm_full = dsc_reads_queue_occup > 10;
 
@@ -132,6 +142,17 @@ bram_interface_io q_table_a_tails();
 bram_interface_io q_table_a_heads();
 bram_interface_io q_table_a_l_addrs();
 bram_interface_io q_table_a_h_addrs();
+
+// These interfaces share the BRAM ports with JTAG/MMIO. They are only used to
+// read the address when sending a completion notification.
+bram_interface_io q_table_b_l_addrs();
+bram_interface_io q_table_b_h_addrs();
+
+logic [QUEUE_ID_WIDTH-1:0] compl_q_table_l_addrs_addr;
+logic [QUEUE_ID_WIDTH-1:0] compl_q_table_h_addrs_addr;
+
+logic compl_q_table_l_addrs_rd_en;
+logic compl_q_table_h_addrs_rd_en;
 
 logic can_issue_dma_rd;
 assign can_issue_dma_rd = !rddm_desc_queue_alm_full & !rddm_prio_queue_alm_full
@@ -355,6 +376,7 @@ always @(posedge clk) begin
       meta.queue_id = rddm_dst_addr.queue_id;
       meta.total_bytes = tx_dsc.length;
       meta.head = rddm_dst_addr.head;
+      meta.transfer_addr = tx_dsc.addr;
 
       meta_queue_in_valid <= 1;
       meta_queue_in_data <= meta;
@@ -366,20 +388,69 @@ always @(posedge clk) begin
 end
 
 logic [19:0] pending_bytes;
+logic transfer_done;
+
+logic external_address_access;
 
 // Ready signals for meta_queue and pkt_queue.
 always_comb begin
-  meta_queue_out_ready =
-    (pending_bytes == 0) & !out_pkt_alm_full & pkt_queue_out_valid;
-  if (pending_bytes > 0) begin
-    pkt_queue_out_ready = !out_pkt_alm_full;
-  end else begin
+  if (transfer_done) begin
+    meta_queue_out_ready = !out_pkt_alm_full & !tx_compl_buf_alm_full
+                           & pkt_queue_out_valid;
     pkt_queue_out_ready = meta_queue_out_ready;
+  end else begin
+    meta_queue_out_ready = 0;
+    pkt_queue_out_ready = !out_pkt_alm_full & !tx_compl_buf_alm_full;
+  end
+
+  // If there is an access from JTAG/MMIO, we need to stall.
+  external_address_access = q_table_l_addrs.rd_en | q_table_h_addrs.rd_en
+                           | q_table_l_addrs.wr_en | q_table_h_addrs.wr_en;
+  if (external_address_access) begin
+    meta_queue_out_ready = 0;
+    pkt_queue_out_ready = 0;
   end
 end
 
-logic [QUEUE_ID_WIDTH-1:0] cur_queue;
-logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] cur_head;
+meta_t cur_meta;
+
+logic addr_rd_en;
+logic addr_rd_en_r1;
+logic addr_rd_en_r2;
+
+logic [63:0] compl_transf_addr;
+logic [63:0] compl_transf_addr_r1;
+logic [63:0] compl_transf_addr_r2;
+
+logic [19:0] compl_length;
+logic [19:0] compl_length_r1;
+logic [19:0] compl_length_r2;
+
+logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] compl_head;
+logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] compl_head_r1;
+logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] compl_head_r2;
+
+logic [QUEUE_ID_WIDTH-1:0] addr_addr;
+
+function void done_sending_pkt(
+  meta_t meta
+);
+  // Write latest head.
+  q_table_a_heads.addr <= meta.queue_id;
+  q_table_a_heads.wr_data <= (meta.head + 1) & rb_mask;
+  q_table_a_heads.wr_en <= 1;
+  
+  // Read address to send completion notification.
+  addr_rd_en <= 1;
+  addr_addr <= meta.queue_id;
+
+  // Save remaining metadata for completion notification.
+  compl_transf_addr <= meta.transfer_addr;
+  compl_length <= meta.total_bytes;
+  compl_head <= meta.head;
+
+  transfer_done <= 1;
+endfunction
 
 // Consume packets and send them out setting sop and eop.
 // (Assuming raw sockets for now, that means that headers are populated by
@@ -392,12 +463,19 @@ always @(posedge clk) begin
   out_pkt_valid <= 0;
   out_pkt_empty <= 0;
 
+  // If there is an access from JTAG/MMIO, we need to retry the read.
+  if (!external_address_access) begin
+    addr_rd_en <= 0;
+    addr_rd_en_r1 <= addr_rd_en;
+  end
+  addr_rd_en_r2 <= addr_rd_en_r1;
+
   if (rst) begin
-    pending_bytes <= 0;
+    transfer_done <= 1;
   end else begin
     automatic logic [19:0] next_pending_bytes = pending_bytes;
 
-    if ((pending_bytes > 0) & pkt_queue_out_valid & pkt_queue_out_ready) begin
+    if (!transfer_done & pkt_queue_out_valid & pkt_queue_out_ready) begin
       // HACK(sadok): hardcode 64-byte packet. Should look at the header in the
       //              first flit to determine when to set eop.
       next_pending_bytes = pending_bytes - 64;
@@ -409,13 +487,11 @@ always @(posedge clk) begin
       out_pkt_valid <= 1;
 
       if (next_pending_bytes == 0) begin
-        q_table_a_heads.addr <= cur_queue;
-        q_table_a_heads.wr_data <= (cur_head + 1) & rb_mask;
-        q_table_a_heads.wr_en <= 1;
+        done_sending_pkt(cur_meta);
       end
     end else if (meta_queue_out_ready & meta_queue_out_valid) begin
-      cur_queue <= meta_queue_out_data.queue_id;
-      cur_head <= meta_queue_out_data.head;
+      cur_meta <= meta_queue_out_data;
+
       // HACK(sadok): hardcode 64-byte packet. Should look at the header in the
       //              first flit to determine when to set eop.
       next_pending_bytes = meta_queue_out_data.total_bytes - 64;
@@ -427,13 +503,41 @@ always @(posedge clk) begin
       out_pkt_valid <= 1;
 
       if (next_pending_bytes == 0) begin
-        q_table_a_heads.addr <= meta_queue_out_data.queue_id;
-        q_table_a_heads.wr_data <= (meta_queue_out_data.head + 1) & rb_mask;
-        q_table_a_heads.wr_en <= 1;
+        done_sending_pkt(meta_queue_out_data);
+      end else begin
+        transfer_done <= 0;
       end
     end
-
     pending_bytes <= next_pending_bytes;
+  end
+end
+
+// Once the address read is complete we can finally enqueue the completion
+// notification.
+always @(posedge clk) begin
+  tx_compl_buf_valid <= 0;
+
+  compl_transf_addr_r1 <= compl_transf_addr;
+  compl_transf_addr_r2 <= compl_transf_addr_r1;
+
+  compl_length_r1 <= compl_length;
+  compl_length_r2 <= compl_length_r1;
+
+  compl_head_r1 <= compl_head;
+  compl_head_r2 <= compl_head_r1;
+
+  if (addr_rd_en_r2) begin
+    automatic tx_transfer_t tx_completion;
+
+    tx_completion.descriptor_addr[31:0] = q_table_b_l_addrs.rd_data;
+    tx_completion.descriptor_addr[63:32] = q_table_b_h_addrs.rd_data;
+    tx_completion.descriptor_addr += compl_head_r2 << 6;
+
+    tx_completion.transfer_addr = compl_transf_addr_r2;
+    tx_completion.length = compl_length_r2;
+
+    tx_compl_buf_valid <= 1;
+    tx_compl_buf_data <= tx_completion;
   end
 end
 
@@ -555,9 +659,9 @@ logic [DSC_Q_TABLE_TAILS_DWIDTH-1:0] q_table_b_tails_wr_data_r2;
 logic q_table_b_tails_wr_en_r1;
 logic q_table_b_tails_wr_en_r2;
 
+logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr;
 logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr_r1;
 logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr_r2;
-logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr;
 
 always @(posedge clk) begin
   q_table_b_tails_wr_data_r1 <= q_table_tails.wr_data;
@@ -578,6 +682,35 @@ always_comb begin
   end else begin
     q_table_b_tails_addr = q_table_b_tails_addr_r2;
   end
+
+  compl_q_table_l_addrs_rd_en = addr_rd_en;
+  compl_q_table_h_addrs_rd_en = addr_rd_en;
+
+  compl_q_table_l_addrs_addr = addr_addr;
+  compl_q_table_h_addrs_addr = addr_addr;
+
+  if (external_address_access) begin
+    q_table_b_l_addrs.addr = q_table_l_addrs.addr;
+    q_table_b_h_addrs.addr = q_table_h_addrs.addr;
+
+    q_table_b_l_addrs.rd_en = q_table_l_addrs.rd_en;
+    q_table_b_h_addrs.rd_en = q_table_h_addrs.rd_en;
+  end else begin
+    q_table_b_l_addrs.addr = compl_q_table_l_addrs_addr;
+    q_table_b_h_addrs.addr = compl_q_table_h_addrs_addr;
+
+    q_table_b_l_addrs.rd_en = compl_q_table_l_addrs_rd_en;
+    q_table_b_h_addrs.rd_en = compl_q_table_h_addrs_rd_en;
+  end
+
+  q_table_b_l_addrs.wr_data = q_table_l_addrs.wr_data;
+  q_table_b_h_addrs.wr_data = q_table_h_addrs.wr_data;
+
+  q_table_b_l_addrs.wr_en = q_table_l_addrs.wr_en;
+  q_table_b_h_addrs.wr_en = q_table_h_addrs.wr_en;
+
+  q_table_l_addrs.rd_data = q_table_b_l_addrs.rd_data;
+  q_table_h_addrs.rd_data = q_table_b_h_addrs.rd_data;
 end
 
 //////////////////////////////
@@ -626,16 +759,16 @@ bram_true2port #(
   .DEPTH(NB_QUEUES)
 ) q_table_l_addrs_bram (
   .address_a (q_table_a_l_addrs.addr[QUEUE_ID_WIDTH-1:0]),
-  .address_b (q_table_l_addrs.addr[QUEUE_ID_WIDTH-1:0]),
+  .address_b (q_table_b_l_addrs.addr[QUEUE_ID_WIDTH-1:0]),
   .clock     (clk),
   .data_a    (q_table_a_l_addrs.wr_data),
-  .data_b    (q_table_l_addrs.wr_data),
+  .data_b    (q_table_b_l_addrs.wr_data),
   .rden_a    (q_table_a_l_addrs.rd_en),
-  .rden_b    (q_table_l_addrs.rd_en),
+  .rden_b    (q_table_b_l_addrs.rd_en),
   .wren_a    (q_table_a_l_addrs.wr_en),
-  .wren_b    (q_table_l_addrs.wr_en),
+  .wren_b    (q_table_b_l_addrs.wr_en),
   .q_a       (q_table_a_l_addrs.rd_data),
-  .q_b       (q_table_l_addrs.rd_data)
+  .q_b       (q_table_b_l_addrs.rd_data)
 );
 
 bram_true2port #(
@@ -644,16 +777,16 @@ bram_true2port #(
   .DEPTH(NB_QUEUES)
 ) q_table_h_addrs_bram (
   .address_a (q_table_a_h_addrs.addr[QUEUE_ID_WIDTH-1:0]),
-  .address_b (q_table_h_addrs.addr[QUEUE_ID_WIDTH-1:0]),
+  .address_b (q_table_b_h_addrs.addr[QUEUE_ID_WIDTH-1:0]),
   .clock     (clk),
   .data_a    (q_table_a_h_addrs.wr_data),
-  .data_b    (q_table_h_addrs.wr_data),
+  .data_b    (q_table_b_h_addrs.wr_data),
   .rden_a    (q_table_a_h_addrs.rd_en),
-  .rden_b    (q_table_h_addrs.rd_en),
+  .rden_b    (q_table_b_h_addrs.rd_en),
   .wren_a    (q_table_a_h_addrs.wr_en),
-  .wren_b    (q_table_h_addrs.wr_en),
+  .wren_b    (q_table_b_h_addrs.wr_en),
   .q_a       (q_table_a_h_addrs.rd_data),
-  .q_b       (q_table_h_addrs.rd_data)
+  .q_b       (q_table_b_h_addrs.rd_data)
 );
 
 // Unused inputs.

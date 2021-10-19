@@ -108,9 +108,9 @@ typedef struct {
 } pcie_rx_dsc_t;
 
 typedef struct {
+    uint64_t signal;
     uint64_t phys_addr;
     uint64_t length;  // In bytes (up to 1MB).
-    uint64_t rx_pkt_queue_id; // TODO(sadok): figure out queue from address.
     uint64_t pad[5];
 } pcie_tx_dsc_t;
 
@@ -147,7 +147,7 @@ typedef struct {
 int dma_init(socket_internal* socket_entry, unsigned socket_id,
              unsigned nb_queues);
 int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
-                              size_t len);
+                              size_t len, socket_internal* socket_entries);
 int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
                    size_t len);
 void advance_ring_buffer(socket_internal* socket_entries,

@@ -88,7 +88,8 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)
     void* ring_buf;
     socket_internal* socket = &open_sockets[sockfd];
     
-    ssize_t bytes_received = get_next_batch_from_queue(socket, &ring_buf, len);
+    ssize_t bytes_received = get_next_batch_from_queue(socket, &ring_buf, len,
+                                                       open_sockets);
 
     if (unlikely(bytes_received <= 0)) {
         return bytes_received;
@@ -103,7 +104,8 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)
 
 ssize_t recv_zc(int sockfd, void **buf, size_t len, int flags __attribute__((unused)))
 {
-    return get_next_batch_from_queue(&open_sockets[sockfd], buf, len);
+    return get_next_batch_from_queue(&open_sockets[sockfd], buf, len,
+                                     open_sockets);
 }
 
 // TODO: should be able to somehow receive the descriptor queue as parameter

@@ -703,7 +703,8 @@ always @(posedge clk_pcie) begin
 
                     if (cur_queue < nb_pkt_queues) begin // pkt queue
                         pdu_flit_cnt <= pdu_flit_cnt + 1;
-                    end else begin // dsc queue
+                    end else if (cur_queue < nb_pkt_queues + nb_dsc_queues) begin
+                        // rx dsc queue
                         automatic logic [31:0] pkt_per_dsc_queue;
                         automatic pcie_rx_dsc_t pcie_pkt_desc = 
                             pcie_bas_writedata;
@@ -733,6 +734,9 @@ always @(posedge clk_pcie) begin
                         // save tail so we can advance the head later
                         pending_pkt_tails[pcie_pkt_desc.queue_id] <= pcie_pkt_desc.tail;
                         pending_pkt_tails_valid[pcie_pkt_desc.queue_id] <= 1'b1;
+                    end else begin  // tx dsc queue
+                        automatic pcie_tx_dsc_t tx_dsc = pcie_bas_writedata;
+                        assert(tx_dsc.signal == 0) else $fatal;
                     end
 
                     // check if address out of bound
@@ -815,6 +819,7 @@ always @(posedge clk_pcie) begin
                                 tx_dsc_q_addr = nb_pkt_queues + nb_dsc_queues + dsc_q;
                                 if (rx_pkt_buf_tail > tx_pkt_buf_head) begin
                                     automatic pcie_tx_dsc_t tx_dsc = 0;
+                                    tx_dsc.signal = 1;
                                     tx_dsc.addr = pkt_buf_base_addr + tx_pkt_buf_head * 64;
                                     tx_dsc.length = (rx_pkt_buf_tail - tx_pkt_buf_head) * 64;
 
@@ -822,6 +827,7 @@ always @(posedge clk_pcie) begin
                                     tx_dsc_tails[dsc_q] <= (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
                                 end else begin  // Data wrap around buffer.
                                     automatic pcie_tx_dsc_t tx_dsc = 0;
+                                    tx_dsc.signal = 1;
                                     tx_dsc.addr = pkt_buf_base_addr + tx_pkt_buf_head * 64;
                                     tx_dsc.length = (DSC_BUF_SIZE - tx_pkt_buf_head) * 64;
 

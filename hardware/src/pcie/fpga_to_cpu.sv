@@ -21,6 +21,12 @@ module fpga_to_cpu (
   output logic                      metadata_buf_in_ready,
   output logic [F2C_RB_AWIDTH:0]    metadata_buf_occup,
 
+  // tx completion notification buffer input and status
+  input  var tx_transfer_t tx_compl_buf_in_data,
+  input  logic             tx_compl_buf_in_valid,
+  output logic             tx_compl_buf_in_ready,
+  output logic [31:0]      tx_compl_buf_occup,
+
   // CPU ring buffer config signals
   input  logic [RB_AWIDTH:0] pkt_rb_size,
   input  logic [RB_AWIDTH:0] dsc_rb_size,
@@ -67,6 +73,10 @@ pkt_meta_with_queues_t  metadata_buf_out_data_r;
 logic                   metadata_buf_out_valid;
 logic                   metadata_buf_out_valid_r;
 logic                   metadata_buf_out_ready;
+
+tx_transfer_t tx_compl_buf_out_data;
+logic         tx_compl_buf_out_valid;
+logic         tx_compl_buf_out_ready;
 
 logic [31:0] dma_queue_full_cnt_r;
 
@@ -164,6 +174,8 @@ logic can_continue_dma;
 assign can_continue_dma = pkt_buf_out_valid && !pcie_bas_waitrequest;
 
 pkt_meta_with_queues_t cur_meta;
+
+logic can_send_tx_completion;
 logic can_start_transfer;
 
 // Consume requests and issue DMAs
@@ -184,7 +196,21 @@ always @(posedge clk) begin
     end
     case (state)
       START_TRANSFER: begin
-        if (can_start_transfer) begin
+        // Try to send tx completion before the next packet.
+        if (can_send_tx_completion) begin
+          automatic pcie_tx_dsc_t tx_dsc;
+
+          tx_dsc.signal = 0;
+          tx_dsc.addr = tx_compl_buf_out_data.transfer_addr;
+          tx_dsc.length = tx_compl_buf_out_data.length;
+          tx_dsc.pad = 0;
+
+          pcie_bas_address_r <= tx_compl_buf_out_data.descriptor_addr;
+          pcie_bas_byteenable_r <= 64'hffffffffffffffff;
+          pcie_bas_writedata_r <= tx_dsc;
+          pcie_bas_write_r <= 1;
+          pcie_bas_burstcount_r <= 1;
+        end else if (can_start_transfer) begin
           automatic logic [3:0] missing_flits_in_transfer;
 
           transf_meta.pkt_meta <= cur_meta;
@@ -304,7 +330,12 @@ end
 always_comb begin
   cur_meta = metadata_buf_out_data_r;
 
-  can_start_transfer = can_continue_dma && metadata_buf_out_valid_r;
+  tx_compl_buf_out_ready = (state == START_TRANSFER) && !pcie_bas_waitrequest;
+
+  can_send_tx_completion = tx_compl_buf_out_ready & tx_compl_buf_out_valid;
+
+  can_start_transfer = !can_send_tx_completion && can_continue_dma 
+                       && metadata_buf_out_valid_r;
 
   metadata_buf_out_ready = can_start_transfer && (state == START_TRANSFER);
   pkt_buf_out_ready = metadata_buf_out_ready || (can_continue_dma
@@ -359,6 +390,27 @@ metadata_buf (
   .out_data      (metadata_buf_out_data),
   .out_valid     (metadata_buf_out_valid),
   .out_ready     (metadata_buf_out_ready | !metadata_buf_out_valid_r)
+);
+
+fifo_wrapper_infill #(
+  .SYMBOLS_PER_BEAT(1),
+  .BITS_PER_SYMBOL($bits(tx_transfer_t)),
+  .FIFO_DEPTH(16)
+)
+tx_compl_buf (
+  .clk           (clk),
+  .reset         (rst),
+  .csr_address   (2'b0),
+  .csr_read      (1'b1),
+  .csr_write     (1'b0),
+  .csr_readdata  (tx_compl_buf_occup),
+  .csr_writedata (32'b0),
+  .in_data       (tx_compl_buf_in_data),
+  .in_valid      (tx_compl_buf_in_valid),
+  .in_ready      (tx_compl_buf_in_ready),
+  .out_data      (tx_compl_buf_out_data),
+  .out_valid     (tx_compl_buf_out_valid),
+  .out_ready     (tx_compl_buf_out_ready)
 );
 
 endmodule

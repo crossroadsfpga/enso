@@ -331,6 +331,11 @@ rx_dsc_queue_manager #(
     .full_cnt        (cpu_dsc_buf_full_cnt)
 );
 
+tx_transfer_t tx_compl_buf_data;
+logic         tx_compl_buf_valid;
+logic         tx_compl_buf_ready;
+logic [31:0]  tx_compl_buf_occup;
+
 fpga_to_cpu fpga_to_cpu_inst (
     .clk                    (pcie_clk),
     .rst                    (!pcie_reset_n),
@@ -342,6 +347,10 @@ fpga_to_cpu fpga_to_cpu_inst (
     .metadata_buf_in_valid  (f2c_in_meta_valid),
     .metadata_buf_in_ready  (f2c_in_meta_ready),
     .metadata_buf_occup     (pcie_rx_meta_buf_occup),
+    .tx_compl_buf_in_data   (tx_compl_buf_data),
+    .tx_compl_buf_in_valid  (tx_compl_buf_valid),
+    .tx_compl_buf_in_ready  (tx_compl_buf_ready),
+    .tx_compl_buf_occup     (tx_compl_buf_occup),
     .pkt_rb_size            (pkt_rb_size),
     .dsc_rb_size            (dsc_rb_size),
     .pcie_bas_waitrequest   (pcie_bas_waitrequest),
@@ -370,6 +379,10 @@ cpu_to_fpga #(
     .out_pkt_empty        (pcie_tx_pkt_empty),
     .out_pkt_ready        (pcie_tx_pkt_ready),
     .out_pkt_occup        (pcie_tx_pkt_occup),
+    .tx_compl_buf_data    (tx_compl_buf_data),
+    .tx_compl_buf_valid   (tx_compl_buf_valid),
+    .tx_compl_buf_ready   (tx_compl_buf_ready),
+    .tx_compl_buf_occup   (tx_compl_buf_occup),
     .pcie_rddm_desc_ready (pcie_rddm_desc_ready),
     .pcie_rddm_desc_valid (pcie_rddm_desc_valid),
     .pcie_rddm_desc_data  (pcie_rddm_desc_data),
