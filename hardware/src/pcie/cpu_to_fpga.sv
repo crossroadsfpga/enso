@@ -452,16 +452,28 @@ function void done_sending_pkt(
   transfer_done <= 1;
 endfunction
 
+logic         out_pkt_sop_r;
+logic         out_pkt_eop_r;
+logic         out_pkt_valid_r;
+logic [511:0] out_pkt_data_r;
+logic [5:0]   out_pkt_empty_r;
+
 // Consume packets and send them out setting sop and eop.
 // (Assuming raw sockets for now, that means that headers are populated by
 // software).
 always @(posedge clk) begin
   q_table_a_heads.wr_en <= 0;
 
-  out_pkt_sop <= 0;
-  out_pkt_eop <= 0;
-  out_pkt_valid <= 0;
-  out_pkt_empty <= 0;
+  out_pkt_sop_r <= 0;
+  out_pkt_eop_r <= 0;
+  out_pkt_valid_r <= 0;
+  out_pkt_empty_r <= 0;
+
+  out_pkt_sop <= out_pkt_sop_r;
+  out_pkt_eop <= out_pkt_eop_r;
+  out_pkt_valid <= out_pkt_valid_r;
+  out_pkt_data <= out_pkt_data_r;
+  out_pkt_empty <= out_pkt_empty_r;
 
   // If there is an access from JTAG/MMIO, we need to retry the read.
   if (!external_address_access) begin
@@ -479,12 +491,12 @@ always @(posedge clk) begin
       // HACK(sadok): hardcode 64-byte packet. Should look at the header in the
       //              first flit to determine when to set eop.
       next_pending_bytes = pending_bytes - 64;
-      out_pkt_eop <= 1;
-      out_pkt_sop <= 1;
+      out_pkt_eop_r <= 1;
+      out_pkt_sop_r <= 1;
 
-      out_pkt_data <= pkt_queue_out_data;
-      out_pkt_empty <= 0;  // TODO(sadok): handle unaligned packets.
-      out_pkt_valid <= 1;
+      out_pkt_data_r <= pkt_queue_out_data;
+      out_pkt_empty_r <= 0;  // TODO(sadok): handle unaligned packets.
+      out_pkt_valid_r <= 1;
 
       if (next_pending_bytes == 0) begin
         done_sending_pkt(cur_meta);
@@ -495,12 +507,12 @@ always @(posedge clk) begin
       // HACK(sadok): hardcode 64-byte packet. Should look at the header in the
       //              first flit to determine when to set eop.
       next_pending_bytes = meta_queue_out_data.total_bytes - 64;
-      out_pkt_eop <= 1;
-      out_pkt_sop <= 1;
+      out_pkt_eop_r <= 1;
+      out_pkt_sop_r <= 1;
 
-      out_pkt_data <= pkt_queue_out_data;
-      out_pkt_empty <= 0;  // TODO(sadok): handle unaligned packets.
-      out_pkt_valid <= 1;
+      out_pkt_data_r <= pkt_queue_out_data;
+      out_pkt_empty_r <= 0;  // TODO(sadok): handle unaligned packets.
+      out_pkt_valid_r <= 1;
 
       if (next_pending_bytes == 0) begin
         done_sending_pkt(meta_queue_out_data);
