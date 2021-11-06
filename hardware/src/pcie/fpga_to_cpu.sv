@@ -410,4 +410,20 @@ tx_compl_buf (
   .out_ready     (tx_compl_buf_out_ready)
 );
 
+
+`ifdef SIM
+// Check if queues are being used correctly (simulation time).
+always @(posedge clk) begin
+  if (!pkt_buf_in_ready) begin
+    assert (!pkt_buf_in_valid) else $fatal;
+  end
+  if (!metadata_buf_in_ready) begin
+    assert (!metadata_buf_in_valid) else $fatal;
+  end
+  if (!tx_compl_buf_in_ready) begin
+    assert (!tx_compl_buf_in_valid) else $fatal;
+  end
+end
+`endif  // SIM
+
 endmodule
