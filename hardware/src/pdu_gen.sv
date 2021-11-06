@@ -1,8 +1,10 @@
 `timescale 1 ps / 1 ps
 `include "./constants.sv"
 module pdu_gen #(
-    parameter OUT_FIFO_DEPTH=64,
-    parameter ALMOST_FULL_THRESHOLD=OUT_FIFO_DEPTH - MAX_PKT_SIZE * 2
+    parameter OUT_PKT_Q_DEPTH=64,
+    parameter OUT_META_Q_DEPTH=128,
+    parameter PKT_Q_ALMOST_FULL_THRESHOLD=OUT_PKT_Q_DEPTH - MAX_PKT_SIZE * 2,
+    parameter META_Q_ALMOST_FULL_THRESHOLD=OUT_META_Q_DEPTH - 2
 )(
 		input  logic           clk,
 		input  logic           rst,
@@ -119,10 +121,12 @@ logic [31:0] out_meta_queue_occup;
 metadata_t in_meta_data_r;
 
 logic out_pkt_queue_alm_full;
-assign out_pkt_queue_alm_full = out_pkt_queue_occup > ALMOST_FULL_THRESHOLD;
+assign out_pkt_queue_alm_full = 
+    out_pkt_queue_occup > PKT_Q_ALMOST_FULL_THRESHOLD;
 
 logic out_meta_queue_alm_full;
-assign out_meta_queue_alm_full = out_meta_queue_occup > ALMOST_FULL_THRESHOLD;
+assign out_meta_queue_alm_full =
+    out_meta_queue_occup > META_Q_ALMOST_FULL_THRESHOLD;
 
 logic needs_meta;
 logic almost_full;
@@ -194,7 +198,7 @@ end
 fifo_wrapper_infill_mlab #(
     .SYMBOLS_PER_BEAT(1),
     .BITS_PER_SYMBOL($bits(pcie_pkt_buf_data)),
-    .FIFO_DEPTH(16)
+    .FIFO_DEPTH(OUT_PKT_Q_DEPTH)
 )
 out_pkt_queue (
     .clk           (clk),
@@ -215,7 +219,7 @@ out_pkt_queue (
 fifo_wrapper_infill_mlab #(
     .SYMBOLS_PER_BEAT(1),
     .BITS_PER_SYMBOL($bits(pcie_meta_buf_data)),
-    .FIFO_DEPTH(16)
+    .FIFO_DEPTH(OUT_META_Q_DEPTH)
 )
 out_meta_queue (
     .clk           (clk),
