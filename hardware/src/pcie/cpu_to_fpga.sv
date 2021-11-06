@@ -51,7 +51,11 @@ module cpu_to_fpga  #(
   input logic [RB_AWIDTH:0] rb_size,
 
   // Counters.
-  output logic [31:0] ignored_dsc_cnt
+  output logic [31:0] ignored_dsc_cnt,
+  output logic [31:0] queue_full_signals,
+  output logic [31:0] dsc_cnt,
+  output logic [31:0] empty_tail_cnt,
+  output logic [31:0] batch_cnt
 );
 
 typedef struct packed {
@@ -86,14 +90,14 @@ logic        dsc_reads_queue_out_valid;
 logic        dsc_reads_queue_out_ready;
 logic [31:0] dsc_reads_queue_occup;
 
-logic [$bits(pcie_rddm_desc_data)-1:0] rddm_desc_queue_in_data;
-logic        rddm_desc_queue_in_valid;
-logic        rddm_desc_queue_in_ready;
-logic [31:0] rddm_desc_queue_occup;
-
-logic [$bits(pcie_rddm_prio_data)-1:0] rddm_prio_queue_in_data;
+logic [$bits(pcie_rddm_desc_data)-1:0] rddm_prio_queue_in_data;
 logic        rddm_prio_queue_in_valid;
 logic        rddm_prio_queue_in_ready;
+logic [31:0] rddm_desc_queue_occup;
+
+logic [$bits(pcie_rddm_prio_data)-1:0] rddm_desc_queue_in_data;
+logic        rddm_desc_queue_in_valid;
+logic        rddm_desc_queue_in_ready;
 logic [31:0] rddm_prio_queue_occup;
 
 meta_t       meta_queue_in_data;
@@ -112,29 +116,29 @@ logic         pkt_queue_out_valid;
 logic         pkt_queue_out_ready;
 logic [31:0]  pkt_queue_occup;
 
-localparam META_QUEUE_LEN = 64;  // In number of descriptors.
+localparam META_QUEUE_LEN = 256;  // In number of descriptors.
 localparam PKT_QUEUE_LEN = 1024;  // In flits.
 
 logic out_pkt_alm_full;
 assign out_pkt_alm_full = out_pkt_occup > PCIE_TX_PKT_FIFO_ALM_FULL_THRESH;
 
 logic tx_compl_buf_alm_full;
-assign tx_compl_buf_alm_full = tx_compl_buf_occup > 8;
+assign tx_compl_buf_alm_full = tx_compl_buf_occup > 10;
 
 logic dsc_reads_queue_alm_full;
 assign dsc_reads_queue_alm_full = dsc_reads_queue_occup > 10;
 
 logic rddm_desc_queue_alm_full;
-assign rddm_desc_queue_alm_full = rddm_desc_queue_occup > 8;
+assign rddm_desc_queue_alm_full = rddm_desc_queue_occup > 500;
 
 logic rddm_prio_queue_alm_full;
-assign rddm_prio_queue_alm_full = rddm_prio_queue_occup > 8;
+assign rddm_prio_queue_alm_full = rddm_prio_queue_occup > 64;
 
 logic meta_queue_alm_full;
-assign meta_queue_alm_full = meta_queue_occup > (META_QUEUE_LEN / 2);
+assign meta_queue_alm_full = meta_queue_occup > META_QUEUE_LEN - 128;
 
 logic pkt_queue_alm_full;
-assign pkt_queue_alm_full = pkt_queue_occup > (PKT_QUEUE_LEN / 2);
+assign pkt_queue_alm_full = pkt_queue_occup > PKT_QUEUE_LEN - 512;
 
 // The BRAM port b's are exposed outside the module while port a's are only used
 // internally.
@@ -156,7 +160,8 @@ logic compl_q_table_h_addrs_rd_en;
 
 logic can_issue_dma_rd;
 assign can_issue_dma_rd = !rddm_desc_queue_alm_full & !rddm_prio_queue_alm_full
-                          & !meta_queue_alm_full & !meta_queue_alm_full;
+                          & !meta_queue_alm_full & !pkt_queue_alm_full
+                          & !dsc_reads_queue_alm_full & !tx_compl_buf_alm_full;
 
 logic q_table_a_tails_rd_en_r1;
 logic q_table_a_tails_rd_en_r2;
@@ -185,7 +190,7 @@ always @(posedge clk) begin
   q_table_a_l_addrs.rd_en <= 0;
   q_table_a_h_addrs.rd_en <= 0;
 
-  if (q_table_tails.wr_en & !dsc_reads_queue_alm_full) begin
+  if (q_table_tails.wr_en & can_issue_dma_rd) begin
     tail <= q_table_tails.wr_data;
     q_table_a_tails.rd_en <= 1;
     q_table_a_tails.addr <= q_table_tails.addr;
@@ -210,7 +215,15 @@ always @(posedge clk) begin
   if (rst) begin
     ignored_dsc_cnt <= 0;
   end else begin
-    if (q_table_tails.wr_en & dsc_reads_queue_alm_full) begin
+    if (q_table_tails.wr_en & !can_issue_dma_rd) begin
+      $display("rddm_desc_queue_alm_full: %b", rddm_desc_queue_alm_full);
+      $display("rddm_prio_queue_alm_full: %b", rddm_prio_queue_alm_full);
+      $display("meta_queue_alm_full: %b", meta_queue_alm_full);
+      $display("pkt_queue_alm_full: %b", pkt_queue_alm_full);
+      $display("dsc_reads_queue_alm_full: %b", dsc_reads_queue_alm_full);
+      $display("tx_compl_buf_alm_full: %b", tx_compl_buf_alm_full);
+      $display("pkt_queue_occup: %d", pkt_queue_occup);
+      $display("----------------------------");
       ignored_dsc_cnt <= ignored_dsc_cnt + 1;
     end
   end
@@ -223,6 +236,10 @@ logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] last_tails [2];
 always @(posedge clk) begin
   dsc_reads_queue_in_valid <= 0;
   last_queues[0][QUEUE_ID_WIDTH] <= 1;  // Invalid queue.
+
+  if (rst) begin
+    empty_tail_cnt <= 0;
+  end
 
   if (q_table_a_tails_rd_en_r2) begin
     automatic logic [31:0] head;
@@ -250,6 +267,8 @@ always @(posedge clk) begin
     // Don't bother sending if there is nothing to read.
     if (head != tail_r2) begin
       dsc_reads_queue_in_valid <= 1;
+    end else begin
+      empty_tail_cnt <= empty_tail_cnt + 1;
     end
   end
 
@@ -274,8 +293,12 @@ always @(posedge clk) begin
                                 // one used in the `desc` queue.
   dst_addr.descriptor = 1;
 
-  rddm_prio_queue_in_valid <= 0;
+  rddm_desc_queue_in_valid <= 0;
   second_dma_req_pending <= 0;
+
+  if (rst) begin
+    dsc_cnt <= 0;
+  end
 
   // Previous request wrapped around, send second DMA before processing next
   // request.
@@ -288,9 +311,10 @@ always @(posedge clk) begin
     rddm_desc.dst_addr = dst_addr;
 
     rddm_desc.nb_dwords = dsc_reads_queue_out_data_r.tail << 4;
+    dsc_cnt <= dsc_cnt + dsc_reads_queue_out_data_r.tail;
 
-    rddm_prio_queue_in_valid <= 1;
-    rddm_prio_queue_in_data <= rddm_desc;
+    rddm_desc_queue_in_valid <= 1;
+    rddm_desc_queue_in_data <= rddm_desc;
 
   end else if (dsc_reads_queue_out_valid & dsc_reads_queue_out_ready) begin
     rddm_desc.src_addr[31:0] = dsc_reads_queue_out_data.l_addr;
@@ -303,18 +327,23 @@ always @(posedge clk) begin
 
     // Check if request wraps around.
     if (dsc_reads_queue_out_data.tail > dsc_reads_queue_out_data.head) begin
-      rddm_desc.nb_dwords =
-        (dsc_reads_queue_out_data.tail - dsc_reads_queue_out_data.head) << 4;
+      automatic logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] nb_flits =
+        dsc_reads_queue_out_data.tail - dsc_reads_queue_out_data.head;
+      rddm_desc.nb_dwords = nb_flits << 4;
+      dsc_cnt <= dsc_cnt + nb_flits;
     end else begin
+      automatic logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] nb_flits =
+        rb_size - dsc_reads_queue_out_data.head;
       // Wraps around, need to send two read requests only if tail is not 0.
       if (dsc_reads_queue_out_data.tail != 0) begin
         second_dma_req_pending <= 1;
       end
-      rddm_desc.nb_dwords = (rb_size - dsc_reads_queue_out_data.head) << 4;
+      rddm_desc.nb_dwords = nb_flits << 4;
+      dsc_cnt <= dsc_cnt + nb_flits;
     end
 
-    rddm_prio_queue_in_valid <= 1;
-    rddm_prio_queue_in_data <= rddm_desc;
+    rddm_desc_queue_in_valid <= 1;
+    rddm_desc_queue_in_data <= rddm_desc;
   end
 
   dsc_reads_queue_out_data_r <= dsc_reads_queue_out_data;
@@ -324,14 +353,20 @@ logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] last_head;
 logic [QUEUE_ID_WIDTH:0]             last_queue_id;  // Extra bit to represent
                                                      // invalid.
 
+logic meta_queue_in_valid_r;
+meta_t meta_queue_in_data_r;
+
 // Reacts to MM writes from RDDM. Descriptor writes cause a metadata to be
 // enqueued to the `meta_queue` and also trigger a DMA read for the associated
 // packets (which are enqueued to the `rddm_desc_queue`). Packet writes are
 // enqueued to the `pkt_queue`.
 always @(posedge clk) begin
-  rddm_desc_queue_in_valid <= 0;
-  meta_queue_in_valid <= 0;
+  rddm_prio_queue_in_valid <= 0;
+  meta_queue_in_valid_r <= 0;
   pkt_queue_in_valid <= 0;
+
+  meta_queue_in_valid <= meta_queue_in_valid_r;
+  meta_queue_in_data <= meta_queue_in_data_r;
 
   if (rst) begin
     last_queue_id[QUEUE_ID_WIDTH] <= 1;  // Invalid queue.
@@ -362,8 +397,8 @@ always @(posedge clk) begin
       // Number of bytes to ignore at the last flit.
       // rddm_desc.dst_addr[QUEUE_ID_WIDTH+1 +: 6] = -tx_dsc.length[5:0];
 
-      rddm_desc_queue_in_valid <= 1;
-      rddm_desc_queue_in_data <= rddm_desc;
+      rddm_prio_queue_in_valid <= 1;
+      rddm_prio_queue_in_data <= rddm_desc;
 
       if (rddm_dst_addr.queue_id != last_queue_id) begin
         last_queue_id <= rddm_dst_addr.queue_id;
@@ -378,8 +413,8 @@ always @(posedge clk) begin
       meta.head = rddm_dst_addr.head;
       meta.transfer_addr = tx_dsc.addr;
 
-      meta_queue_in_valid <= 1;
-      meta_queue_in_data <= meta;
+      meta_queue_in_valid_r <= 1;
+      meta_queue_in_data_r <= meta;
     end else begin  // Received a packet.
       pkt_queue_in_data <= pcie_rddm_writedata;
       pkt_queue_in_valid <= 1;
@@ -387,8 +422,10 @@ always @(posedge clk) begin
   end
 end
 
-logic [19:0] pending_bytes;
+logic [19:0] batch_pending_bytes;
+logic [19:0] pkt_pending_bytes;
 logic transfer_done;
+logic ready_for_next_pkt;
 
 logic external_address_access;
 
@@ -432,7 +469,13 @@ logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] compl_head_r2;
 
 logic [QUEUE_ID_WIDTH-1:0] addr_addr;
 
-function void done_sending_pkt(
+logic         out_pkt_sop_r;
+logic         out_pkt_eop_r;
+logic         out_pkt_valid_r;
+logic [511:0] out_pkt_data_r;
+logic [5:0]   out_pkt_empty_r;
+
+function void done_sending_batch(
   meta_t meta
 );
   // Write latest head.
@@ -449,14 +492,46 @@ function void done_sending_pkt(
   compl_length <= meta.total_bytes;
   compl_head <= meta.head;
 
-  transfer_done <= 1;
+  batch_cnt <= batch_cnt + 1;
 endfunction
 
-logic         out_pkt_sop_r;
-logic         out_pkt_eop_r;
-logic         out_pkt_valid_r;
-logic [511:0] out_pkt_data_r;
-logic [5:0]   out_pkt_empty_r;
+function void send_flit(
+  logic [19:0] bytes_remaining,
+  meta_t meta
+);
+  automatic logic [15:0] pkt_len_be = pkt_queue_out_data[16*8 +: 16];
+  automatic logic [15:0] pkt_len_le = {pkt_len_be[7:0], pkt_len_be[15:8]};
+  automatic logic [19:0] current_pkt_pending_bytes;
+
+  out_pkt_data_r <= pkt_queue_out_data;
+  out_pkt_empty_r <= 0;  // TODO(sadok): handle unaligned packets.
+  out_pkt_valid_r <= 1;
+
+  if (ready_for_next_pkt) begin
+    out_pkt_sop_r <= 1;
+    current_pkt_pending_bytes = pkt_len_le; // TODO(sadok): L2 header/trailer?
+  end else begin
+    current_pkt_pending_bytes = pkt_pending_bytes;
+  end
+
+  if (current_pkt_pending_bytes <= 64) begin
+    out_pkt_eop_r <= 1;
+    ready_for_next_pkt <= 1;
+    pkt_pending_bytes <= 0;
+  end else begin
+    ready_for_next_pkt <= 0;
+    pkt_pending_bytes <= current_pkt_pending_bytes - 64;
+  end
+
+  if (bytes_remaining <= 64) begin
+    done_sending_batch(meta);
+    transfer_done <= 1;
+    batch_pending_bytes <= 0;
+  end else begin
+    transfer_done <= 0;
+    batch_pending_bytes <= bytes_remaining - 64;
+  end
+endfunction
 
 // Consume packets and send them out setting sop and eop.
 // (Assuming raw sockets for now, that means that headers are populated by
@@ -484,43 +559,15 @@ always @(posedge clk) begin
 
   if (rst) begin
     transfer_done <= 1;
+    ready_for_next_pkt <= 1;
+    batch_cnt <= 0;
   end else begin
-    automatic logic [19:0] next_pending_bytes = pending_bytes;
-
     if (!transfer_done & pkt_queue_out_valid & pkt_queue_out_ready) begin
-      // HACK(sadok): hardcode 64-byte packet. Should look at the header in the
-      //              first flit to determine when to set eop.
-      next_pending_bytes = pending_bytes - 64;
-      out_pkt_eop_r <= 1;
-      out_pkt_sop_r <= 1;
-
-      out_pkt_data_r <= pkt_queue_out_data;
-      out_pkt_empty_r <= 0;  // TODO(sadok): handle unaligned packets.
-      out_pkt_valid_r <= 1;
-
-      if (next_pending_bytes == 0) begin
-        done_sending_pkt(cur_meta);
-      end
+      send_flit(batch_pending_bytes, cur_meta);
     end else if (meta_queue_out_ready & meta_queue_out_valid) begin
       cur_meta <= meta_queue_out_data;
-
-      // HACK(sadok): hardcode 64-byte packet. Should look at the header in the
-      //              first flit to determine when to set eop.
-      next_pending_bytes = meta_queue_out_data.total_bytes - 64;
-      out_pkt_eop_r <= 1;
-      out_pkt_sop_r <= 1;
-
-      out_pkt_data_r <= pkt_queue_out_data;
-      out_pkt_empty_r <= 0;  // TODO(sadok): handle unaligned packets.
-      out_pkt_valid_r <= 1;
-
-      if (next_pending_bytes == 0) begin
-        done_sending_pkt(meta_queue_out_data);
-      end else begin
-        transfer_done <= 0;
-      end
+      send_flit(meta_queue_out_data.total_bytes, meta_queue_out_data);
     end
-    pending_bytes <= next_pending_bytes;
   end
 end
 
@@ -587,7 +634,7 @@ fifo_wrapper_infill_mlab #(
 fifo_wrapper_infill_mlab #(
   .SYMBOLS_PER_BEAT(1),
   .BITS_PER_SYMBOL($bits(pcie_rddm_desc_data)),
-  .FIFO_DEPTH(16)
+  .FIFO_DEPTH(512)
 ) rddm_desc_queue (
   .clk           (clk),
   .reset         (rst),
@@ -607,7 +654,7 @@ fifo_wrapper_infill_mlab #(
 fifo_wrapper_infill_mlab #(
   .SYMBOLS_PER_BEAT(1),
   .BITS_PER_SYMBOL($bits(pcie_rddm_prio_data)),
-  .FIFO_DEPTH(16)
+  .FIFO_DEPTH(128)
 ) rddm_prio_queue (
   .clk           (clk),
   .reset         (rst),
@@ -663,6 +710,35 @@ fifo_wrapper_infill_mlab #(
   .out_valid     (pkt_queue_out_valid),
   .out_ready     (pkt_queue_out_ready)
 );
+
+// Check if queues are being used correctly.
+always @(posedge clk) begin
+  queue_full_signals[31:5] <= 0;
+  if (rst) begin
+    queue_full_signals[4:0] <= 0;
+  end else begin
+    if (!dsc_reads_queue_in_ready & dsc_reads_queue_in_valid) begin
+      queue_full_signals[0] <= 1;
+      $fatal;
+    end
+    if (!rddm_prio_queue_in_ready & rddm_prio_queue_in_valid) begin
+      queue_full_signals[1] <= 1;
+      $fatal;
+    end
+    if (!rddm_desc_queue_in_ready & rddm_desc_queue_in_valid) begin
+      queue_full_signals[2] <= 1;
+      $fatal;
+    end
+    if (!meta_queue_in_ready & meta_queue_in_valid) begin
+      queue_full_signals[3] <= 1;
+      $fatal;
+    end
+    if (!pkt_queue_in_ready & pkt_queue_in_valid) begin
+      queue_full_signals[4] <= 1;
+      $fatal;
+    end
+  end
+end
 
 // Delay writes from MMIO/JTAG by two cycles so that we have time to read the
 // old value before the update.

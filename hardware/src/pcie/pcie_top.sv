@@ -66,15 +66,19 @@ module pcie_top (
     input  logic         pcie_tx_pkt_ready,
     input  logic [31:0]  pcie_tx_pkt_occup,
 
-    output logic              disable_pcie,
-    output logic              sw_reset,
-    output var pdu_metadata_t pdumeta_cpu_data,
-    output logic              pdumeta_cpu_valid,
-    input  logic [9:0]        pdumeta_cnt,
-    output logic [31:0]       dma_queue_full_cnt,
-    output logic [31:0]       cpu_dsc_buf_full_cnt,
-    output logic [31:0]       cpu_pkt_buf_full_cnt,
-    output logic [31:0]       pcie_tx_ignored_dsc_cnt,
+    output logic        disable_pcie,
+    output logic        sw_reset,
+    output logic [31:0] dma_queue_full_cnt,
+    output logic [31:0] cpu_dsc_buf_full_cnt,
+    output logic [31:0] cpu_pkt_buf_full_cnt,
+    output logic [31:0] tx_ignored_dsc_cnt,
+    output logic [31:0] tx_q_full_signals,
+    output logic [31:0] tx_dsc_cnt,
+    output logic [31:0] tx_empty_tail_cnt,
+    output logic [31:0] tx_batch_cnt,
+    output logic [31:0] tx_dma_pkt_cnt,
+    output logic [31:0] rx_pkt_head_upd_cnt,
+    output logic [31:0] tx_dsc_tail_upd_cnt,
 
     // status register bus
     input  logic        clk_status,
@@ -170,8 +174,10 @@ always @(posedge pcie_clk) begin
         queue_updated[i] <= 0;
     end
 
+    if (!pcie_reset_n) begin
+        rx_pkt_head_upd_cnt <= 0;
     // Got a PCIe write to a packet queue head.
-    if (pcie_write_0 && (queue_idx < MAX_NB_FLOWS) && head_upd) begin
+    end else if (pcie_write_0 && (queue_idx < MAX_NB_FLOWS) && head_upd) begin
         automatic logic [NON_NEG_PKT_QM_MSB:0] pkt_qm_id;
 
         // Use packet queue index's LSBs to choose the queue manager.
@@ -184,6 +190,8 @@ always @(posedge pcie_clk) begin
         updated_queue_idx[pkt_qm_id] <=
             queue_idx[BRAM_TABLE_IDX_WIDTH-1:PKT_QM_ID_WIDTH];
         queue_updated[pkt_qm_id] <= 1;
+
+        rx_pkt_head_upd_cnt <= rx_pkt_head_upd_cnt + 1;
     end
 end
 
@@ -264,6 +272,17 @@ end
 
 always @(posedge pcie_clk) begin
     cpu_pkt_buf_full_cnt <= cpu_pkt_buf_full_cnt_r;
+end
+
+// Count TX dsc tail pointer updates.
+always @(posedge pcie_clk) begin
+    if (!pcie_reset_n) begin
+        tx_dsc_tail_upd_cnt <= 0;
+    end else begin
+        if (tx_dsc_q_table_tails.owner.wr_en) begin
+            tx_dsc_tail_upd_cnt <= tx_dsc_tail_upd_cnt + 1;
+        end
+    end
 end
 
 pkt_queue_manager #(
@@ -400,8 +419,21 @@ cpu_to_fpga #(
     .q_table_l_addrs      (tx_dsc_q_table_l_addrs.owner),
     .q_table_h_addrs      (tx_dsc_q_table_h_addrs.owner),
     .rb_size              (dsc_rb_size),  // TODO(sadok): use different rb size?
-    .ignored_dsc_cnt      (pcie_tx_ignored_dsc_cnt)
+    .ignored_dsc_cnt      (tx_ignored_dsc_cnt),
+    .queue_full_signals   (tx_q_full_signals),
+    .dsc_cnt              (tx_dsc_cnt),
+    .empty_tail_cnt       (tx_empty_tail_cnt),
+    .batch_cnt            (tx_batch_cnt)
 );
+
+// Keep track of the number of packets that were successfully DMAed by software.
+always @(posedge pcie_clk) begin
+    if (!pcie_reset_n) begin
+        tx_dma_pkt_cnt <= 0;
+    end else if (pcie_tx_pkt_valid & pcie_tx_pkt_ready & pcie_tx_pkt_eop) begin
+        tx_dma_pkt_cnt <= tx_dma_pkt_cnt + 1;
+    end
+end
 
 // TODO(sadok): remove these when using WRDM.
 assign pcie_wrdm_desc_valid = 0;

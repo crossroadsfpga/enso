@@ -65,15 +65,6 @@ localparam TX_TRACK = 5'b11_000; //(5'b11000);
 
 localparam PCIE_ADDR_WIDTH = 30;
 
-localparam PCIE_TX_PKT_FIFO_DEPTH = 1024;
-localparam PCIE_TX_PKT_FIFO_ALM_FULL_THRESH = 640;
-
-//Ring buffer 
-//Used for FPGA-CPU communication. Some fields are FPGA read only, used for
-//CPU indicatings FPGA info. Some fields are CPU read only, used for FPGA
-//indicating CPU info. 
-//The higher half is used for CPU ring buffer registers
-//The bottom half is used as PDU header for each PDU transfer.
 localparam MAX_RB_DEPTH = 1048576; // in 512 bits (power of two).
 localparam RB_AWIDTH = ($clog2(MAX_RB_DEPTH));
 
@@ -81,6 +72,10 @@ localparam C2F_RB_DEPTH = 512; // in 512 bits.
 localparam C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
 
 localparam MAX_PKT_SIZE = 24; // in 512 bits
+
+localparam PCIE_TX_PKT_FIFO_DEPTH = 1024;
+localparam PCIE_TX_PKT_FIFO_ALM_FULL_THRESH = 
+    PCIE_TX_PKT_FIFO_DEPTH - 4 * MAX_PKT_SIZE;
 
 // The MAX_NB_APPS determines the max number of descriptor queues, while 
 // MAX_NB_FLOWS determines the max number of packet queues.

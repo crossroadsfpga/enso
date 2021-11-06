@@ -109,9 +109,6 @@ logic [31:0]  pcie_tx_pkt_occup;
 
 logic          disable_pcie;
 logic          sw_reset;
-pdu_metadata_t pdumeta_cpu_data;
-logic          pdumeta_cpu_valid;
-logic [9:0]    pdumeta_cnt;
 logic [31:0]   dma_queue_full_cnt;
 logic [31:0]   cpu_dsc_buf_full_cnt;
 logic [31:0]   cpu_pkt_buf_full_cnt;
@@ -396,8 +393,31 @@ always @(posedge clk) begin
           pending_pkt_tails[pcie_pkt_desc.queue_id] <= pcie_pkt_desc.tail;
           pending_pkt_tails_valid[pcie_pkt_desc.queue_id] <= 1'b1;
         end else begin  // tx dsc queue
+          automatic logic [31:0] pkt_buf_queue;
+          automatic logic [31:0] pkt_buf_head;
+          automatic logic [31:0] tx_dsc_buf_queue;
           automatic pcie_tx_dsc_t tx_dsc = pcie_bas_writedata;
           assert(tx_dsc.signal == 0) else $fatal;
+
+          // Figure out queue and head from address.
+          pkt_buf_queue = tx_dsc.addr[32 +: BRAM_TABLE_IDX_WIDTH];
+          pkt_buf_head = (tx_dsc.addr[6 +: RAM_ADDR_LEN]
+                          + tx_dsc.length / 64) % PKT_BUF_SIZE;
+
+          // Advance head pointer for corresponding pkt queue.
+          next_pcie_write_0 = 1;
+          pcie_address_0 <= pkt_buf_queue << 12;
+          pcie_writedata_0 <= 0;
+          pcie_byteenable_0 <= 0;
+          last_pkt_heads[pkt_buf_queue] <= pkt_buf_head;
+
+          pcie_writedata_0[32 +: 32] <= pkt_buf_head;
+          pcie_byteenable_0[4 +: 4] <= 4'hf;
+
+          // Advance corresponding TX dsc queue head.
+          tx_dsc_buf_queue = cur_queue - nb_pkt_queues - nb_dsc_queues;
+          tx_dsc_heads[tx_dsc_buf_queue]
+            <= (tx_dsc_heads[tx_dsc_buf_queue] + 1) % DSC_BUF_SIZE;
         end
 
         // Check if address out of bound.
@@ -435,7 +455,7 @@ always @(posedge clk) begin
         // of the queues.
         end else if (pkt_q_consume_delay_cnt == 0) begin
           for (i = 0; i < nb_pkt_queues; i++) begin
-            automatic integer pkt_q = (i + last_upd_pkt_q) % nb_pkt_queues;
+            automatic integer pkt_q = (i + last_upd_pkt_q + 1) % nb_pkt_queues;
             automatic integer dsc_q = pkt_q / pkt_per_dsc_queue;
             automatic integer free_slot =
               (tx_dsc_heads[dsc_q] - tx_dsc_tails[dsc_q] - 1) % DSC_BUF_SIZE;
@@ -501,8 +521,14 @@ always @(posedge clk) begin
                 ram[tx_dsc_q_addr][(tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE] <=
                   tx_dsc;
 
-                // Advance to hold two descriptors.
-                tx_dsc_tails[dsc_q] <= (tx_dsc_tails[dsc_q] + 2) % DSC_BUF_SIZE;
+                // Ignore second descriptor if it has zero length.
+                if (tx_dsc.length == 0) begin
+                  tx_dsc_tails[dsc_q]
+                    <= (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
+                end else begin
+                  tx_dsc_tails[dsc_q]
+                    <= (tx_dsc_tails[dsc_q] + 2) % DSC_BUF_SIZE; 
+                end
               end
 
               tx_pkt_heads[pkt_q] <= rx_pkt_buf_tail;
@@ -550,6 +576,7 @@ always @(posedge clk) begin
         // `prio` queue has priority over `desc` queue.
         if (rddm_prio_queue_valid) begin
           rddm_desc = rddm_prio_queue_data;
+          assert(!rddm_desc_queue_ready) else $fatal;
         end else begin
           rddm_desc = rddm_desc_queue_data;
         end
@@ -1086,9 +1113,6 @@ pcie_top pcie (
   .pcie_tx_pkt_occup       (pcie_tx_pkt_occup),
   .disable_pcie            (disable_pcie),
   .sw_reset                (sw_reset),
-  .pdumeta_cpu_data        (pdumeta_cpu_data),
-  .pdumeta_cpu_valid       (pdumeta_cpu_valid),
-  .pdumeta_cnt             (pdumeta_cnt),
   .dma_queue_full_cnt      (dma_queue_full_cnt),
   .cpu_dsc_buf_full_cnt    (cpu_dsc_buf_full_cnt),
   .cpu_pkt_buf_full_cnt    (cpu_pkt_buf_full_cnt),

@@ -105,14 +105,21 @@ logic [31:0] pcie_meta_cnt_status;
 logic [31:0] dm_pcie_rx_pkt_cnt_status;
 logic [31:0] dm_pcie_rx_meta_cnt_status;
 logic [31:0] dm_eth_pkt_cnt_status;
-logic [31:0] dma_pkt_cnt_status;
+logic [31:0] rx_dma_pkt_cnt_status;
+logic [31:0] pcie_rx_pkt_head_upd_cnt_status;
+logic [31:0] pcie_tx_dsc_tail_upd_cnt_status;
 logic [31:0] dma_request_cnt_status;
 logic [31:0] rule_set_cnt_status;
 logic [31:0] dma_queue_full_cnt_status;
 logic [31:0] cpu_dsc_buf_full_cnt_status;
 logic [31:0] cpu_pkt_buf_full_cnt_status;
-logic [31:0] pcie_tx_ignored_dsc_cnt_status;
 logic [31:0] max_pcie_fifo_status;
+logic [31:0] pcie_tx_ignored_dsc_cnt_status;
+logic [31:0] pcie_tx_q_full_signals_status;
+logic [31:0] pcie_tx_dsc_cnt_status;
+logic [31:0] pcie_tx_empty_tail_cnt_status;
+logic [31:0] pcie_tx_batch_cnt_status;
+logic [31:0] pcie_tx_dma_pkt_cnt_status;
 
 //Register I/O
 logic  [511:0]  out_data;
@@ -250,12 +257,6 @@ logic [511:0]  pcie_tx_pkt_data;
 logic [5:0]    pcie_tx_pkt_empty;
 logic          pcie_tx_pkt_ready;
 
-pdu_metadata_t pdumeta_cpu_out_data;
-logic          pdumeta_cpu_out_valid;
-logic          pdumeta_cpu_out_ready;
-logic          pdumeta_cpu_ready;
-logic [31:0]   pdumeta_cpu_csr_readdata;
-
 flit_lite_t             pcie_pkt_buf_data;
 logic                   pcie_pkt_buf_valid;
 logic                   pcie_pkt_buf_ready;
@@ -268,9 +269,6 @@ logic                   pcie_meta_buf_ready;
 logic [F2C_RB_AWIDTH:0] pcie_meta_buf_occup;
 
 logic                    disable_pcie;
-pdu_metadata_t           pdumeta_cpu_data;
-logic                    pdumeta_cpu_valid;
-logic [9:0]              pdumeta_cnt;
 
 logic sw_reset;
 
@@ -345,9 +343,15 @@ logic [31:0] dm_pcie_rx_meta_cnt_r2;
 logic [31:0] dm_eth_pkt_cnt;
 logic [31:0] dm_eth_pkt_cnt_r1;
 logic [31:0] dm_eth_pkt_cnt_r2;
-logic [31:0] dma_pkt_cnt;
-logic [31:0] dma_pkt_cnt_r1;
-logic [31:0] dma_pkt_cnt_r2;
+logic [31:0] rx_dma_pkt_cnt;
+logic [31:0] rx_dma_pkt_cnt_r1;
+logic [31:0] rx_dma_pkt_cnt_r2;
+logic [31:0] pcie_rx_pkt_head_upd_cnt;
+logic [31:0] pcie_rx_pkt_head_upd_cnt_r1;
+logic [31:0] pcie_rx_pkt_head_upd_cnt_r2;
+logic [31:0] pcie_tx_dsc_tail_upd_cnt;
+logic [31:0] pcie_tx_dsc_tail_upd_cnt_r1;
+logic [31:0] pcie_tx_dsc_tail_upd_cnt_r2;
 logic [31:0] dma_request_cnt;
 logic [31:0] dma_request_cnt_r1;
 logic [31:0] dma_request_cnt_r2;
@@ -369,6 +373,21 @@ logic [31:0] max_pcie_fifo_r2;
 logic [31:0] pcie_tx_ignored_dsc_cnt;
 logic [31:0] pcie_tx_ignored_dsc_cnt_r1;
 logic [31:0] pcie_tx_ignored_dsc_cnt_r2;
+logic [31:0] pcie_tx_q_full_signals;
+logic [31:0] pcie_tx_q_full_signals_r1;
+logic [31:0] pcie_tx_q_full_signals_r2;
+logic [31:0] pcie_tx_dsc_cnt;
+logic [31:0] pcie_tx_dsc_cnt_r1;
+logic [31:0] pcie_tx_dsc_cnt_r2;
+logic [31:0] pcie_tx_empty_tail_cnt;
+logic [31:0] pcie_tx_empty_tail_cnt_r1;
+logic [31:0] pcie_tx_empty_tail_cnt_r2;
+logic [31:0] pcie_tx_batch_cnt;
+logic [31:0] pcie_tx_batch_cnt_r1;
+logic [31:0] pcie_tx_batch_cnt_r2;
+logic [31:0] pcie_tx_dma_pkt_cnt;
+logic [31:0] pcie_tx_dma_pkt_cnt_r1;
+logic [31:0] pcie_tx_dma_pkt_cnt_r2;
 
 logic pcie_bas_write_r;
 
@@ -469,13 +488,12 @@ always @(posedge clk_datamover) begin
         end
     end
 end
-
 // pcie clock domain
 always @(posedge clk_pcie) begin
     if (rst_pcie | sw_reset) begin
         pcie_pkt_cnt <= 0;
         pcie_meta_cnt <= 0;
-        dma_pkt_cnt <= 0;
+        rx_dma_pkt_cnt <= 0;
         dma_request_cnt <= 0;
         rule_set_cnt <= 0;
         max_pcie_fifo <= 0;
@@ -486,15 +504,15 @@ always @(posedge clk_pcie) begin
         if (pcie_rx_meta_valid & pcie_rx_meta_ready) begin
             pcie_meta_cnt <= pcie_meta_cnt + 1;
         end
-        if (pcie_meta_buf_valid) begin
-            dma_pkt_cnt <= dma_pkt_cnt + 1;
+        if (pcie_meta_buf_valid & pcie_meta_buf_ready) begin
+            rx_dma_pkt_cnt <= rx_dma_pkt_cnt + 1;
         end
         if (!pcie_bas_waitrequest && pcie_bas_write_r) begin
             dma_request_cnt <= dma_request_cnt + 1;
         end
-        if (pdumeta_cpu_valid) begin
-            rule_set_cnt <= rule_set_cnt + 1;
-        end
+        // if (pdumeta_cpu_valid) begin
+        //     rule_set_cnt <= rule_set_cnt + 1;
+        // end
         if (pcie_pkt_buf_occup_r > max_pcie_fifo) begin
             max_pcie_fifo <= pcie_pkt_buf_occup_r;
         end
@@ -567,9 +585,15 @@ always @(posedge clk_status) begin
     dm_eth_pkt_cnt_r1               <= dm_eth_pkt_cnt;
     dm_eth_pkt_cnt_r2               <= dm_eth_pkt_cnt_r1;
     dm_eth_pkt_cnt_status           <= dm_eth_pkt_cnt_r2;
-    dma_pkt_cnt_r1                  <= dma_pkt_cnt;
-    dma_pkt_cnt_r2                  <= dma_pkt_cnt_r1;
-    dma_pkt_cnt_status              <= dma_pkt_cnt_r2;
+    rx_dma_pkt_cnt_r1               <= rx_dma_pkt_cnt;
+    rx_dma_pkt_cnt_r2               <= rx_dma_pkt_cnt_r1;
+    rx_dma_pkt_cnt_status           <= rx_dma_pkt_cnt_r2;
+    pcie_rx_pkt_head_upd_cnt_r1     <= pcie_rx_pkt_head_upd_cnt;
+    pcie_rx_pkt_head_upd_cnt_r2     <= pcie_rx_pkt_head_upd_cnt_r1;
+    pcie_rx_pkt_head_upd_cnt_status <= pcie_rx_pkt_head_upd_cnt_r2;
+    pcie_tx_dsc_tail_upd_cnt_r1     <= pcie_tx_dsc_tail_upd_cnt;
+    pcie_tx_dsc_tail_upd_cnt_r2     <= pcie_tx_dsc_tail_upd_cnt_r1;
+    pcie_tx_dsc_tail_upd_cnt_status <= pcie_tx_dsc_tail_upd_cnt_r2;
     dma_request_cnt_r1              <= dma_request_cnt;
     dma_request_cnt_r2              <= dma_request_cnt_r1;
     dma_request_cnt_status          <= dma_request_cnt_r2;
@@ -591,6 +615,20 @@ always @(posedge clk_status) begin
     pcie_tx_ignored_dsc_cnt_r1      <= pcie_tx_ignored_dsc_cnt;
     pcie_tx_ignored_dsc_cnt_r2      <= pcie_tx_ignored_dsc_cnt_r1;
     pcie_tx_ignored_dsc_cnt_status  <= pcie_tx_ignored_dsc_cnt_r2;
+    pcie_tx_q_full_signals_r1       <= pcie_tx_q_full_signals;
+    pcie_tx_q_full_signals_r2       <= pcie_tx_q_full_signals_r1;
+    pcie_tx_q_full_signals_status   <= pcie_tx_q_full_signals_r2;
+    pcie_tx_dsc_cnt_r1              <= pcie_tx_dsc_cnt;
+    pcie_tx_dsc_cnt_r2              <= pcie_tx_dsc_cnt_r1;
+    pcie_tx_dsc_cnt_status          <= pcie_tx_dsc_cnt_r2;
+    pcie_tx_empty_tail_cnt_r1       <= pcie_tx_empty_tail_cnt;
+    pcie_tx_empty_tail_cnt_r2       <= pcie_tx_empty_tail_cnt_r1;
+    pcie_tx_batch_cnt_r1            <= pcie_tx_batch_cnt;
+    pcie_tx_batch_cnt_r2            <= pcie_tx_batch_cnt_r1;
+    pcie_tx_batch_cnt_status        <= pcie_tx_batch_cnt_r2;
+    pcie_tx_dma_pkt_cnt_r1          <= pcie_tx_dma_pkt_cnt;
+    pcie_tx_dma_pkt_cnt_r2          <= pcie_tx_dma_pkt_cnt_r1;
+    pcie_tx_dma_pkt_cnt_status      <= pcie_tx_dma_pkt_cnt_r2;
 end
 
 //registers
@@ -627,14 +665,21 @@ always @(posedge clk_status) begin
                 8'd17 : status_readdata_top <= dm_pcie_rx_pkt_cnt_status;
                 8'd18 : status_readdata_top <= dm_pcie_rx_meta_cnt_status;
                 8'd19 : status_readdata_top <= dm_eth_pkt_cnt_status;
-                8'd20 : status_readdata_top <= dma_pkt_cnt_status;
-                8'd21 : status_readdata_top <= dma_request_cnt_status;
-                8'd22 : status_readdata_top <= rule_set_cnt_status;
-                8'd23 : status_readdata_top <= dma_queue_full_cnt_status;
-                8'd24 : status_readdata_top <= cpu_dsc_buf_full_cnt_status;
-                8'd25 : status_readdata_top <= cpu_pkt_buf_full_cnt_status;
-                8'd26 : status_readdata_top <= max_pcie_fifo_status;
-                8'd27 : status_readdata_top <= pcie_tx_ignored_dsc_cnt_status;
+                8'd20 : status_readdata_top <= rx_dma_pkt_cnt_status;
+                8'd21 : status_readdata_top <= pcie_rx_pkt_head_upd_cnt_status;
+                8'd22 : status_readdata_top <= pcie_tx_dsc_tail_upd_cnt_status;
+                8'd23 : status_readdata_top <= dma_request_cnt_status;
+                8'd24 : status_readdata_top <= rule_set_cnt_status;
+                8'd25 : status_readdata_top <= dma_queue_full_cnt_status;
+                8'd26 : status_readdata_top <= cpu_dsc_buf_full_cnt_status;
+                8'd27 : status_readdata_top <= cpu_pkt_buf_full_cnt_status;
+                8'd28 : status_readdata_top <= max_pcie_fifo_status;
+                8'd29 : status_readdata_top <= pcie_tx_ignored_dsc_cnt_status;
+                8'd30 : status_readdata_top <= pcie_tx_q_full_signals_status;
+                8'd31 : status_readdata_top <= pcie_tx_dsc_cnt_status;
+                8'd32 : status_readdata_top <= pcie_tx_empty_tail_cnt;
+                8'd33 : status_readdata_top <= pcie_tx_batch_cnt_status;
+                8'd34 : status_readdata_top <= pcie_tx_dma_pkt_cnt_status;
                 default : status_readdata_top <= 32'h345;
             endcase
         end
@@ -664,7 +709,6 @@ assign input_comp_eth_empty = reg_in_empty;
 
 assign out_valid_int = out_valid & !reg_out_almost_full;
 //pdumeta occupancy cnt
-assign pdumeta_cnt = pdumeta_cpu_csr_readdata[9:0];
 
 //connect flow_director_wrapper with flow_table_wrapper
 assign fdw_in_meta_data  = flow_table_wrapper_out_meta_data;
@@ -815,9 +859,10 @@ flow_table_wrapper flow_table_wrapper_0 (
     .out_meta_data    (flow_table_wrapper_out_meta_data),
     .out_meta_valid   (flow_table_wrapper_out_meta_valid),
     .out_meta_ready   (flow_table_wrapper_out_ready),
-    .in_control_data  (pdumeta_cpu_out_data),
-    .in_control_valid (pdumeta_cpu_out_valid),
-    .in_control_ready (pdumeta_cpu_out_ready),
+    // TODO(sadok): add control data
+    .in_control_data  (),
+    .in_control_valid (),
+    .in_control_ready (),
     .out_control_done (flow_table_wrapper_out_control_done)
  );
 
@@ -835,7 +880,7 @@ flow_director_wrapper flow_director_inst (
 dc_fifo_wrapper_infill  #(
     .SYMBOLS_PER_BEAT(1),
     .BITS_PER_SYMBOL(META_WIDTH),
-    .FIFO_DEPTH(PKT_NUM),
+    .FIFO_DEPTH(PKT_NUM*2),
     .USE_PACKETS(0)
 )
 flow_director_out_fifo (
@@ -943,35 +988,6 @@ dm2pcie_fifo (
     .out_startofpacket (pcie_rx_pkt_sop),
     .out_endofpacket   (pcie_rx_pkt_eop),
     .out_empty         (pcie_rx_pkt_empty)
-);
-
-dc_fifo_wrapper_infill #(
-    .SYMBOLS_PER_BEAT(1),
-    .BITS_PER_SYMBOL(PDU_META_WIDTH),
-    .FIFO_DEPTH(512),
-    .USE_PACKETS(0)
-) pdumeta_cpu_fifo (
-    .in_clk            (clk_pcie),
-    .in_reset_n        (!rst_pcie),
-    .out_clk           (clk),
-    .out_reset_n       (!rst),
-    .in_csr_address    (1'b0),
-    .in_csr_read       (1'b1),
-    .in_csr_write      (1'b0),
-    .in_csr_readdata   (pdumeta_cpu_csr_readdata),
-    .in_csr_writedata  (32'b0),
-    .in_data           (pdumeta_cpu_data),
-    .in_valid          (pdumeta_cpu_valid),
-    .in_ready          (pdumeta_cpu_ready),
-    .in_startofpacket  (1'b0),
-    .in_endofpacket    (1'b0),
-    .in_empty          (6'b0),
-    .out_data          (pdumeta_cpu_out_data),
-    .out_valid         (pdumeta_cpu_out_valid),
-    .out_ready         (pdumeta_cpu_out_ready),
-    .out_startofpacket (),
-    .out_endofpacket   (),
-    .out_empty         ()
 );
 
 dc_back_pressure #(
@@ -1192,13 +1208,17 @@ pcie_top pcie (
     .pcie_tx_pkt_occup       (pcie_tx_pkt_fifo_occup),
     .disable_pcie            (disable_pcie),
     .sw_reset                (sw_reset),
-    .pdumeta_cpu_data        (pdumeta_cpu_data),
-    .pdumeta_cpu_valid       (pdumeta_cpu_valid),
-    .pdumeta_cnt             (pdumeta_cnt),
     .dma_queue_full_cnt      (dma_queue_full_cnt),
     .cpu_dsc_buf_full_cnt    (cpu_dsc_buf_full_cnt),
     .cpu_pkt_buf_full_cnt    (cpu_pkt_buf_full_cnt),
-    .pcie_tx_ignored_dsc_cnt (pcie_tx_ignored_dsc_cnt),
+    .tx_ignored_dsc_cnt      (pcie_tx_ignored_dsc_cnt),
+    .tx_q_full_signals       (pcie_tx_q_full_signals),
+    .tx_dsc_cnt              (pcie_tx_dsc_cnt),
+    .tx_empty_tail_cnt       (pcie_tx_empty_tail_cnt),
+    .tx_batch_cnt            (pcie_tx_batch_cnt),
+    .tx_dma_pkt_cnt          (pcie_tx_dma_pkt_cnt),
+    .rx_pkt_head_upd_cnt     (pcie_rx_pkt_head_upd_cnt),
+    .tx_dsc_tail_upd_cnt     (pcie_tx_dsc_tail_upd_cnt),
     .clk_status              (clk_status),
     .status_addr             (status_addr),
     .status_read             (status_read),

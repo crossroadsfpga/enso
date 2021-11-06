@@ -24,6 +24,8 @@ module tb;
 `define RATE 100; // in Gbps (without Ethernet overhead)
 `endif
 
+`define DELAY_LAST_PKTS;  // Set it to delay last packets for every queue.
+
 generate
     // We assume this during the test, it does not necessarily hold in general.
     if (((`NB_PKT_QUEUES / `NB_DSC_QUEUES) * `NB_DSC_QUEUES) != `NB_PKT_QUEUES)
@@ -274,14 +276,21 @@ typedef enum{
     DM_PCIE_PKT,
     DM_PCIE_META,
     DM_ETH_PKT,
-    DMA_PKT,
+    RX_DMA_PKT,
+    RX_PKT_HEAD_UPD,
+    TX_DSC_TAIL_UPD,
     DMA_REQUEST,
     RULE_SET,
     DMA_QUEUE_FULL,
     CPU_DSC_BUF_FULL,
     CPU_PKT_BUF_FULL,
     MAX_PCIE_FIFO,
-    PCIE_TX_IGNORED_DSC_CNT
+    PCIE_TX_IGNORED_DSC,
+    PCIE_TX_Q_FULL_SIGNALS,
+    PCIE_TX_DSC_CNT,
+    PCIE_TX_EMPTY_TAIL_CNT,
+    PCIE_TX_BATCH_CNT,
+    TX_DMA_PKT
 } c_state_t;
 
 c_state_t conf_state;
@@ -371,10 +380,10 @@ logic [7:0] rate_cnt;
 always @(posedge clk_rxmac)
 begin
     cnt <= cnt + 1;
+    l8_rx_valid <= 0;
     if (cnt == 1) begin
         rst <= 1;
         addr <= 0;
-        l8_rx_valid <= 0;
         rate_cnt <= 0;
     end else if (cnt == 35) begin
         rst <= 0;
@@ -384,7 +393,12 @@ begin
         l8_rx_valid <= 1;
     end else if (cnt >= 7001 && setup_finished) begin
         if (rate_cnt < 100 * (`RATE * period_rx/(64 * 8))) begin
+`ifdef DELAY_LAST_PKTS
+            if (addr < (hi - nb_pkt_queues * `PKT_SIZE / 64 - 1)
+                    && !error_termination) begin  // Not sending last packets.
+`else
             if (addr < hi && !error_termination) begin
+`endif
                 addr <= addr + 1;
                 l8_rx_valid <= 1;
             end else if (!stop && stop_cnt == 0) begin
@@ -393,9 +407,13 @@ begin
                 $display("Number of cycles: %d", nb_cycles);
                 $display("Duration: %d", nb_cycles * period_rx);
                 $display("Flits: %d", hi);
+            end else if (!stop && stop_cnt < STOP_DELAY/2) begin
+                // Send last packets if not already sent.
+                if (addr < hi && !error_termination) begin
+                    addr <= addr + 1;
+                    l8_rx_valid <= 1;
+                end
             end
-        end else begin
-            l8_rx_valid <= 0;
         end
 
         if (rate_cnt == 99) begin
@@ -478,8 +496,8 @@ logic [511:0] read_return_buf [DMA_BUF_SIZE-1:0];
 logic [DMA_BUF_AWIDTH-1:0] read_return_buf_head;
 logic [DMA_BUF_AWIDTH-1:0] read_return_buf_tail;
 
-logic [$clog2(MAX_PKT_SIZE)-1:0] pdu_flit_cnt;
-logic [nb_pkt_queues-1:0]        pending_pkt_tails_valid;
+logic [63:0]              rx_pdu_flit_cnt;
+logic [nb_pkt_queues-1:0] pending_pkt_tails_valid;
 
 logic [31:0] pending_pkt_tails[nb_pkt_queues];
 logic [31:0] last_pkt_heads[nb_pkt_queues];
@@ -497,7 +515,13 @@ logic [3:0]  burst_size;
 logic [PCIE_ADDR_WIDTH-1:0] next_pcie_address_0;
 logic [31:0]                next_upd_tail;
 
-// PCIe FPGA -> CPU
+logic [63:0] total_rx_length;
+logic [63:0] total_tx_length;
+logic [63:0] max_tx_length;
+logic [63:0] tx_queue_full_cnt;
+logic [63:0] total_nb_tx_dscs;
+
+// PCIe FPGA -> CPU -> FPGA
 always @(posedge clk_pcie) begin
     automatic logic next_pcie_write_0;
 
@@ -512,7 +536,7 @@ always @(posedge clk_pcie) begin
     pcie_rddm_write <= 0;
 
     pcie_rddm_writedata <= 0;
-    pcie_rddm_byteenable <= 0; // not used at the moment
+    pcie_rddm_byteenable <= 0;
 
     if (rst) begin
         automatic integer c;
@@ -538,7 +562,7 @@ always @(posedge clk_pcie) begin
         pcie_bas_waitrequest <= 0;
         rx_cnt <= 0;
         req_cnt <= 0;
-        pdu_flit_cnt <= 0;
+        rx_pdu_flit_cnt <= 0;
         burst_offset <= 0;
         burst_size <= 0;
 
@@ -549,6 +573,12 @@ always @(posedge clk_pcie) begin
         pending_pkt_tails_valid <= 0;
 
         pending_dma_write_dwords <= 0;
+
+        total_rx_length <= 0;
+        total_tx_length <= 0;
+        max_tx_length <= 0;
+        tx_queue_full_cnt <= 0;
+        total_nb_tx_dscs <= 0;
 
         for (c = 0; c < nb_pkt_queues; c++) begin
             pending_pkt_tails[c] <= 0;
@@ -702,7 +732,7 @@ always @(posedge clk_pcie) begin
                                   + burst_offset;
 
                     if (cur_queue < nb_pkt_queues) begin // pkt queue
-                        pdu_flit_cnt <= pdu_flit_cnt + 1;
+                        rx_pdu_flit_cnt <= rx_pdu_flit_cnt + 1;
                     end else if (cur_queue < nb_pkt_queues + nb_dsc_queues) begin
                         // rx dsc queue
                         automatic logic [31:0] pkt_per_dsc_queue;
@@ -734,9 +764,38 @@ always @(posedge clk_pcie) begin
                         // save tail so we can advance the head later
                         pending_pkt_tails[pcie_pkt_desc.queue_id] <= pcie_pkt_desc.tail;
                         pending_pkt_tails_valid[pcie_pkt_desc.queue_id] <= 1'b1;
+                        total_rx_length <= total_rx_length + ((
+                            pcie_pkt_desc.tail
+                            - pending_pkt_tails[pcie_pkt_desc.queue_id]
+                        ) % PKT_BUF_SIZE) * 64;
                     end else begin  // tx dsc queue
+                        automatic logic [31:0] pkt_buf_queue;
+                        automatic logic [31:0] pkt_buf_head;
+                        automatic logic [31:0] tx_dsc_buf_queue;
                         automatic pcie_tx_dsc_t tx_dsc = pcie_bas_writedata;
                         assert(tx_dsc.signal == 0) else $fatal;
+
+                        // Figure out queue and head from address.
+                        pkt_buf_queue = tx_dsc.addr[32 +: BRAM_TABLE_IDX_WIDTH];
+                        pkt_buf_head = (tx_dsc.addr[6 +: RAM_ADDR_LEN]
+                                       + tx_dsc.length / 64) % PKT_BUF_SIZE;
+
+                        // Advance head pointer for corresponding pkt queue.
+                        next_pcie_write_0 = 1;
+                        pcie_address_0 <= pkt_buf_queue << 12;
+                        pcie_writedata_0 <= 0;
+                        pcie_byteenable_0 <= 0;
+                        last_pkt_heads[pkt_buf_queue] <= pkt_buf_head;
+
+                        pcie_writedata_0[32 +: 32] <= pkt_buf_head;
+                        pcie_byteenable_0[4 +: 4] <= 4'hf;
+
+                        // Advance corresponding TX dsc queue head.
+                        tx_dsc_buf_queue
+                            = cur_queue - nb_pkt_queues - nb_dsc_queues;
+                        tx_dsc_heads[tx_dsc_buf_queue]
+                            <= (tx_dsc_heads[tx_dsc_buf_queue] + 1)
+                               % DSC_BUF_SIZE;
                     end
 
                     // check if address out of bound
@@ -754,7 +813,7 @@ always @(posedge clk_pcie) begin
                 end
 
                 // if not trying to write anything, we can try to advance one of
-                // the head pointers
+                // the pointers.
                 if (next_pcie_write_0 == 0) begin
                     automatic integer i;
 
@@ -774,7 +833,7 @@ always @(posedge clk_pcie) begin
                     // of the queues.
                     end else if (pkt_q_consume_delay_cnt == 0) begin
                         for (i = 0; i < nb_pkt_queues; i++) begin
-                            automatic integer pkt_q = (i + last_upd_pkt_q) % nb_pkt_queues;
+                            automatic integer pkt_q = (i + last_upd_pkt_q + 1) % nb_pkt_queues;
                             automatic integer dsc_q = pkt_q / pkt_per_dsc_queue;
                             automatic integer free_slot =
                             (tx_dsc_heads[dsc_q] - tx_dsc_tails[dsc_q] - 1) % DSC_BUF_SIZE;
@@ -782,6 +841,7 @@ always @(posedge clk_pcie) begin
                             // Check if TX dsc buffer has enough room for at
                             // least 2 descriptors.
                             if (free_slot < 2) begin
+                                tx_queue_full_cnt <= tx_queue_full_cnt + 1;
                                 continue;
                             end
                             if (pending_pkt_tails_valid[pkt_q]) begin
@@ -822,6 +882,12 @@ always @(posedge clk_pcie) begin
                                     tx_dsc.signal = 1;
                                     tx_dsc.addr = pkt_buf_base_addr + tx_pkt_buf_head * 64;
                                     tx_dsc.length = (rx_pkt_buf_tail - tx_pkt_buf_head) * 64;
+                                    total_tx_length += tx_dsc.length;
+                                    total_nb_tx_dscs++;
+
+                                    if (tx_dsc.length > max_tx_length) begin
+                                        max_tx_length = tx_dsc.length;
+                                    end
 
                                     ram[tx_dsc_q_addr][tx_dsc_tails[dsc_q]] <= tx_dsc;
                                     tx_dsc_tails[dsc_q] <= (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
@@ -830,18 +896,34 @@ always @(posedge clk_pcie) begin
                                     tx_dsc.signal = 1;
                                     tx_dsc.addr = pkt_buf_base_addr + tx_pkt_buf_head * 64;
                                     tx_dsc.length = (DSC_BUF_SIZE - tx_pkt_buf_head) * 64;
+                                    total_tx_length += tx_dsc.length;
+                                    total_nb_tx_dscs++;
+
+                                    if (tx_dsc.length > max_tx_length) begin
+                                        max_tx_length = tx_dsc.length;
+                                    end
 
                                     ram[tx_dsc_q_addr][tx_dsc_tails[dsc_q]] <= tx_dsc;
 
                                     // Send second descriptor.
                                     tx_dsc.addr = pkt_buf_base_addr;
                                     tx_dsc.length = rx_pkt_buf_tail * 64;
+                                    total_tx_length += tx_dsc.length;
+                                    total_nb_tx_dscs++;
 
-                                    ram[tx_dsc_q_addr][(tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE] <=
-                                    tx_dsc;
+                                    if (tx_dsc.length > max_tx_length) begin
+                                        max_tx_length = tx_dsc.length;
+                                    end
 
-                                    // Advance to hold two descriptors.
-                                    tx_dsc_tails[dsc_q] <= (tx_dsc_tails[dsc_q] + 2) % DSC_BUF_SIZE;
+                                    ram[tx_dsc_q_addr][(tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE] <= tx_dsc;
+
+                                    // Ignore second descriptor if it has zero
+                                    // length.
+                                    if (tx_dsc.length == 0) begin
+                                        tx_dsc_tails[dsc_q] <= (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
+                                    end else begin
+                                       tx_dsc_tails[dsc_q] <= (tx_dsc_tails[dsc_q] + 2) % DSC_BUF_SIZE; 
+                                    end
                                 end
 
                                 tx_pkt_heads[pkt_q] <= rx_pkt_buf_tail;
@@ -888,6 +970,7 @@ always @(posedge clk_pcie) begin
                     // `prio` queue has priority over `desc` queue.
                     if (rddm_prio_queue_valid) begin
                         rddm_desc = rddm_prio_queue_data;
+                        assert(!rddm_desc_queue_ready) else $fatal;
                     end else begin
                         rddm_desc = rddm_desc_queue_data;
                     end
@@ -897,7 +980,10 @@ always @(posedge clk_pcie) begin
 
                     // Address must be aligned to double dword but here we assume cache line
                     // alignment to make things easier.
-                    assert(rddm_desc.src_addr[5:0] == 0) else $fatal;
+                    assert(rddm_desc.src_addr[5:0] == 0) else begin
+                       $display("rddm_desc.src_addr: %h", rddm_desc.src_addr);
+                       $fatal; 
+                    end
                     assert(rddm_desc.nb_dwords[3:0] == 0) else $fatal;
 
                     // Only single_dst is implemented in this mock.
@@ -921,11 +1007,6 @@ always @(posedge clk_pcie) begin
                         pending_dma_write_dwords <= 0;
                     end
                 end
-
-                // TODO(sadok): Advance head pointer for corresponding pkt queue.
-                // if (next_pcie_write_0 == 0) begin
-                // end
-
             end
         endcase
 
@@ -938,6 +1019,26 @@ always @(posedge clk_pcie) begin
     end
 end
 
+logic [31:0] rddm_write_pkt_cnt;
+logic [31:0] rddm_write_dsc_cnt;
+
+initial rddm_write_pkt_cnt = 0;
+initial rddm_write_dsc_cnt = 0;
+
+// Check TX packets
+always @(posedge clk_pcie) begin
+    if (pcie_rddm_write) begin
+        automatic logic [31:0] cur_queue;
+        automatic rddm_desc_t rddm_desc = pcie_rddm_address;
+        cur_queue = rddm_desc.src_addr[32 +: BRAM_TABLE_IDX_WIDTH+1];
+
+        if (cur_queue >= (nb_pkt_queues + nb_dsc_queues)) begin
+            rddm_write_dsc_cnt <= rddm_write_dsc_cnt + 1;
+        end else begin
+            rddm_write_pkt_cnt <= rddm_write_pkt_cnt + 1;
+        end
+    end
+end
 
 // Queue that holds incoming RDDM descriptors with regular prioity (desc).
 fifo_wrapper_infill_mlab #(
@@ -1026,55 +1127,55 @@ always @(posedge clk_status) begin
                     integer j;
                     integer k;
 
-                    for (q = 0; q < nb_dsc_queues; q = q + 1) begin
-                        $display("RX Descriptor queue: %d", q);
-                        // printing only the beginning of each buffer,
-                        // may print the entire thing instead
-                        for (i = 0; i < 10; i = i + 1) begin
-                        // for (i = 0; i < RAM_SIZE; i = i + 1) begin
-                            for (j = 0; j < 8; j = j + 1) begin
-                                $write("%h:", i*64+j*8);
-                                for (k = 0; k < 8; k = k + 1) begin
-                                    $write(" %h",
-                                        ram[q+nb_pkt_queues][i][j*64+k*8 +: 8]);
-                                end
-                                $write("\n");
-                            end
-                            $write("\n");
-                        end
-                        $display("TX Descriptor queue: %d", q);
-                        for (i = 0; i < 10; i = i + 1) begin
-                            // for (i = 0; i < RAM_SIZE; i = i + 1) begin
-                            for (j = 0; j < 8; j = j + 1) begin
-                                $write("%h:", i*64+j*8);
-                                for (k = 0; k < 8; k = k + 1) begin
-                                    $write(" %h", 
-                                           ram[q+nb_pkt_queues+nb_dsc_queues][
-                                               i][j*64+k*8 +: 8]);
-                                end
-                                $write("\n");
-                            end
-                        $write("\n");
-                        end
+                    // for (q = 0; q < nb_dsc_queues; q = q + 1) begin
+                    //     $display("RX Descriptor queue: %d", q);
+                    //     // printing only the beginning of each buffer,
+                    //     // may print the entire thing instead
+                    //     for (i = 0; i < 10; i = i + 1) begin
+                    //     // for (i = 0; i < RAM_SIZE; i = i + 1) begin
+                    //         for (j = 0; j < 8; j = j + 1) begin
+                    //             $write("%h:", i*64+j*8);
+                    //             for (k = 0; k < 8; k = k + 1) begin
+                    //                 $write(" %h",
+                    //                     ram[q+nb_pkt_queues][i][j*64+k*8 +: 8]);
+                    //             end
+                    //             $write("\n");
+                    //         end
+                    //         $write("\n");
+                    //     end
+                    //     $display("TX Descriptor queue: %d", q);
+                    //     for (i = 0; i < 10; i = i + 1) begin
+                    //         // for (i = 0; i < RAM_SIZE; i = i + 1) begin
+                    //         for (j = 0; j < 8; j = j + 1) begin
+                    //             $write("%h:", i*64+j*8);
+                    //             for (k = 0; k < 8; k = k + 1) begin
+                    //                 $write(" %h", 
+                    //                        ram[q+nb_pkt_queues+nb_dsc_queues][
+                    //                            i][j*64+k*8 +: 8]);
+                    //             end
+                    //             $write("\n");
+                    //         end
+                    //     $write("\n");
+                    //     end
 
-                        $display("Packet queues:");
-                        for (pkt_q = q*pkt_per_dsc_queue;
-                            pkt_q < (q+1)*pkt_per_dsc_queue; pkt_q = pkt_q + 1)
-                        begin
-                            $display("Packet queue: %d", pkt_q);
-                            for (i = 0; i < 10; i = i + 1) begin
-                                for (j = 0; j < 8; j = j + 1) begin
-                                    $write("%h:", i*64+j*8);
-                                    for (k = 0; k < 8; k = k + 1) begin
-                                        $write(" %h",
-                                            ram[pkt_q][i][j*64+k*8 +: 8]);
-                                    end
-                                    $write("\n");
-                                end
-                                $write("\n");
-                            end
-                        end
-                    end
+                    //     $display("Packet queues:");
+                    //     for (pkt_q = q*pkt_per_dsc_queue;
+                    //         pkt_q < (q+1)*pkt_per_dsc_queue; pkt_q = pkt_q + 1)
+                    //     begin
+                    //         $display("Packet queue: %d", pkt_q);
+                    //         for (i = 0; i < 10; i = i + 1) begin
+                    //             for (j = 0; j < 8; j = j + 1) begin
+                    //                 $write("%h:", i*64+j*8);
+                    //                 for (k = 0; k < 8; k = k + 1) begin
+                    //                     $write(" %h",
+                    //                         ram[pkt_q][i][j*64+k*8 +: 8]);
+                    //                 end
+                    //                 $write("\n");
+                    //             end
+                    //             $write("\n");
+                    //         end
+                    //     end
+                    // end
                     conf_state <= READ_PCIE_START;
                 end
             end
@@ -1133,7 +1234,7 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("---- PRINT STATS ------");
-                    $display("IN_PKT:\t\t\t%d",top_readdata);
+                    $display("IN_PKT:\t\t%d",top_readdata);
                     conf_state <= OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0001;
@@ -1142,7 +1243,7 @@ always @(posedge clk_status) begin
             OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("OUT_PKT:\t\t\t%d",top_readdata);
+                    $display("OUT_PKT:\t\t%d",top_readdata);
                     conf_state <= INCOMP_OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0002;
@@ -1151,7 +1252,7 @@ always @(posedge clk_status) begin
             INCOMP_OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("INCOMP_OUT_PKT:\t\t%d",top_readdata);
+                    $display("INCOMP_OUT_PKT:\t%d",top_readdata);
                     conf_state <= PARSER_OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0003;
@@ -1160,7 +1261,7 @@ always @(posedge clk_status) begin
             PARSER_OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PARSER_OUT_PKT:\t\t%d",top_readdata);
+                    $display("PARSER_OUT_PKT:\t%d",top_readdata);
                     conf_state <= MAX_PARSER_FIFO;
                     s_read <= 1;
                     s_addr <= 30'h2200_0004;
@@ -1169,7 +1270,7 @@ always @(posedge clk_status) begin
             MAX_PARSER_FIFO: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("MAX_PARSER_FIFO:\t\t%d",top_readdata);
+                    $display("MAX_PARSER_FIFO:\t%d",top_readdata);
                     conf_state <= FD_IN_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0005;
@@ -1178,7 +1279,7 @@ always @(posedge clk_status) begin
             FD_IN_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("FD_IN_PKT:\t\t\t%d",top_readdata);
+                    $display("FD_IN_PKT:\t\t%d",top_readdata);
                     conf_state <= FD_OUT_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0006;
@@ -1187,7 +1288,7 @@ always @(posedge clk_status) begin
             FD_OUT_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("FD_OUT_PKT:\t\t\t%d",top_readdata);
+                    $display("FD_OUT_PKT:\t\t%d",top_readdata);
                     conf_state <= MAX_FD_OUT_FIFO;
                     s_read <= 1;
                     s_addr <= 30'h2200_0007;
@@ -1196,7 +1297,7 @@ always @(posedge clk_status) begin
             MAX_FD_OUT_FIFO: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("MAX_FD_OUT_PKT:\t\t%d",top_readdata);
+                    $display("MAX_FD_OUT_PKT:\t%d",top_readdata);
                     conf_state <= DM_IN_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0008;
@@ -1205,7 +1306,7 @@ always @(posedge clk_status) begin
             DM_IN_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DM_IN_PKT:\t\t\t%d",top_readdata);
+                    $display("DM_IN_PKT:\t\t%d",top_readdata);
                     conf_state <= IN_EMPTYLIST_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0009;
@@ -1215,7 +1316,7 @@ always @(posedge clk_status) begin
             IN_EMPTYLIST_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("IN_EMPTYLIST_PKT:\t\t%d",top_readdata);
+                    $display("IN_EMPTYLIST_PKT:\t%d",top_readdata);
                     conf_state <= OUT_EMPTYLIST_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_000A;
@@ -1224,7 +1325,7 @@ always @(posedge clk_status) begin
             OUT_EMPTYLIST_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("OUT_EMPTYLIST_PKT:\t\t%d",top_readdata);
+                    $display("OUT_EMPTYLIST_PKT:\t%d",top_readdata);
                     conf_state <= PKT_ETH;
                     s_read <= 1;
                     s_addr <= 30'h2200_000B;
@@ -1233,7 +1334,7 @@ always @(posedge clk_status) begin
             PKT_ETH: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PKT_ETH:\t\t\t%d",top_readdata);
+                    $display("PKT_ETH:\t\t%d",top_readdata);
                     conf_state <= PKT_DROP;
                     s_read <= 1;
                     s_addr <= 30'h2200_000C;
@@ -1242,7 +1343,7 @@ always @(posedge clk_status) begin
             PKT_DROP: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PKT_DROP:\t\t\t%d",top_readdata);
+                    $display("PKT_DROP:\t\t%d",top_readdata);
                     conf_state <= PKT_PCIE;
                     s_read <= 1;
                     s_addr <= 30'h2200_000D;
@@ -1251,7 +1352,7 @@ always @(posedge clk_status) begin
             PKT_PCIE: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PKT_PCIE:\t\t\t%d",top_readdata);
+                    $display("PKT_PCIE:\t\t%d",top_readdata);
                     conf_state <= MAX_DM2PCIE_FIFO;
                     s_read <= 1;
                     s_addr <= 30'h2200_000E;
@@ -1260,7 +1361,7 @@ always @(posedge clk_status) begin
             MAX_DM2PCIE_FIFO: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("MAX_DM2PCIE_FIFO:\t\t%d",top_readdata);
+                    $display("MAX_DM2PCIE_FIFO:\t%d",top_readdata);
                     conf_state <= PCIE_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_000F;
@@ -1269,7 +1370,7 @@ always @(posedge clk_status) begin
             PCIE_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PCIE_PKT:\t\t\t%d",top_readdata);
+                    $display("PCIE_PKT:\t\t%d",top_readdata);
                     conf_state <= PCIE_META;
                     s_read <= 1;
                     s_addr <= 30'h2200_0010;
@@ -1278,7 +1379,7 @@ always @(posedge clk_status) begin
             PCIE_META: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PCIE_META:\t\t\t%d",top_readdata);
+                    $display("PCIE_META:\t\t%d",top_readdata);
                     conf_state <= DM_PCIE_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0011;
@@ -1287,7 +1388,7 @@ always @(posedge clk_status) begin
             DM_PCIE_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DM_PCIE_PKT:\t\t\t%d",top_readdata);
+                    $display("DM_PCIE_PKT:\t\t%d",top_readdata);
                     conf_state <= DM_PCIE_META;
                     s_read <= 1;
                     s_addr <= 30'h2200_0012;
@@ -1296,7 +1397,7 @@ always @(posedge clk_status) begin
             DM_PCIE_META: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DM_PCIE_META:\t\t\t%d",top_readdata);
+                    $display("DM_PCIE_META:\t\t%d",top_readdata);
                     conf_state <= DM_ETH_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0013;
@@ -1305,80 +1406,153 @@ always @(posedge clk_status) begin
             DM_ETH_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DM_ETH_PKT:\t\t\t%d",top_readdata);
-                    conf_state <= DMA_PKT;
+                    $display("DM_ETH_PKT:\t\t%d",top_readdata);
+                    conf_state <= RX_DMA_PKT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0014;
                 end
             end
-            DMA_PKT: begin
+            RX_DMA_PKT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DMA_PKT:\t\t\t%d",top_readdata);
-                    conf_state <= DMA_REQUEST;
+                    $display("RX_DMA_PKT:\t\t%d",top_readdata);
+                    conf_state <= RX_PKT_HEAD_UPD;
                     s_read <= 1;
                     s_addr <= 30'h2200_0015;
+                end
+            end
+            RX_PKT_HEAD_UPD: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("RX_PKT_HEAD_UPD:\t%d",top_readdata);
+                    conf_state <= TX_DSC_TAIL_UPD;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0016;
+                end
+            end
+            TX_DSC_TAIL_UPD: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("TX_DSC_TAIL_UPD:\t%d",top_readdata);
+                    conf_state <= DMA_REQUEST;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0017;
                 end
             end
             DMA_REQUEST: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DMA_REQUEST:\t\t\t%d",top_readdata);
+                    $display("DMA_REQUEST:\t\t%d",top_readdata);
                     conf_state <= RULE_SET;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0016;
+                    s_addr <= 30'h2200_0018;
                 end
             end
             RULE_SET: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("RULE_SET:\t\t\t%d",top_readdata);
+                    $display("RULE_SET:\t\t%d",top_readdata);
                     conf_state <= DMA_QUEUE_FULL;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0017;
+                    s_addr <= 30'h2200_0019;
                 end
             end
             DMA_QUEUE_FULL: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("DMA_QUEUE_FULL:\t\t%d",top_readdata);
+                    $display("DMA_QUEUE_FULL:\t%d",top_readdata);
                     conf_state <= CPU_DSC_BUF_FULL;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0018;
+                    s_addr <= 30'h2200_001A;
                 end
             end
             CPU_DSC_BUF_FULL: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("CPU_DSC_BUF_FULL:\t\t%d",top_readdata);
+                    $display("CPU_DSC_BUF_FULL:\t%d",top_readdata);
                     conf_state <= CPU_PKT_BUF_FULL;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0019;
+                    s_addr <= 30'h2200_001B;
                 end
             end
             CPU_PKT_BUF_FULL: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("CPU_PKT_BUF_FULL:\t\t%d",top_readdata);
+                    $display("CPU_PKT_BUF_FULL:\t%d",top_readdata);
                     conf_state <= MAX_PCIE_FIFO;
                     s_read <= 1;
-                    s_addr <= 30'h2200_001A;
+                    s_addr <= 30'h2200_001C;
                 end
             end
             MAX_PCIE_FIFO: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("MAX_PCIE_FIFO:\t\t%d",top_readdata);
-                    conf_state <= PCIE_TX_IGNORED_DSC_CNT;
+                    $display("MAX_PCIE_FIFO:\t%d",top_readdata);
+                    conf_state <= PCIE_TX_IGNORED_DSC;
                     s_read <= 1;
-                    s_addr <= 30'h2200_001B;
+                    s_addr <= 30'h2200_001D;
                 end
             end
-            PCIE_TX_IGNORED_DSC_CNT: begin
+            PCIE_TX_IGNORED_DSC: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PCIE_TX_IGNORED_DSC_CNT:\t%d",top_readdata);
-                    $display("done -");
+                    $display("PCIE_TX_IGNORED_DSC:\t%d",top_readdata);
+                    conf_state <= PCIE_TX_Q_FULL_SIGNALS;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_001E;
+                end
+            end
+            PCIE_TX_Q_FULL_SIGNALS: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PCIE_TX_Q_FULL_SIG:\t%d",top_readdata);
+                    conf_state <= PCIE_TX_DSC_CNT;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_001F;
+                end
+            end
+            PCIE_TX_DSC_CNT: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PCIE_TX_DSC_CNT:\t%d",top_readdata);
+                    conf_state <= PCIE_TX_EMPTY_TAIL_CNT;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0020;
+                end
+            end
+            PCIE_TX_EMPTY_TAIL_CNT: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PCIE_TX_EMPTY_TAIL:\t%d",top_readdata);
+                    conf_state <= PCIE_TX_BATCH_CNT;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0021;
+                end
+            end
+            PCIE_TX_BATCH_CNT: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PCIE_TX_BATCH_CNT:\t%d",top_readdata);
+                    conf_state <= TX_DMA_PKT;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0022;
+                end
+            end
+            TX_DMA_PKT: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("TX_DMA_PKT:\t\t%d",top_readdata);
+                    
+                    $display("\nTB stats:");
+                    $display("Flits read from memory (pkt): %d", rddm_write_pkt_cnt);
+                    $display("Flits read from memory (dsc): %d", rddm_write_dsc_cnt);
+                    $display("Total RX length (in bytes): %d", total_rx_length);
+                    $display("Total TX length (in bytes): %d", total_tx_length);
+                    $display("Total # TX descriptors: %d", total_nb_tx_dscs);
+                    $display("Average TX transfer size: %d", total_tx_length/total_nb_tx_dscs);
+                    $display("Max TX transfer size: %d", max_tx_length);
+                    $display("RX PDU flit cnt: %d", rx_pdu_flit_cnt);
+                    $display("TX queue full cnt: %d", tx_queue_full_cnt);
                     $finish;
                 end
             end
