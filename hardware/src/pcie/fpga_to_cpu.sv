@@ -164,7 +164,6 @@ typedef enum
 } state_t;
 
 state_t state;
-logic rst_r;
 
 // We may set the writing signals even when pcie_bas_waitrequest is set, but we
 // must make sure that they remain active until pcie_bas_waitrequest is unset.
@@ -180,9 +179,7 @@ logic can_start_transfer;
 
 // Consume requests and issue DMAs
 always @(posedge clk) begin
-  rst_r <= rst;
-
-  if (rst_r | sw_reset) begin
+  if (rst | sw_reset) begin
     state <= START_TRANSFER;
     dma_queue_full_cnt_r <= 0;
     pcie_bas_write_r <= 0;
@@ -307,7 +304,7 @@ end
 
 // Extra registers to help with timing.
 always @(posedge clk) begin
-  if (rst_r | sw_reset) begin
+  if (rst | sw_reset) begin
     metadata_buf_out_valid_r <= 0;
   end else begin
     if (!pcie_bas_waitrequest) begin
