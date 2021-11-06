@@ -230,7 +230,6 @@ end
 // Write logic (no backpressure yet).
 always @(posedge clk) begin
     if (rst) begin
-        eth_pkt_valid <= 0;
         pcie_rx_pkt_valid <= 0;
     end else begin
         pcie_rx_pkt_data <= pkt_buffer_readdata.data;
@@ -247,13 +246,6 @@ always @(posedge clk) begin
         // eth_pkt_empty <= 0;
         // eth_pkt_valid <= 0;
 
-        eth_pkt_data <= pcie_tx_pkt_data;
-        eth_pkt_sop <= pcie_tx_pkt_sop;
-        eth_pkt_eop <= pcie_tx_pkt_eop;
-        eth_pkt_empty <= pcie_tx_pkt_empty;
-        eth_pkt_valid <= pcie_tx_pkt_valid;
-        pcie_tx_pkt_ready <= eth_pkt_ready;
-
         if (pkt_buffer_readvalid) begin
             // Send check_pkt to data_fifo.
             if(pkt_flags_r == PKT_PCIE) begin
@@ -269,6 +261,15 @@ always @(posedge clk) begin
             end
         end
     end
+end
+
+always_comb begin
+    eth_pkt_data = pcie_tx_pkt_data;
+    eth_pkt_sop = pcie_tx_pkt_sop;
+    eth_pkt_eop = pcie_tx_pkt_eop;
+    eth_pkt_empty = pcie_tx_pkt_empty;
+    eth_pkt_valid = pcie_tx_pkt_valid;
+    pcie_tx_pkt_ready = eth_pkt_ready;
 end
 
 hyper_pipe #(
