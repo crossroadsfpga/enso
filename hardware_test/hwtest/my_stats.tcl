@@ -77,8 +77,10 @@ set PCIE_TX_IGNORED_DSC    29
 set PCIE_TX_Q_FULL_SIGNALS 30
 set PCIE_TX_DSC_CNT        31
 set PCIE_TX_EMPTY_TAIL_CNT 32
-set PCIE_TX_BATCH_CNT      33
-set TX_DMA_PKT             34
+set PCIE_TX_DSC_READ_CNT   33
+set PCIE_TX_PKT_READ_CNT   34
+set PCIE_TX_BATCH_CNT      35
+set TX_DMA_PKT             36
 
 #PCIE reg
 set PCIE_CTRL_REG       0
@@ -499,6 +501,8 @@ proc get_top_stats {} {
     global PCIE_TX_Q_FULL_SIGNALS
     global PCIE_TX_DSC_CNT
     global PCIE_TX_EMPTY_TAIL_CNT
+    global PCIE_TX_DSC_READ_CNT
+    global PCIE_TX_PKT_READ_CNT
     global PCIE_TX_BATCH_CNT
     global TX_DMA_PKT
 
@@ -536,6 +540,8 @@ proc get_top_stats {} {
     read_top_reg PCIE_TX_Q_FULL_SIGNALS $PCIE_TX_Q_FULL_SIGNALS $fp
     read_top_reg PCIE_TX_DSC_CNT        $PCIE_TX_DSC_CNT        $fp
     read_top_reg PCIE_TX_EMPTY_TAIL_CNT $PCIE_TX_EMPTY_TAIL_CNT $fp
+    read_top_reg PCIE_TX_DSC_READ_CNT   $PCIE_TX_DSC_READ_CNT   $fp
+    read_top_reg PCIE_TX_PKT_READ_CNT   $PCIE_TX_PKT_READ_CNT   $fp
     read_top_reg PCIE_TX_BATCH_CNT      $PCIE_TX_BATCH_CNT      $fp
     read_top_reg TX_DMA_PKT             $TX_DMA_PKT             $fp
     close $fp

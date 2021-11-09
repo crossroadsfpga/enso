@@ -118,6 +118,8 @@ logic [31:0] pcie_tx_ignored_dsc_cnt_status;
 logic [31:0] pcie_tx_q_full_signals_status;
 logic [31:0] pcie_tx_dsc_cnt_status;
 logic [31:0] pcie_tx_empty_tail_cnt_status;
+logic [31:0] pcie_tx_dsc_read_cnt_status;
+logic [31:0] pcie_tx_pkt_read_cnt_status;
 logic [31:0] pcie_tx_batch_cnt_status;
 logic [31:0] pcie_tx_dma_pkt_cnt_status;
 
@@ -382,6 +384,12 @@ logic [31:0] pcie_tx_dsc_cnt_r2;
 logic [31:0] pcie_tx_empty_tail_cnt;
 logic [31:0] pcie_tx_empty_tail_cnt_r1;
 logic [31:0] pcie_tx_empty_tail_cnt_r2;
+logic [31:0] pcie_tx_dsc_read_cnt;
+logic [31:0] pcie_tx_dsc_read_cnt_r1;
+logic [31:0] pcie_tx_dsc_read_cnt_r2;
+logic [31:0] pcie_tx_pkt_read_cnt;
+logic [31:0] pcie_tx_pkt_read_cnt_r1;
+logic [31:0] pcie_tx_pkt_read_cnt_r2;
 logic [31:0] pcie_tx_batch_cnt;
 logic [31:0] pcie_tx_batch_cnt_r1;
 logic [31:0] pcie_tx_batch_cnt_r2;
@@ -623,6 +631,13 @@ always @(posedge clk_status) begin
     pcie_tx_dsc_cnt_status          <= pcie_tx_dsc_cnt_r2;
     pcie_tx_empty_tail_cnt_r1       <= pcie_tx_empty_tail_cnt;
     pcie_tx_empty_tail_cnt_r2       <= pcie_tx_empty_tail_cnt_r1;
+    pcie_tx_empty_tail_cnt_status   <= pcie_tx_empty_tail_cnt_r2;
+    pcie_tx_dsc_read_cnt_r1         <= pcie_tx_dsc_read_cnt;
+    pcie_tx_dsc_read_cnt_r2         <= pcie_tx_dsc_read_cnt_r1;
+    pcie_tx_dsc_read_cnt_status     <= pcie_tx_dsc_read_cnt_r2;
+    pcie_tx_pkt_read_cnt_r1         <= pcie_tx_pkt_read_cnt;
+    pcie_tx_pkt_read_cnt_r2         <= pcie_tx_pkt_read_cnt_r1;
+    pcie_tx_pkt_read_cnt_status     <= pcie_tx_pkt_read_cnt_r2;
     pcie_tx_batch_cnt_r1            <= pcie_tx_batch_cnt;
     pcie_tx_batch_cnt_r2            <= pcie_tx_batch_cnt_r1;
     pcie_tx_batch_cnt_status        <= pcie_tx_batch_cnt_r2;
@@ -677,9 +692,11 @@ always @(posedge clk_status) begin
                 8'd29 : status_readdata_top <= pcie_tx_ignored_dsc_cnt_status;
                 8'd30 : status_readdata_top <= pcie_tx_q_full_signals_status;
                 8'd31 : status_readdata_top <= pcie_tx_dsc_cnt_status;
-                8'd32 : status_readdata_top <= pcie_tx_empty_tail_cnt;
-                8'd33 : status_readdata_top <= pcie_tx_batch_cnt_status;
-                8'd34 : status_readdata_top <= pcie_tx_dma_pkt_cnt_status;
+                8'd32 : status_readdata_top <= pcie_tx_empty_tail_cnt_status;
+                8'd33 : status_readdata_top <= pcie_tx_dsc_read_cnt_status;
+                8'd34 : status_readdata_top <= pcie_tx_pkt_read_cnt_status;
+                8'd35 : status_readdata_top <= pcie_tx_batch_cnt_status;
+                8'd36 : status_readdata_top <= pcie_tx_dma_pkt_cnt_status;
                 default : status_readdata_top <= 32'h345;
             endcase
         end
@@ -1215,6 +1232,8 @@ pcie_top pcie (
     .tx_q_full_signals       (pcie_tx_q_full_signals),
     .tx_dsc_cnt              (pcie_tx_dsc_cnt),
     .tx_empty_tail_cnt       (pcie_tx_empty_tail_cnt),
+    .tx_dsc_read_cnt         (pcie_tx_dsc_read_cnt),
+    .tx_pkt_read_cnt         (pcie_tx_pkt_read_cnt),
     .tx_batch_cnt            (pcie_tx_batch_cnt),
     .tx_dma_pkt_cnt          (pcie_tx_dma_pkt_cnt),
     .rx_pkt_head_upd_cnt     (pcie_rx_pkt_head_upd_cnt),

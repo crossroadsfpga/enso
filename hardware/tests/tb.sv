@@ -289,6 +289,8 @@ typedef enum{
     PCIE_TX_Q_FULL_SIGNALS,
     PCIE_TX_DSC_CNT,
     PCIE_TX_EMPTY_TAIL_CNT,
+    PCIE_TX_DSC_READ_CNT,
+    PCIE_TX_PKT_READ_CNT,
     PCIE_TX_BATCH_CNT,
     TX_DMA_PKT
 } c_state_t;
@@ -1524,9 +1526,27 @@ always @(posedge clk_status) begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("PCIE_TX_EMPTY_TAIL:\t%d",top_readdata);
-                    conf_state <= PCIE_TX_BATCH_CNT;
+                    conf_state <= PCIE_TX_DSC_READ_CNT;
                     s_read <= 1;
                     s_addr <= 30'h2200_0021;
+                end
+            end
+            PCIE_TX_DSC_READ_CNT: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PCIE_TX_DSC_READ_CNT:\t%d",top_readdata);
+                    conf_state <= PCIE_TX_PKT_READ_CNT;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0022;
+                end
+            end
+            PCIE_TX_PKT_READ_CNT: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PCIE_TX_PKT_READ_CNT:\t%d",top_readdata);
+                    conf_state <= PCIE_TX_BATCH_CNT;
+                    s_read <= 1;
+                    s_addr <= 30'h2200_0023;
                 end
             end
             PCIE_TX_BATCH_CNT: begin
@@ -1535,7 +1555,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_TX_BATCH_CNT:\t%d",top_readdata);
                     conf_state <= TX_DMA_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0022;
+                    s_addr <= 30'h2200_0024;
                 end
             end
             TX_DMA_PKT: begin

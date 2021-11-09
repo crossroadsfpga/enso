@@ -75,6 +75,8 @@ module pcie_top (
     output logic [31:0] tx_q_full_signals,
     output logic [31:0] tx_dsc_cnt,
     output logic [31:0] tx_empty_tail_cnt,
+    output logic [31:0] tx_dsc_read_cnt,
+    output logic [31:0] tx_pkt_read_cnt,
     output logic [31:0] tx_batch_cnt,
     output logic [31:0] tx_dma_pkt_cnt,
     output logic [31:0] rx_pkt_head_upd_cnt,
@@ -423,6 +425,8 @@ cpu_to_fpga #(
     .queue_full_signals   (tx_q_full_signals),
     .dsc_cnt              (tx_dsc_cnt),
     .empty_tail_cnt       (tx_empty_tail_cnt),
+    .dsc_read_cnt         (tx_dsc_read_cnt),
+    .pkt_read_cnt         (tx_pkt_read_cnt),
     .batch_cnt            (tx_batch_cnt)
 );
 

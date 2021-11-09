@@ -55,6 +55,8 @@ module cpu_to_fpga  #(
   output logic [31:0] queue_full_signals,
   output logic [31:0] dsc_cnt,
   output logic [31:0] empty_tail_cnt,
+  output logic [31:0] dsc_read_cnt,
+  output logic [31:0] pkt_read_cnt,
   output logic [31:0] batch_cnt
 );
 
@@ -370,6 +372,8 @@ always @(posedge clk) begin
 
   if (rst) begin
     last_queue_id[QUEUE_ID_WIDTH] <= 1;  // Invalid queue.
+    dsc_read_cnt <= 0;
+    pkt_read_cnt <= 0;
   end else if (pcie_rddm_write) begin
     automatic rddm_dst_addr_t rddm_dst_addr = pcie_rddm_address;
 
@@ -415,9 +419,13 @@ always @(posedge clk) begin
 
       meta_queue_in_valid_r <= 1;
       meta_queue_in_data_r <= meta;
+
+      dsc_read_cnt <= dsc_read_cnt + 1;
     end else begin  // Received a packet.
       pkt_queue_in_data <= pcie_rddm_writedata;
       pkt_queue_in_valid <= 1;
+
+      pkt_read_cnt <= pkt_read_cnt + 1;
     end
   end
 end
