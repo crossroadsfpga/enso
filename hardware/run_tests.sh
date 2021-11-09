@@ -7,8 +7,9 @@ trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
 trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
 declare -a tests=(
-    'test_pcie_top'
-    'test_queue_manager'
+    # 'test_pcie_top'
+    'test_cpu_to_fpga'
+    # 'test_queue_manager'
     # 'test_prefetch_rb'
 )
 
@@ -59,9 +60,9 @@ for t in ${tests[@]}; do
     else
         vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
             -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver \
-            -voptargs="+acc" -c -do "run -all" $t  > out.txt
+            -voptargs="+acc" -c -do "run -all" $t #> out.txt
     fi
-    output_if_error $t
+    #output_if_error $t
 done
 
 printf "${GREEN}All tests passed${NC}\n"
