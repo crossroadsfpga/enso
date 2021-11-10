@@ -639,6 +639,38 @@ fifo_wrapper_infill_mlab #(
   .out_ready     (dsc_reads_queue_out_ready)
 );
 
+logic pcie_rddm_desc_ready_r1;
+logic pcie_rddm_desc_ready_r2;
+logic pcie_rddm_desc_ready_r3;
+
+logic pcie_rddm_prio_ready_r1;
+logic pcie_rddm_prio_ready_r2;
+logic pcie_rddm_prio_ready_r3;
+
+logic rddm_desc_queue_out_valid;
+logic rddm_desc_queue_out_ready;
+
+logic rddm_prio_queue_out_valid;
+logic rddm_prio_queue_out_ready;
+
+// Adjusting to the ready latency of 3 cycles imposed by the RDDM.
+always @(posedge clk) begin
+  pcie_rddm_desc_ready_r1 <= pcie_rddm_desc_ready;
+  pcie_rddm_desc_ready_r2 <= pcie_rddm_desc_ready_r1;
+  pcie_rddm_desc_ready_r3 <= pcie_rddm_desc_ready_r2;
+
+  pcie_rddm_prio_ready_r1 <= pcie_rddm_prio_ready;
+  pcie_rddm_prio_ready_r2 <= pcie_rddm_prio_ready_r1;
+  pcie_rddm_prio_ready_r3 <= pcie_rddm_prio_ready_r2;
+end
+
+always_comb begin
+  rddm_desc_queue_out_ready = pcie_rddm_desc_ready_r3;
+  pcie_rddm_desc_valid = rddm_desc_queue_out_valid & rddm_desc_queue_out_ready;
+  rddm_prio_queue_out_ready = pcie_rddm_prio_ready_r3;
+  pcie_rddm_prio_valid = rddm_prio_queue_out_valid & rddm_prio_queue_out_ready;
+end
+
 fifo_wrapper_infill_mlab #(
   .SYMBOLS_PER_BEAT(1),
   .BITS_PER_SYMBOL($bits(pcie_rddm_desc_data)),
@@ -655,8 +687,8 @@ fifo_wrapper_infill_mlab #(
   .in_valid      (rddm_desc_queue_in_valid),
   .in_ready      (rddm_desc_queue_in_ready),
   .out_data      (pcie_rddm_desc_data),
-  .out_valid     (pcie_rddm_desc_valid),
-  .out_ready     (pcie_rddm_desc_ready)
+  .out_valid     (rddm_desc_queue_out_valid),
+  .out_ready     (rddm_desc_queue_out_ready)
 );
 
 fifo_wrapper_infill_mlab #(
@@ -675,8 +707,8 @@ fifo_wrapper_infill_mlab #(
   .in_valid      (rddm_prio_queue_in_valid),
   .in_ready      (rddm_prio_queue_in_ready),
   .out_data      (pcie_rddm_prio_data),
-  .out_valid     (pcie_rddm_prio_valid),
-  .out_ready     (pcie_rddm_prio_ready)
+  .out_valid     (rddm_prio_queue_out_valid),
+  .out_ready     (rddm_prio_queue_out_ready)
 );
 
 fifo_wrapper_infill_mlab #(
