@@ -292,7 +292,7 @@ always @(posedge clk) begin
   automatic rddm_desc_t rddm_desc = 0;
   rddm_desc.single_dst = 1;
   rddm_desc.descriptor_id = 2;  // Make sure this remains different from the
-                                // one used in the `desc` queue.
+                                // one used in the `prio` queue.
   dst_addr.descriptor = 1;
 
   rddm_desc_queue_in_valid <= 0;
@@ -385,7 +385,7 @@ always @(posedge clk) begin
 
       rddm_desc.single_dst = 1;
       rddm_desc.descriptor_id = 1;  // Make sure this remains different from the
-                                    // one used in the `prio` queue.
+                                    // one used in the `desc` queue.
 
       // TODO(sadok): should check values in the descriptor to make sure they
       // are "reasonable." A bad actor may exploit this to read memory that they
