@@ -154,6 +154,8 @@ void advance_ring_buffer(socket_internal* socket_entries,
                          socket_internal* socket_entry);
 int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
                          unsigned int nb_queues);
+int send_to_queue(socket_internal* socket_entries,
+                  socket_internal* socket_entry, void* buf, size_t len);
 int dma_finish(socket_internal* socket_entry);
 void print_queue_regs(queue_regs_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);

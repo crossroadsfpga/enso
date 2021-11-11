@@ -413,6 +413,25 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
     return consume_queue(socket_entry, buf, len);
 }
 
+inline uint32_t transmit_chunk(uint64_t buf_phys_addr, pcie_tx_dsc_t* tx_buf,
+                               uint32_t tx_tail, int app_id, uint64_t length,
+                               uint32_t offset)
+{
+    if (unlikely(length == 0)) {
+        return tx_tail;
+    }
+
+    pcie_tx_dsc_t* tx_dsc = tx_buf + tx_tail;
+    tx_dsc->length = length;
+    rx_pkt_queue_ids[tx_tail] = app_id;
+    tx_dsc->signal = 1;
+    tx_dsc->phys_addr = buf_phys_addr + offset;
+
+    tx_tail = (tx_tail + 1) % DSC_BUF_SIZE;
+
+    return tx_tail;
+}
+
 // HACK(sadok): socket_entries is used to retrieve new head and should not be
 //              needed.
 void advance_ring_buffer(socket_internal* socket_entries,
@@ -429,22 +448,29 @@ void advance_ring_buffer(socket_internal* socket_entries,
     pcie_tx_dsc_t* tx_buf = dsc_queue.tx_buf;
     uint32_t tx_tail = dsc_queue.tx_tail;
 
+    if (unlikely(rx_pkt_head == rx_pkt_tail)) {
+        return;
+    }
+
     uint32_t free_slots = (dsc_queue.tx_head - tx_tail - 1) % DSC_BUF_SIZE;
     // Block until we can send.
-    while (free_slots == 0) {
+    while (free_slots < 2) {
         get_new_tx_head(socket_entries);
         free_slots = (dsc_queue.tx_head - tx_tail - 1) % DSC_BUF_SIZE;
     }
 
-    pcie_tx_dsc_t* tx_dsc = tx_buf + tx_tail;
-    tx_dsc->signal = 1;
-    tx_dsc->phys_addr = buf_phys_addr + rx_pkt_head * 64;
-    uint64_t length = ((rx_pkt_tail - rx_pkt_head) % PKT_BUF_SIZE) * 64;
+    // Buffer wraps around. We need to send two descriptors.
+    if (rx_pkt_head > rx_pkt_tail) {
+        tx_tail = transmit_chunk(buf_phys_addr, tx_buf, tx_tail, app_id,
+                                 (PKT_BUF_SIZE - rx_pkt_head) * 64, rx_pkt_head * 64);
 
-    tx_dsc->length = length;
-    rx_pkt_queue_ids[tx_tail] = app_id;
+        // Reset pkt buffer to the beginning.
+        rx_pkt_head = 0;
+    }
 
-    tx_tail = (tx_tail + 1) % DSC_BUF_SIZE;
+    tx_tail = transmit_chunk(buf_phys_addr, tx_buf, tx_tail, app_id,
+                             (rx_pkt_tail - rx_pkt_head) * 64, rx_pkt_head * 64);
+
     dsc_queue.tx_tail = tx_tail;
 
     asm volatile ("" : : : "memory"); // compiler memory barrier
@@ -459,6 +485,26 @@ void advance_ring_buffer(socket_internal* socket_entries,
 #endif  // SEND_BACK
 
     socket_entry->pkt_queue.rx_head = rx_pkt_tail;
+}
+
+int send_to_queue(socket_internal* socket_entries,
+                  socket_internal* socket_entry, void* buf, size_t len)
+{
+    pcie_tx_dsc_t* tx_buf = dsc_queue.tx_buf;
+    uint32_t tx_tail = dsc_queue.tx_tail;
+    int app_id = socket_entry->app_id;
+
+    uint32_t free_slots = (dsc_queue.tx_head - tx_tail - 1) % DSC_BUF_SIZE;
+
+    // Block until we can send.
+    while (free_slots < 2) {
+        get_new_tx_head(socket_entries);
+        free_slots = (dsc_queue.tx_head - tx_tail - 1) % DSC_BUF_SIZE;
+    }
+
+    dsc_queue.tx_tail = transmit_chunk((uint64_t) buf, tx_buf, tx_tail, app_id,
+                                       len, 0);
+    return 0;
 }
 
 int dma_finish(socket_internal* socket_entry)
