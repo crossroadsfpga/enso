@@ -1058,11 +1058,14 @@ rddm_desc_queue (
   .csr_writedata (32'b0),
   .in_data       (pcie_rddm_desc_data),
   .in_valid      (pcie_rddm_desc_valid),
-  .in_ready      (pcie_rddm_desc_ready),
+  .in_ready      (),
   .out_data      (rddm_desc_queue_data),
   .out_valid     (rddm_desc_queue_valid),
   .out_ready     (rddm_desc_queue_ready)
 );
+
+// Absorb ready latency of 3.
+assign pcie_rddm_desc_ready = rddm_desc_queue_occup < (16 - 3);
 
 // Queue that holds incoming RDDM descriptors with elevated priority (prio).
 fifo_wrapper_infill_mlab #(
@@ -1080,11 +1083,13 @@ rddm_prio_queue (
   .csr_writedata (32'b0),
   .in_data       (pcie_rddm_prio_data),
   .in_valid      (pcie_rddm_prio_valid),
-  .in_ready      (pcie_rddm_prio_ready),
+  .in_ready      (),
   .out_data      (rddm_prio_queue_data),
   .out_valid     (rddm_prio_queue_valid),
   .out_ready     (rddm_prio_queue_ready)
 );
+
+assign pcie_rddm_prio_ready = rddm_prio_queue_occup < (16 - 3);
 
 //Configure
 //Read and display pkt/flow cnts
