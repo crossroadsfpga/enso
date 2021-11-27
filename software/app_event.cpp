@@ -95,17 +95,31 @@ int main(int argc, const char* argv[])
                 std::cerr << "Error receiving" << std::endl;
                 exit(4);
             }
-            // ensuring that we are modifying every cache line
-            for (uint32_t i = 0; i < ((uint32_t) recv_len) / 64; ++i) {
+            if (unlikely(recv_len == 0)) {
+                continue;
+            }
+            // Modify every cache line.
+            for (uint32_t i = 0; i < ((uint32_t) recv_len) / 256; i += 4) {
+                ++buf[(i+0)*64 + 63];
+                ++buf[(i+1)*64 + 63];
+                ++buf[(i+2)*64 + 63];
+                ++buf[(i+3)*64 + 63];
+
+                // Flush cache lines to avoid contention with PCIe read.
+                _mm_clflushopt(&buf[(i+0)*64]);
+                _mm_clflushopt(&buf[(i+1)*64]);
+                _mm_clflushopt(&buf[(i+2)*64]);
+                _mm_clflushopt(&buf[(i+3)*64]);
+            }
+            for (uint32_t i = 0; i < (((uint32_t) recv_len) % 256)/64; ++i) {
                 ++buf[i*64 + 63];
+                _mm_clflushopt(&buf[i*64]);
             }
             for (uint32_t i = 0; i < nb_cycles; ++i) {
                 asm("nop");
             }
-            if (recv_len > 0) {
-                ++nb_batches;
-                free_pkt_buf(socket_fd);
-            }
+            ++nb_batches;
+            free_pkt_buf(socket_fd);
             recv_bytes += recv_len;
         }
 
