@@ -1,5 +1,5 @@
-CXX = g++
-LD = g++
+CXX = g++-9
+LD = g++-9
 CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O2
 LDFLAGS = -O2
 
