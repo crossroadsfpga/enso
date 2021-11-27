@@ -18,6 +18,14 @@
 #define MAX_NB_APPS 256
 #define MAX_NB_FLOWS 8192
 
+#if MAX_NB_FLOWS < 65536
+typedef uint16_t pkt_q_id_t;
+#else
+typedef uint32_t pkt_q_id_t;
+#endif
+
+#define MAX_TRANSFER_LEN 1048576
+
 #ifndef BATCH_SIZE
 // Maximum number of packets to process in call to get_next_batch_from_queue
 #define BATCH_SIZE 64
@@ -43,12 +51,6 @@
 // page, we may put them in the same page
 #define ALIGNED_DSC_BUF_PAIR_SIZE ((((DSC_BUF_SIZE * 64 * 2 - 1) \
     / BUF_PAGE_SIZE + 1) * BUF_PAGE_SIZE))
-#define ALIGNED_PKT_BUF_SIZE ((((PKT_BUF_SIZE * 64 - 1) \
-    / BUF_PAGE_SIZE + 1) * BUF_PAGE_SIZE))
-
-// In dwords.
-// if changed, should also change the kernel
-#define C2F_BUFFER_OFFSET (ALIGNED_PKT_BUF_SIZE / 4 + )
 
 // 4 bytes, 1 dword
 #define HEAD_OFFSET 4
@@ -115,16 +117,22 @@ typedef struct {
 } pcie_tx_dsc_t;
 
 typedef struct {
+    // First cache line:
     pcie_rx_dsc_t* rx_buf;
+    pkt_q_id_t* last_rx_ids;  // Last queue ids consumed from rx_buf.
     pcie_tx_dsc_t* tx_buf;
-    queue_regs_t* regs;
     uint32_t* rx_head_ptr;
-    uint32_t* tx_head_ptr;
     uint32_t* tx_tail_ptr;
     uint32_t rx_head;
     uint32_t tx_head;
     uint32_t tx_tail;
     uint32_t old_rx_head;
+    uint32_t pending_rx_ids;
+    uint32_t consumed_rx_ids;
+
+    // Second cache line:
+    queue_regs_t* regs;
+    uint64_t tx_full_cnt;
     uint32_t ref_cnt;
 } dsc_queue_t;
 
@@ -141,7 +149,7 @@ typedef struct {
 typedef struct {
     intel_fpga_pcie_dev* dev;
     pkt_queue_t pkt_queue;
-    int app_id; // TODO(sadok): This is a bad name, change it.
+    int queue_id;
 } socket_internal;
 
 int dma_init(socket_internal* socket_entry, unsigned socket_id,

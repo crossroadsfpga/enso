@@ -63,8 +63,8 @@ int bind(
 {
     socket_internal* socket = &open_sockets[sockfd];
 
-    // FIXME(sadok) we currently only bind sockets on app 0
-    if (socket->app_id != 0) {
+    // FIXME(sadok) we currently only bind sockets on queue 0
+    if (socket->queue_id != 0) {
         std::cerr << "not sending control message" << std::endl;
         return 0;
     }
