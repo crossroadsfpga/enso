@@ -29,4 +29,6 @@ void free_pkt_buf(int sockfd);
 
 int shutdown(int sockfd, int how) noexcept;
 
+void print_sock_stats(int sockfd);
+
 #endif // FD_H

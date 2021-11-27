@@ -8,6 +8,9 @@
 #include <string>
 #include <thread>
 
+// #include <immintrin.h>
+#include <x86intrin.h>
+
 #include <sched.h>
 #include <pthread.h>
 
@@ -126,6 +129,9 @@ int main(int argc, const char* argv[])
         // TODO(sadok) it is also common to use the close() syscall to close a
         // UDP socket
         for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
+            std::cout << socket_fd << std::endl;
+            print_sock_stats(socket_fd);
+            std::cout << std::endl;
             shutdown(socket_fd, SHUT_RDWR);
         }
     });

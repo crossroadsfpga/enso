@@ -173,5 +173,6 @@ void print_block(block_s *block);
 void fill_block(uint32_t *addr, block_s *block);
 uint32_t tx_copy_head(uint32_t tx_tail, queue_regs_t *global_block, 
                        block_s *block, uint32_t *kdata);
+void print_stats(socket_internal* socket_entry, bool print_global);
 
 #endif // PCIE_H

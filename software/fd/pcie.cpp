@@ -583,3 +583,14 @@ void print_buffer(uint32_t* buf, uint32_t nb_flits)
         printf("\n");
     }
 }
+
+void print_stats(socket_internal* socket_entry, bool print_global)
+{
+    if (print_global) {
+        printf("TX descriptor queue full counter: %lu\n\n", dsc_queue.tx_full_cnt);
+    }
+
+    printf("Pkt RX tail: %d\n", socket_entry->pkt_queue.rx_tail);
+    printf("Pkt RX head: %d\n", socket_entry->pkt_queue.rx_head);
+    printf("Pkt Old RX head: %d\n", socket_entry->pkt_queue.old_rx_head);
+}

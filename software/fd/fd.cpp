@@ -143,3 +143,8 @@ int shutdown(int sockfd, int how __attribute__((unused))) noexcept
 
     return 0;
 }
+
+void print_sock_stats(int sockfd) {
+    socket_internal* socket = &open_sockets[sockfd];
+    print_stats(socket, socket->queue_id == 0);
+}
