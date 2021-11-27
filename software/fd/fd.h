@@ -11,7 +11,7 @@ typedef unsigned int socklen_t;
 
 #define MAX_NB_SOCKETS 16384
 
-int socket(int domain, int type, int protocol);
+int socket(int domain, int type, int protocol) noexcept;
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen,
          unsigned nb_queues);
@@ -27,6 +27,6 @@ void free_pkt_buf(int sockfd);
 // ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
 //         struct sockaddr *src_addr, socklen_t *addrlen);
 
-int shutdown(int sockfd, int how);
+int shutdown(int sockfd, int how) noexcept;
 
 #endif // FD_H

@@ -11,7 +11,7 @@ static socket_internal open_sockets[MAX_NB_SOCKETS];
 static unsigned int nb_open_sockets = 0;
 
 int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
-    int nb_queues) // HACK(sadok) using protocol as nb_queues
+    int nb_queues) noexcept // HACK(sadok) using protocol as nb_queues
 {
     intel_fpga_pcie_dev *dev;
     uint16_t bdf = 0;
@@ -124,7 +124,7 @@ void free_pkt_buf(int sockfd)
     advance_ring_buffer(open_sockets, &open_sockets[sockfd]);
 }
 
-int shutdown(int sockfd, int how __attribute__((unused)))
+int shutdown(int sockfd, int how __attribute__((unused))) noexcept
 {
     int result;
     intel_fpga_pcie_dev *dev = open_sockets[sockfd].dev;
