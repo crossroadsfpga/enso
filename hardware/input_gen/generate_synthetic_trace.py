@@ -8,7 +8,18 @@ import sys
 
 from itertools import cycle
 
-from scapy.all import IP, TCP, UDP, wrpcap, Ether, Raw
+from tqdm import tqdm
+from scapy.all import IP, TCP, Ether, Raw, bytes_encode, PcapWriter, DLT_EN10MB
+
+
+# Bypassing scapy's awfully slow wrpcap, have to use raw packets as input
+# To get a raw packet from a scapy packet use `bytes_encode(pkt)`.
+def wrpcap(pcap_name, raw_packets):
+    with PcapWriter(pcap_name, linktype=DLT_EN10MB) as pkt_wr:
+        for raw_pkt in raw_packets:
+            if not pkt_wr.header_present:
+                pkt_wr._write_header(raw_pkt)
+            pkt_wr._write_packet(raw_pkt)
 
 
 def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest):
@@ -24,20 +35,18 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest):
             IP(dst=str(dst_ip), src=str(src_ip), len=ipv4_len) /
             TCP(dport=80, sport=8080, flags='S')
         )
+
+        missing_bytes = pkt_size - len(pkt) - 4  # no CRC
+        payload = binascii.unhexlify('00' * missing_bytes)
+        pkt = pkt/Raw(load=payload)
+        pkt = bytes_encode(pkt)
         sample_pkts.append(pkt)
 
-    pkts = []
-    missing_bytes = pkt_size - len(sample_pkts[0]) - counter_size - 4  # no CRC
-    for i, pkt in zip(range(nb_pkts), cycle(sample_pkts)):
-        payload = (i).to_bytes(counter_size, byteorder='big')
-        if (missing_bytes < 0):
-            payload = payload[:missing_bytes]
-        else:
-            payload += binascii.unhexlify('00' * missing_bytes)
-        pkt = pkt/Raw(load=payload)
-        pkts.append(pkt)
+    def pkt_gen():
+        for _, pkt in zip(tqdm(range(nb_pkts)), cycle(sample_pkts)):
+            yield pkt
 
-    wrpcap(out_pcap, pkts)
+    wrpcap(out_pcap, pkt_gen())
 
 
 def main():
