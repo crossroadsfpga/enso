@@ -119,8 +119,12 @@ logic         pkt_queue_out_valid;
 logic         pkt_queue_out_ready;
 logic [31:0]  pkt_queue_occup;
 
-localparam META_QUEUE_LEN = 256;  // In number of descriptors.
-localparam PKT_QUEUE_LEN = 1024;  // In flits.
+localparam RDDM_WREQ_ALLOWANCE = 16;
+
+localparam META_QUEUE_LEN = 1024;  // In number of descriptors.
+localparam PKT_QUEUE_LEN = 512;  // In flits.
+
+localparam RDDM_PR_QUEUE_LEN = 1024;
 
 logic out_pkt_alm_full;
 assign out_pkt_alm_full = out_pkt_occup > PCIE_TX_PKT_FIFO_ALM_FULL_THRESH;
@@ -135,13 +139,26 @@ logic rddm_desc_queue_alm_full;
 assign rddm_desc_queue_alm_full = rddm_desc_queue_occup > 500;
 
 logic rddm_prio_queue_alm_full;
-assign rddm_prio_queue_alm_full = rddm_prio_queue_occup > 64;
+assign rddm_prio_queue_alm_full = rddm_prio_queue_occup > RDDM_PR_QUEUE_LEN / 16;
 
 logic meta_queue_alm_full;
-assign meta_queue_alm_full = meta_queue_occup > META_QUEUE_LEN - 128;
+assign meta_queue_alm_full = meta_queue_occup > META_QUEUE_LEN / 16;
 
 logic pkt_queue_alm_full;
-assign pkt_queue_alm_full = pkt_queue_occup > PKT_QUEUE_LEN - 512;
+assign pkt_queue_alm_full = pkt_queue_occup > PKT_QUEUE_LEN / 4;
+
+// Backpressure PCIe core only when packet queue is too full. Note that this
+// does not include backpressure signals from the `meta_queue` and from the
+// `rddm_prio_queue`. This is on purpose, as backpressuring the PCIe core when
+// these queues are almost full can cause a deadlock. The reason for this is
+// that these queues need packets read from PCIe in order to advance. If we
+// backpressure the PCIe core, it will not be able to output these packets.
+// So instead of backpressuring the PCIe core we must prevent the meta_queue and
+// rddm_prio_queue from overflowing by stopping request for new descriptors to
+// be sent to the PCIe core in the first place. Look at the logic to assert the
+// `rddm_desc_queue_out_ready` signal.
+assign pcie_rddm_waitrequest =
+    pkt_queue_occup >= (PKT_QUEUE_LEN - RDDM_WREQ_ALLOWANCE * 2);
 
 // The BRAM port b's are exposed outside the module while port a's are only used
 // internally.
@@ -162,9 +179,12 @@ logic compl_q_table_l_addrs_rd_en;
 logic compl_q_table_h_addrs_rd_en;
 
 logic can_issue_dma_rd;
-assign can_issue_dma_rd = !rddm_desc_queue_alm_full & !rddm_prio_queue_alm_full
-                          & !meta_queue_alm_full & !pkt_queue_alm_full
-                          & !dsc_reads_queue_alm_full & !tx_compl_buf_alm_full;
+
+// Cannot issue a DMA read if one of the queues is almost full or if there is
+// read for BRAM port A in the current cycle (q_table_a_tails.rd_en). When there
+// is a read for port A, there will be a write in the following cycle, which
+// could conflict with the current read if they are accessing the same address.
+assign can_issue_dma_rd = !dsc_reads_queue_alm_full & !q_table_a_tails.rd_en;
 
 logic q_table_a_tails_rd_en_r1;
 logic q_table_a_tails_rd_en_r2;
@@ -177,31 +197,77 @@ logic [QUEUE_ID_WIDTH-1:0] queue_id;
 logic [QUEUE_ID_WIDTH-1:0] queue_id_r1;
 logic [QUEUE_ID_WIDTH-1:0] queue_id_r2;
 
+logic q_table_a_tails_wr_en;
+logic q_table_a_tails_wr_en_r;
+
+logic [DSC_Q_TABLE_TAILS_DWIDTH-1:0] q_table_a_tails_wr_data;
+logic [DSC_Q_TABLE_TAILS_DWIDTH-1:0] q_table_a_tails_wr_data_r;
+
+logic [QUEUE_ID_WIDTH-1:0] q_table_a_tails_rd_addr;
+
+logic [QUEUE_ID_WIDTH-1:0] q_table_a_tails_wr_addr;
+logic [QUEUE_ID_WIDTH-1:0] q_table_a_tails_wr_addr_r;
+
 // Define mask associated with rb_size. Assume that rb_size is a power of two.
 logic [RB_AWIDTH-1:0] rb_mask;
 always @(posedge clk) begin
     rb_mask <= rb_size - 1;
 end
 
+// HACK(sadok): assume single descriptor queue.
+logic ignored_tail_set;
+logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] ignored_tail;
+
+// Fetch queue state and write new tail in the following cycle.
+function void consume_tx_queue(
+  logic [QUEUE_ID_WIDTH-1:0] addr,
+  logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] new_tail
+);
+  q_table_a_tails.rd_en <= 1;
+  q_table_a_tails_rd_addr <= addr;
+  q_table_a_l_addrs.rd_en <= 1;
+  q_table_a_l_addrs.addr <= addr;
+  q_table_a_h_addrs.rd_en <= 1;
+  q_table_a_h_addrs.addr <= addr;
+  queue_id <= addr;
+
+  tail <= new_tail;
+
+  // Write tail only in the next cycle, so we can read the current tail first.
+  q_table_a_tails_wr_en <= 1;
+  q_table_a_tails_wr_data <= new_tail;
+  q_table_a_tails_wr_addr <= addr;
+endfunction
+
 // Monitor tail pointer updates from the CPU to fetch more descriptors.
 // FIXME(sadok): If the tail is updated too often, the PCIe core may
 //               backpressure. If this causes the queue to get full, some
-//               descriptors may never be read. This should not happen under
-//               normal circumstances but it should still be addressed.
+//               descriptors may never be read.
 always @(posedge clk) begin
   q_table_a_tails.rd_en <= 0;
   q_table_a_l_addrs.rd_en <= 0;
   q_table_a_h_addrs.rd_en <= 0;
 
-  if (q_table_tails.wr_en & can_issue_dma_rd) begin
-    tail <= q_table_tails.wr_data;
-    q_table_a_tails.rd_en <= 1;
-    q_table_a_tails.addr <= q_table_tails.addr;
-    q_table_a_l_addrs.rd_en <= 1;
-    q_table_a_l_addrs.addr <= q_table_tails.addr;
-    q_table_a_h_addrs.rd_en <= 1;
-    q_table_a_h_addrs.addr <= q_table_tails.addr;
-    queue_id <= q_table_tails.addr;
+  q_table_a_tails_wr_en <= 0;
+  q_table_a_tails_wr_en_r <= q_table_a_tails_wr_en;
+  q_table_a_tails_wr_data_r <= q_table_a_tails_wr_data;
+  q_table_a_tails_wr_addr_r <= q_table_a_tails_wr_addr;
+
+  if (rst) begin
+    ignored_tail_set <= 0;
+  end else if (q_table_tails.wr_en) begin
+    if (can_issue_dma_rd) begin
+      consume_tx_queue(q_table_tails.addr, q_table_tails.wr_data);
+      ignored_tail_set <= 0; // HACK(sadok): assume single descriptor queue.
+    end else begin
+      // HACK(sadok): assume single descriptor queue.
+      ignored_tail_set <= 1;
+      ignored_tail <= q_table_tails.wr_data;
+    end
+  end else if (ignored_tail_set & can_issue_dma_rd) begin
+    // HACK(sadok): assume single descriptor queue.
+    consume_tx_queue(0, ignored_tail);
+    ignored_tail_set <= 0;
   end
 
   q_table_a_tails_rd_en_r1 <= q_table_a_tails.rd_en;
@@ -219,26 +285,14 @@ always @(posedge clk) begin
     ignored_dsc_cnt <= 0;
   end else begin
     if (q_table_tails.wr_en & !can_issue_dma_rd) begin
-      $display("rddm_desc_queue_alm_full: %b", rddm_desc_queue_alm_full);
-      $display("rddm_prio_queue_alm_full: %b", rddm_prio_queue_alm_full);
-      $display("meta_queue_alm_full: %b", meta_queue_alm_full);
-      $display("pkt_queue_alm_full: %b", pkt_queue_alm_full);
-      $display("dsc_reads_queue_alm_full: %b", dsc_reads_queue_alm_full);
-      $display("tx_compl_buf_alm_full: %b", tx_compl_buf_alm_full);
-      $display("pkt_queue_occup: %d", pkt_queue_occup);
-      $display("----------------------------");
       ignored_dsc_cnt <= ignored_dsc_cnt + 1;
     end
   end
 end
 
-logic [QUEUE_ID_WIDTH:0] last_queues [2];  // Extra bit to represent invalid.
-logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] last_tails [2];
-
 // Whenever a queue state read completes, we enqueue it to dsc_reads_queue.
 always @(posedge clk) begin
   dsc_reads_queue_in_valid <= 0;
-  last_queues[0][QUEUE_ID_WIDTH] <= 1;  // Invalid queue.
 
   if (rst) begin
     empty_tail_cnt <= 0;
@@ -251,21 +305,8 @@ always @(posedge clk) begin
     dsc_reads_queue_in_data.l_addr <= q_table_a_l_addrs.rd_data;
     dsc_reads_queue_in_data.h_addr <= q_table_a_h_addrs.rd_data;
 
-    // Use the old tail as the "head". The actual head is only updated after all
-    // the packets associated with a descriptor are DMAed from memory. However,
-    // the last tail may be outdated as we need two cycles to write to the BRAM.
-    if (last_queues[0] == queue_id_r2) begin
-      head = last_tails[0];
-    end else if (last_queues[1] == queue_id_r2) begin
-      head = last_tails[1];
-    end else begin
-      head = q_table_a_tails.rd_data;
-    end
-
+    head = q_table_a_tails.rd_data;
     dsc_reads_queue_in_data.head <= head;
-
-    last_queues[0] <= {1'b0, queue_id_r2};
-    last_tails[0] <= tail_r2;
 
     // Don't bother sending if there is nothing to read.
     if (head != tail_r2) begin
@@ -274,14 +315,12 @@ always @(posedge clk) begin
       empty_tail_cnt <= empty_tail_cnt + 1;
     end
   end
-
-  last_queues[1] <= last_queues[0];
-  last_tails[1] <= last_tails[0];
 end
 
 // When set, a second DMA is pending for the same read request.
 logic second_dma_req_pending;
-assign dsc_reads_queue_out_ready = !second_dma_req_pending;
+assign dsc_reads_queue_out_ready = !second_dma_req_pending
+                                   & !rddm_desc_queue_alm_full;
 
 q_state_t dsc_reads_queue_out_data_r;
 
@@ -611,7 +650,6 @@ end
 
 assign q_table_a_heads.rd_en = 0;
 
-assign q_table_a_tails.wr_en = 0;
 assign q_table_a_l_addrs.wr_en = 0;
 assign q_table_a_h_addrs.wr_en = 0;
 
@@ -666,7 +704,9 @@ always @(posedge clk) begin
 end
 
 always_comb begin
-  rddm_desc_queue_out_ready = pcie_rddm_desc_ready_r3;
+  // Backpressure descriptors if prio_queue gets almost full.
+  rddm_desc_queue_out_ready = pcie_rddm_desc_ready_r3
+    & !rddm_prio_queue_alm_full & !meta_queue_alm_full;
   pcie_rddm_desc_valid = rddm_desc_queue_out_valid & rddm_desc_queue_out_ready;
   rddm_prio_queue_out_ready = pcie_rddm_prio_ready_r3;
   pcie_rddm_prio_valid = rddm_prio_queue_out_valid & rddm_prio_queue_out_ready;
@@ -695,7 +735,7 @@ fifo_wrapper_infill_mlab #(
 fifo_wrapper_infill_mlab #(
   .SYMBOLS_PER_BEAT(1),
   .BITS_PER_SYMBOL($bits(pcie_rddm_prio_data)),
-  .FIFO_DEPTH(128)
+  .FIFO_DEPTH(RDDM_PR_QUEUE_LEN)
 ) rddm_prio_queue (
   .clk           (clk),
   .reset         (rst),
@@ -754,9 +794,9 @@ fifo_wrapper_infill_mlab #(
 
 // Check if queues are being used correctly.
 always @(posedge clk) begin
-  queue_full_signals[31:5] <= 0;
+  queue_full_signals[31:7] <= 0;
   if (rst) begin
-    queue_full_signals[4:0] <= 0;
+    queue_full_signals[6:0] <= 0;
   end else begin
     if (!dsc_reads_queue_in_ready & dsc_reads_queue_in_valid) begin
       queue_full_signals[0] <= 1;
@@ -778,38 +818,25 @@ always @(posedge clk) begin
       queue_full_signals[4] <= 1;
       $fatal;
     end
+    if (!tx_compl_buf_ready & tx_compl_buf_valid) begin
+      queue_full_signals[5] <= 1;
+      $fatal;
+    end
+    if (!out_pkt_ready & out_pkt_valid) begin
+      queue_full_signals[6] <= 1;
+      $fatal;
+    end
   end
 end
 
-// Delay writes from MMIO/JTAG by two cycles so that we have time to read the
-// old value before the update.
-logic [DSC_Q_TABLE_TAILS_DWIDTH-1:0] q_table_b_tails_wr_data_r1;
-logic [DSC_Q_TABLE_TAILS_DWIDTH-1:0] q_table_b_tails_wr_data_r2;
-logic q_table_b_tails_wr_en_r1;
-logic q_table_b_tails_wr_en_r2;
-
-logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr;
-logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr_r1;
-logic [QUEUE_ID_WIDTH-1:0] q_table_b_tails_addr_r2;
-
-always @(posedge clk) begin
-  q_table_b_tails_wr_data_r1 <= q_table_tails.wr_data;
-  q_table_b_tails_wr_data_r2 <= q_table_b_tails_wr_data_r1;
-
-  q_table_b_tails_wr_en_r1 <= q_table_tails.wr_en;
-  q_table_b_tails_wr_en_r2 <= q_table_b_tails_wr_en_r1;
-
-  q_table_b_tails_addr_r1 <= q_table_tails.addr[QUEUE_ID_WIDTH-1:0];
-  q_table_b_tails_addr_r2 <= q_table_b_tails_addr_r1;
-end
+logic [QUEUE_ID_WIDTH-1:0] q_table_a_tails_addr;
 
 always_comb begin
-  // Do not delay address when reading. This assumes that JTAG/MMIO will not
-  // read and write the tail at the same time.
-  if (q_table_tails.rd_en) begin
-    q_table_b_tails_addr = q_table_tails.addr[QUEUE_ID_WIDTH-1:0];
+  // Tails write address to port A is delayed by 1 cycle.
+  if (q_table_a_tails.rd_en) begin
+    q_table_a_tails_addr = q_table_a_tails_rd_addr;
   end else begin
-    q_table_b_tails_addr = q_table_b_tails_addr_r2;
+    q_table_a_tails_addr = q_table_a_tails_wr_addr_r;
   end
 
   compl_q_table_l_addrs_rd_en = addr_rd_en;
@@ -851,15 +878,15 @@ bram_true2port #(
   .DWIDTH(DSC_Q_TABLE_TAILS_DWIDTH),
   .DEPTH(NB_QUEUES)
 ) q_table_tails_bram (
-  .address_a (q_table_a_tails.addr[QUEUE_ID_WIDTH-1:0]),
-  .address_b (q_table_b_tails_addr),
+  .address_a (q_table_a_tails_addr),
+  .address_b (q_table_tails.addr[QUEUE_ID_WIDTH-1:0]),
   .clock     (clk),
-  .data_a    (q_table_a_tails.wr_data),
-  .data_b    (q_table_b_tails_wr_data_r2),
+  .data_a    (q_table_a_tails_wr_data_r),
+  .data_b    (),
   .rden_a    (q_table_a_tails.rd_en),
   .rden_b    (q_table_tails.rd_en),
-  .wren_a    (q_table_a_tails.wr_en),
-  .wren_b    (q_table_b_tails_wr_en_r2),
+  .wren_a    (q_table_a_tails_wr_en_r),
+  .wren_b    (0),
   .q_a       (q_table_a_tails.rd_data),
   .q_b       (q_table_tails.rd_data)
 );
@@ -919,7 +946,6 @@ bram_true2port #(
 );
 
 // Unused inputs.
-assign q_table_a_tails.wr_data = 32'bx;
 assign q_table_a_l_addrs.wr_data = 32'bx;
 assign q_table_a_h_addrs.wr_data = 32'bx;
 
