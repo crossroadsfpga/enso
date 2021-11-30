@@ -40,6 +40,7 @@ module cpu_to_fpga  #(
   input  logic         pcie_rddm_write,
   input  logic [511:0] pcie_rddm_writedata,
   input  logic [63:0]  pcie_rddm_byteenable,
+  output logic         pcie_rddm_waitrequest,
 
   // BRAM signals for TX descriptor queues.
   bram_interface_io.owner q_table_tails,

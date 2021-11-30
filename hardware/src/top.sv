@@ -64,6 +64,7 @@ module top (
     input  logic         pcie_rddm_write,
     input  logic [511:0] pcie_rddm_writedata,
     input  logic [63:0]  pcie_rddm_byteenable,
+    output logic         pcie_rddm_waitrequest,
 
     // eSRAM
     output  logic                     reg_esram_pkt_buf_wren,
@@ -1208,6 +1209,7 @@ pcie_top pcie (
     .pcie_rddm_write         (pcie_rddm_write),
     .pcie_rddm_writedata     (pcie_rddm_writedata),
     .pcie_rddm_byteenable    (pcie_rddm_byteenable),
+    .pcie_rddm_waitrequest   (pcie_rddm_waitrequest),
     .pcie_rx_pkt_buf_data    (pcie_pkt_buf_data),
     .pcie_rx_pkt_buf_valid   (pcie_pkt_buf_valid),
     .pcie_rx_pkt_buf_ready   (pcie_pkt_buf_ready),

@@ -248,6 +248,7 @@ module alt_ehipc2_hw (
     logic         pcie_rddm_write;
     logic [511:0] pcie_rddm_writedata;
     logic [63:0]  pcie_rddm_byteenable;
+    logic         pcie_rddm_waitrequest;
 
     // eSRAM signals
     logic                      clk_datamover;
@@ -651,6 +652,7 @@ module alt_ehipc2_hw (
         .pcie_rddm_write              (pcie_rddm_write),
         .pcie_rddm_writedata          (pcie_rddm_writedata),
         .pcie_rddm_byteenable         (pcie_rddm_byteenable),
+        .pcie_rddm_waitrequest        (pcie_rddm_waitrequest),
 
         // eSRAM
         .reg_esram_pkt_buf_wren       (esram_pkt_buf_wren),
@@ -841,7 +843,8 @@ module alt_ehipc2_hw (
         .rddm_writedata      (pcie_rddm_writedata),
         .rddm_address        (pcie_rddm_address),
         .rddm_write          (pcie_rddm_write),
-        .rddm_byteenable     (pcie_rddm_byteenable)
+        .rddm_byteenable     (pcie_rddm_byteenable),
+        .rddm_waitrequest    (pcie_rddm_waitrequest)
     );
 `endif
 

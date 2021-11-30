@@ -76,7 +76,8 @@ module pcie_core (
     output logic [511:0] rddm_writedata,
     output logic [63:0]  rddm_address,
     output logic         rddm_write,
-    output logic [63:0]  rddm_byteenable
+    output logic [63:0]  rddm_byteenable,
+    input  logic         rddm_waitrequest
 );
 
 logic         hip_ctrl_simu_mode_pipe;
@@ -731,7 +732,7 @@ pcie_ed pcie (
     .dut_wrdm_tx_valid                       (wrdm_tx_valid),
     .dut_wrdm_tx_data                        (wrdm_tx_data),
     .dut_rddm_conduit_pfnum                  (),
-    .dut_rddm_master_waitrequest             (1'b0),
+    .dut_rddm_master_waitrequest             (rddm_waitrequest),
     .dut_rddm_master_write                   (rddm_write),
     .dut_rddm_master_address                 (rddm_address),
     .dut_rddm_master_burstcount              (),
