@@ -72,15 +72,16 @@ set RULE_SET               24
 set DMA_QUEUE_FULL         25
 set CPU_DSC_BUF_FULL       26
 set CPU_PKT_BUF_FULL       27
-set MAX_PCIE_FIFO          28
-set PCIE_TX_IGNORED_DSC    29
-set PCIE_TX_Q_FULL_SIGNALS 30
-set PCIE_TX_DSC_CNT        31
-set PCIE_TX_EMPTY_TAIL_CNT 32
-set PCIE_TX_DSC_READ_CNT   33
-set PCIE_TX_PKT_READ_CNT   34
-set PCIE_TX_BATCH_CNT      35
-set TX_DMA_PKT             36
+set MAX_PCIE_PKT_FIFO      28
+set MAX_PCIE_META_FIFO     29
+set PCIE_TX_IGNORED_DSC    30
+set PCIE_TX_Q_FULL_SIGNALS 31
+set PCIE_TX_DSC_CNT        32
+set PCIE_TX_EMPTY_TAIL_CNT 33
+set PCIE_TX_DSC_READ_CNT   34
+set PCIE_TX_PKT_READ_CNT   35
+set PCIE_TX_BATCH_CNT      36
+set TX_DMA_PKT             37
 
 #PCIE reg
 set PCIE_CTRL_REG       0
@@ -496,7 +497,8 @@ proc get_top_stats {} {
     global DMA_QUEUE_FULL
     global CPU_DSC_BUF_FULL
     global CPU_PKT_BUF_FULL
-    global MAX_PCIE_FIFO
+    global MAX_PCIE_PKT_FIFO
+    global MAX_PCIE_META_FIFO
     global PCIE_TX_IGNORED_DSC
     global PCIE_TX_Q_FULL_SIGNALS
     global PCIE_TX_DSC_CNT
@@ -535,7 +537,8 @@ proc get_top_stats {} {
     read_top_reg DMA_QUEUE_FULL         $DMA_QUEUE_FULL         $fp
     read_top_reg CPU_DSC_BUF_FULL       $CPU_DSC_BUF_FULL       $fp
     read_top_reg CPU_PKT_BUF_FULL       $CPU_PKT_BUF_FULL       $fp
-    read_top_reg MAX_PCIE_FIFO          $MAX_PCIE_FIFO          $fp
+    read_top_reg MAX_PCIE_PKT_FIFO      $MAX_PCIE_PKT_FIFO      $fp
+    read_top_reg MAX_PCIE_META_FIFO     $MAX_PCIE_META_FIFO     $fp
     read_top_reg PCIE_TX_IGNORED_DSC    $PCIE_TX_IGNORED_DSC    $fp
     read_top_reg PCIE_TX_Q_FULL_SIGNALS $PCIE_TX_Q_FULL_SIGNALS $fp
     read_top_reg PCIE_TX_DSC_CNT        $PCIE_TX_DSC_CNT        $fp

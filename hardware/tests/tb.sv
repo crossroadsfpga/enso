@@ -284,7 +284,8 @@ typedef enum{
     DMA_QUEUE_FULL,
     CPU_DSC_BUF_FULL,
     CPU_PKT_BUF_FULL,
-    MAX_PCIE_FIFO,
+    MAX_PCIE_PKT_FIFO,
+    MAX_PCIE_META_FIFO,
     PCIE_TX_IGNORED_DSC,
     PCIE_TX_Q_FULL_SIGNALS,
     PCIE_TX_DSC_CNT,
@@ -1244,7 +1245,7 @@ always @(posedge clk_status) begin
                     $display("IN_PKT:\t\t%d",top_readdata);
                     conf_state <= OUT_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0001;
+                    s_addr <= s_addr + 1;
                 end
             end
             OUT_PKT: begin
@@ -1253,7 +1254,7 @@ always @(posedge clk_status) begin
                     $display("OUT_PKT:\t\t%d",top_readdata);
                     conf_state <= INCOMP_OUT_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0002;
+                    s_addr <= s_addr + 1;
                 end
             end
             INCOMP_OUT_PKT: begin
@@ -1262,7 +1263,7 @@ always @(posedge clk_status) begin
                     $display("INCOMP_OUT_PKT:\t%d",top_readdata);
                     conf_state <= PARSER_OUT_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0003;
+                    s_addr <= s_addr + 1;
                 end
             end
             PARSER_OUT_PKT: begin
@@ -1271,7 +1272,7 @@ always @(posedge clk_status) begin
                     $display("PARSER_OUT_PKT:\t%d",top_readdata);
                     conf_state <= MAX_PARSER_FIFO;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0004;
+                    s_addr <= s_addr + 1;
                 end
             end
             MAX_PARSER_FIFO: begin
@@ -1280,7 +1281,7 @@ always @(posedge clk_status) begin
                     $display("MAX_PARSER_FIFO:\t%d",top_readdata);
                     conf_state <= FD_IN_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0005;
+                    s_addr <= s_addr + 1;
                 end
             end
             FD_IN_PKT: begin
@@ -1289,7 +1290,7 @@ always @(posedge clk_status) begin
                     $display("FD_IN_PKT:\t\t%d",top_readdata);
                     conf_state <= FD_OUT_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0006;
+                    s_addr <= s_addr + 1;
                 end
             end
             FD_OUT_PKT: begin
@@ -1298,7 +1299,7 @@ always @(posedge clk_status) begin
                     $display("FD_OUT_PKT:\t\t%d",top_readdata);
                     conf_state <= MAX_FD_OUT_FIFO;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0007;
+                    s_addr <= s_addr + 1;
                 end
             end
             MAX_FD_OUT_FIFO: begin
@@ -1307,7 +1308,7 @@ always @(posedge clk_status) begin
                     $display("MAX_FD_OUT_PKT:\t%d",top_readdata);
                     conf_state <= DM_IN_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0008;
+                    s_addr <= s_addr + 1;
                 end
             end
             DM_IN_PKT: begin
@@ -1316,7 +1317,7 @@ always @(posedge clk_status) begin
                     $display("DM_IN_PKT:\t\t%d",top_readdata);
                     conf_state <= IN_EMPTYLIST_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0009;
+                    s_addr <= s_addr + 1;
                 end
             end
 
@@ -1326,7 +1327,7 @@ always @(posedge clk_status) begin
                     $display("IN_EMPTYLIST_PKT:\t%d",top_readdata);
                     conf_state <= OUT_EMPTYLIST_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_000A;
+                    s_addr <= s_addr + 1;
                 end
             end
             OUT_EMPTYLIST_PKT: begin
@@ -1335,7 +1336,7 @@ always @(posedge clk_status) begin
                     $display("OUT_EMPTYLIST_PKT:\t%d",top_readdata);
                     conf_state <= PKT_ETH;
                     s_read <= 1;
-                    s_addr <= 30'h2200_000B;
+                    s_addr <= s_addr + 1;
                 end
             end
             PKT_ETH: begin
@@ -1344,7 +1345,7 @@ always @(posedge clk_status) begin
                     $display("PKT_ETH:\t\t%d",top_readdata);
                     conf_state <= PKT_DROP;
                     s_read <= 1;
-                    s_addr <= 30'h2200_000C;
+                    s_addr <= s_addr + 1;
                 end
             end
             PKT_DROP: begin
@@ -1353,7 +1354,7 @@ always @(posedge clk_status) begin
                     $display("PKT_DROP:\t\t%d",top_readdata);
                     conf_state <= PKT_PCIE;
                     s_read <= 1;
-                    s_addr <= 30'h2200_000D;
+                    s_addr <= s_addr + 1;
                 end
             end
             PKT_PCIE: begin
@@ -1362,7 +1363,7 @@ always @(posedge clk_status) begin
                     $display("PKT_PCIE:\t\t%d",top_readdata);
                     conf_state <= MAX_DM2PCIE_FIFO;
                     s_read <= 1;
-                    s_addr <= 30'h2200_000E;
+                    s_addr <= s_addr + 1;
                 end
             end
             MAX_DM2PCIE_FIFO: begin
@@ -1371,7 +1372,7 @@ always @(posedge clk_status) begin
                     $display("MAX_DM2PCIE_FIFO:\t%d",top_readdata);
                     conf_state <= PCIE_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_000F;
+                    s_addr <= s_addr + 1;
                 end
             end
             PCIE_PKT: begin
@@ -1380,7 +1381,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_PKT:\t\t%d",top_readdata);
                     conf_state <= PCIE_META;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0010;
+                    s_addr <= s_addr + 1;
                 end
             end
             PCIE_META: begin
@@ -1389,7 +1390,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_META:\t\t%d",top_readdata);
                     conf_state <= DM_PCIE_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0011;
+                    s_addr <= s_addr + 1;
                 end
             end
             DM_PCIE_PKT: begin
@@ -1398,7 +1399,7 @@ always @(posedge clk_status) begin
                     $display("DM_PCIE_PKT:\t\t%d",top_readdata);
                     conf_state <= DM_PCIE_META;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0012;
+                    s_addr <= s_addr + 1;
                 end
             end
             DM_PCIE_META: begin
@@ -1407,7 +1408,7 @@ always @(posedge clk_status) begin
                     $display("DM_PCIE_META:\t\t%d",top_readdata);
                     conf_state <= DM_ETH_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0013;
+                    s_addr <= s_addr + 1;
                 end
             end
             DM_ETH_PKT: begin
@@ -1416,7 +1417,7 @@ always @(posedge clk_status) begin
                     $display("DM_ETH_PKT:\t\t%d",top_readdata);
                     conf_state <= RX_DMA_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0014;
+                    s_addr <= s_addr + 1;
                 end
             end
             RX_DMA_PKT: begin
@@ -1425,7 +1426,7 @@ always @(posedge clk_status) begin
                     $display("RX_DMA_PKT:\t\t%d",top_readdata);
                     conf_state <= RX_PKT_HEAD_UPD;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0015;
+                    s_addr <= s_addr + 1;
                 end
             end
             RX_PKT_HEAD_UPD: begin
@@ -1434,7 +1435,7 @@ always @(posedge clk_status) begin
                     $display("RX_PKT_HEAD_UPD:\t%d",top_readdata);
                     conf_state <= TX_DSC_TAIL_UPD;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0016;
+                    s_addr <= s_addr + 1;
                 end
             end
             TX_DSC_TAIL_UPD: begin
@@ -1443,7 +1444,7 @@ always @(posedge clk_status) begin
                     $display("TX_DSC_TAIL_UPD:\t%d",top_readdata);
                     conf_state <= DMA_REQUEST;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0017;
+                    s_addr <= s_addr + 1;
                 end
             end
             DMA_REQUEST: begin
@@ -1452,7 +1453,7 @@ always @(posedge clk_status) begin
                     $display("DMA_REQUEST:\t\t%d",top_readdata);
                     conf_state <= RULE_SET;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0018;
+                    s_addr <= s_addr + 1;
                 end
             end
             RULE_SET: begin
@@ -1461,7 +1462,7 @@ always @(posedge clk_status) begin
                     $display("RULE_SET:\t\t%d",top_readdata);
                     conf_state <= DMA_QUEUE_FULL;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0019;
+                    s_addr <= s_addr + 1;
                 end
             end
             DMA_QUEUE_FULL: begin
@@ -1470,7 +1471,7 @@ always @(posedge clk_status) begin
                     $display("DMA_QUEUE_FULL:\t%d",top_readdata);
                     conf_state <= CPU_DSC_BUF_FULL;
                     s_read <= 1;
-                    s_addr <= 30'h2200_001A;
+                    s_addr <= s_addr + 1;
                 end
             end
             CPU_DSC_BUF_FULL: begin
@@ -1479,25 +1480,34 @@ always @(posedge clk_status) begin
                     $display("CPU_DSC_BUF_FULL:\t%d",top_readdata);
                     conf_state <= CPU_PKT_BUF_FULL;
                     s_read <= 1;
-                    s_addr <= 30'h2200_001B;
+                    s_addr <= s_addr + 1;
                 end
             end
             CPU_PKT_BUF_FULL: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
                     $display("CPU_PKT_BUF_FULL:\t%d",top_readdata);
-                    conf_state <= MAX_PCIE_FIFO;
+                    conf_state <= MAX_PCIE_PKT_FIFO;
                     s_read <= 1;
-                    s_addr <= 30'h2200_001C;
+                    s_addr <= s_addr + 1;
                 end
             end
-            MAX_PCIE_FIFO: begin
+            MAX_PCIE_PKT_FIFO: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("MAX_PCIE_FIFO:\t%d",top_readdata);
+                    $display("MAX_PCIE_PKT_FIFO:\t%d",top_readdata);
+                    conf_state <= MAX_PCIE_META_FIFO;
+                    s_read <= 1;
+                    s_addr <= s_addr + 1;
+                end
+            end
+            MAX_PCIE_META_FIFO: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("MAX_PCIE_META_FIFO:\t%d",top_readdata);
                     conf_state <= PCIE_TX_IGNORED_DSC;
                     s_read <= 1;
-                    s_addr <= 30'h2200_001D;
+                    s_addr <= s_addr + 1;
                 end
             end
             PCIE_TX_IGNORED_DSC: begin
@@ -1506,7 +1516,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_TX_IGNORED_DSC:\t%d",top_readdata);
                     conf_state <= PCIE_TX_Q_FULL_SIGNALS;
                     s_read <= 1;
-                    s_addr <= 30'h2200_001E;
+                    s_addr <= s_addr + 1;
                 end
             end
             PCIE_TX_Q_FULL_SIGNALS: begin
@@ -1515,7 +1525,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_TX_Q_FULL_SIG:\t%d",top_readdata);
                     conf_state <= PCIE_TX_DSC_CNT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_001F;
+                    s_addr <= s_addr + 1;
                 end
             end
             PCIE_TX_DSC_CNT: begin
@@ -1524,7 +1534,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_TX_DSC_CNT:\t%d",top_readdata);
                     conf_state <= PCIE_TX_EMPTY_TAIL_CNT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0020;
+                    s_addr <= s_addr + 1;
                 end
             end
             PCIE_TX_EMPTY_TAIL_CNT: begin
@@ -1533,7 +1543,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_TX_EMPTY_TAIL:\t%d",top_readdata);
                     conf_state <= PCIE_TX_DSC_READ_CNT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0021;
+                    s_addr <= s_addr + 1;
                 end
             end
             PCIE_TX_DSC_READ_CNT: begin
@@ -1542,7 +1552,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_TX_DSC_READ_CNT:\t%d",top_readdata);
                     conf_state <= PCIE_TX_PKT_READ_CNT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0022;
+                    s_addr <= s_addr + 1;
                 end
             end
             PCIE_TX_PKT_READ_CNT: begin
@@ -1551,7 +1561,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_TX_PKT_READ_CNT:\t%d",top_readdata);
                     conf_state <= PCIE_TX_BATCH_CNT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0023;
+                    s_addr <= s_addr + 1;
                 end
             end
             PCIE_TX_BATCH_CNT: begin
@@ -1560,7 +1570,7 @@ always @(posedge clk_status) begin
                     $display("PCIE_TX_BATCH_CNT:\t%d",top_readdata);
                     conf_state <= TX_DMA_PKT;
                     s_read <= 1;
-                    s_addr <= 30'h2200_0024;
+                    s_addr <= s_addr + 1;
                 end
             end
             TX_DMA_PKT: begin
