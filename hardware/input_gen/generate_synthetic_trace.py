@@ -25,7 +25,6 @@ def wrpcap(pcap_name, raw_packets):
 def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest):
     sample_pkts = []
     ipv4_len = pkt_size - 14 - 4
-    counter_size = math.ceil(math.log2(nb_pkts))
     for i in range(nb_dest):
         dst_ip = ipaddress.ip_address('192.168.0.0') + i
         src_offset = int(i/(nb_dest/nb_src))
