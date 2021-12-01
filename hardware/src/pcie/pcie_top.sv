@@ -79,6 +79,8 @@ module pcie_top (
     output logic [31:0] tx_dsc_read_cnt,
     output logic [31:0] tx_pkt_read_cnt,
     output logic [31:0] tx_batch_cnt,
+    output logic [31:0] tx_max_inflight_dscs,
+    output logic [31:0] tx_max_nb_req_dscs,
     output logic [31:0] tx_dma_pkt_cnt,
     output logic [31:0] rx_pkt_head_upd_cnt,
     output logic [31:0] tx_dsc_tail_upd_cnt,
@@ -95,6 +97,8 @@ module pcie_top (
 
 logic [RB_AWIDTH:0] dsc_rb_size;
 logic [RB_AWIDTH:0] pkt_rb_size;
+
+logic [31:0] inflight_desc_limit;
 
 // descriptor queue table interface signals
 bram_interface_io rx_dsc_q_table_tails();
@@ -159,6 +163,8 @@ assign pkt_rb_size = control_regs[0][1 +: RB_AWIDTH+1];
 assign sw_reset = control_regs[0][27];
 
 assign dsc_rb_size = control_regs[1][0 +: RB_AWIDTH+1];
+
+assign inflight_desc_limit = control_regs[2];
 
 logic queue_updated [NB_PKT_QUEUE_MANAGERS];
 logic [BRAM_TABLE_IDX_WIDTH-1:0] queue_idx;
@@ -423,13 +429,16 @@ cpu_to_fpga #(
     .q_table_l_addrs       (tx_dsc_q_table_l_addrs.owner),
     .q_table_h_addrs       (tx_dsc_q_table_h_addrs.owner),
     .rb_size               (dsc_rb_size), // TODO(sadok): use different rb size?
+    .inflight_desc_limit   (inflight_desc_limit),
     .ignored_dsc_cnt       (tx_ignored_dsc_cnt),
     .queue_full_signals    (tx_q_full_signals),
     .dsc_cnt               (tx_dsc_cnt),
     .empty_tail_cnt        (tx_empty_tail_cnt),
     .dsc_read_cnt          (tx_dsc_read_cnt),
     .pkt_read_cnt          (tx_pkt_read_cnt),
-    .batch_cnt             (tx_batch_cnt)
+    .batch_cnt             (tx_batch_cnt),
+    .max_inflight_dscs     (tx_max_inflight_dscs),
+    .max_nb_req_dscs       (tx_max_nb_req_dscs)
 );
 
 // Keep track of the number of packets that were successfully DMAed by software.

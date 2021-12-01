@@ -9,10 +9,13 @@ localparam PERIOD = 4;
 localparam NB_QUEUES = 4;  // Must be at least 2.
 localparam RB_SIZE = 64;
 
+// Set number of in-flight descriptor reads that are allowed in the TX path.
+localparam NB_TX_CREDITS = 1024;
+
 generate
-    if (NB_QUEUES < 2) begin
-        $error("NB_QUEUES must be at least 2");
-    end
+  if (NB_QUEUES < 2) begin
+    $error("NB_QUEUES must be at least 2");
+  end
 endgenerate
 
 localparam QUEUE_ADDR_WIDTH = $clog2(NB_QUEUES);
@@ -79,12 +82,15 @@ virtual bram_interface_io.user #(
 ) q_table_h_addrs_user = tx_dsc_q_table_h_addrs.user;
 
 logic [RB_AWIDTH:0] dsc_rb_size;
+logic [31:0]        inflight_desc_limit;
 
 logic [31:0] tx_ignored_dsc_cnt;
 logic [31:0] tx_q_full_signals;
 logic [31:0] tx_dsc_cnt;
 logic [31:0] tx_empty_tail_cnt;
 logic [31:0] tx_batch_cnt;
+logic [31:0] tx_max_inflight_dscs;
+logic [31:0] tx_max_nb_req_dscs;
 
 logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] tx_dsc_tail;
 logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] expected_tx_dsc_tail;
@@ -93,7 +99,10 @@ logic [31:0] pkt_tx_cnt;
 logic [31:0] rx_step;
 logic [31:0] tx_step;
 
-assign dsc_rb_size = 2048;
+logic [63:0] src_addr;
+
+assign dsc_rb_size = RB_SIZE;
+assign inflight_desc_limit = NB_TX_CREDITS;
 
 always @(posedge clk) begin
   pcie_tx_pkt_ready <= 1;
@@ -124,58 +133,49 @@ always @(posedge clk) begin
   end else if (cnt == 10) begin
     rst <= 0;
     cnt <= cnt + 1;
-    tx_dsc_tail <= 1;
+    tx_dsc_tail = 0;
     pkt_tx_cnt <= 0;
-    pkt_rx_cnt <= 0;
-    rx_step <= 0;
-    tx_step <= 0;
+    pkt_rx_cnt = 0;
+    rx_step = 0;
+    tx_step = 0;
+    src_addr <= 0;
 
     pcie_rddm_desc_ready <= 1;
   end else if (cnt == 11) begin
     const int nb_steps = 100;
     automatic int increm_seq[] = new[nb_steps];
-    automatic int expected_tails[] = new[nb_steps];
     automatic logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] next_tail = 1;
-    automatic int j = 0;
+    automatic int total_bytes = 0;
     increm_seq = '{1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1,
                    0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0,
                    0, 0, 0, 0, 6, 5, 4, 3, 2, 1, 0, 2, 0, 0, 1, 1, 0, 1, 1, 1,
                    0, 1, 1, 0, 0, 2, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0,
                    0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 2, 3, 4, 5, 6};
     for (int i = 0; i < nb_steps; i++) begin
-      if (increm_seq[i] != 0) begin
-        expected_tails[j] = next_tail;
-        next_tail = (next_tail + increm_seq[i]) % RB_SIZE;
-        j++;
-      end
+      total_bytes += increm_seq[i] * 64;
     end
 
     if (tx_step < nb_steps) begin
-      tx_step <= tx_step + 1;
-      q_table_tails_user.wr_en <= 1;
+      tx_dsc_tail = (tx_dsc_tail + increm_seq[tx_step]) % RB_SIZE;
       q_table_tails_user.addr <= 0;
       q_table_tails_user.wr_data <= tx_dsc_tail;
-      
-      tx_dsc_tail <= (tx_dsc_tail + increm_seq[tx_step]) % RB_SIZE;
+      q_table_tails_user.wr_en <= (q_table_tails_user.wr_data != tx_dsc_tail);
+
       pkt_tx_cnt <= pkt_tx_cnt + increm_seq[tx_step];
-      pcie_rddm_desc_ready <= ~pcie_rddm_desc_ready;
+      tx_step = tx_step + 1;
     end
 
     // Got a DMA read for a descriptor.
-    if (pcie_rddm_desc_valid & pcie_rddm_desc_ready) begin
+    if (pcie_rddm_desc_valid) begin
       automatic rddm_desc_t rddm_desc = pcie_rddm_desc_data;
-      rx_step <= rx_step + 1;
 
-      // $display("pcie_rddm_desc_data: %p", rddm_desc);
-      assert(((rddm_desc.src_addr/64 + rddm_desc.nb_dwords/16) % RB_SIZE)
-             == expected_tails[rx_step]) else begin
-        $display("rddm_desc.src_addr: %d", rddm_desc.src_addr);
-        $display("rddm_desc.nb_dwords: %d", rddm_desc.nb_dwords);
-        $fatal;
-      end
-      pkt_rx_cnt <= pkt_rx_cnt + rddm_desc.nb_dwords/16;
+      assert(rddm_desc.src_addr == src_addr) else $fatal;
+      src_addr <= (rddm_desc.src_addr + rddm_desc.nb_dwords*4) % (RB_SIZE * 64);
 
-      if ((rx_step + 1) == j) begin
+      pkt_rx_cnt = pkt_rx_cnt + rddm_desc.nb_dwords/16;
+      rx_step = rx_step + 1;
+
+      if (total_bytes == pkt_rx_cnt*64) begin
         cnt <= cnt + 1;
       end
     end
@@ -185,6 +185,8 @@ always @(posedge clk) begin
     $display("PCIE_TX_DSC_CNT:\t%d", tx_dsc_cnt);
     $display("PCIE_TX_EMPTY_TAIL:\t%d", tx_empty_tail_cnt);
     $display("PCIE_TX_BATCH_CNT:\t%d", tx_batch_cnt);
+    $display("PCIE_TX_MAX_INFLIGHT:\t%d", tx_max_inflight_dscs);
+    $display("PCIE_TX_MAX_NB_DSCS:\t%d", tx_max_nb_req_dscs);
     $finish;
   end
 end
@@ -222,11 +224,14 @@ cpu_to_fpga #(
   .q_table_l_addrs      (tx_dsc_q_table_l_addrs.owner),
   .q_table_h_addrs      (tx_dsc_q_table_h_addrs.owner),
   .rb_size              (dsc_rb_size),  // TODO(sadok): use different rb size?
+  .inflight_desc_limit  (inflight_desc_limit),
   .ignored_dsc_cnt      (tx_ignored_dsc_cnt),
   .queue_full_signals   (tx_q_full_signals),
   .dsc_cnt              (tx_dsc_cnt),
   .empty_tail_cnt       (tx_empty_tail_cnt),
-  .batch_cnt            (tx_batch_cnt)
+  .batch_cnt            (tx_batch_cnt),
+  .max_inflight_dscs    (tx_max_inflight_dscs),
+  .max_nb_req_dscs      (tx_max_nb_req_dscs)
 );
 
 endmodule

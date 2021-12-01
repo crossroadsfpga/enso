@@ -50,6 +50,7 @@ module cpu_to_fpga  #(
 
   // Config signals.
   input logic [RB_AWIDTH:0] rb_size,
+  input logic [31:0]        inflight_desc_limit,
 
   // Counters.
   output logic [31:0] ignored_dsc_cnt,
@@ -58,7 +59,9 @@ module cpu_to_fpga  #(
   output logic [31:0] empty_tail_cnt,
   output logic [31:0] dsc_read_cnt,
   output logic [31:0] pkt_read_cnt,
-  output logic [31:0] batch_cnt
+  output logic [31:0] batch_cnt,
+  output logic [31:0] max_inflight_dscs,
+  output logic [31:0] max_nb_req_dscs
 );
 
 typedef struct packed {
@@ -118,6 +121,8 @@ logic [511:0] pkt_queue_out_data;
 logic         pkt_queue_out_valid;
 logic         pkt_queue_out_ready;
 logic [31:0]  pkt_queue_occup;
+
+logic [31:0] infligh_descriptors;
 
 localparam RDDM_WREQ_ALLOWANCE = 16;
 
@@ -703,13 +708,56 @@ always @(posedge clk) begin
   pcie_rddm_prio_ready_r3 <= pcie_rddm_prio_ready_r2;
 end
 
+logic has_enough_credit;
+logic [31:0] nb_requested_descriptors;
+
 always_comb begin
-  // Backpressure descriptors if prio_queue gets almost full.
-  rddm_desc_queue_out_ready = pcie_rddm_desc_ready_r3
-    & !rddm_prio_queue_alm_full & !meta_queue_alm_full;
+  automatic rddm_desc_t rddm_desc = pcie_rddm_desc_data;
+
+  if (rddm_desc_queue_out_valid) begin
+    nb_requested_descriptors = rddm_desc.nb_dwords >> 4;
+  end else begin
+    nb_requested_descriptors = 0;
+  end
+  
+  // Limit the number of in-flight requested descriptors. `inflight_desc_limit`
+  // is configurable through JTAG.
+  has_enough_credit =
+    (infligh_descriptors + nb_requested_descriptors) <= inflight_desc_limit;
+
+  rddm_desc_queue_out_ready = pcie_rddm_desc_ready_r3 & has_enough_credit;
   pcie_rddm_desc_valid = rddm_desc_queue_out_valid & rddm_desc_queue_out_ready;
   rddm_prio_queue_out_ready = pcie_rddm_prio_ready_r3;
   pcie_rddm_prio_valid = rddm_prio_queue_out_valid & rddm_prio_queue_out_ready;
+end
+
+// Keep track of in-flight descriptors. Whenever the PCIe core consumes the
+// descriptor we increment by the number of requested descriptors. Whenever a
+// descriptor arrives we decrement.
+always @(posedge clk) begin
+  if (rst) begin
+    infligh_descriptors <= 0;
+    max_inflight_dscs <= 0;
+    max_nb_req_dscs <= 0;
+  end else begin
+    automatic rddm_dst_addr_t rddm_dst_addr = pcie_rddm_address;
+    automatic logic descriptor_arrived;
+
+    descriptor_arrived = pcie_rddm_write & rddm_dst_addr.descriptor;
+    if (pcie_rddm_desc_valid) begin
+      infligh_descriptors <=
+        infligh_descriptors + nb_requested_descriptors - descriptor_arrived;
+    end else begin
+      infligh_descriptors <= infligh_descriptors - descriptor_arrived;
+    end
+
+    if (infligh_descriptors > max_inflight_dscs) begin
+      max_inflight_dscs <= infligh_descriptors;
+    end
+    if (nb_requested_descriptors > max_nb_req_dscs) begin
+      max_nb_req_dscs <= nb_requested_descriptors;
+    end
+  end
 end
 
 fifo_wrapper_infill_mlab #(

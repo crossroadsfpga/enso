@@ -43,6 +43,9 @@ localparam PKT_BUF_SIZE = 8192;
 localparam RAM_SIZE = DSC_BUF_SIZE + PKT_BUF_SIZE;
 localparam RAM_ADDR_LEN = $clog2(RAM_SIZE);
 
+// Set number of in-flight descriptor reads that are allowed in the TX path.
+localparam NB_TX_CREDITS = 1024;
+
 localparam DMA_BUF_SIZE = 64;
 localparam DMA_BUF_AWIDTH = ($clog2(DMA_BUF_SIZE));
 
@@ -251,6 +254,7 @@ state_t read_state;
 typedef enum{
     CONFIGURE_0,
     CONFIGURE_1,
+    CONFIGURE_2,
     READ_MEMORY,
     READ_PCIE_START,
     READ_PCIE_PKT_Q,
@@ -293,6 +297,8 @@ typedef enum{
     PCIE_TX_DSC_READ_CNT,
     PCIE_TX_PKT_READ_CNT,
     PCIE_TX_BATCH_CNT,
+    PCIE_TX_MAX_INFLIGHT_DSCS,
+    PCIE_TX_MAX_NB_REQ_DSCS,
     TX_DMA_PKT
 } c_state_t;
 
@@ -1125,6 +1131,14 @@ always @(posedge clk_status) begin
                 s_write <= 1;
                 
                 s_writedata <= {6'h0, dsc_buf_size};
+                conf_state <= CONFIGURE_2;
+            end
+            CONFIGURE_2: begin
+                automatic logic [25:0] dsc_buf_size = DSC_BUF_SIZE;
+                s_addr <= 30'h2A00_0002;
+                s_write <= 1;
+                
+                s_writedata <= NB_TX_CREDITS;
                 conf_state <= READ_MEMORY;
             end
             READ_MEMORY: begin
@@ -1567,7 +1581,25 @@ always @(posedge clk_status) begin
             PCIE_TX_BATCH_CNT: begin
                 s_read <= 0;
                 if(top_readdata_valid)begin
-                    $display("PCIE_TX_BATCH_CNT:\t%d",top_readdata);
+                    $display("PCIE_TX_BATCH_CNT:\t%d", top_readdata);
+                    conf_state <= PCIE_TX_MAX_INFLIGHT_DSCS;
+                    s_read <= 1;
+                    s_addr <= s_addr + 1;
+                end
+            end
+            PCIE_TX_MAX_INFLIGHT_DSCS: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PCIE_TX_MAX_INFLIGHT:\t%d", top_readdata);
+                    conf_state <= PCIE_TX_MAX_NB_REQ_DSCS;
+                    s_read <= 1;
+                    s_addr <= s_addr + 1;
+                end
+            end
+            PCIE_TX_MAX_NB_REQ_DSCS: begin
+                s_read <= 0;
+                if(top_readdata_valid)begin
+                    $display("PCIE_TX_MAX_NB_DSCS:\t%d", top_readdata);
                     conf_state <= TX_DMA_PKT;
                     s_read <= 1;
                     s_addr <= s_addr + 1;
