@@ -488,7 +488,7 @@ void advance_ring_buffer(socket_internal* socket_entries,
     *(dsc_queue.tx_tail_ptr) = dsc_queue.tx_tail;
 
     // Hack to force new descriptor to be sent.
-    *(socket_entry->pkt_queue.buf_head_ptr) = old_rx_head;
+    // *(socket_entry->pkt_queue.buf_head_ptr) = old_rx_head;
 #else
     asm volatile ("" : : : "memory"); // compiler memory barrier
     *(socket_entry->pkt_queue.buf_head_ptr) = rx_pkt_tail;
