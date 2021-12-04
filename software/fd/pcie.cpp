@@ -588,6 +588,9 @@ void print_stats(socket_internal* socket_entry, bool print_global)
 {
     if (print_global) {
         printf("TX descriptor queue full counter: %lu\n\n", dsc_queue.tx_full_cnt);
+        printf("Dsc RX head: %d\n", dsc_queue.rx_head);
+        printf("Dsc TX tail: %d\n", dsc_queue.tx_tail);
+        printf("Dsc TX head: %d\n\n", dsc_queue.tx_head);
     }
 
     printf("Pkt RX tail: %d\n", socket_entry->pkt_queue.rx_tail);
