@@ -518,6 +518,8 @@ int send_to_queue(socket_internal* socket_entries,
 int dma_finish(socket_internal* socket_entry)
 {
     queue_regs_t* pkt_queue_regs = socket_entry->pkt_queue.regs;
+    pkt_queue_regs->rx_tail = 0;
+    pkt_queue_regs->rx_head = 0;
     pkt_queue_regs->rx_mem_low = 0;
     pkt_queue_regs->rx_mem_high = 0;
 
@@ -528,8 +530,13 @@ int dma_finish(socket_internal* socket_entry)
     }
 
     if (--(dsc_queue.ref_cnt) == 0) {
+        dsc_queue.regs->rx_tail = 0;
+        dsc_queue.regs->rx_head = 0;
         dsc_queue.regs->rx_mem_low = 0;
         dsc_queue.regs->rx_mem_high = 0;
+
+        dsc_queue.regs->tx_mem_low = 0;
+        dsc_queue.regs->tx_mem_high = 0;
         munmap(dsc_queue.rx_buf, ALIGNED_DSC_BUF_PAIR_SIZE);
         free(pending_pkt_tails);
         free(rx_pkt_queue_ids);
