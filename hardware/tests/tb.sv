@@ -490,10 +490,6 @@ logic [DMA_BUF_AWIDTH-1:0] pcie_wr_req_buf_head;
 logic [DMA_BUF_AWIDTH-1:0] pcie_wr_req_buf_tail;
 
 pcie_state_t pcie_state;
-// ring buffer to keep track of descriptors with pending reads
-// pcie_desc_t dma_pending_rd_buf[DMA_BUF_SIZE-1:0];
-// logic [DMA_BUF_AWIDTH-1:0] dma_pending_rd_buf_head;
-// logic [DMA_BUF_AWIDTH-1:0] dma_pending_rd_buf_tail;
 
 // number of dwords that have been requested (for the head descriptor)
 logic [31:0] cur_desc_reqs_dwords;
