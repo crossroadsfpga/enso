@@ -197,8 +197,11 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         dsc_queue.tx_tail_ptr = &dsc_queue_regs->tx_tail;
         dsc_queue.rx_head = dsc_queue_regs->rx_head;
         dsc_queue.old_rx_head = dsc_queue.rx_head;
-        dsc_queue.tx_head = dsc_queue_regs->tx_head;
+        
+        // Preserve TX DSC tail and make head match the same value.
         dsc_queue.tx_tail = dsc_queue_regs->tx_tail;
+        dsc_queue.tx_head = dsc_queue.tx_tail;
+        dsc_queue_regs->tx_head = dsc_queue.tx_head;
 
         // HACK(sadok) assuming that we know the number of queues beforehand
         pending_pkt_tails = (uint32_t*) malloc(
