@@ -1200,14 +1200,15 @@ always @(posedge clk_status) begin
                 end
             end
             READ_PCIE_START: begin
-                s_read <= 1;
-                s_addr <= 30'h2A00_0000;
-                conf_state <= READ_PCIE_PKT_Q;
-                
-                // uncomment to skip read_pcie
-                // conf_state <= IDLE;
-                $display("read_pcie:");
-                $display("status + pkt queues:");
+                `ifdef SKIP_PCIE_RD
+                    conf_state <= IDLE;
+                `else
+                    s_read <= 1;
+                    s_addr <= 30'h2A00_0000;
+                    conf_state <= READ_PCIE_PKT_Q;
+                    $display("read_pcie:");
+                    $display("status + pkt queues:");
+                `endif
             end
             READ_PCIE_PKT_Q: begin
                 if (top_readdata_valid) begin
