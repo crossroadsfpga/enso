@@ -26,6 +26,8 @@ module tb;
 
 `define DELAY_LAST_PKTS;  // Set it to delay last packets for every queue.
 
+`define SKIP_PCIE_RD;  // Set it to skip PCIe read after the simulation is done.
+
 generate
     // We assume this during the test, it does not necessarily hold in general.
     if (((`NB_PKT_QUEUES / `NB_DSC_QUEUES) * `NB_DSC_QUEUES) != `NB_PKT_QUEUES)
