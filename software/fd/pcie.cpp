@@ -426,10 +426,6 @@ inline void transmit_chunk(uint64_t buf_phys_addr, pcie_tx_dsc_t* tx_buf,
 {
     uint32_t tx_tail = dsc_queue.tx_tail;
 
-    if (unlikely(length == 0)) {
-        return;
-    }
-
     while (length > 0) {
         uint32_t free_slots = (dsc_queue.tx_head - tx_tail - 1) % DSC_BUF_SIZE;
         // Block until we can send.
