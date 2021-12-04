@@ -6,24 +6,24 @@ module pdu_gen #(
     parameter PKT_Q_ALMOST_FULL_THRESHOLD=OUT_PKT_Q_DEPTH - MAX_PKT_SIZE * 2,
     parameter META_Q_ALMOST_FULL_THRESHOLD=OUT_META_Q_DEPTH - 2
 )(
-		input  logic           clk,
-		input  logic           rst,
-		input  logic           in_sop,
-		input  logic           in_eop,
-		input  logic [511:0]   in_data,
-		input  logic [5:0]     in_empty,
-		input  logic           in_valid,
-		output logic           in_ready,
-        input  logic           in_meta_valid,
-        input  var metadata_t  in_meta_data,
-        output logic           in_meta_ready,
-        output var flit_lite_t pcie_pkt_buf_data,
-        output logic           pcie_pkt_buf_valid,
-        input  logic           pcie_pkt_buf_ready,
-        output var pkt_meta_t  pcie_meta_buf_data,
-        output logic           pcie_meta_buf_valid,
-        input  logic           pcie_meta_buf_ready
-	);
+    input  logic           clk,
+    input  logic           rst,
+    input  logic           in_sop,
+    input  logic           in_eop,
+    input  logic [511:0]   in_data,
+    input  logic [5:0]     in_empty,
+    input  logic           in_valid,
+    output logic           in_ready,
+    input  logic           in_meta_valid,
+    input  var metadata_t  in_meta_data,
+    output logic           in_meta_ready,
+    output var flit_lite_t pcie_pkt_buf_data,
+    output logic           pcie_pkt_buf_valid,
+    input  logic           pcie_pkt_buf_ready,
+    output var pkt_meta_t  pcie_meta_buf_data,
+    output logic           pcie_meta_buf_valid,
+    input  logic           pcie_meta_buf_ready
+);
 
 logic [511:0] pdu_data;
 logic [511:0] pdu_data_swap;
