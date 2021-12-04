@@ -106,6 +106,9 @@ logic        rddm_desc_queue_in_valid;
 logic        rddm_desc_queue_in_ready;
 logic [31:0] rddm_prio_queue_occup;
 
+logic [$bits(pcie_rddm_prio_data)-1:0] rddm_desc_queue_in_data_r;
+logic        rddm_desc_queue_in_valid_r;
+
 meta_t       meta_queue_in_data;
 logic        meta_queue_in_valid;
 logic        meta_queue_in_ready;
@@ -122,14 +125,16 @@ logic         pkt_queue_out_valid;
 logic         pkt_queue_out_ready;
 logic [31:0]  pkt_queue_occup;
 
-logic [31:0] infligh_descriptors;
+logic [31:0] inflight_descriptors;
 
 localparam RDDM_WREQ_ALLOWANCE = 16;
 
+localparam RDDM_PRIO_QUEUE_LEN = 1024;
+localparam RDDM_DESC_QUEUE_LEN = RDDM_PRIO_QUEUE_LEN/2;
 localparam META_QUEUE_LEN = 1024;  // In number of descriptors.
 localparam PKT_QUEUE_LEN = 512;  // In flits.
 
-localparam RDDM_PR_QUEUE_LEN = 1024;
+localparam MAX_TX_DSC_BATCH = RDDM_PRIO_QUEUE_LEN/4;
 
 logic out_pkt_alm_full;
 assign out_pkt_alm_full = out_pkt_occup > PCIE_TX_PKT_FIFO_ALM_FULL_THRESH;
@@ -141,16 +146,8 @@ logic dsc_reads_queue_alm_full;
 assign dsc_reads_queue_alm_full = dsc_reads_queue_occup > 10;
 
 logic rddm_desc_queue_alm_full;
-assign rddm_desc_queue_alm_full = rddm_desc_queue_occup > 500;
-
-logic rddm_prio_queue_alm_full;
-assign rddm_prio_queue_alm_full = rddm_prio_queue_occup > RDDM_PR_QUEUE_LEN / 16;
-
-logic meta_queue_alm_full;
-assign meta_queue_alm_full = meta_queue_occup > META_QUEUE_LEN / 16;
-
-logic pkt_queue_alm_full;
-assign pkt_queue_alm_full = pkt_queue_occup > PKT_QUEUE_LEN / 4;
+assign rddm_desc_queue_alm_full =
+  rddm_desc_queue_occup > (RDDM_DESC_QUEUE_LEN - MAX_TX_DSC_BATCH);
 
 // Backpressure PCIe core only when packet queue is too full. Note that this
 // does not include backpressure signals from the `meta_queue` and from the
@@ -216,7 +213,7 @@ logic [QUEUE_ID_WIDTH-1:0] q_table_a_tails_wr_addr_r;
 // Define mask associated with rb_size. Assume that rb_size is a power of two.
 logic [RB_AWIDTH-1:0] rb_mask;
 always @(posedge clk) begin
-    rb_mask <= rb_size - 1;
+  rb_mask <= rb_size - 1;
 end
 
 // HACK(sadok): assume single descriptor queue.
@@ -322,78 +319,111 @@ always @(posedge clk) begin
   end
 end
 
-// When set, a second DMA is pending for the same read request.
-logic second_dma_req_pending;
-assign dsc_reads_queue_out_ready = !second_dma_req_pending
+logic [31:0] dsc_cnt_r1;
+logic [31:0] dsc_cnt_r2;
+
+typedef enum
+{
+  START_TRANSFER,
+  DELAY,
+  CONTINUE_TRANSFER
+} state_t;
+
+state_t state;
+
+assign dsc_reads_queue_out_ready = (state == START_TRANSFER)
                                    & !rddm_desc_queue_alm_full;
 
-q_state_t dsc_reads_queue_out_data_r;
+q_state_t last_dsc_reads_queue_out_data;
+q_state_t last_dsc_reads_queue_out_data_r;
 
-// Send descriptor to RDDM to read latest descriptors for a given TX dsc queue.
-// It consumes the queue state from dsc_reads_queue and enqueues descriptors to
-// the rddm_prio_queue.
-always @(posedge clk) begin
+function void dma_rd_descriptor(
+  q_state_t q_state
+);
   automatic rddm_dst_addr_t dst_addr = 0;
   automatic rddm_desc_t rddm_desc = 0;
+  automatic logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] nb_flits;
+  
   rddm_desc.single_dst = 1;
   rddm_desc.descriptor_id = 2;  // Make sure this remains different from the
                                 // one used in the `prio` queue.
-  dst_addr.descriptor = 1;
 
-  rddm_desc_queue_in_valid <= 0;
-  second_dma_req_pending <= 0;
+  rddm_desc.src_addr[31:0] = q_state.l_addr;
+  rddm_desc.src_addr[63:32] = q_state.h_addr;
+  rddm_desc.src_addr += q_state.head << 6;
+
+  dst_addr.descriptor = 1;
+  dst_addr.queue_id = q_state.queue_id;
+  dst_addr.head = q_state.head;
+  rddm_desc.dst_addr = dst_addr;
+
+  last_dsc_reads_queue_out_data <= q_state;
+
+  // Unless we need to send multiple transfers, we should go to START_TRANSFER. 
+  state <= START_TRANSFER;
+
+  // Check if request wraps around.
+  if (q_state.tail > q_state.head) begin
+    nb_flits = q_state.tail - q_state.head;
+  end else begin
+    nb_flits = rb_size - q_state.head;
+
+    // Since it wraps around, need to send at least two read requests if tail is
+    // not 0.
+    if (q_state.tail != 0) begin
+      state <= DELAY;
+    end
+  end
+
+  // Limit number of descriptors fetch at once to MAX_TX_DSC_BATCH.
+  if (nb_flits > MAX_TX_DSC_BATCH) begin
+    nb_flits = MAX_TX_DSC_BATCH;
+    state <= DELAY;
+  end
+
+  last_dsc_reads_queue_out_data.head <= (q_state.head + nb_flits) & rb_mask;
+
+  rddm_desc.nb_dwords = nb_flits << 4;
+  dsc_cnt_r2 <= dsc_cnt_r2 + nb_flits;
+
+  rddm_desc_queue_in_valid_r <= 1;
+  rddm_desc_queue_in_data_r <= rddm_desc;
+endfunction
+
+// Send descriptor to RDDM to read latest descriptors for a given TX dsc queue.
+// It consumes the queue state from dsc_reads_queue and enqueues PCIe core
+// RDDM descriptors to the rddm_prio_queue.
+always @(posedge clk) begin
+  rddm_desc_queue_in_valid_r <= 0;
+
+  rddm_desc_queue_in_data <= rddm_desc_queue_in_data_r;
+  rddm_desc_queue_in_valid <= rddm_desc_queue_in_valid_r;
+
+  dsc_cnt <= dsc_cnt_r1;
+  dsc_cnt_r1 <= dsc_cnt_r2;
+
+  last_dsc_reads_queue_out_data_r <= last_dsc_reads_queue_out_data;
 
   if (rst) begin
-    dsc_cnt <= 0;
-  end
-
-  // Previous request wrapped around, send second DMA before processing next
-  // request.
-  if (second_dma_req_pending) begin
-    rddm_desc.src_addr[31:0] = dsc_reads_queue_out_data_r.l_addr;
-    rddm_desc.src_addr[63:32] = dsc_reads_queue_out_data_r.h_addr;
-
-    dst_addr.queue_id = dsc_reads_queue_out_data_r.queue_id;
-    dst_addr.head = 0;
-    rddm_desc.dst_addr = dst_addr;
-
-    rddm_desc.nb_dwords = dsc_reads_queue_out_data_r.tail << 4;
-    dsc_cnt <= dsc_cnt + dsc_reads_queue_out_data_r.tail;
-
-    rddm_desc_queue_in_valid <= 1;
-    rddm_desc_queue_in_data <= rddm_desc;
-
-  end else if (dsc_reads_queue_out_valid & dsc_reads_queue_out_ready) begin
-    rddm_desc.src_addr[31:0] = dsc_reads_queue_out_data.l_addr;
-    rddm_desc.src_addr[63:32] = dsc_reads_queue_out_data.h_addr;
-    rddm_desc.src_addr += dsc_reads_queue_out_data.head << 6;
-
-    dst_addr.queue_id = dsc_reads_queue_out_data.queue_id;
-    dst_addr.head = dsc_reads_queue_out_data.head;
-    rddm_desc.dst_addr = dst_addr;
-
-    // Check if request wraps around.
-    if (dsc_reads_queue_out_data.tail > dsc_reads_queue_out_data.head) begin
-      automatic logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] nb_flits =
-        dsc_reads_queue_out_data.tail - dsc_reads_queue_out_data.head;
-      rddm_desc.nb_dwords = nb_flits << 4;
-      dsc_cnt <= dsc_cnt + nb_flits;
-    end else begin
-      automatic logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] nb_flits =
-        rb_size - dsc_reads_queue_out_data.head;
-      // Wraps around, need to send two read requests only if tail is not 0.
-      if (dsc_reads_queue_out_data.tail != 0) begin
-        second_dma_req_pending <= 1;
+    dsc_cnt_r2 <= 0;
+    state <= START_TRANSFER;
+  end else begin
+    case (state)
+      START_TRANSFER: begin
+        // Consume next read request from dsc_reads_queue.
+        if (dsc_reads_queue_out_valid & dsc_reads_queue_out_ready) begin
+          dma_rd_descriptor(dsc_reads_queue_out_data);
+        end
       end
-      rddm_desc.nb_dwords = nb_flits << 4;
-      dsc_cnt <= dsc_cnt + nb_flits;
-    end
-
-    rddm_desc_queue_in_valid <= 1;
-    rddm_desc_queue_in_data <= rddm_desc;
+      // Introducing delay to help with timing.
+      DELAY: begin
+        state <= CONTINUE_TRANSFER;
+      end
+      CONTINUE_TRANSFER: begin
+        dma_rd_descriptor(last_dsc_reads_queue_out_data_r);
+      end
+    endcase
   end
-
-  dsc_reads_queue_out_data_r <= dsc_reads_queue_out_data;
 end
 
 logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] last_head;
@@ -709,6 +739,7 @@ always @(posedge clk) begin
 end
 
 logic has_enough_credit;
+logic has_enough_credit_r;
 logic [31:0] nb_requested_descriptors;
 
 always_comb begin
@@ -723,9 +754,9 @@ always_comb begin
   // Limit the number of in-flight requested descriptors. `inflight_desc_limit`
   // is configurable through JTAG.
   has_enough_credit =
-    (infligh_descriptors + nb_requested_descriptors) <= inflight_desc_limit;
+    (inflight_descriptors + nb_requested_descriptors) <= inflight_desc_limit;
 
-  rddm_desc_queue_out_ready = pcie_rddm_desc_ready_r3 & has_enough_credit;
+  rddm_desc_queue_out_ready = pcie_rddm_desc_ready_r3 & has_enough_credit_r;
   pcie_rddm_desc_valid = rddm_desc_queue_out_valid & rddm_desc_queue_out_ready;
   rddm_prio_queue_out_ready = pcie_rddm_prio_ready_r3;
   pcie_rddm_prio_valid = rddm_prio_queue_out_valid & rddm_prio_queue_out_ready;
@@ -735,8 +766,9 @@ end
 // descriptor we increment by the number of requested descriptors. Whenever a
 // descriptor arrives we decrement.
 always @(posedge clk) begin
+  has_enough_credit_r <= has_enough_credit;
   if (rst) begin
-    infligh_descriptors <= 0;
+    inflight_descriptors <= 0;
     max_inflight_dscs <= 0;
     max_nb_req_dscs <= 0;
   end else begin
@@ -745,14 +777,14 @@ always @(posedge clk) begin
 
     descriptor_arrived = pcie_rddm_write & rddm_dst_addr.descriptor;
     if (pcie_rddm_desc_valid) begin
-      infligh_descriptors <=
-        infligh_descriptors + nb_requested_descriptors - descriptor_arrived;
+      inflight_descriptors <=
+        inflight_descriptors + nb_requested_descriptors - descriptor_arrived;
     end else begin
-      infligh_descriptors <= infligh_descriptors - descriptor_arrived;
+      inflight_descriptors <= inflight_descriptors - descriptor_arrived;
     end
 
-    if (infligh_descriptors > max_inflight_dscs) begin
-      max_inflight_dscs <= infligh_descriptors;
+    if (inflight_descriptors > max_inflight_dscs) begin
+      max_inflight_dscs <= inflight_descriptors;
     end
     if (nb_requested_descriptors > max_nb_req_dscs) begin
       max_nb_req_dscs <= nb_requested_descriptors;
@@ -763,7 +795,7 @@ end
 fifo_wrapper_infill_mlab #(
   .SYMBOLS_PER_BEAT(1),
   .BITS_PER_SYMBOL($bits(pcie_rddm_desc_data)),
-  .FIFO_DEPTH(512)
+  .FIFO_DEPTH(RDDM_DESC_QUEUE_LEN)
 ) rddm_desc_queue (
   .clk           (clk),
   .reset         (rst),
@@ -783,7 +815,7 @@ fifo_wrapper_infill_mlab #(
 fifo_wrapper_infill_mlab #(
   .SYMBOLS_PER_BEAT(1),
   .BITS_PER_SYMBOL($bits(pcie_rddm_prio_data)),
-  .FIFO_DEPTH(RDDM_PR_QUEUE_LEN)
+  .FIFO_DEPTH(RDDM_PRIO_QUEUE_LEN)
 ) rddm_prio_queue (
   .clk           (clk),
   .reset         (rst),
