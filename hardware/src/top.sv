@@ -724,7 +724,7 @@ always @(posedge clk_status) begin
                 8'd36 : status_readdata_top <= pcie_tx_batch_cnt_status;
                 8'd37 : status_readdata_top <= pcie_tx_max_inflight_dscs_status;
                 8'd38 : status_readdata_top <= pcie_tx_max_nb_req_dscs_status;
-                8'd38 : status_readdata_top <= pcie_tx_dma_pkt_cnt_status;
+                8'd39 : status_readdata_top <= pcie_tx_dma_pkt_cnt_status;
                 default : status_readdata_top <= 32'h345;
             endcase
         end
