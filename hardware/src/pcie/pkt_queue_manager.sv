@@ -2,6 +2,13 @@
 
 /*
  * This module specializes the generic queue manager to packet queues.
+ * 
+ * It is also reponsible for determining when to send descriptors for incoming
+ * packets. It sends descriptors reactively to head pointer updates from
+ * software. The first packet for every queue is accompanied by a descriptor.
+ * The following packets for the same queue will only have descriptor after
+ * sofware consumed the first one. This keeps the invariant that we only have
+ * a single decriptor for each queue at any given moment.
  */
 
 module pkt_queue_manager #(
