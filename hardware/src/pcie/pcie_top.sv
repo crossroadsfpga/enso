@@ -166,9 +166,7 @@ assign dsc_rb_size = control_regs[1][0 +: RB_AWIDTH+1];
 
 assign inflight_desc_limit = control_regs[2];
 
-logic queue_updated [NB_PKT_QUEUE_MANAGERS];
 logic [BRAM_TABLE_IDX_WIDTH-1:0] queue_idx;
-logic [BRAM_TABLE_IDX_WIDTH-1:0] updated_queue_idx [NB_PKT_QUEUE_MANAGERS];
 assign queue_idx = pcie_address_0[12 +: BRAM_TABLE_IDX_WIDTH];
 
 logic head_upd;
@@ -179,27 +177,10 @@ localparam NON_NEG_PKT_QM_MSB = PKT_QM_ID_WIDTH ? PKT_QM_ID_WIDTH - 1 : 0;
 
 // Monitor PCIe writes to detect updates to a pkt queue head.
 always @(posedge pcie_clk) begin
-    for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; ++i) begin
-        queue_updated[i] <= 0;
-    end
-
     if (!pcie_reset_n) begin
         rx_pkt_head_upd_cnt <= 0;
-    // Got a PCIe write to a packet queue head.
     end else if (pcie_write_0 && (queue_idx < MAX_NB_FLOWS) && head_upd) begin
-        automatic logic [NON_NEG_PKT_QM_MSB:0] pkt_qm_id;
-
-        // Use packet queue index's LSBs to choose the queue manager.
-        if (PKT_QM_ID_WIDTH > 0) begin
-            pkt_qm_id = queue_idx[NON_NEG_PKT_QM_MSB:0];
-        end else begin
-            pkt_qm_id = 0;
-        end
-
-        updated_queue_idx[pkt_qm_id] <=
-            queue_idx[BRAM_TABLE_IDX_WIDTH-1:PKT_QM_ID_WIDTH];
-        queue_updated[pkt_qm_id] <= 1;
-
+        // Got a PCIe write to a packet queue head.
         rx_pkt_head_upd_cnt <= rx_pkt_head_upd_cnt + 1;
     end
 end
@@ -309,8 +290,6 @@ pkt_queue_manager #(
     .q_table_heads     (pqm_pkt_q_table_heads),
     .q_table_l_addrs   (pqm_pkt_q_table_l_addrs),
     .q_table_h_addrs   (pqm_pkt_q_table_h_addrs),
-    .queue_updated     (queue_updated),
-    .updated_queue_idx (updated_queue_idx),
     .rb_size           (pkt_rb_size),
     .full_cnt          (pkt_full_counters)
 );

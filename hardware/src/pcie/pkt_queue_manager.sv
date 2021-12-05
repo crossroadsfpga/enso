@@ -33,10 +33,6 @@ module pkt_queue_manager #(
     bram_interface_io.owner q_table_l_addrs,
     bram_interface_io.owner q_table_h_addrs,
 
-    // PCIe write signals (used to intercept pointer updates)
-    input  logic                            queue_updated,
-    input  logic [BRAM_TABLE_IDX_WIDTH-1:0] updated_queue_idx,
-
     // config signals
     input logic [RB_AWIDTH:0] rb_size,
 
@@ -84,6 +80,15 @@ logic                      pkt_q_status_interf_a_rd_en_r [2];
 
 logic [QUEUE_ID_WIDTH-1:0] delayed_queue [3];
 logic [QUEUE_ID_WIDTH:0]   last_queues [3];  // Extra bit to represent invalid.
+
+logic                            queue_updated;
+logic [BRAM_TABLE_IDX_WIDTH-1:0] updated_queue_idx;
+
+// Intercept head updates.
+always @(posedge clk) begin
+    queue_updated <= q_table_heads.wr_en;
+    updated_queue_idx <= q_table_heads.addr[QUEUE_ID_WIDTH-1:0];
+end
 
 // fetch next pkt queue status
 // FIXME(sadok) this will only work if the queue eventually
