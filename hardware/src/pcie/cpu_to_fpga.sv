@@ -966,7 +966,7 @@ bram_true2port #(
   .rden_a    (q_table_a_tails.rd_en),
   .rden_b    (q_table_tails.rd_en),
   .wren_a    (q_table_a_tails_wr_en_r),
-  .wren_b    (0),
+  .wren_b    (1'b0),
   .q_a       (q_table_a_tails.rd_data),
   .q_b       (q_table_tails.rd_data)
 );
