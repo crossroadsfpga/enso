@@ -321,6 +321,7 @@ end
 
 logic [31:0] dsc_cnt_r1;
 logic [31:0] dsc_cnt_r2;
+logic [31:0] dsc_cnt_r3;
 
 typedef enum
 {
@@ -384,7 +385,7 @@ function void dma_rd_descriptor(
   last_dsc_reads_queue_out_data.head <= (q_state.head + nb_flits) & rb_mask;
 
   rddm_desc.nb_dwords = nb_flits << 4;
-  dsc_cnt_r2 <= dsc_cnt_r2 + nb_flits;
+  dsc_cnt_r3 <= dsc_cnt_r3 + nb_flits;
 
   rddm_desc_queue_in_valid_r <= 1;
   rddm_desc_queue_in_data_r <= rddm_desc;
@@ -401,11 +402,12 @@ always @(posedge clk) begin
 
   dsc_cnt <= dsc_cnt_r1;
   dsc_cnt_r1 <= dsc_cnt_r2;
+  dsc_cnt_r2 <= dsc_cnt_r3;
 
   last_dsc_reads_queue_out_data_r <= last_dsc_reads_queue_out_data;
 
   if (rst) begin
-    dsc_cnt_r2 <= 0;
+    dsc_cnt_r3 <= 0;
     state <= START_TRANSFER;
   end else begin
     case (state)
