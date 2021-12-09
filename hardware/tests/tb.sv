@@ -926,8 +926,8 @@ always @(posedge clk_pcie) begin
                   // Ignore second descriptor if it has zero
                   // length.
                   if (tx_dsc.length == 0) begin
-                    tx_dsc_tails[dsc_q]
-                      <= (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
+                    tx_dsc_tails[dsc_q] <=
+                      (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
                   end else begin
                     tx_dsc_tails[dsc_q] <=
                       (tx_dsc_tails[dsc_q] + 2) % DSC_BUF_SIZE;
