@@ -66,7 +66,7 @@ localparam nb_dsc_queues = `NB_DSC_QUEUES;
 localparam nb_pkt_queues = `NB_PKT_QUEUES;
 localparam pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
 
-// this determines the number of cycles to wait before stopping the simulation
+// This determines the number of cycles to wait before stopping the simulation.
 localparam STOP_DELAY = 100000;
 
 logic  clk_status;
@@ -334,11 +334,6 @@ always #(period_esram_ref) clk_esram_ref = ~clk_esram_ref;
 always #(period_esram) clk_esram = ~clk_esram;
 always #(period_pcie) begin
   clk_pcie = ~clk_pcie;
-
-  // print two lines at every clock
-  // if (cnt >= 7000 && !(stop || error_termination)) begin
-  //     `hdisplay(("-----------"));
-  // end
 end
 
 //
@@ -401,9 +396,9 @@ begin
     rst <= 0;
 
   // Make sure the stats reset is done and the setup has finished
-  end else if (cnt == 7000 && setup_finished) begin
+  end else if (cnt == 500 && setup_finished) begin
     l8_rx_valid <= 1;
-  end else if (cnt >= 7001 && setup_finished) begin
+  end else if (cnt >= 501 && setup_finished) begin
     if (rate_cnt < 100 * (`RATE * period_rx/(64 * 8))) begin
 `ifdef DELAY_LAST_PKTS
       if (addr < (hi - nb_pkt_queues * `PKT_SIZE / 64 - 1)
@@ -596,7 +591,7 @@ always @(posedge clk_pcie) begin
   end else begin
     case (pcie_state)
       PCIE_SET_F2C_PKT_QUEUE: begin
-        if (cnt >= 1000) begin
+        if (cnt >= 50) begin
           next_pcie_write_0 = 1;
           pcie_address_0 <= cfg_queue << 12;
           pcie_writedata_0 <= 0;
