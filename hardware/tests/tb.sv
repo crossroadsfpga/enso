@@ -185,6 +185,7 @@ logic [63:0]  pcie_rddm_address;
 logic         pcie_rddm_write;
 logic [511:0] pcie_rddm_writedata;
 logic [63:0]  pcie_rddm_byteenable;
+logic         pcie_rddm_waitrequest;
 logic         error_termination;
 logic         error_termination_r;
 logic         stop;
@@ -855,28 +856,17 @@ always @(posedge clk_pcie) begin
                 rx_pkt_buf_head = last_pkt_heads[pkt_q];
                 tx_pkt_buf_head = tx_pkt_heads[pkt_q];
 
-                next_pcie_write_0 = 1;
-                pcie_address_0 <= pkt_q << 12;
-                pcie_writedata_0 <= 0;
-                pcie_byteenable_0 <= 0;
-
-                // pcie_writedata_0[32 +: 32] <= rx_pkt_buf_tail;
-
-                // Write same value again, just to inform that
-                // we can receive another descriptor.
-                pcie_writedata_0[32 +: 32] <= rx_pkt_buf_head;
-                pcie_byteenable_0[4 +: 4] <= 4'hf;
-
                 pending_pkt_tails_valid[pkt_q] <= 0;
 
                 last_upd_pkt_q = pkt_q;
                 last_upd_dsc_q <= dsc_q;
-                // last_pkt_heads[pkt_q] <=
-                //     pending_pkt_tails[pkt_q];
 
                 // Enqueue TX descriptor.
                 pkt_buf_base_addr = 64'ha000000000000000 + (pkt_q << 32);
                 tx_dsc_q_addr = nb_pkt_queues + nb_dsc_queues + dsc_q;
+
+                assert(rx_pkt_buf_tail != tx_pkt_buf_head)
+
                 if (rx_pkt_buf_tail > tx_pkt_buf_head) begin
                   automatic pcie_tx_dsc_t tx_dsc = 0;
                   tx_dsc.signal = 1;
@@ -1710,6 +1700,7 @@ top top_inst (
   .pcie_rddm_write              (pcie_rddm_write),
   .pcie_rddm_writedata          (pcie_rddm_writedata),
   .pcie_rddm_byteenable         (pcie_rddm_byteenable),
+  .pcie_rddm_waitrequest        (pcie_rddm_waitrequest),
   //eSRAM
   .reg_esram_pkt_buf_wren       (esram_pkt_buf_wren),
   .reg_esram_pkt_buf_wraddress  (esram_pkt_buf_wraddress),
