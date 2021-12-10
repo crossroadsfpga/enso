@@ -72,6 +72,7 @@ module pcie_top (
     output logic [31:0] dma_queue_full_cnt,
     output logic [31:0] cpu_dsc_buf_full_cnt,
     output logic [31:0] cpu_pkt_buf_full_cnt,
+    output logic [31:0] rx_ignored_head_cnt,
     output logic [31:0] tx_ignored_dsc_cnt,
     output logic [31:0] tx_q_full_signals,
     output logic [31:0] tx_dsc_cnt,
@@ -95,10 +96,171 @@ module pcie_top (
     output logic        status_readdata_valid
 );
 
+localparam HEAD_UPD_QUEUE_LEN = 128;
+
 logic [RB_AWIDTH:0] dsc_rb_size;
 logic [RB_AWIDTH:0] pkt_rb_size;
 
 logic [31:0] inflight_desc_limit;
+
+logic [31:0] control_regs [NB_CONTROL_REGS];
+
+assign disable_pcie = control_regs[0][0];
+assign pkt_rb_size = control_regs[0][1 +: RB_AWIDTH+1];
+
+// Use to reset stats from software. Must also be unset from software.
+logic sw_reset_r1;
+logic sw_reset_r2;
+assign sw_reset_r2 = control_regs[0][27];
+
+always @(posedge pcie_clk) begin
+    sw_reset_r1 <= sw_reset_r2;
+    sw_reset <= sw_reset_r1;
+end
+
+assign dsc_rb_size = control_regs[1][0 +: RB_AWIDTH+1];
+
+assign inflight_desc_limit = control_regs[2];
+
+logic [BRAM_TABLE_IDX_WIDTH-1:0] queue_id;
+assign queue_id = pcie_address_0[12 +: BRAM_TABLE_IDX_WIDTH];
+
+logic pkt_q_head_upd;
+always_comb begin
+    pkt_q_head_upd = 0;
+    if (pcie_write_0 && (queue_id < MAX_NB_FLOWS)) begin
+        pkt_q_head_upd =
+            pcie_byteenable_0[1*REG_SIZE +: REG_SIZE] == {REG_SIZE{1'b1}};
+    end
+end
+
+logic [31:0] head_upd_queue_occup;
+logic head_upd_queue_almost_full;
+assign head_upd_queue_almost_full =
+    head_upd_queue_occup > HEAD_UPD_QUEUE_LEN - 4;
+
+logic [FLOW_IDX_WIDTH-1:0] head_upd_queue_in_data;
+logic                      head_upd_queue_in_valid;
+logic                      head_upd_queue_in_ready;
+logic [FLOW_IDX_WIDTH-1:0] head_upd_queue_out_data;
+logic                      head_upd_queue_out_valid;
+logic                      head_upd_queue_out_ready;
+
+// Monitor PCIe writes to detect updates to a pkt queue head. When that happens,
+// inject a descriptor-only metadata to check if software is missing any packet.
+always @(posedge pcie_clk) begin
+    head_upd_queue_in_valid <= 0;
+
+    if (!pcie_reset_n) begin
+        rx_ignored_head_cnt <= 0;
+    end else begin
+        // Got a PCIe write to a packet queue head.
+        if (pkt_q_head_upd) begin
+            if (!head_upd_queue_almost_full) begin
+                head_upd_queue_in_valid <= 1;
+                head_upd_queue_in_data <= queue_id[FLOW_IDX_WIDTH-1:0];
+            end else begin
+                // TODO(sadok): If the head is updated too often we will ignore
+                // it here and may never send a descriptor.
+                rx_ignored_head_cnt <= rx_ignored_head_cnt + 1;
+            end
+        end
+    end
+end
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL(FLOW_IDX_WIDTH),
+    .FIFO_DEPTH(HEAD_UPD_QUEUE_LEN)
+)
+head_upd_queue (
+    .clk           (pcie_clk),
+    .reset         (!pcie_reset_n),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (head_upd_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       (head_upd_queue_in_data),
+    .in_valid      (head_upd_queue_in_valid),
+    .in_ready      (head_upd_queue_in_ready),
+    .out_data      (head_upd_queue_out_data),
+    .out_valid     (head_upd_queue_out_valid),
+    .out_ready     (head_upd_queue_out_ready)
+);
+
+logic [31:0] in_queue_occup;
+logic in_queue_almost_full;
+assign in_queue_almost_full = in_queue_occup > 4;
+
+pkt_meta_with_queues_t in_queue_in_data;
+logic                  in_queue_in_valid;
+logic                  in_queue_in_ready;
+pkt_meta_with_queues_t in_queue_out_data;
+logic                  in_queue_out_valid;
+logic                  in_queue_out_ready;
+
+assign head_upd_queue_out_ready = !in_queue_almost_full;
+assign pcie_rx_meta_buf_ready =
+    head_upd_queue_out_ready & !head_upd_queue_out_valid;
+
+// We need to inject the descriptor-only metadata here (as opposed to injecting
+// in the packet queue manager directly) to ensure that the descriptor remains
+// ordered relative to all incoming packets.
+always @(posedge pcie_clk) begin
+    in_queue_in_valid <= 0;
+
+    if (!pcie_reset_n) begin
+        rx_pkt_head_upd_cnt <= 0;
+    end else begin
+        // Prioritize serving head queue updates over incoming metadata.
+        if (head_upd_queue_out_valid & head_upd_queue_out_ready) begin
+            automatic pkt_meta_with_queues_t meta;
+
+            meta.pkt_queue_id = head_upd_queue_out_data;
+            meta.size = 0;
+            meta.descriptor_only = 1;
+
+            in_queue_in_data <= meta;
+            in_queue_in_valid <= 1;
+
+            rx_pkt_head_upd_cnt <= rx_pkt_head_upd_cnt + 1;
+        end else if (pcie_rx_meta_buf_ready & pcie_rx_meta_buf_valid) begin
+            automatic pkt_meta_with_queues_t meta;
+
+            meta.dsc_queue_id = pcie_rx_meta_buf_data.dsc_queue_id;
+            meta.pkt_queue_id = pcie_rx_meta_buf_data.pkt_queue_id;
+            meta.size = pcie_rx_meta_buf_data.size;
+            meta.descriptor_only = 0;
+
+            in_queue_in_data <= meta;
+            in_queue_in_valid <= 1;
+
+            rx_pkt_head_upd_cnt <= rx_pkt_head_upd_cnt + 1;
+        end
+    end
+end
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(pkt_meta_with_queues_t)),
+    .FIFO_DEPTH(8)
+)
+in_queue (
+    .clk           (pcie_clk),
+    .reset         (!pcie_reset_n),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (in_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       (in_queue_in_data),
+    .in_valid      (in_queue_in_valid),
+    .in_ready      (in_queue_in_ready),
+    .out_data      (in_queue_out_data),
+    .out_valid     (in_queue_out_valid),
+    .out_ready     (in_queue_out_ready)
+);
 
 // descriptor queue table interface signals
 bram_interface_io rx_dsc_q_table_tails();
@@ -154,37 +316,6 @@ bram_mux #( .NB_BRAMS(NB_PKT_QUEUE_MANAGERS) ) pkt_q_table_h_addrs_mux (
     .out (pqm_pkt_q_table_h_addrs)
 );
 
-logic [31:0] control_regs [NB_CONTROL_REGS];
-
-assign disable_pcie = control_regs[0][0];
-assign pkt_rb_size = control_regs[0][1 +: RB_AWIDTH+1];
-
-// Use to reset stats from software. Must also be unset from software
-assign sw_reset = control_regs[0][27];
-
-assign dsc_rb_size = control_regs[1][0 +: RB_AWIDTH+1];
-
-assign inflight_desc_limit = control_regs[2];
-
-logic [BRAM_TABLE_IDX_WIDTH-1:0] queue_idx;
-assign queue_idx = pcie_address_0[12 +: BRAM_TABLE_IDX_WIDTH];
-
-logic head_upd;
-assign head_upd = pcie_byteenable_0[1*REG_SIZE +: REG_SIZE] == {REG_SIZE{1'b1}};
-
-// use to default ranges to a single bit when using a single pkt queue manager.
-localparam NON_NEG_PKT_QM_MSB = PKT_QM_ID_WIDTH ? PKT_QM_ID_WIDTH - 1 : 0;
-
-// Monitor PCIe writes to detect updates to a pkt queue head.
-always @(posedge pcie_clk) begin
-    if (!pcie_reset_n) begin
-        rx_pkt_head_upd_cnt <= 0;
-    end else if (pcie_write_0 && (queue_idx < MAX_NB_FLOWS) && head_upd) begin
-        // Got a PCIe write to a packet queue head.
-        rx_pkt_head_upd_cnt <= rx_pkt_head_upd_cnt + 1;
-    end
-end
-
 jtag_mmio_arbiter #(
     .PKT_QUEUE_RD_DELAY(4)  // 2 cycle BRAM read + 2 cycle bram mux read.
 )
@@ -232,27 +363,20 @@ logic [31:0] cpu_pkt_buf_full_cnt_r;
 
 logic st_mux_ord_ready;
 
-logic [NON_NEG_PKT_QM_MSB:0] pkt_q_mngr_id;
-assign pkt_q_mngr_id = !pcie_rx_meta_buf_valid
-        | pcie_rx_meta_buf_data.pkt_queue_id[NON_NEG_PKT_QM_MSB:0];
+// use to default ranges to a single bit when using a single pkt queue manager.
+localparam NON_NEG_PKT_QM_MSB = PKT_QM_ID_WIDTH ? PKT_QM_ID_WIDTH - 1 : 0;
 
 always_comb begin
-    pcie_rx_meta_buf_ready = 1;
+    in_queue_out_ready = st_mux_ord_ready;
     cpu_pkt_buf_full_cnt_r = 0;
     for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
-        pkt_q_mngr_in_meta_data[i].dsc_queue_id =
-            pcie_rx_meta_buf_data.dsc_queue_id;
-        pkt_q_mngr_in_meta_data[i].pkt_queue_id =
-            pcie_rx_meta_buf_data.pkt_queue_id;
-        pkt_q_mngr_in_meta_data[i].size = pcie_rx_meta_buf_data.size;
+        pkt_q_mngr_in_meta_data[i] = in_queue_out_data;
 
-        pcie_rx_meta_buf_ready &=
-            pkt_q_mngr_in_meta_ready[i] & st_mux_ord_ready;
+        in_queue_out_ready &= pkt_q_mngr_in_meta_ready[i];
 
-        pkt_q_mngr_in_meta_valid[i] =
-            pcie_rx_meta_buf_valid & pcie_rx_meta_buf_ready;
+        pkt_q_mngr_in_meta_valid[i] = in_queue_out_valid & in_queue_out_ready;
         if (PKT_QM_ID_WIDTH > 0) begin
-            pkt_q_mngr_in_meta_valid[i] &= (pcie_rx_meta_buf_data.pkt_queue_id[
+            pkt_q_mngr_in_meta_valid[i] &= (in_queue_out_data.pkt_queue_id[
                 NON_NEG_PKT_QM_MSB:0] == i);
         end
 
@@ -269,7 +393,7 @@ always @(posedge pcie_clk) begin
     if (!pcie_reset_n) begin
         tx_dsc_tail_upd_cnt <= 0;
     end else begin
-        if (tx_dsc_q_table_tails.owner.wr_en) begin
+        if (tx_dsc_q_table_tails.wr_en) begin
             tx_dsc_tail_upd_cnt <= tx_dsc_tail_upd_cnt + 1;
         end
     end
@@ -302,9 +426,14 @@ pkt_meta_with_queues_t f2c_in_meta_data;
 logic f2c_in_meta_valid;
 logic f2c_in_meta_ready;
 
+logic [NON_NEG_PKT_QM_MSB:0] pkt_q_mngr_id;
+assign pkt_q_mngr_id = !in_queue_out_valid
+        | in_queue_out_data.pkt_queue_id[NON_NEG_PKT_QM_MSB:0];
+
 st_ordered_multiplexer #(
     .NB_IN(NB_PKT_QUEUE_MANAGERS),
-    .DWIDTH($bits(pkt_meta_with_queues_t))
+    .DWIDTH($bits(pkt_meta_with_queues_t)),
+    .DEPTH(2*NB_PKT_QUEUE_MANAGERS)
 ) st_mux (
     .clk         (pcie_clk),
     .rst         (!pcie_reset_n),
@@ -314,7 +443,7 @@ st_ordered_multiplexer #(
     .out_valid   (dsc_q_mngr_in_meta_valid),
     .out_ready   (dsc_q_mngr_in_meta_ready),
     .out_data    (dsc_q_mngr_in_meta_data),
-    .order_valid (pcie_rx_meta_buf_valid & pcie_rx_meta_buf_ready),
+    .order_valid (in_queue_out_valid & in_queue_out_ready),
     .order_ready (st_mux_ord_ready),
     .order_data  (pkt_q_mngr_id)
 );
@@ -429,7 +558,7 @@ always @(posedge pcie_clk) begin
     end
 end
 
-// TODO(sadok): remove these when using WRDM.
+// Remove these if start using WRDM.
 assign pcie_wrdm_desc_valid = 0;
 assign pcie_wrdm_prio_valid = 0;
 

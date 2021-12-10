@@ -7,7 +7,8 @@ set PCIE_BASE    0x2A000000
 # These **must be kept in sync** with the variables with the same name on 
 # `hardware/src/constants.sv` and `software/fd/pcie.h`.
 set MAX_NB_APPS 256
-set MAX_NB_FLOWS 65536
+# set MAX_NB_FLOWS 65536
+set MAX_NB_FLOWS 8192
 
 set REGS_PER_PKT_QUEUE 4
 set REGS_PER_DSC_QUEUE 8
@@ -501,6 +502,7 @@ proc get_top_stats {} {
     global CPU_PKT_BUF_FULL
     global MAX_PCIE_PKT_FIFO
     global MAX_PCIE_META_FIFO
+    global PCIE_RX_IGNORED_HEAD
     global PCIE_TX_IGNORED_DSC
     global PCIE_TX_Q_FULL_SIGNALS
     global PCIE_TX_DSC_CNT
@@ -543,6 +545,7 @@ proc get_top_stats {} {
     read_top_reg CPU_PKT_BUF_FULL          $CPU_PKT_BUF_FULL          $fp
     read_top_reg MAX_PCIE_PKT_FIFO         $MAX_PCIE_PKT_FIFO         $fp
     read_top_reg MAX_PCIE_META_FIFO        $MAX_PCIE_META_FIFO        $fp
+    read_top_reg PCIE_RX_IGNORED_HEAD      $PCIE_RX_IGNORED_HEAD      $fp
     read_top_reg PCIE_TX_IGNORED_DSC       $PCIE_TX_IGNORED_DSC       $fp
     read_top_reg PCIE_TX_Q_FULL_SIGNALS    $PCIE_TX_Q_FULL_SIGNALS    $fp
     read_top_reg PCIE_TX_DSC_CNT           $PCIE_TX_DSC_CNT           $fp

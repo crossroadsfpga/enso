@@ -6,7 +6,7 @@
  * It is also reponsible for determining when to send descriptors for incoming
  * packets. It sends descriptors reactively to head pointer updates from
  * software. The first packet for every queue is accompanied by a descriptor.
- * The following packets for the same queue will only have descriptor after
+ * The following packets for the same queue will only have a descriptor after
  * sofware consumed the first one. This keeps the invariant that we only have
  * a single decriptor for each queue at any given moment.
  */
@@ -54,12 +54,19 @@ function logic [QUEUE_ID_WIDTH-1:0] local_queue_id(
     return queue_id[$bits(in_meta_data.pkt_queue_id)-1 -: QUEUE_ID_WIDTH];
 endfunction
 
-pkt_meta_with_queues_t in_queue_data;
-logic                  in_queue_valid;
-logic                  in_queue_ready;
-pkt_meta_with_queues_t out_queue_data;
-logic                  out_queue_valid;
-logic                  out_queue_ready;
+pkt_meta_with_queues_t in_queue_in_data;
+logic                  in_queue_in_valid;
+logic                  in_queue_in_ready;
+pkt_meta_with_queues_t in_queue_out_data;
+logic                  in_queue_out_valid;
+logic                  in_queue_out_ready;
+
+pkt_meta_with_queues_t out_queue_in_data;
+logic                  out_queue_in_valid;
+logic                  out_queue_in_ready;
+pkt_meta_with_queues_t out_queue_out_data;
+logic                  out_queue_out_valid;
+logic                  out_queue_out_ready;
 
 bram_interface_io #(
     .ADDR_WIDTH(QUEUE_ID_WIDTH),
@@ -70,49 +77,46 @@ bram_interface_io #(
     .DATA_WIDTH(1)
 ) pkt_q_status_interf_b();
 
-logic [31:0] queue_occup;
-logic queue_almost_full;
-assign queue_almost_full = queue_occup > 4;
-assign in_meta_ready = !queue_almost_full;
+logic [31:0] in_queue_occup;
+logic in_queue_almost_full;
+assign in_queue_almost_full = in_queue_occup > 4;
+assign in_meta_ready = !in_queue_almost_full;
 
-pkt_meta_with_queues_t     delayed_metadata [3];
-logic                      pkt_q_status_interf_a_rd_en_r [2];
+logic queue_manager_out_meta_ready;
+logic queue_manager_out_meta_valid;
+
+logic [31:0] out_queue_occup;
+logic out_queue_almost_full;
+assign out_queue_almost_full = out_queue_occup > 4;
+assign queue_manager_out_meta_ready = !out_queue_almost_full;
+
+always @(posedge clk) begin
+    in_queue_in_valid <= 0;
+    
+    if (in_meta_ready & in_meta_valid) begin
+        in_queue_in_data <= in_meta_data;
+        in_queue_in_valid <= 1;
+    end
+end
+
+pkt_meta_with_queues_t delayed_metadata [3];
+logic                  pkt_q_status_interf_a_rd_en_r [2];
 
 logic [QUEUE_ID_WIDTH-1:0] delayed_queue [3];
 logic [QUEUE_ID_WIDTH:0]   last_queues [3];  // Extra bit to represent invalid.
+logic                      last_queue_status [3];
 
-logic                            queue_updated;
-logic [BRAM_TABLE_IDX_WIDTH-1:0] updated_queue_idx;
+function void set_queue_status(
+    logic [QUEUE_ID_WIDTH-1:0] queue_id,
+    logic status
+);
+    last_queue_status[0] <= status;
+    pkt_q_status_interf_b.wr_data <= status;
+    pkt_q_status_interf_b.addr <= queue_id;
+    pkt_q_status_interf_b.wr_en <= 1;
+endfunction
 
-// Intercept head updates.
-always @(posedge clk) begin
-    queue_updated <= q_table_heads.wr_en;
-    updated_queue_idx <= q_table_heads.addr[QUEUE_ID_WIDTH-1:0];
-end
-
-// fetch next pkt queue status
-// FIXME(sadok) this will only work if the queue eventually
-// receives more packets. Otherwise, there will be some residue
-// packets that software will never know about. To fix this, we
-// need to check if the latest tail pointer is greater than the
-// new head that we received. If it is, that means that we need
-// to send an extra descriptor. The logic to send an extra
-// descriptor, however, is quite tricky. We probably need to add
-// a queue with `descriptor requests` to send to the fpga2cpu so
-// that it can send these descriptor when it has a chance -- it
-// may even ignore some of them if it receives a new packet for
-// the queue. (Alternatively, we can use dummy packets that
-// cause only the descriptor to be sent. To avoid wasting
-// cycles, we may modify the START_TRANSFER state in fpga_to_cpu
-// to directly send a descriptor in such case) Another tricky
-// part is that there may be some race conditions, where this
-// part of the design thinks that the queue is updated but the
-// fpga2cpu is processing a new packet and will not send a
-// descriptor. To overcome this, fpga2cpu should make sure
-// pcie_top has the latest tail, before it decides if it needs
-// to send the descriptor. (or the decision of whether to send a
-// descriptor or not should be made in the same place as we
-// decide to send extra descriptors)
+// Fetch next pkt queue status.
 always @(posedge clk) begin
     pkt_q_status_interf_a.rd_en <= 0;
     pkt_q_status_interf_a.wr_en <= 0;
@@ -129,43 +133,64 @@ always @(posedge clk) begin
     last_queues[1] <= last_queues[0];
     last_queues[0] <= -1;
 
-    in_queue_valid <= 0;
+    last_queue_status[2] <= last_queue_status[1];
+    last_queue_status[1] <= last_queue_status[0];
 
-    if (in_meta_ready & in_meta_valid) begin
-        // fetch next state
+    out_queue_in_valid <= 0;
+
+    if (queue_manager_out_meta_ready & queue_manager_out_meta_valid) begin
         automatic logic [QUEUE_ID_WIDTH-1:0] local_q;
-        local_q = local_queue_id(in_meta_data.pkt_queue_id);
-        delayed_metadata[2] <= in_meta_data;
+
+        // Fetch next state.
+        local_q = local_queue_id(out_meta_extra.pkt_queue_id);
+        delayed_metadata[2] <= out_meta_extra;
+        delayed_metadata[2].pkt_q_state <= out_q_state;
+        delayed_metadata[2].drop <= out_drop;
+        delayed_metadata[2].needs_dsc <= out_meta_extra.needs_dsc & !out_drop;
+
         delayed_queue[2] <= local_q;
         pkt_q_status_interf_a.addr <= local_q;
         pkt_q_status_interf_a.rd_en <= 1;
     end
 
     if (pkt_q_status_interf_a_rd_en_r[0]) begin
-        in_queue_data <= delayed_metadata[0];
-        // Packet to the same queue arrived in the last 3 cycles
-        if (last_queues[0] == delayed_queue[0]
-                || last_queues[1] == delayed_queue[0]
-                || last_queues[2] == delayed_queue[0]) begin
-            in_queue_data.needs_dsc <= 0;
-        end else begin
-            in_queue_data.needs_dsc <= !pkt_q_status_interf_a.rd_data;
-            if (!pkt_q_status_interf_a.rd_data) begin
-                pkt_q_status_interf_b.wr_data <= 1;
-                pkt_q_status_interf_b.addr <= delayed_queue[0];
-                pkt_q_status_interf_b.wr_en <= 1;
+        automatic logic needs_dsc = !pkt_q_status_interf_a.rd_data;
+        automatic logic queue_empty = 1'b0;
+
+        out_queue_in_data <= delayed_metadata[0];
+
+        // Packet to the same queue arrived in the last 3 cycles.
+        if (last_queues[0] == delayed_queue[0]) begin
+            needs_dsc = !last_queue_status[0];
+        end else if (last_queues[1] == delayed_queue[0]) begin
+            needs_dsc = !last_queue_status[1];
+        end else if (last_queues[2] == delayed_queue[0]) begin
+            needs_dsc = !last_queue_status[2];
+        end
+
+        out_queue_in_data.needs_dsc <= needs_dsc;
+        out_queue_in_valid <= 1;
+
+        if (delayed_metadata[0].descriptor_only) begin
+            out_queue_in_data.needs_dsc <= 1;
+
+            // HACK(sadok): assume dsc queue id 0.
+            out_queue_in_data.dsc_queue_id <= 0;
+
+            if (delayed_metadata[0].pkt_q_state.head ==
+                    delayed_metadata[0].pkt_q_state.tail) begin
+                queue_empty = 1'b1;
+
+                // No descriptor needed now, do not send descriptor-only meta.
+                out_queue_in_data.drop <= 1;
+                out_queue_in_data.needs_dsc <= 0;
             end
         end
-        in_queue_valid <= 1;
-    end
 
-    // FIXME(sadok) this may cause extra descriptors to be sent by overriding
-    // the write above. We should probably create a queue of these.
-    // update pkt_q_status to indicate if a pkt queue needs a descriptor
-    if (queue_updated) begin
-        pkt_q_status_interf_b.wr_data <= 0;
-        pkt_q_status_interf_b.addr <= updated_queue_idx;
-        pkt_q_status_interf_b.wr_en <= 1;
+        // If queue is empty, next packet should have a descriptor.
+        set_queue_status(delayed_queue[0], !queue_empty);
+
+        last_queues[0] <= delayed_queue[0];
     end
 end
 
@@ -174,44 +199,44 @@ fifo_wrapper_infill_mlab #(
     .BITS_PER_SYMBOL($bits(pkt_meta_with_queues_t)),
     .FIFO_DEPTH(8)
 )
-queue (
+in_queue (
     .clk           (clk),
     .reset         (rst),
     .csr_address   (2'b0),
     .csr_read      (1'b1),
     .csr_write     (1'b0),
-    .csr_readdata  (queue_occup),
+    .csr_readdata  (in_queue_occup),
     .csr_writedata (32'b0),
-    .in_data       (in_queue_data),
-    .in_valid      (in_queue_valid),
-    .in_ready      (in_queue_ready),
-    .out_data      (out_queue_data),
-    .out_valid     (out_queue_valid),
-    .out_ready     (out_queue_ready)
+    .in_data       (in_queue_in_data),
+    .in_valid      (in_queue_in_valid),
+    .in_ready      (in_queue_in_ready),
+    .out_data      (in_queue_out_data),
+    .out_valid     (in_queue_out_valid),
+    .out_ready     (in_queue_out_ready)
 );
 
 logic [QUEUE_ID_WIDTH-1:0] in_local_queue_id;
-assign in_local_queue_id = local_queue_id(out_queue_data.pkt_queue_id);
+assign in_local_queue_id = local_queue_id(in_queue_out_data.pkt_queue_id);
 
 queue_manager #(
     .NB_QUEUES(NB_QUEUES),
-    .EXTRA_META_BITS($bits(out_queue_data)),
+    .EXTRA_META_BITS($bits(in_queue_out_data)),
     .UNIT_POINTER(0)
 )
 queue_manager_inst (
     .clk             (clk),
     .rst             (rst),
-    .in_pass_through (1'b0),
+    .in_pass_through (in_queue_out_data.descriptor_only),
     .in_queue_id     (in_local_queue_id),
-    .in_size         (out_queue_data.size),
-    .in_meta_extra   (out_queue_data),
-    .in_meta_valid   (out_queue_valid),
-    .in_meta_ready   (out_queue_ready),
+    .in_size         (in_queue_out_data.size),
+    .in_meta_extra   (in_queue_out_data),
+    .in_meta_valid   (in_queue_out_valid),
+    .in_meta_ready   (in_queue_out_ready),
     .out_q_state     (out_q_state),
     .out_drop        (out_drop),
     .out_meta_extra  (out_meta_extra),
-    .out_meta_valid  (out_meta_valid),
-    .out_meta_ready  (out_meta_ready),
+    .out_meta_valid  (queue_manager_out_meta_valid),
+    .out_meta_ready  (queue_manager_out_meta_ready),
     .q_table_tails   (q_table_tails),
     .q_table_heads   (q_table_heads),
     .q_table_l_addrs (q_table_l_addrs),
@@ -220,11 +245,31 @@ queue_manager_inst (
     .full_cnt        (full_cnt)
 );
 
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(pkt_meta_with_queues_t)),
+    .FIFO_DEPTH(8)
+)
+out_queue (
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (out_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       (out_queue_in_data),
+    .in_valid      (out_queue_in_valid),
+    .in_ready      (out_queue_in_ready),
+    .out_data      (out_queue_out_data),
+    .out_valid     (out_queue_out_valid),
+    .out_ready     (out_queue_out_ready)
+);
+
 always_comb begin
-    out_meta_data = out_meta_extra;
-    out_meta_data.pkt_q_state = out_q_state;
-    out_meta_data.drop = out_drop;
-    out_meta_data.needs_dsc = out_meta_extra.needs_dsc & !out_drop;
+    out_meta_data = out_queue_out_data;
+    out_meta_valid = out_queue_out_valid;
+    out_queue_out_ready = out_meta_ready;
 end
 
 logic no_confl_pkt_q_status_interf_a_rd_en;

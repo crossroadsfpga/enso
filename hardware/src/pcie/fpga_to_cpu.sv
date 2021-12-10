@@ -80,11 +80,17 @@ logic         tx_compl_buf_out_ready;
 
 logic [31:0] dma_queue_full_cnt_r;
 
-logic [63:0]  pcie_bas_address_r;
-logic [63:0]  pcie_bas_byteenable_r;
-logic         pcie_bas_write_r;
-logic [511:0] pcie_bas_writedata_r;
-logic [3:0]   pcie_bas_burstcount_r;
+logic [63:0]  pcie_bas_address_r1;
+logic [63:0]  pcie_bas_byteenable_r1;
+logic         pcie_bas_write_r1;
+logic [511:0] pcie_bas_writedata_r1;
+logic [3:0]   pcie_bas_burstcount_r1;
+
+logic [63:0]  pcie_bas_address_r2;
+logic [63:0]  pcie_bas_byteenable_r2;
+logic         pcie_bas_write_r2;
+logic [511:0] pcie_bas_writedata_r2;
+logic [3:0]   pcie_bas_burstcount_r2;
 
 typedef struct packed
 {
@@ -104,18 +110,14 @@ function void dma_pkt(
     // Assume that it is a burst when flits_in_transfer == 0, no need to set
     // address.
     if (flits_in_transfer != 0) begin
-      pcie_bas_address_r <=
+      pcie_bas_address_r2 <=
         meta.pkt_q_state.kmem_addr + 64 * meta.pkt_q_state.tail;
     end
 
-    pcie_bas_byteenable_r <= 64'hffffffffffffffff;
-    pcie_bas_writedata_r <= data.data;
-    pcie_bas_write_r <= 1;
-    pcie_bas_burstcount_r <= flits_in_transfer;
-
-    if (meta.drop) begin
-      pcie_bas_write_r <= 0;
-    end
+    pcie_bas_byteenable_r2 <= 64'hffffffffffffffff;
+    pcie_bas_writedata_r2 <= data.data;
+    pcie_bas_write_r2 <= !meta.drop;
+    pcie_bas_burstcount_r2 <= flits_in_transfer;
 
     transf_meta.pkt_meta.pkt_q_state.tail <=
       (meta.pkt_q_state.tail + 1) & pkt_rb_mask;
@@ -177,17 +179,19 @@ pkt_meta_with_queues_t cur_meta;
 logic can_send_tx_completion;
 logic can_start_transfer;
 
+logic next_meta_dsc_only;  // Set when the next metadata is descriptor-only.
+
 // Consume requests and issue DMAs
 always @(posedge clk) begin
   if (rst | sw_reset) begin
     state <= START_TRANSFER;
     dma_queue_full_cnt_r <= 0;
-    pcie_bas_write_r <= 0;
+    pcie_bas_write_r2 <= 0;
   end else begin
     // Make sure the previous transfer is complete before setting
-    // pcie_bas_write_r to 0.
+    // pcie_bas_write_r2 to 0.
     if (!pcie_bas_waitrequest) begin
-      pcie_bas_write_r <= 0;
+      pcie_bas_write_r2 <= 0;
     end else begin
       dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
     end
@@ -202,11 +206,14 @@ always @(posedge clk) begin
           tx_dsc.length = tx_compl_buf_out_data.length;
           tx_dsc.pad = 0;
 
-          pcie_bas_address_r <= tx_compl_buf_out_data.descriptor_addr;
-          pcie_bas_byteenable_r <= 64'hffffffffffffffff;
-          pcie_bas_writedata_r <= tx_dsc;
-          pcie_bas_write_r <= 1;
-          pcie_bas_burstcount_r <= 1;
+          pcie_bas_address_r2 <= tx_compl_buf_out_data.descriptor_addr;
+          pcie_bas_byteenable_r2 <= 64'hffffffffffffffff;
+          pcie_bas_writedata_r2 <= tx_dsc;
+          pcie_bas_write_r2 <= 1;
+          pcie_bas_burstcount_r2 <= 1;
+        end else if (next_meta_dsc_only) begin
+          transf_meta.pkt_meta <= cur_meta;
+          state <= SEND_DESCRIPTOR;
         end else if (can_start_transfer) begin
           automatic logic [3:0] missing_flits_in_transfer;
 
@@ -287,15 +294,22 @@ always @(posedge clk) begin
           pcie_pkt_desc.pad = 0;
 
           // Skip DMA when addresses are not set
-          if (pkt_q_state.kmem_addr & dsc_q_state.kmem_addr) begin
-            pcie_bas_address_r <= dsc_q_state.kmem_addr + 64 * dsc_q_state.tail;
-            pcie_bas_byteenable_r <= 64'hffffffffffffffff;
-            pcie_bas_writedata_r <= pcie_pkt_desc;
-            pcie_bas_write_r <= 1;
-            pcie_bas_burstcount_r <= 1;
+          if (pkt_q_state.kmem_addr && dsc_q_state.kmem_addr) begin
+            pcie_bas_address_r2 <= dsc_q_state.kmem_addr + 64 * dsc_q_state.tail;
+            pcie_bas_byteenable_r2 <= 64'hffffffffffffffff;
+            pcie_bas_writedata_r2 <= pcie_pkt_desc;
+            pcie_bas_write_r2 <= !transf_meta.pkt_meta.drop;
+            pcie_bas_burstcount_r2 <= 1;
           end
 
           state <= START_TRANSFER;
+
+          // If next metadata is descriptor-only we should stay in this state.
+          // This avoids wasting a cycle.
+          if (next_meta_dsc_only) begin
+            transf_meta.pkt_meta <= cur_meta;
+            state <= SEND_DESCRIPTOR;
+          end
         end
       end
     endcase
@@ -308,14 +322,21 @@ always @(posedge clk) begin
     metadata_buf_out_valid_r <= 0;
   end else begin
     if (!pcie_bas_waitrequest) begin
-      pcie_bas_address <= pcie_bas_address_r;
-      pcie_bas_byteenable <= pcie_bas_byteenable_r;
-      pcie_bas_write <= pcie_bas_write_r;
-      pcie_bas_writedata <= pcie_bas_writedata_r;
-      pcie_bas_burstcount <= pcie_bas_burstcount_r;
+      pcie_bas_address_r1 <= pcie_bas_address_r2;
+      pcie_bas_byteenable_r1 <= pcie_bas_byteenable_r2;
+      pcie_bas_write_r1 <= pcie_bas_write_r2;
+      pcie_bas_writedata_r1 <= pcie_bas_writedata_r2;
+      pcie_bas_burstcount_r1 <= pcie_bas_burstcount_r2;
 
-      dma_queue_full_cnt <= dma_queue_full_cnt_r;
+      pcie_bas_address <= pcie_bas_address_r1;
+      pcie_bas_byteenable <= pcie_bas_byteenable_r1;
+      pcie_bas_write <= pcie_bas_write_r1;
+      pcie_bas_writedata <= pcie_bas_writedata_r1;
+      pcie_bas_burstcount <= pcie_bas_burstcount_r1;
     end
+
+    dma_queue_full_cnt <= dma_queue_full_cnt_r;
+
     if (metadata_buf_out_ready | !metadata_buf_out_valid_r) begin
       metadata_buf_out_data_r <= metadata_buf_out_data;
       metadata_buf_out_valid_r <= metadata_buf_out_valid;
@@ -323,7 +344,9 @@ always @(posedge clk) begin
   end
 end
 
-// Check if we are able to DMA the packet or descriptor
+assign next_meta_dsc_only = metadata_buf_out_valid_r & cur_meta.descriptor_only;
+
+// Check if we are able to DMA the packet or descriptor.
 always_comb begin
   cur_meta = metadata_buf_out_data_r;
 
@@ -331,12 +354,22 @@ always_comb begin
 
   can_send_tx_completion = tx_compl_buf_out_ready & tx_compl_buf_out_valid;
 
-  can_start_transfer = !can_send_tx_completion && can_continue_dma 
-                       && metadata_buf_out_valid_r;
+  can_start_transfer = can_continue_dma & metadata_buf_out_valid_r;
 
-  metadata_buf_out_ready = can_start_transfer && (state == START_TRANSFER);
-  pkt_buf_out_ready = metadata_buf_out_ready || (can_continue_dma
-    && (state != SEND_DESCRIPTOR) && (state != START_TRANSFER));
+  metadata_buf_out_ready = 0;
+  if ((state == START_TRANSFER) && !can_send_tx_completion) begin
+    metadata_buf_out_ready = can_start_transfer | next_meta_dsc_only;
+  end
+  if (state == SEND_DESCRIPTOR) begin
+    metadata_buf_out_ready = next_meta_dsc_only;
+  end
+
+  pkt_buf_out_ready = 0;
+  if (state == START_TRANSFER) begin
+    pkt_buf_out_ready = metadata_buf_out_ready & !next_meta_dsc_only;
+  end else if (state != SEND_DESCRIPTOR) begin
+    pkt_buf_out_ready = can_continue_dma;
+  end
 end
 
 logic [31:0] pkt_buf_csr_readdata;
