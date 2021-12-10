@@ -24,7 +24,7 @@ module tb;
 `define RATE 100; // in Gbps (without Ethernet overhead)
 `endif
 
-`define DELAY_LAST_PKTS;  // Set it to delay last packets for every queue.
+// `define DELAY_LAST_PKTS;  // Set it to delay last packets for every queue.
 
 `define SKIP_PCIE_RD;  // Set it to skip PCIe read after the simulation is done.
 
