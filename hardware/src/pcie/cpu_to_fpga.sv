@@ -321,7 +321,6 @@ end
 
 logic [31:0] dsc_cnt_r1;
 logic [31:0] dsc_cnt_r2;
-logic [31:0] dsc_cnt_r3;
 
 typedef enum
 {
@@ -337,6 +336,8 @@ assign dsc_reads_queue_out_ready = (state == START_TRANSFER)
 
 q_state_t last_dsc_reads_queue_out_data;
 q_state_t last_dsc_reads_queue_out_data_r;
+
+logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] nb_flits_r;
 
 function void dma_rd_descriptor(
   q_state_t q_state
@@ -385,7 +386,10 @@ function void dma_rd_descriptor(
   last_dsc_reads_queue_out_data.head <= (q_state.head + nb_flits) & rb_mask;
 
   rddm_desc.nb_dwords = nb_flits << 4;
-  dsc_cnt_r3 <= dsc_cnt_r3 + nb_flits;
+  
+  // Save number of flits so that we can add to dsc_cnt_r2 in the next cycle.
+  // We do it this way to help with timing.
+  nb_flits_r <= nb_flits;
 
   rddm_desc_queue_in_valid_r <= 1;
   rddm_desc_queue_in_data_r <= rddm_desc;
@@ -402,12 +406,15 @@ always @(posedge clk) begin
 
   dsc_cnt <= dsc_cnt_r1;
   dsc_cnt_r1 <= dsc_cnt_r2;
-  dsc_cnt_r2 <= dsc_cnt_r3;
+  dsc_cnt_r2 <= dsc_cnt_r2 + nb_flits_r;
+
+  // Used to add to dsc_cnt_r2.
+  nb_flits_r <= 0;
 
   last_dsc_reads_queue_out_data_r <= last_dsc_reads_queue_out_data;
 
   if (rst) begin
-    dsc_cnt_r3 <= 0;
+    dsc_cnt_r2 <= 0;
     state <= START_TRANSFER;
   end else begin
     case (state)
