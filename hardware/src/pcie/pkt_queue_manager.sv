@@ -54,13 +54,6 @@ function logic [QUEUE_ID_WIDTH-1:0] local_queue_id(
     return queue_id[$bits(in_meta_data.pkt_queue_id)-1 -: QUEUE_ID_WIDTH];
 endfunction
 
-pkt_meta_with_queues_t in_queue_in_data;
-logic                  in_queue_in_valid;
-logic                  in_queue_in_ready;
-pkt_meta_with_queues_t in_queue_out_data;
-logic                  in_queue_out_valid;
-logic                  in_queue_out_ready;
-
 pkt_meta_with_queues_t out_queue_in_data;
 logic                  out_queue_in_valid;
 logic                  out_queue_in_ready;
@@ -77,11 +70,6 @@ bram_interface_io #(
     .DATA_WIDTH(1)
 ) pkt_q_status_interf_b();
 
-logic [31:0] in_queue_occup;
-logic in_queue_almost_full;
-assign in_queue_almost_full = in_queue_occup > 4;
-assign in_meta_ready = !in_queue_almost_full;
-
 logic queue_manager_out_meta_ready;
 logic queue_manager_out_meta_valid;
 
@@ -89,15 +77,6 @@ logic [31:0] out_queue_occup;
 logic out_queue_almost_full;
 assign out_queue_almost_full = out_queue_occup > 4;
 assign queue_manager_out_meta_ready = !out_queue_almost_full;
-
-always @(posedge clk) begin
-    in_queue_in_valid <= 0;
-    
-    if (in_meta_ready & in_meta_valid) begin
-        in_queue_in_data <= in_meta_data;
-        in_queue_in_valid <= 1;
-    end
-end
 
 pkt_meta_with_queues_t delayed_metadata [3];
 logic                  pkt_q_status_interf_a_rd_en_r [2];
@@ -187,7 +166,7 @@ always @(posedge clk) begin
                 queue_empty = 1'b1;
 
                 // No descriptor needed now, do not send descriptor-only meta.
-                out_queue_in_data.drop <= delayed_metadata[0].descriptor_only;
+                out_queue_in_data.drop <= 1;
                 out_queue_in_data.needs_dsc <= 0;
             end
         end
@@ -199,44 +178,23 @@ always @(posedge clk) begin
     end
 end
 
-fifo_wrapper_infill_mlab #(
-    .SYMBOLS_PER_BEAT(1),
-    .BITS_PER_SYMBOL($bits(pkt_meta_with_queues_t)),
-    .FIFO_DEPTH(8)
-)
-in_queue (
-    .clk           (clk),
-    .reset         (rst),
-    .csr_address   (2'b0),
-    .csr_read      (1'b1),
-    .csr_write     (1'b0),
-    .csr_readdata  (in_queue_occup),
-    .csr_writedata (32'b0),
-    .in_data       (in_queue_in_data),
-    .in_valid      (in_queue_in_valid),
-    .in_ready      (in_queue_in_ready),
-    .out_data      (in_queue_out_data),
-    .out_valid     (in_queue_out_valid),
-    .out_ready     (in_queue_out_ready)
-);
-
 logic [QUEUE_ID_WIDTH-1:0] in_local_queue_id;
-assign in_local_queue_id = local_queue_id(in_queue_out_data.pkt_queue_id);
+assign in_local_queue_id = local_queue_id(in_meta_data.pkt_queue_id);
 
 queue_manager #(
     .NB_QUEUES(NB_QUEUES),
-    .EXTRA_META_BITS($bits(in_queue_out_data)),
+    .EXTRA_META_BITS($bits(in_meta_data)),
     .UNIT_POINTER(0)
 )
 queue_manager_inst (
     .clk             (clk),
     .rst             (rst),
-    .in_pass_through (in_queue_out_data.descriptor_only),
+    .in_pass_through (in_meta_data.descriptor_only),
     .in_queue_id     (in_local_queue_id),
-    .in_size         (in_queue_out_data.size),
-    .in_meta_extra   (in_queue_out_data),
-    .in_meta_valid   (in_queue_out_valid),
-    .in_meta_ready   (in_queue_out_ready),
+    .in_size         (in_meta_data.size),
+    .in_meta_extra   (in_meta_data),
+    .in_meta_valid   (in_meta_valid),
+    .in_meta_ready   (in_meta_ready),
     .out_q_state     (out_q_state),
     .out_drop        (out_drop),
     .out_meta_extra  (out_meta_extra),
