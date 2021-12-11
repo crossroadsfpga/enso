@@ -405,7 +405,7 @@ int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
     // Consume up to a batch of descriptors at a time. If the number of
     // consumed is the same as the number of pending, we are done processing
     // the last batch and can get the next one. Using batches here performs
-    // **significanlty** better compared to always fetching the latest
+    // **significantly** better compared to always fetching the latest
     // descriptor.
     if (dsc_queue.pending_rx_ids == dsc_queue.consumed_rx_ids) {
         dsc_queue.pending_rx_ids = get_new_tails(socket_entries);
