@@ -288,6 +288,8 @@ typedef enum{
   TX_DSC_TAIL_UPD,
   DMA_REQUEST,
   RULE_SET,
+  MAX_PDUGEN_PKT_FIFO,
+  MAX_PDUGEN_META_FIFO,
   DMA_QUEUE_FULL,
   CPU_DSC_BUF_FULL,
   CPU_PKT_BUF_FULL,
@@ -399,10 +401,10 @@ begin
     rst <= 0;
 
   // Make sure the stats reset is done and the setup has finished
-  end else if (setup_finished && !started) begin
+  end else if (cnt >= 500 && setup_finished && !started) begin
     l8_rx_valid <= 1;
     started <= 1;
-  end else if (setup_finished) begin
+  end else if (cnt >= 500 && setup_finished) begin
     if (rate_cnt < 100 * (`RATE * period_rx/(64 * 8))) begin
 `ifdef DELAY_LAST_PKTS
       if (addr < (hi - nb_pkt_queues * `PKT_SIZE / 64 - 1)
@@ -737,11 +739,14 @@ always @(posedge clk_pcie) begin
 
           if (cur_queue < nb_pkt_queues) begin // pkt queue
             rx_pdu_flit_cnt <= rx_pdu_flit_cnt + 1;
+            // $display("> packet");
           end else if (cur_queue < nb_pkt_queues + nb_dsc_queues) begin
             // rx dsc queue
             automatic logic [31:0] pkt_per_dsc_queue;
             automatic pcie_rx_dsc_t pcie_pkt_desc =
               pcie_bas_writedata;
+
+            // $display("> pcie_pkt_desc: %p", pcie_pkt_desc);
 
             // dsc queues can receive only one flit per burst
             assert(pcie_bas_burstcount == 1) else $fatal;
@@ -793,6 +798,9 @@ always @(posedge clk_pcie) begin
 
             pcie_writedata_0[32 +: 32] <= pkt_buf_head;
             pcie_byteenable_0[4 +: 4] <= 4'hf;
+
+            // $display("> tx_dsc: %p", tx_dsc);
+            // $display("  pkt_buf_queue: %d pkt_buf_head: %d", pkt_buf_queue, pkt_buf_head);
 
             // Advance corresponding TX dsc queue head.
             tx_dsc_buf_queue
@@ -882,6 +890,8 @@ always @(posedge clk_pcie) begin
                   if (tx_dsc.length > max_tx_length) begin
                     max_tx_length = tx_dsc.length;
                   end
+
+                  // $display("    pkt_q: %d, tx_dsc: %p", pkt_q, tx_dsc);
 
                   ram[tx_dsc_q_addr][tx_dsc_tails[dsc_q]] <= tx_dsc;
                   tx_dsc_tails[dsc_q] <=
@@ -1463,6 +1473,24 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("RULE_SET:\t\t%d", top_readdata);
+          conf_state <= MAX_PDUGEN_PKT_FIFO;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      MAX_PDUGEN_PKT_FIFO: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("MAX_PDUGEN_PKT_FIFO:\t%d", top_readdata);
+          conf_state <= MAX_PDUGEN_META_FIFO;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      MAX_PDUGEN_META_FIFO: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("MAX_PDUGEN_META_FIFO:\t%d", top_readdata);
           conf_state <= DMA_QUEUE_FULL;
           s_read <= 1;
           s_addr <= s_addr + 1;
