@@ -150,9 +150,9 @@ always @(posedge clk) begin
         out_queue_in_data.needs_dsc <= needs_dsc;
         out_queue_in_valid <= 1;
 
-        // Metadata with descriptor_only set orginates from a `head pointer`
-        // update while metadata with `needs_dsc` set means that i originates
-        // from a head update that was merged to a head update to the same queue.
+        // Metadata with `descriptor_only` set orginates from a head pointer
+        // update while metadata with `needs_dsc` set means that it originates
+        // from a head update that was merged to a packet to the same queue.
         if (delayed_metadata[0].needs_dsc) begin
             out_queue_in_data.needs_dsc <= 1;
         end else if (delayed_metadata[0].descriptor_only) begin
