@@ -121,7 +121,8 @@ always @(posedge clk) begin
             in_data_valid <= 1;
             in_data.pkt_queue_id <= queue_id;
             in_data.size <= PKT_SIZE;
-            in_data.drop <= 1'bx;
+            in_data.drop_data <= 1'bx;
+            in_data.drop_meta <= 1'bx;
             pkt_tx_cnt <= pkt_tx_cnt + 1;
         end
 
@@ -163,7 +164,8 @@ always @(posedge clk) begin
             in_data_valid <= 1;
             in_data.pkt_queue_id <= queue_id;
             in_data.size <= PKT_SIZE;
-            in_data.drop <= 1'bx;
+            in_data.drop_data <= 1'bx;
+            in_data.drop_meta <= 1'bx;
             pkt_tx_cnt <= pkt_tx_cnt + 1;
         end
 
@@ -222,7 +224,8 @@ always @(posedge clk) begin
             in_data_valid <= 1;
             in_data.pkt_queue_id <= queue_id;
             in_data.size <= PKT_SIZE;
-            in_data.drop <= 1'bx;
+            in_data.drop_data <= 1'bx;
+            in_data.drop_meta <= 1'bx;
             pkt_tx_cnt <= pkt_tx_cnt + 1;
         end
 

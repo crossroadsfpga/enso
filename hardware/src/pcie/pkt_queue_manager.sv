@@ -124,7 +124,8 @@ always @(posedge clk) begin
         local_q = local_queue_id(out_meta_extra.pkt_queue_id);
         delayed_metadata[2] <= out_meta_extra;
         delayed_metadata[2].pkt_q_state <= out_q_state;
-        delayed_metadata[2].drop <= out_drop;
+        delayed_metadata[2].drop_data <= out_drop;
+        delayed_metadata[2].drop_meta <= out_drop;
         delayed_metadata[2].needs_dsc <= out_meta_extra.needs_dsc & !out_drop;
 
         delayed_queue[2] <= local_q;
@@ -153,9 +154,8 @@ always @(posedge clk) begin
         // Metadata with `descriptor_only` set orginates from a head pointer
         // update while metadata with `needs_dsc` set means that it originates
         // from a head update that was merged to a packet to the same queue.
-        if (delayed_metadata[0].needs_dsc) begin
-            out_queue_in_data.needs_dsc <= 1;
-        end else if (delayed_metadata[0].descriptor_only) begin
+        if (delayed_metadata[0].needs_dsc | delayed_metadata[0].descriptor_only)
+        begin
             out_queue_in_data.needs_dsc <= 1;
 
             // HACK(sadok): assume dsc queue id 0.
@@ -166,8 +166,16 @@ always @(posedge clk) begin
                 queue_empty = 1'b1;
 
                 // No descriptor needed now, do not send descriptor-only meta.
-                out_queue_in_data.drop <= 1;
+                out_queue_in_data.drop_meta <= 1;
                 out_queue_in_data.needs_dsc <= 0;
+            end else begin
+                out_queue_in_data.drop_meta <= 0;
+            end
+
+            // Drop the data but may keep metadata.
+            if (delayed_metadata[0].needs_dsc & delayed_metadata[0].drop_data)
+            begin
+                delayed_metadata[0].descriptor_only <= 1;
             end
         end
 

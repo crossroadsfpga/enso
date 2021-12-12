@@ -19,7 +19,8 @@ typedef struct packed
     logic [FLOW_IDX_WIDTH-1:0] pkt_queue_id;
     logic [$clog2(MAX_PKT_SIZE):0] size;  // In number of flits.
     logic needs_dsc;
-    logic drop;
+    logic drop_data;
+    logic drop_meta;
     logic descriptor_only;  // If set, no data is associated with this metadata.
     queue_state_t dsc_q_state;
     queue_state_t pkt_q_state;

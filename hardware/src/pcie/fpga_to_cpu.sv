@@ -116,7 +116,7 @@ function void dma_pkt(
 
     pcie_bas_byteenable_r2 <= 64'hffffffffffffffff;
     pcie_bas_writedata_r2 <= data.data;
-    pcie_bas_write_r2 <= !meta.drop;
+    pcie_bas_write_r2 <= !meta.drop_data;
     pcie_bas_burstcount_r2 <= flits_in_transfer;
 
     // Increment and pad tail.
@@ -306,7 +306,7 @@ always @(posedge clk) begin
             pcie_bas_address_r2 <= dsc_q_state.kmem_addr + 64 * dsc_q_state.tail;
             pcie_bas_byteenable_r2 <= 64'hffffffffffffffff;
             pcie_bas_writedata_r2 <= pcie_pkt_desc;
-            pcie_bas_write_r2 <= !transf_meta.pkt_meta.drop;
+            pcie_bas_write_r2 <= !transf_meta.pkt_meta.drop_meta;
             pcie_bas_burstcount_r2 <= 1;
           end
 
