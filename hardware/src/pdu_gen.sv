@@ -4,7 +4,7 @@ module pdu_gen #(
     parameter OUT_PKT_Q_DEPTH=64,
     parameter OUT_META_Q_DEPTH=128,
     parameter PKT_Q_ALMOST_FULL_THRESHOLD=OUT_PKT_Q_DEPTH - MAX_PKT_SIZE * 2,
-    parameter META_Q_ALMOST_FULL_THRESHOLD=OUT_META_Q_DEPTH - 2
+    parameter META_Q_ALMOST_FULL_THRESHOLD=OUT_META_Q_DEPTH - 4
 )(
     input  logic           clk,
     input  logic           rst,
