@@ -394,21 +394,29 @@ logic st_mux_ord_ready;
 // use to default ranges to a single bit when using a single pkt queue manager.
 localparam NON_NEG_PKT_QM_MSB = PKT_QM_ID_WIDTH ? PKT_QM_ID_WIDTH - 1 : 0;
 
+logic [NON_NEG_PKT_QM_MSB:0] pkt_q_mngr_id;
+
+// Direct `in_queue` output to the appropriate queue manager
 always_comb begin
-    in_queue_out_ready = st_mux_ord_ready;
+    in_queue_out_ready = 0;
     cpu_pkt_buf_full_cnt_r = 0;
+
     for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
         pkt_q_mngr_in_meta_data[i] = in_queue_out_data;
-
-        in_queue_out_ready &= pkt_q_mngr_in_meta_ready[i];
-
-        pkt_q_mngr_in_meta_valid[i] = in_queue_out_valid & in_queue_out_ready;
-        if (PKT_QM_ID_WIDTH > 0) begin
-            pkt_q_mngr_in_meta_valid[i] &= (in_queue_out_data.pkt_queue_id[
-                NON_NEG_PKT_QM_MSB:0] == i);
-        end
-
+        pkt_q_mngr_in_meta_valid[i] = 0;
         cpu_pkt_buf_full_cnt_r += pkt_full_counters[i];
+    end
+
+    if (PKT_QM_ID_WIDTH > 0) begin
+        pkt_q_mngr_id = in_queue_out_data.pkt_queue_id[NON_NEG_PKT_QM_MSB:0];
+    end else begin
+        pkt_q_mngr_id = 0;
+    end
+
+    if (in_queue_out_valid) begin
+        in_queue_out_ready =
+            st_mux_ord_ready & pkt_q_mngr_in_meta_ready[pkt_q_mngr_id];
+        pkt_q_mngr_in_meta_valid[pkt_q_mngr_id] = st_mux_ord_ready;
     end
 end
 
@@ -453,10 +461,6 @@ logic dsc_q_mngr_in_meta_ready;
 pkt_meta_with_queues_t f2c_in_meta_data;
 logic f2c_in_meta_valid;
 logic f2c_in_meta_ready;
-
-logic [NON_NEG_PKT_QM_MSB:0] pkt_q_mngr_id;
-assign pkt_q_mngr_id = !in_queue_out_valid
-        | in_queue_out_data.pkt_queue_id[NON_NEG_PKT_QM_MSB:0];
 
 st_ordered_multiplexer #(
     .NB_IN(NB_PKT_QUEUE_MANAGERS),
