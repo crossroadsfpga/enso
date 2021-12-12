@@ -157,7 +157,6 @@ logic [519:0]             reg_esram_pkt_buf_rddata;
 
 logic          input_comp_eth_valid;
 logic  [511:0] input_comp_eth_data;
-logic          input_comp_eth_ready;
 logic          input_comp_eth_sop;
 logic          input_comp_eth_eop;
 logic  [5:0]   input_comp_eth_empty;
