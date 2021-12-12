@@ -69,9 +69,11 @@ logic       pkt_buf_out_ready;
 logic       pkt_buf_out_valid;
 
 pkt_meta_with_queues_t  metadata_buf_out_data;
-pkt_meta_with_queues_t  metadata_buf_out_data_r;
+pkt_meta_with_queues_t  metadata_buf_out_data_r1;
+pkt_meta_with_queues_t  metadata_buf_out_data_r2;
 logic                   metadata_buf_out_valid;
-logic                   metadata_buf_out_valid_r;
+logic                   metadata_buf_out_valid_r1;
+logic                   metadata_buf_out_valid_r2;
 logic                   metadata_buf_out_ready;
 
 tx_transfer_t tx_compl_buf_out_data;
@@ -327,7 +329,8 @@ end
 // Extra registers to help with timing.
 always @(posedge clk) begin
   if (rst | sw_reset) begin
-    metadata_buf_out_valid_r <= 0;
+    metadata_buf_out_valid_r1 <= 0;
+    metadata_buf_out_valid_r2 <= 0;
   end else begin
     if (!pcie_bas_waitrequest) begin
       pcie_bas_address_r1 <= pcie_bas_address_r2;
@@ -345,24 +348,26 @@ always @(posedge clk) begin
 
     dma_queue_full_cnt <= dma_queue_full_cnt_r;
 
-    if (metadata_buf_out_ready | !metadata_buf_out_valid_r) begin
-      metadata_buf_out_data_r <= metadata_buf_out_data;
-      metadata_buf_out_valid_r <= metadata_buf_out_valid;
+    if (metadata_buf_out_ready | !metadata_buf_out_valid_r2) begin
+      metadata_buf_out_data_r1 <= metadata_buf_out_data;
+      metadata_buf_out_data_r2 <= metadata_buf_out_data_r1;
+      metadata_buf_out_valid_r1 <= metadata_buf_out_valid;
+      metadata_buf_out_valid_r2 <= metadata_buf_out_valid_r1;
     end
   end
 end
 
-assign next_meta_dsc_only = metadata_buf_out_valid_r & cur_meta.descriptor_only;
+assign next_meta_dsc_only = metadata_buf_out_valid_r2 & cur_meta.descriptor_only;
 
 // Check if we are able to DMA the packet or descriptor.
 always_comb begin
-  cur_meta = metadata_buf_out_data_r;
+  cur_meta = metadata_buf_out_data_r2;
 
   tx_compl_buf_out_ready = (state == START_TRANSFER) && !pcie_bas_waitrequest;
 
   can_send_tx_completion = tx_compl_buf_out_ready & tx_compl_buf_out_valid;
 
-  can_start_transfer = can_continue_dma & metadata_buf_out_valid_r;
+  can_start_transfer = can_continue_dma & metadata_buf_out_valid_r2;
 
   metadata_buf_out_ready = 0;
   if ((state == START_TRANSFER) && !can_send_tx_completion) begin
@@ -427,7 +432,7 @@ metadata_buf (
   .in_ready      (metadata_buf_in_ready),
   .out_data      (metadata_buf_out_data),
   .out_valid     (metadata_buf_out_valid),
-  .out_ready     (metadata_buf_out_ready | !metadata_buf_out_valid_r)
+  .out_ready     (metadata_buf_out_ready | !metadata_buf_out_valid_r2)
 );
 
 fifo_wrapper_infill #(
