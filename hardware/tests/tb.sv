@@ -834,10 +834,11 @@ always @(posedge clk_pcie) begin
           // of the queues.
           end else if (pkt_q_consume_delay_cnt == 0) begin
             for (i = 0; i < nb_pkt_queues; i++) begin
-              automatic integer pkt_q = (i + last_upd_pkt_q + 1) % nb_pkt_queues;
+              automatic integer pkt_q =
+                (i + last_upd_pkt_q + 1) % nb_pkt_queues;
               automatic integer dsc_q = pkt_q / pkt_per_dsc_queue;
               automatic integer free_slot =
-              (tx_dsc_heads[dsc_q] - tx_dsc_tails[dsc_q] - 1) % DSC_BUF_SIZE;
+                (tx_dsc_heads[dsc_q] - tx_dsc_tails[dsc_q] - 1) % DSC_BUF_SIZE;
 
               // Check if TX dsc buffer has enough room for at
               // least 2 descriptors.
@@ -909,8 +910,7 @@ always @(posedge clk_pcie) begin
                   ram[tx_dsc_q_addr][(tx_dsc_tails[dsc_q]+1) % DSC_BUF_SIZE] <=
                     tx_dsc;
 
-                  // Ignore second descriptor if it has zero
-                  // length.
+                  // Ignore second descriptor if it has zero length.
                   if (tx_dsc.length == 0) begin
                     tx_dsc_tails[dsc_q] <=
                       (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
