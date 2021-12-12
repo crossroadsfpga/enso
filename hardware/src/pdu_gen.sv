@@ -22,7 +22,11 @@ module pdu_gen #(
     input  logic           pcie_pkt_buf_ready,
     output var pkt_meta_t  pcie_meta_buf_data,
     output logic           pcie_meta_buf_valid,
-    input  logic           pcie_meta_buf_ready
+    input  logic           pcie_meta_buf_ready,
+
+    // Counters.
+    output logic [31:0] out_pkt_queue_occup,
+    output logic [31:0] out_meta_queue_occup
 );
 
 logic [511:0] pdu_data;
@@ -111,12 +115,10 @@ assign out_pkt_queue_data.data = pdu_data_swap;
 flit_lite_t  out_pkt_queue_data;
 logic        out_pkt_queue_valid;
 logic        out_pkt_queue_ready;
-logic [31:0] out_pkt_queue_occup;
 
 pkt_meta_t   out_meta_queue_data;
 logic        out_meta_queue_valid;
 logic        out_meta_queue_ready;
-logic [31:0] out_meta_queue_occup;
 
 metadata_t in_meta_data_r;
 
