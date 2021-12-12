@@ -265,8 +265,6 @@ always @(posedge pcie_clk) begin
 
             in_queue_in_data <= meta;
             in_queue_in_valid <= 1;
-
-            rx_pkt_head_upd_cnt <= rx_pkt_head_upd_cnt + 1;
         end
     end
 end
