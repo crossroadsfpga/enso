@@ -12,6 +12,7 @@ module queue_manager #(
     parameter EXTRA_META_BITS, // Number fo bits in the extra metadata
     parameter UNIT_POINTER=0, // Set it to 1 to advance pointer by a single unit
     parameter QUEUE_ID_WIDTH=$clog2(NB_QUEUES),
+    parameter IN_FIFO_DEPTH=16,
     parameter OUT_FIFO_DEPTH=16,
     parameter ALMOST_FULL_THRESHOLD=(OUT_FIFO_DEPTH - 8)
 )(
@@ -53,7 +54,7 @@ bram_interface_io q_table_a_heads();
 bram_interface_io q_table_a_l_addrs();
 bram_interface_io q_table_a_h_addrs();
 
-logic                      queue_ready;
+logic                      queue_state_rd_ready;
 logic [QUEUE_ID_WIDTH-1:0] rd_queue;
 logic [QUEUE_ID_WIDTH-1:0] rd_queue_r;
 logic [QUEUE_ID_WIDTH-1:0] rd_queue_r2;
@@ -90,6 +91,42 @@ typedef struct packed {
     logic                          pass_through;
 } pkt_metadata_t;
 
+logic [31:0] in_queue_occup;
+pkt_metadata_t in_queue_in_meta;
+pkt_metadata_t in_queue_out_meta;
+
+logic [QUEUE_ID_WIDTH-1:0] in_queue_out_queue_id;
+
+logic in_queue_out_valid;
+logic in_queue_out_ready;
+
+always_comb begin
+    in_queue_in_meta.pkt_size = in_size;
+    in_queue_in_meta.meta_extra = in_meta_extra;
+    in_queue_in_meta.pass_through = in_pass_through;
+end
+
+fifo_wrapper_infill_mlab #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(pkt_metadata_t) + QUEUE_ID_WIDTH),
+    .FIFO_DEPTH(IN_FIFO_DEPTH)
+)
+in_queue (
+    .clk           (clk),
+    .reset         (rst),
+    .csr_address   (2'b0),
+    .csr_read      (1'b1),
+    .csr_write     (1'b0),
+    .csr_readdata  (in_queue_occup),
+    .csr_writedata (32'b0),
+    .in_data       ({in_queue_in_meta, in_queue_id}),
+    .in_valid      (in_meta_valid),
+    .in_ready      (in_meta_ready),
+    .out_data      ({in_queue_out_meta, in_queue_out_queue_id}),
+    .out_valid     (in_queue_out_valid),
+    .out_ready     (in_queue_out_ready)
+);
+
 internal_last_queue_state_t last_states [2];
 
 queue_state_t               out_queue_q_state;
@@ -119,10 +156,10 @@ pkt_metadata_t cur_metadata;
 assign cur_metadata = delayed_metadata[0];
 
 logic may_write;
-assign may_write = queue_ready & !cur_metadata.pass_through;
+assign may_write = queue_state_rd_ready & !cur_metadata.pass_through;
 
 // Can only issue a read when there is no write in a given cycle.
-assign in_meta_ready = !out_queue_almost_full & !may_write;
+assign in_queue_out_ready = !out_queue_almost_full & !may_write;
 
 logic [RB_AWIDTH-1:0] rb_mask;
 always @(posedge clk) begin
@@ -206,7 +243,7 @@ always @(posedge clk) begin
     end else begin
         // A fetched queue state just became ready. We must consume it in this
         // cycle.
-        if (queue_ready) begin
+        if (queue_state_rd_ready) begin
             automatic internal_queue_state_t cur_state;
             cur_state.head = head;
             cur_state.tail = tail;
@@ -259,13 +296,11 @@ always @(posedge clk) begin
         end
 
         // Consume input and issue a queue state read.
-        if (in_meta_ready & in_meta_valid) begin
+        if (in_queue_out_ready & in_queue_out_valid) begin
             // Fetch next state.
-            rd_queue <= in_queue_id;
+            rd_queue <= in_queue_out_queue_id;
             queue_rd_en <= 1;
-            delayed_metadata[2].pkt_size <= in_size;
-            delayed_metadata[2].meta_extra <= in_meta_extra;
-            delayed_metadata[2].pass_through <= in_pass_through;
+            delayed_metadata[2] <= in_queue_out_meta;
         end
 
         // Advance last states pipeline.
@@ -382,7 +417,7 @@ always_comb begin
         q_table_a_tails.addr = wr_queue;
     end
 
-    queue_ready =
+    queue_state_rd_ready =
         q_table_a_tails_rd_en_r2   || q_table_a_heads_rd_en_r2   ||
         q_table_a_l_addrs_rd_en_r2 || q_table_a_h_addrs_rd_en_r2;
 
