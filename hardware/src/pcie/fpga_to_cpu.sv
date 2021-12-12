@@ -60,8 +60,8 @@ logic [RB_AWIDTH-1:0] pkt_rb_mask;
 always @(posedge clk) begin
   dsc_rb_size_r <= dsc_rb_size;
   pkt_rb_size_r <= pkt_rb_size;
-  dsc_rb_mask <= dsc_rb_size - 1;
-  pkt_rb_mask <= pkt_rb_size - 1;
+  dsc_rb_mask <= dsc_rb_size[RB_AWIDTH-1:0] - 1;
+  pkt_rb_mask <= pkt_rb_size[RB_AWIDTH-1:0] - 1;
 end
 
 flit_lite_t pkt_buf_out_data;
@@ -106,7 +106,7 @@ function void dma_pkt(
   logic [3:0]            flits_in_transfer
   // TODO(sadok) expose byteenable?
 );
-  if (meta.pkt_q_state.kmem_addr && meta.dsc_q_state.kmem_addr) begin
+  if (meta.pkt_q_state.kmem_addr != 0 && meta.dsc_q_state.kmem_addr != 0) begin
     // Assume that it is a burst when flits_in_transfer == 0, no need to set
     // address.
     if (flits_in_transfer != 0) begin
@@ -119,8 +119,12 @@ function void dma_pkt(
     pcie_bas_write_r2 <= !meta.drop;
     pcie_bas_burstcount_r2 <= flits_in_transfer;
 
-    transf_meta.pkt_meta.pkt_q_state.tail <=
-      (meta.pkt_q_state.tail + 1) & pkt_rb_mask;
+    // Increment and pad tail.
+    transf_meta.pkt_meta.pkt_q_state.tail <= {
+      {{$bits(transf_meta.pkt_meta.pkt_q_state.tail) - RB_AWIDTH}{1'b0}},
+      (meta.pkt_q_state.tail[RB_AWIDTH-1:0] + 1'b1) & pkt_rb_mask
+    };
+
     transf_meta.pkt_meta.size <= meta.size - 1;
   end
 endfunction
@@ -130,7 +134,7 @@ function logic [3:0] start_burst(
   pkt_meta_with_queues_t meta
 );
   // Skip when addresses are not defined.
-  if (meta.pkt_q_state.kmem_addr && meta.dsc_q_state.kmem_addr) begin
+  if (meta.pkt_q_state.kmem_addr != 0 && meta.dsc_q_state.kmem_addr != 0) begin
     automatic logic [3:0] flits_in_transfer;
 
     // max 8 flits per burst
@@ -288,13 +292,17 @@ always @(posedge clk) begin
 
           pcie_pkt_desc.signal = 1;
           pcie_pkt_desc.tail = {
-            {{$bits(pcie_pkt_desc.tail) - RB_AWIDTH}{1'b0}}, pkt_q_state.tail
+            {{$bits(pcie_pkt_desc.tail) - RB_AWIDTH}{1'b0}},
+            pkt_q_state.tail[RB_AWIDTH-1:0]
           };
-          pcie_pkt_desc.queue_id = transf_meta.pkt_meta.pkt_queue_id;
+          pcie_pkt_desc.queue_id = {
+            {{$bits(pcie_pkt_desc.queue_id) - FLOW_IDX_WIDTH}{1'b0}},
+            transf_meta.pkt_meta.pkt_queue_id
+          };
           pcie_pkt_desc.pad = 0;
 
           // Skip DMA when addresses are not set
-          if (pkt_q_state.kmem_addr && dsc_q_state.kmem_addr) begin
+          if (pkt_q_state.kmem_addr != 0 && dsc_q_state.kmem_addr != 0) begin
             pcie_bas_address_r2 <= dsc_q_state.kmem_addr + 64 * dsc_q_state.tail;
             pcie_bas_byteenable_r2 <= 64'hffffffffffffffff;
             pcie_bas_writedata_r2 <= pcie_pkt_desc;
