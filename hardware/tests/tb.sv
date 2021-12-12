@@ -384,6 +384,7 @@ end
 // we send a burst of packets in a window, we set the rate by limiting the size
 // of the window
 logic [7:0] rate_cnt;
+logic started;
 
 always @(posedge clk_rxmac)
 begin
@@ -393,13 +394,15 @@ begin
     rst <= 1;
     addr <= 0;
     rate_cnt <= 0;
+    started <= 0;
   end else if (cnt == 35) begin
     rst <= 0;
 
   // Make sure the stats reset is done and the setup has finished
-  end else if (cnt == 500 && setup_finished) begin
+  end else if (setup_finished && !started) begin
     l8_rx_valid <= 1;
-  end else if (cnt >= 501 && setup_finished) begin
+    started <= 1;
+  end else if (setup_finished) begin
     if (rate_cnt < 100 * (`RATE * period_rx/(64 * 8))) begin
 `ifdef DELAY_LAST_PKTS
       if (addr < (hi - nb_pkt_queues * `PKT_SIZE / 64 - 1)
