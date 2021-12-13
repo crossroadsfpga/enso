@@ -69,7 +69,11 @@ module pcie_top (
 
     output logic        disable_pcie,
     output logic        sw_reset,
-    output logic [31:0] dma_queue_full_cnt,
+    output logic [31:0] pcie_core_full_cnt,
+    output logic [31:0] rx_dma_dsc_cnt,
+    output logic [31:0] rx_dma_dsc_drop_cnt,
+    output logic [31:0] rx_dma_pkt_flit_cnt,
+    output logic [31:0] rx_dma_pkt_flit_drop_cnt,
     output logic [31:0] cpu_dsc_buf_full_cnt,
     output logic [31:0] cpu_pkt_buf_full_cnt,
     output logic [31:0] rx_ignored_head_cnt,
@@ -532,7 +536,11 @@ fpga_to_cpu fpga_to_cpu_inst (
     .pcie_bas_burstcount    (pcie_bas_burstcount),
     .pcie_bas_response      (pcie_bas_response),
     .sw_reset               (sw_reset),
-    .dma_queue_full_cnt     (dma_queue_full_cnt)
+    .pcie_core_full_cnt     (pcie_core_full_cnt),
+    .dma_dsc_cnt            (rx_dma_dsc_cnt),
+    .dma_dsc_drop_cnt       (rx_dma_dsc_drop_cnt),
+    .dma_pkt_flit_cnt       (rx_dma_pkt_flit_cnt),
+    .dma_pkt_flit_drop_cnt  (rx_dma_pkt_flit_drop_cnt)
 );
 
 cpu_to_fpga #(

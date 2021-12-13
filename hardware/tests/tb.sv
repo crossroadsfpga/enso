@@ -290,7 +290,11 @@ typedef enum{
   RULE_SET,
   MAX_PDUGEN_PKT_FIFO,
   MAX_PDUGEN_META_FIFO,
-  DMA_QUEUE_FULL,
+  PCIE_CORE_FULL,
+  RX_DMA_DSC_CNT,
+  RX_DMA_DSC_DROP_CNT,
+  RX_DMA_PKT_FLIT_CNT,
+  RX_DMA_PKT_FLIT_DROP_CNT,
   CPU_DSC_BUF_FULL,
   CPU_PKT_BUF_FULL,
   MAX_PCIE_PKT_FIFO,
@@ -1491,15 +1495,51 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("MAX_PDUGEN_META_FIFO:\t%d", top_readdata);
-          conf_state <= DMA_QUEUE_FULL;
+          conf_state <= PCIE_CORE_FULL;
           s_read <= 1;
           s_addr <= s_addr + 1;
         end
       end
-      DMA_QUEUE_FULL: begin
+      PCIE_CORE_FULL: begin
         s_read <= 0;
         if(top_readdata_valid)begin
-          $display("DMA_QUEUE_FULL:\t%d", top_readdata);
+          $display("PCIE_CORE_FULL:\t%d", top_readdata);
+          conf_state <= RX_DMA_DSC_CNT;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      RX_DMA_DSC_CNT: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("RX_DMA_DSC:\t\t%d", top_readdata);
+          conf_state <= RX_DMA_DSC_DROP_CNT;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      RX_DMA_DSC_DROP_CNT: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("RX_DMA_DSC_DROP:\t%d", top_readdata);
+          conf_state <= RX_DMA_PKT_FLIT_CNT;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      RX_DMA_PKT_FLIT_CNT: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("RX_DMA_PKT_FLIT:\t%d", top_readdata);
+          conf_state <= RX_DMA_PKT_FLIT_DROP_CNT;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      RX_DMA_PKT_FLIT_DROP_CNT: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("RX_DMA_PKT_FLIT_DROP:\t%d", top_readdata);
           conf_state <= CPU_DSC_BUF_FULL;
           s_read <= 1;
           s_addr <= s_addr + 1;

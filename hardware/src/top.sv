@@ -113,7 +113,11 @@ logic [31:0] dma_request_cnt_status;
 logic [31:0] rule_set_cnt_status;
 logic [31:0] max_pdugen_pkt_fifo_status;
 logic [31:0] max_pdugen_meta_fifo_status;
-logic [31:0] dma_queue_full_cnt_status;
+logic [31:0] pcie_core_full_cnt_status;
+logic [31:0] rx_dma_dsc_cnt_status;
+logic [31:0] rx_dma_dsc_drop_cnt_status;
+logic [31:0] rx_dma_pkt_flit_cnt_status;
+logic [31:0] rx_dma_pkt_flit_drop_cnt_status;
 logic [31:0] cpu_dsc_buf_full_cnt_status;
 logic [31:0] cpu_pkt_buf_full_cnt_status;
 logic [31:0] max_pcie_pkt_fifo_status;
@@ -376,9 +380,21 @@ logic [31:0] max_pdugen_pkt_fifo_r2;
 logic [31:0] max_pdugen_meta_fifo;
 logic [31:0] max_pdugen_meta_fifo_r1;
 logic [31:0] max_pdugen_meta_fifo_r2;
-logic [31:0] dma_queue_full_cnt;
-logic [31:0] dma_queue_full_cnt_r1;
-logic [31:0] dma_queue_full_cnt_r2;
+logic [31:0] pcie_core_full_cnt;
+logic [31:0] pcie_core_full_cnt_r1;
+logic [31:0] pcie_core_full_cnt_r2;
+logic [31:0] rx_dma_dsc_cnt;
+logic [31:0] rx_dma_dsc_cnt_r1;
+logic [31:0] rx_dma_dsc_cnt_r2;
+logic [31:0] rx_dma_dsc_drop_cnt;
+logic [31:0] rx_dma_dsc_drop_cnt_r1;
+logic [31:0] rx_dma_dsc_drop_cnt_r2;
+logic [31:0] rx_dma_pkt_flit_cnt;
+logic [31:0] rx_dma_pkt_flit_cnt_r1;
+logic [31:0] rx_dma_pkt_flit_cnt_r2;
+logic [31:0] rx_dma_pkt_flit_drop_cnt;
+logic [31:0] rx_dma_pkt_flit_drop_cnt_r1;
+logic [31:0] rx_dma_pkt_flit_drop_cnt_r2;
 logic [31:0] cpu_dsc_buf_full_cnt;
 logic [31:0] cpu_dsc_buf_full_cnt_r1;
 logic [31:0] cpu_dsc_buf_full_cnt_r2;
@@ -437,7 +453,6 @@ begin
         fd_out_pkt_cnt <= 0;
         max_fd_out_fifo <= 0;
         out_pkt_cnt <= 0;
-        //in_check_mux_pkt <= 0;
     end else begin
         if(parser_out_fifo_out_valid & parser_out_fifo_out_ready)begin
             fd_in_pkt_cnt <= fd_in_pkt_cnt + 1;
@@ -652,9 +667,21 @@ always @(posedge clk_status) begin
     max_pdugen_meta_fifo_r1          <= max_pdugen_meta_fifo;
     max_pdugen_meta_fifo_r2          <= max_pdugen_meta_fifo_r1;
     max_pdugen_meta_fifo_status      <= max_pdugen_meta_fifo_r2;
-    dma_queue_full_cnt_r1            <= dma_queue_full_cnt;
-    dma_queue_full_cnt_r2            <= dma_queue_full_cnt_r1;
-    dma_queue_full_cnt_status        <= dma_queue_full_cnt_r2;
+    pcie_core_full_cnt_r1            <= pcie_core_full_cnt;
+    pcie_core_full_cnt_r2            <= pcie_core_full_cnt_r1;
+    pcie_core_full_cnt_status        <= pcie_core_full_cnt_r2;
+    rx_dma_dsc_cnt_r1                <= rx_dma_dsc_cnt;
+    rx_dma_dsc_cnt_r2                <= rx_dma_dsc_cnt_r1;
+    rx_dma_dsc_cnt_status            <= rx_dma_dsc_cnt_r2;
+    rx_dma_dsc_drop_cnt_r1           <= rx_dma_dsc_drop_cnt;
+    rx_dma_dsc_drop_cnt_r2           <= rx_dma_dsc_drop_cnt_r1;
+    rx_dma_dsc_drop_cnt_status       <= rx_dma_dsc_drop_cnt_r2;
+    rx_dma_pkt_flit_cnt_r1           <= rx_dma_pkt_flit_cnt;
+    rx_dma_pkt_flit_cnt_r2           <= rx_dma_pkt_flit_cnt_r1;
+    rx_dma_pkt_flit_cnt_status       <= rx_dma_pkt_flit_cnt_r2;
+    rx_dma_pkt_flit_drop_cnt_r1      <= rx_dma_pkt_flit_drop_cnt;
+    rx_dma_pkt_flit_drop_cnt_r2      <= rx_dma_pkt_flit_drop_cnt_r1;
+    rx_dma_pkt_flit_drop_cnt_status  <= rx_dma_pkt_flit_drop_cnt_r2;
     cpu_dsc_buf_full_cnt_r1          <= cpu_dsc_buf_full_cnt;
     cpu_dsc_buf_full_cnt_r2          <= cpu_dsc_buf_full_cnt_r1;
     cpu_dsc_buf_full_cnt_status      <= cpu_dsc_buf_full_cnt_r2;
@@ -743,22 +770,26 @@ always @(posedge clk_status) begin
                 8'd24 : status_readdata_top <= rule_set_cnt_status;
                 8'd25 : status_readdata_top <= max_pdugen_pkt_fifo_status;
                 8'd26 : status_readdata_top <= max_pdugen_meta_fifo_status;
-                8'd27 : status_readdata_top <= dma_queue_full_cnt_status;
-                8'd28 : status_readdata_top <= cpu_dsc_buf_full_cnt_status;
-                8'd29 : status_readdata_top <= cpu_pkt_buf_full_cnt_status;
-                8'd30 : status_readdata_top <= max_pcie_pkt_fifo_status;
-                8'd31 : status_readdata_top <= max_pcie_meta_fifo_status;
-                8'd32 : status_readdata_top <= pcie_rx_ignored_head_cnt_status;
-                8'd33 : status_readdata_top <= pcie_tx_ignored_dsc_cnt_status;
-                8'd34 : status_readdata_top <= pcie_tx_q_full_signals_status;
-                8'd35 : status_readdata_top <= pcie_tx_dsc_cnt_status;
-                8'd36 : status_readdata_top <= pcie_tx_empty_tail_cnt_status;
-                8'd37 : status_readdata_top <= pcie_tx_dsc_read_cnt_status;
-                8'd38 : status_readdata_top <= pcie_tx_pkt_read_cnt_status;
-                8'd39 : status_readdata_top <= pcie_tx_batch_cnt_status;
-                8'd40 : status_readdata_top <= pcie_tx_max_inflight_dscs_status;
-                8'd41 : status_readdata_top <= pcie_tx_max_nb_req_dscs_status;
-                8'd42 : status_readdata_top <= pcie_tx_dma_pkt_cnt_status;
+                8'd27 : status_readdata_top <= pcie_core_full_cnt_status;
+                8'd28 : status_readdata_top <= rx_dma_dsc_cnt_status;
+                8'd29 : status_readdata_top <= rx_dma_dsc_drop_cnt_status;
+                8'd30 : status_readdata_top <= rx_dma_pkt_flit_cnt_status;
+                8'd31 : status_readdata_top <= rx_dma_pkt_flit_drop_cnt_status;
+                8'd32 : status_readdata_top <= cpu_dsc_buf_full_cnt_status;
+                8'd33 : status_readdata_top <= cpu_pkt_buf_full_cnt_status;
+                8'd34 : status_readdata_top <= max_pcie_pkt_fifo_status;
+                8'd35 : status_readdata_top <= max_pcie_meta_fifo_status;
+                8'd36 : status_readdata_top <= pcie_rx_ignored_head_cnt_status;
+                8'd37 : status_readdata_top <= pcie_tx_ignored_dsc_cnt_status;
+                8'd38 : status_readdata_top <= pcie_tx_q_full_signals_status;
+                8'd39 : status_readdata_top <= pcie_tx_dsc_cnt_status;
+                8'd40 : status_readdata_top <= pcie_tx_empty_tail_cnt_status;
+                8'd41 : status_readdata_top <= pcie_tx_dsc_read_cnt_status;
+                8'd42 : status_readdata_top <= pcie_tx_pkt_read_cnt_status;
+                8'd43 : status_readdata_top <= pcie_tx_batch_cnt_status;
+                8'd44 : status_readdata_top <= pcie_tx_max_inflight_dscs_status;
+                8'd45 : status_readdata_top <= pcie_tx_max_nb_req_dscs_status;
+                8'd46 : status_readdata_top <= pcie_tx_dma_pkt_cnt_status;
                 default : status_readdata_top <= 32'h345;
             endcase
         end
@@ -1233,86 +1264,90 @@ pktbuf_emptylist (
 );
 //////////////////PCIe logic ////////////////
 pcie_top pcie (
-    .pcie_clk                (clk_pcie),
-    .pcie_reset_n            (!rst),
-    .pcie_wrdm_desc_ready    (pcie_wrdm_desc_ready),
-    .pcie_wrdm_desc_valid    (pcie_wrdm_desc_valid),
-    .pcie_wrdm_desc_data     (pcie_wrdm_desc_data),
-    .pcie_wrdm_prio_ready    (pcie_wrdm_prio_ready),
-    .pcie_wrdm_prio_valid    (pcie_wrdm_prio_valid),
-    .pcie_wrdm_prio_data     (pcie_wrdm_prio_data),
-    .pcie_wrdm_tx_valid      (pcie_wrdm_tx_valid),
-    .pcie_wrdm_tx_data       (pcie_wrdm_tx_data),
-    .pcie_rddm_desc_ready    (pcie_rddm_desc_ready),
-    .pcie_rddm_desc_valid    (pcie_rddm_desc_valid),
-    .pcie_rddm_desc_data     (pcie_rddm_desc_data),
-    .pcie_rddm_prio_ready    (pcie_rddm_prio_ready),
-    .pcie_rddm_prio_valid    (pcie_rddm_prio_valid),
-    .pcie_rddm_prio_data     (pcie_rddm_prio_data),
-    .pcie_rddm_tx_valid      (pcie_rddm_tx_valid),
-    .pcie_rddm_tx_data       (pcie_rddm_tx_data),
-    .pcie_bas_waitrequest    (pcie_bas_waitrequest),
-    .pcie_bas_address        (pcie_bas_address),
-    .pcie_bas_byteenable     (pcie_bas_byteenable),
-    .pcie_bas_read           (pcie_bas_read),
-    .pcie_bas_readdata       (pcie_bas_readdata),
-    .pcie_bas_readdatavalid  (pcie_bas_readdatavalid),
-    .pcie_bas_write          (pcie_bas_write),
-    .pcie_bas_writedata      (pcie_bas_writedata),
-    .pcie_bas_burstcount     (pcie_bas_burstcount),
-    .pcie_bas_response       (pcie_bas_response),
-    .pcie_address_0          (pcie_address_0),
-    .pcie_write_0            (pcie_write_0),
-    .pcie_read_0             (pcie_read_0),
-    .pcie_readdatavalid_0    (pcie_readdatavalid_0),
-    .pcie_readdata_0         (pcie_readdata_0),
-    .pcie_writedata_0        (pcie_writedata_0),
-    .pcie_byteenable_0       (pcie_byteenable_0),
-    .pcie_rddm_address       (pcie_rddm_address),
-    .pcie_rddm_write         (pcie_rddm_write),
-    .pcie_rddm_writedata     (pcie_rddm_writedata),
-    .pcie_rddm_byteenable    (pcie_rddm_byteenable),
-    .pcie_rddm_waitrequest   (pcie_rddm_waitrequest),
-    .pcie_rx_pkt_buf_data    (pcie_pkt_buf_data),
-    .pcie_rx_pkt_buf_valid   (pcie_pkt_buf_valid),
-    .pcie_rx_pkt_buf_ready   (pcie_pkt_buf_ready),
-    .pcie_rx_pkt_buf_occup   (pcie_pkt_buf_occup),
-    .pcie_rx_meta_buf_data   (pcie_meta_buf_data),
-    .pcie_rx_meta_buf_valid  (pcie_meta_buf_valid),
-    .pcie_rx_meta_buf_ready  (pcie_meta_buf_ready),
-    .pcie_rx_meta_buf_occup  (pcie_meta_buf_occup),
-    .pcie_tx_pkt_sop         (pcie_tx_pkt_sop),
-    .pcie_tx_pkt_eop         (pcie_tx_pkt_eop),
-    .pcie_tx_pkt_valid       (pcie_tx_pkt_valid),
-    .pcie_tx_pkt_data        (pcie_tx_pkt_data),
-    .pcie_tx_pkt_empty       (pcie_tx_pkt_empty),
-    .pcie_tx_pkt_ready       (pcie_tx_pkt_ready),
-    .pcie_tx_pkt_occup       (pcie_tx_pkt_fifo_occup),
-    .disable_pcie            (disable_pcie),
-    .sw_reset                (sw_reset),
-    .dma_queue_full_cnt      (dma_queue_full_cnt),
-    .cpu_dsc_buf_full_cnt    (cpu_dsc_buf_full_cnt),
-    .cpu_pkt_buf_full_cnt    (cpu_pkt_buf_full_cnt),
-    .rx_ignored_head_cnt     (pcie_rx_ignored_head_cnt),
-    .tx_ignored_dsc_cnt      (pcie_tx_ignored_dsc_cnt),
-    .tx_q_full_signals       (pcie_tx_q_full_signals),
-    .tx_dsc_cnt              (pcie_tx_dsc_cnt),
-    .tx_empty_tail_cnt       (pcie_tx_empty_tail_cnt),
-    .tx_dsc_read_cnt         (pcie_tx_dsc_read_cnt),
-    .tx_pkt_read_cnt         (pcie_tx_pkt_read_cnt),
-    .tx_batch_cnt            (pcie_tx_batch_cnt),
-    .tx_max_inflight_dscs    (pcie_tx_max_inflight_dscs),
-    .tx_max_nb_req_dscs      (pcie_tx_max_nb_req_dscs),
-    .tx_dma_pkt_cnt          (pcie_tx_dma_pkt_cnt),
-    .rx_pkt_head_upd_cnt     (pcie_rx_pkt_head_upd_cnt),
-    .tx_dsc_tail_upd_cnt     (pcie_tx_dsc_tail_upd_cnt),
-    .clk_status              (clk_status),
-    .status_addr             (status_addr),
-    .status_read             (status_read),
-    .status_write            (status_write),
-    .status_writedata        (status_writedata),
-    .status_readdata         (status_readdata_pcie),
-    .status_readdata_valid   (status_readdata_valid_pcie)
+    .pcie_clk                 (clk_pcie),
+    .pcie_reset_n             (!rst),
+    .pcie_wrdm_desc_ready     (pcie_wrdm_desc_ready),
+    .pcie_wrdm_desc_valid     (pcie_wrdm_desc_valid),
+    .pcie_wrdm_desc_data      (pcie_wrdm_desc_data),
+    .pcie_wrdm_prio_ready     (pcie_wrdm_prio_ready),
+    .pcie_wrdm_prio_valid     (pcie_wrdm_prio_valid),
+    .pcie_wrdm_prio_data      (pcie_wrdm_prio_data),
+    .pcie_wrdm_tx_valid       (pcie_wrdm_tx_valid),
+    .pcie_wrdm_tx_data        (pcie_wrdm_tx_data),
+    .pcie_rddm_desc_ready     (pcie_rddm_desc_ready),
+    .pcie_rddm_desc_valid     (pcie_rddm_desc_valid),
+    .pcie_rddm_desc_data      (pcie_rddm_desc_data),
+    .pcie_rddm_prio_ready     (pcie_rddm_prio_ready),
+    .pcie_rddm_prio_valid     (pcie_rddm_prio_valid),
+    .pcie_rddm_prio_data      (pcie_rddm_prio_data),
+    .pcie_rddm_tx_valid       (pcie_rddm_tx_valid),
+    .pcie_rddm_tx_data        (pcie_rddm_tx_data),
+    .pcie_bas_waitrequest     (pcie_bas_waitrequest),
+    .pcie_bas_address         (pcie_bas_address),
+    .pcie_bas_byteenable      (pcie_bas_byteenable),
+    .pcie_bas_read            (pcie_bas_read),
+    .pcie_bas_readdata        (pcie_bas_readdata),
+    .pcie_bas_readdatavalid   (pcie_bas_readdatavalid),
+    .pcie_bas_write           (pcie_bas_write),
+    .pcie_bas_writedata       (pcie_bas_writedata),
+    .pcie_bas_burstcount      (pcie_bas_burstcount),
+    .pcie_bas_response        (pcie_bas_response),
+    .pcie_address_0           (pcie_address_0),
+    .pcie_write_0             (pcie_write_0),
+    .pcie_read_0              (pcie_read_0),
+    .pcie_readdatavalid_0     (pcie_readdatavalid_0),
+    .pcie_readdata_0          (pcie_readdata_0),
+    .pcie_writedata_0         (pcie_writedata_0),
+    .pcie_byteenable_0        (pcie_byteenable_0),
+    .pcie_rddm_address        (pcie_rddm_address),
+    .pcie_rddm_write          (pcie_rddm_write),
+    .pcie_rddm_writedata      (pcie_rddm_writedata),
+    .pcie_rddm_byteenable     (pcie_rddm_byteenable),
+    .pcie_rddm_waitrequest    (pcie_rddm_waitrequest),
+    .pcie_rx_pkt_buf_data     (pcie_pkt_buf_data),
+    .pcie_rx_pkt_buf_valid    (pcie_pkt_buf_valid),
+    .pcie_rx_pkt_buf_ready    (pcie_pkt_buf_ready),
+    .pcie_rx_pkt_buf_occup    (pcie_pkt_buf_occup),
+    .pcie_rx_meta_buf_data    (pcie_meta_buf_data),
+    .pcie_rx_meta_buf_valid   (pcie_meta_buf_valid),
+    .pcie_rx_meta_buf_ready   (pcie_meta_buf_ready),
+    .pcie_rx_meta_buf_occup   (pcie_meta_buf_occup),
+    .pcie_tx_pkt_sop          (pcie_tx_pkt_sop),
+    .pcie_tx_pkt_eop          (pcie_tx_pkt_eop),
+    .pcie_tx_pkt_valid        (pcie_tx_pkt_valid),
+    .pcie_tx_pkt_data         (pcie_tx_pkt_data),
+    .pcie_tx_pkt_empty        (pcie_tx_pkt_empty),
+    .pcie_tx_pkt_ready        (pcie_tx_pkt_ready),
+    .pcie_tx_pkt_occup        (pcie_tx_pkt_fifo_occup),
+    .disable_pcie             (disable_pcie),
+    .sw_reset                 (sw_reset),
+    .pcie_core_full_cnt       (pcie_core_full_cnt),
+    .rx_dma_dsc_cnt           (rx_dma_dsc_cnt),
+    .rx_dma_dsc_drop_cnt      (rx_dma_dsc_drop_cnt),
+    .rx_dma_pkt_flit_cnt      (rx_dma_pkt_flit_cnt),
+    .rx_dma_pkt_flit_drop_cnt (rx_dma_pkt_flit_drop_cnt),
+    .cpu_dsc_buf_full_cnt     (cpu_dsc_buf_full_cnt),
+    .cpu_pkt_buf_full_cnt     (cpu_pkt_buf_full_cnt),
+    .rx_ignored_head_cnt      (pcie_rx_ignored_head_cnt),
+    .tx_ignored_dsc_cnt       (pcie_tx_ignored_dsc_cnt),
+    .tx_q_full_signals        (pcie_tx_q_full_signals),
+    .tx_dsc_cnt               (pcie_tx_dsc_cnt),
+    .tx_empty_tail_cnt        (pcie_tx_empty_tail_cnt),
+    .tx_dsc_read_cnt          (pcie_tx_dsc_read_cnt),
+    .tx_pkt_read_cnt          (pcie_tx_pkt_read_cnt),
+    .tx_batch_cnt             (pcie_tx_batch_cnt),
+    .tx_max_inflight_dscs     (pcie_tx_max_inflight_dscs),
+    .tx_max_nb_req_dscs       (pcie_tx_max_nb_req_dscs),
+    .tx_dma_pkt_cnt           (pcie_tx_dma_pkt_cnt),
+    .rx_pkt_head_upd_cnt      (pcie_rx_pkt_head_upd_cnt),
+    .tx_dsc_tail_upd_cnt      (pcie_tx_dsc_tail_upd_cnt),
+    .clk_status               (clk_status),
+    .status_addr              (status_addr),
+    .status_read              (status_read),
+    .status_write             (status_write),
+    .status_writedata         (status_writedata),
+    .status_readdata          (status_readdata_pcie),
+    .status_readdata_valid    (status_readdata_valid_pcie)
 );
 
 endmodule

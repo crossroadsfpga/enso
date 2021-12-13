@@ -43,11 +43,12 @@ module fpga_to_cpu (
   output logic [3:0]   pcie_bas_burstcount,
   input  logic [1:0]   pcie_bas_response,
 
-  // Counter reset
-  input logic sw_reset,
-
   // Counters
-  output logic [31:0] dma_queue_full_cnt
+  output logic [31:0] pcie_core_full_cnt,
+  output logic [31:0] dma_dsc_cnt,
+  output logic [31:0] dma_dsc_drop_cnt,
+  output logic [31:0] dma_pkt_flit_cnt,
+  output logic [31:0] dma_pkt_flit_drop_cnt
 );
 
 assign pcie_bas_read = 0;
@@ -80,7 +81,7 @@ tx_transfer_t tx_compl_buf_out_data;
 logic         tx_compl_buf_out_valid;
 logic         tx_compl_buf_out_ready;
 
-logic [31:0] dma_queue_full_cnt_r;
+logic [31:0] pcie_core_full_cnt_r;
 
 logic [63:0]  pcie_bas_address_r1;
 logic [63:0]  pcie_bas_byteenable_r1;
@@ -128,6 +129,11 @@ function void dma_pkt(
     };
 
     transf_meta.pkt_meta.size <= meta.size - 1;
+    if (meta.drop_data) begin
+      dma_pkt_flit_drop_cnt <= dma_pkt_flit_drop_cnt + 1;
+    end else begin
+      dma_pkt_flit_cnt <= dma_pkt_flit_cnt + 1;
+    end
   end
 endfunction
 
@@ -189,17 +195,21 @@ logic next_meta_dsc_only;  // Set when the next metadata is descriptor-only.
 
 // Consume requests and issue DMAs
 always @(posedge clk) begin
-  if (rst | sw_reset) begin
+  if (rst) begin
     state <= START_TRANSFER;
-    dma_queue_full_cnt_r <= 0;
+    pcie_core_full_cnt_r <= 0;
     pcie_bas_write_r2 <= 0;
+    dma_dsc_cnt <= 0;
+    dma_dsc_drop_cnt <= 0;
+    dma_pkt_flit_cnt <= 0;
+    dma_pkt_flit_drop_cnt <= 0;
   end else begin
     // Make sure the previous transfer is complete before setting
     // pcie_bas_write_r2 to 0.
     if (!pcie_bas_waitrequest) begin
       pcie_bas_write_r2 <= 0;
     end else begin
-      dma_queue_full_cnt_r <= dma_queue_full_cnt_r + 1;
+      pcie_core_full_cnt_r <= pcie_core_full_cnt_r + 1;
     end
     case (state)
       START_TRANSFER: begin
@@ -310,6 +320,12 @@ always @(posedge clk) begin
             pcie_bas_writedata_r2 <= pcie_pkt_desc;
             pcie_bas_write_r2 <= !transf_meta.pkt_meta.drop_meta;
             pcie_bas_burstcount_r2 <= 1;
+
+            if (transf_meta.pkt_meta.drop_meta) begin
+              dma_dsc_drop_cnt <= dma_dsc_drop_cnt + 1;
+            end else begin
+              dma_dsc_cnt <= dma_dsc_cnt + 1;
+            end
           end
 
           state <= START_TRANSFER;
@@ -328,7 +344,7 @@ end
 
 // Extra registers to help with timing.
 always @(posedge clk) begin
-  if (rst | sw_reset) begin
+  if (rst) begin
     metadata_buf_out_valid_r1 <= 0;
     metadata_buf_out_valid_r2 <= 0;
   end else begin
@@ -346,7 +362,7 @@ always @(posedge clk) begin
       pcie_bas_burstcount <= pcie_bas_burstcount_r1;
     end
 
-    dma_queue_full_cnt <= dma_queue_full_cnt_r;
+    pcie_core_full_cnt <= pcie_core_full_cnt_r;
 
     if (metadata_buf_out_ready | !metadata_buf_out_valid_r2) begin
       metadata_buf_out_data_r1 <= metadata_buf_out_data;
