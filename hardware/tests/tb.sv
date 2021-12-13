@@ -26,7 +26,9 @@ module tb;
 
 // `define DELAY_LAST_PKTS;  // Set it to delay last packets for every queue.
 
-`define SKIP_PCIE_RD;  // Set it to skip PCIe read after the simulation is done.
+`define SKIP_PCIE_RD;  // Set it to skip PCIe read after simulation is done.
+// `define CHECK_QUEUE_HEAD_TAIL' // Set it to check head and tail pointers for 
+                               // every pkt queue at the end of the simulation.
 
 generate
   // We assume this during the test, it does not necessarily hold in general.
@@ -1100,6 +1102,8 @@ rddm_prio_queue (
 
 assign pcie_rddm_prio_ready = rddm_prio_queue_occup < (16 - 3);
 
+logic [31:0] last_tail;
+
 //Configure
 //Read and display pkt/flow cnts
 always @(posedge clk_status) begin
@@ -1216,20 +1220,39 @@ always @(posedge clk_status) begin
       end
       READ_PCIE_PKT_Q: begin
         if (top_readdata_valid) begin
-          $display("%d: 0x%8h", s_addr[JTAG_ADDR_WIDTH-1:0],
-               top_readdata);
-          s_addr = s_addr + 1;
+          `ifdef CHECK_QUEUE_HEAD_TAIL
+            if (s_addr[JTAG_ADDR_WIDTH-1:0] >= NB_CONTROL_REGS) begin
+              if (((s_addr - NB_CONTROL_REGS) % 4) == 0) begin
+                last_tail <= top_readdata;
+              end else if (((s_addr - NB_CONTROL_REGS) % 4) == 1) begin
+                automatic int queue =
+                    (s_addr[JTAG_ADDR_WIDTH-1:0] - NB_CONTROL_REGS) / 4;
+                assert (last_tail == top_readdata) else begin 
+                  $display("queue %d: tail: %h, head: %h", queue, last_tail,
+                           top_readdata);
+                end
+              end
+            end
+          `else
+            $display("%d: 0x%8h", s_addr[JTAG_ADDR_WIDTH-1:0],
+                top_readdata);
+          `endif  // CHECK_QUEUE_HEAD_TAIL
+          s_addr <= s_addr + 1;
           s_read <= 1;
-          if (s_addr == (
-              30'h2A00_0000 + REGS_PER_PKT_Q * nb_pkt_queues
-              + NB_CONTROL_REGS)
-            ) begin
+          if ((s_addr + 1) == (30'h2A00_0000 + REGS_PER_PKT_Q * nb_pkt_queues
+                               + NB_CONTROL_REGS)) begin
             s_addr <= 30'h2A00_0000
               + REGS_PER_PKT_Q * MAX_NB_FLOWS
               + NB_CONTROL_REGS;
             s_writedata <= 0;
-            conf_state <= READ_PCIE_DSC_Q;
-            $display("dsc queues:");
+            
+            `ifdef CHECK_QUEUE_HEAD_TAIL
+              s_read <= 0;
+              conf_state <= IDLE;
+            `else
+              conf_state <= READ_PCIE_DSC_Q;
+              $display("dsc queues:");
+            `endif // CHECK_QUEUE_HEAD_TAIL
           end
         end
       end
