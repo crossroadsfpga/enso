@@ -535,7 +535,6 @@ fpga_to_cpu fpga_to_cpu_inst (
     .pcie_bas_writedata     (pcie_bas_writedata),
     .pcie_bas_burstcount    (pcie_bas_burstcount),
     .pcie_bas_response      (pcie_bas_response),
-    .sw_reset               (sw_reset),
     .pcie_core_full_cnt     (pcie_core_full_cnt),
     .dma_dsc_cnt            (rx_dma_dsc_cnt),
     .dma_dsc_drop_cnt       (rx_dma_dsc_drop_cnt),
