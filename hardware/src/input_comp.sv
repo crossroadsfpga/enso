@@ -74,7 +74,7 @@ always@ (posedge clk) begin
             end
         end
 
-        assert(!(!emptylist_out_valid & emptylist_out_ready)) else begin
+        assert(emptylist_out_valid | !emptylist_out_ready) else begin
             hterminate("Request from empty PKT_empty list");
         end
     end
