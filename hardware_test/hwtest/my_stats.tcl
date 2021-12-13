@@ -787,6 +787,8 @@ proc sw_rst {} {
     #     reg_write $PCIE_BASE [expr $a + $NB_CTRL_REGS] 0
     # }
 
+
+    after 100
     # rewrite old value back
     reg_write $PCIE_BASE $PCIE_CTRL_REG $rdata
 

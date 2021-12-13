@@ -232,7 +232,7 @@ end
 always @(posedge pcie_clk) begin
     in_queue_in_valid <= 0;
 
-    if (!pcie_reset_n) begin
+    if (!pcie_reset_n | sw_reset) begin
         rx_pkt_head_upd_cnt <= 0;
     end else begin
         // Prioritize serving head updates over incoming metadata.
@@ -426,7 +426,7 @@ end
 
 // Count TX dsc tail pointer updates.
 always @(posedge pcie_clk) begin
-    if (!pcie_reset_n) begin
+    if (!pcie_reset_n | sw_reset) begin
         tx_dsc_tail_upd_cnt <= 0;
     end else begin
         if (tx_dsc_q_table_tails.wr_en) begin
@@ -439,7 +439,7 @@ pkt_queue_manager #(
     .NB_QUEUES(MAX_NB_FLOWS/NB_PKT_QUEUE_MANAGERS)
 ) pkt_queue_manager_inst [NB_PKT_QUEUE_MANAGERS] (
     .clk               (pcie_clk),
-    .rst               (!pcie_reset_n),
+    .rst               (!pcie_reset_n | sw_reset),
     .in_meta_data      (pkt_q_mngr_in_meta_data),
     .in_meta_valid     (pkt_q_mngr_in_meta_valid),
     .in_meta_ready     (pkt_q_mngr_in_meta_ready),
@@ -506,7 +506,7 @@ logic [31:0]  tx_compl_buf_occup;
 
 fpga_to_cpu fpga_to_cpu_inst (
     .clk                    (pcie_clk),
-    .rst                    (!pcie_reset_n),
+    .rst                    (!pcie_reset_n | sw_reset),
     .pkt_buf_in_data        (pcie_rx_pkt_buf_data),
     .pkt_buf_in_valid       (pcie_rx_pkt_buf_valid),
     .pkt_buf_in_ready       (pcie_rx_pkt_buf_ready),
@@ -539,7 +539,7 @@ cpu_to_fpga #(
     .NB_QUEUES(MAX_NB_APPS)
 ) cpu_to_fpga_inst (
     .clk                   (pcie_clk),
-    .rst                   (!pcie_reset_n),
+    .rst                   (!pcie_reset_n | sw_reset),
     .out_pkt_sop           (pcie_tx_pkt_sop),
     .out_pkt_eop           (pcie_tx_pkt_eop),
     .out_pkt_valid         (pcie_tx_pkt_valid),
@@ -583,7 +583,7 @@ cpu_to_fpga #(
 
 // Keep track of the number of packets that were successfully DMAed by software.
 always @(posedge pcie_clk) begin
-    if (!pcie_reset_n) begin
+    if (!pcie_reset_n | sw_reset) begin
         tx_dma_pkt_cnt <= 0;
     end else if (pcie_tx_pkt_valid & pcie_tx_pkt_ready & pcie_tx_pkt_eop) begin
         tx_dma_pkt_cnt <= tx_dma_pkt_cnt + 1;
