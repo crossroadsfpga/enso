@@ -93,7 +93,9 @@ always @(posedge clk) begin
         pcie_rx_meta_valid <= 0;
     end else begin
         pcie_rx_meta_valid <= 0;
-        if (meta_valid & meta_ready & (meta_data.pkt_flags == PKT_PCIE) & !disable_pcie) begin
+        if (meta_valid & meta_ready & (meta_data.pkt_flags == PKT_PCIE)
+            & !disable_pcie)
+        begin
             pcie_rx_meta_valid <= 1;
         end
     end
