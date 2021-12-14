@@ -184,12 +184,7 @@ typedef enum
 
 state_t state;
 
-// We may set the writing signals even when pcie_bas_waitrequest is set, but we
-// must make sure that they remain active until pcie_bas_waitrequest is unset.
-// So we are checking this signal not to ensure that we are able to write but
-// instead to ensure that any write request in the previous cycle is complete.
 logic can_continue_dma;
-assign can_continue_dma = pkt_buf_out_valid && !pcie_bas_waitrequest;
 
 pkt_meta_with_queues_t cur_meta;
 
@@ -383,6 +378,12 @@ always @(posedge clk) begin
   end
 end
 
+// We may set the writing signals even when pcie_bas_waitrequest is set, but we
+// must make sure that they remain active until pcie_bas_waitrequest is unset.
+// So we are checking this signal not to ensure that we are able to write but
+// instead to ensure that any write request in the previous cycle is complete.
+assign can_continue_dma = pkt_buf_out_valid && !pcie_bas_waitrequest;
+
 assign next_meta_dsc_only = metadata_buf_out_valid_r2 & cur_meta.descriptor_only;
 
 // Check if we are able to DMA the packet or descriptor.
@@ -400,7 +401,7 @@ always_comb begin
     metadata_buf_out_ready = can_start_transfer | next_meta_dsc_only;
   end
   if (state == SEND_DESCRIPTOR) begin
-    metadata_buf_out_ready = next_meta_dsc_only;
+    metadata_buf_out_ready = next_meta_dsc_only & !pcie_bas_waitrequest;
   end
 
   pkt_buf_out_ready = 0;
