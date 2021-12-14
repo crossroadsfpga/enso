@@ -109,6 +109,9 @@ function void dma_pkt(
   logic [3:0]            flits_in_transfer
   // TODO(sadok) expose byteenable?
 );
+  assert(meta.pkt_q_state.kmem_addr != 0);
+  assert(meta.dsc_q_state.kmem_addr != 0);
+
   if (meta.pkt_q_state.kmem_addr != 0 && meta.dsc_q_state.kmem_addr != 0) begin
     // Assume that it is a burst when flits_in_transfer == 0, no need to set
     // address.
@@ -312,6 +315,9 @@ always @(posedge clk) begin
             transf_meta.pkt_meta.pkt_queue_id
           };
           pcie_pkt_desc.pad = 0;
+
+          assert(pkt_q_state.kmem_addr != 0);
+          assert(dsc_q_state.kmem_addr != 0);
 
           // Skip DMA when addresses are not set
           if (pkt_q_state.kmem_addr != 0 && dsc_q_state.kmem_addr != 0) begin
