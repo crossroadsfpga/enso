@@ -126,7 +126,7 @@ always @(posedge clk) begin
         delayed_metadata[2].pkt_q_state <= out_q_state;
         delayed_metadata[2].drop_data <= out_drop;
         delayed_metadata[2].drop_meta <= out_drop;
-        delayed_metadata[2].needs_dsc <= out_meta_extra.needs_dsc & !out_drop;
+        delayed_metadata[2].needs_dsc <= out_meta_extra.needs_dsc;
 
         delayed_queue[2] <= local_q;
         pkt_q_status_interf_a.addr <= local_q;
@@ -148,16 +148,17 @@ always @(posedge clk) begin
             needs_dsc = !last_queue_status[2];
         end
 
-        out_queue_in_data.needs_dsc <= needs_dsc;
-        out_queue_in_valid <= 1;
+        // If packet should be dropped, it does not need a descriptor.
+        needs_dsc &= !delayed_metadata[0].drop_data;
 
-        // Metadata with `descriptor_only` set orginates from a head pointer
+        // Metadata with `descriptor_only` set originates from a head pointer
         // update while metadata with `needs_dsc` set means that it originates
         // from a head update that was merged to a packet to the same queue.
-        if (delayed_metadata[0].needs_dsc | delayed_metadata[0].descriptor_only)
-        begin
-            out_queue_in_data.needs_dsc <= 1;
-
+        if (delayed_metadata[0].needs_dsc) begin
+            needs_dsc = 1;
+            out_queue_in_data.drop_meta <= 0;
+            delayed_metadata[0].descriptor_only <= 1;
+        end else if (delayed_metadata[0].descriptor_only) begin
             // HACK(sadok): assume dsc queue id 0.
             out_queue_in_data.dsc_queue_id <= 0;
 
@@ -167,17 +168,15 @@ always @(posedge clk) begin
 
                 // No descriptor needed now, do not send descriptor-only meta.
                 out_queue_in_data.drop_meta <= 1;
-                out_queue_in_data.needs_dsc <= 0;
+                needs_dsc = 0;
             end else begin
                 out_queue_in_data.drop_meta <= 0;
-            end
-
-            // Drop the data but may keep metadata.
-            if (delayed_metadata[0].needs_dsc & delayed_metadata[0].drop_data)
-            begin
-                delayed_metadata[0].descriptor_only <= 1;
+                needs_dsc = 1;
             end
         end
+
+        out_queue_in_data.needs_dsc <= needs_dsc;
+        out_queue_in_valid <= 1;
 
         // If queue is empty, next packet should have a descriptor.
         set_queue_status(delayed_queue[0], !queue_empty);
