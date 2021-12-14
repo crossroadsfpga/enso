@@ -452,15 +452,6 @@ begin
   end
 end
 
-logic [7:0] pcie_delay_cnt;
-
-logic [DMA_BUF_AWIDTH-1:0] dma_buf_head;
-logic [DMA_BUF_AWIDTH-1:0] dma_buf_tail;
-logic dma_buf_full;
-logic dma_buf_full_r1;
-logic dma_buf_full_r2;
-assign dma_buf_full = dma_buf_head + 1'b1 == dma_buf_tail;
-
 logic [31:0] cnt_delay;
 logic [PCIE_ADDR_WIDTH-1:0] cfg_queue;
 logic [63:0] nb_config_queues;
@@ -477,39 +468,7 @@ typedef enum{
   PCIE_WAIT_DESC
 } pcie_state_t;
 
-typedef struct packed
-{
-  logic [PCIE_ADDR_WIDTH-1:0] addr;
-} pcie_rd_req_t;
-
-typedef struct packed
-{
-  logic [PCIE_ADDR_WIDTH-1:0] addr;
-  logic [511:0] data;
-  logic [63:0] byteenable;
-} pcie_wr_req_t;
-
-// buffers holding PCIe read and write requests, so that they can be serialized
-pcie_rd_req_t pcie_rd_req_buf[DMA_BUF_SIZE-1:0];
-logic [DMA_BUF_AWIDTH-1:0] pcie_rd_req_buf_head;
-logic [DMA_BUF_AWIDTH-1:0] pcie_rd_req_buf_tail;
-pcie_wr_req_t pcie_wr_req_buf[DMA_BUF_SIZE-1:0];
-logic [DMA_BUF_AWIDTH-1:0] pcie_wr_req_buf_head;
-logic [DMA_BUF_AWIDTH-1:0] pcie_wr_req_buf_tail;
-
 pcie_state_t pcie_state;
-
-// number of dwords that have been requested (for the head descriptor)
-logic [31:0] cur_desc_reqs_dwords;
-
-// number of dwords that have completed a read (for the tail descriptor)
-logic [31:0] cur_desc_compl_dword_reads;
-
-// keep results from read requests so that they don't need to be consumed
-// immediately
-logic [511:0] read_return_buf [DMA_BUF_SIZE-1:0];
-logic [DMA_BUF_AWIDTH-1:0] read_return_buf_head;
-logic [DMA_BUF_AWIDTH-1:0] read_return_buf_tail;
 
 logic [63:0]              rx_pdu_flit_cnt;
 logic [nb_pkt_queues-1:0] pending_pkt_tails_valid;
@@ -560,16 +519,6 @@ always @(posedge clk_pcie) begin
     cfg_queue <= 0;
     cnt_delay <= 0;
     nb_config_queues <= 0;
-    dma_buf_tail <= 0;
-
-    cur_desc_reqs_dwords <= 0;
-    cur_desc_compl_dword_reads <= 0;
-
-    read_return_buf_head <= 0;
-    read_return_buf_tail <= 0;
-
-    pcie_rd_req_buf_head <= 0;
-    pcie_wr_req_buf_head <= 0;
 
     pcie_bas_waitrequest <= 0;
     rx_cnt <= 0;
@@ -651,8 +600,6 @@ always @(posedge clk_pcie) begin
       end
       PCIE_READ_F2C_PKT_QUEUE: begin
         if (cnt >= cnt_delay) begin
-          automatic pcie_rd_req_t rd_req;
-
           // read pkt queue 0
           pcie_address_0 <= 0 << 12;
           pcie_read_0 <= 1;
@@ -671,8 +618,6 @@ always @(posedge clk_pcie) begin
       end
       PCIE_READ_F2C_DSC_QUEUE: begin
         if (cnt >= cnt_delay) begin
-          automatic pcie_rd_req_t rd_req;
-
           // read dsc queue 0
           pcie_address_0 <= (0 + MAX_NB_FLOWS) << 12;
           pcie_read_0 <= 1;
@@ -1273,7 +1218,6 @@ always @(posedge clk_status) begin
         end
       end
       IDLE: begin
-        s_write <= 0;
         conf_state <= IN_PKT;
         s_read <= 1;
         s_addr <= 30'h2200_0000;
