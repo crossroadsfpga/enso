@@ -30,6 +30,8 @@ module tb;
 // `define CHECK_QUEUE_HEAD_TAIL' // Set it to check head and tail pointers for 
                                // every pkt queue at the end of the simulation.
 
+// Number of cycles to wait before stopping the simulation.
+localparam STOP_DELAY = 100000 + PCIE_DELAY;
 generate
   // We assume this during the test, it does not necessarily hold in general.
   if (((`NB_PKT_QUEUES / `NB_DSC_QUEUES) * `NB_DSC_QUEUES) != `NB_PKT_QUEUES)
@@ -497,6 +499,68 @@ logic [63:0] max_tx_length;
 logic [63:0] tx_queue_full_cnt;
 logic [63:0] total_nb_tx_dscs;
 
+logic         delayed_pcie_bas_waitrequest;
+logic         delayed_pcie_bas_write;
+logic [511:0] delayed_pcie_bas_writedata;
+logic [3:0]   delayed_pcie_bas_burstcount;
+logic [63:0]  delayed_pcie_bas_byteenable;
+logic [63:0]  delayed_pcie_bas_address;
+
+hyper_pipe #(
+  .WIDTH ($bits(pcie_bas_waitrequest)),
+  .NUM_PIPES(PCIE_DELAY)
+) hp_pcie_bas_waitrequest (
+  .clk  (clk_pcie),
+  .din  (pcie_bas_waitrequest),
+  .dout (delayed_pcie_bas_waitrequest)
+);
+
+hyper_pipe #(
+  .WIDTH ($bits(pcie_bas_write)),
+  .NUM_PIPES(PCIE_DELAY)
+) hp_pcie_bas_write (
+  .clk  (clk_pcie),
+  .din  (pcie_bas_write),
+  .dout (delayed_pcie_bas_write)
+);
+
+hyper_pipe #(
+  .WIDTH ($bits(pcie_bas_writedata)),
+  .NUM_PIPES(PCIE_DELAY)
+) hp_pcie_bas_writedata (
+  .clk  (clk_pcie),
+  .din  (pcie_bas_writedata),
+  .dout (delayed_pcie_bas_writedata)
+);
+
+hyper_pipe #(
+  .WIDTH ($bits(pcie_bas_burstcount)),
+  .NUM_PIPES(PCIE_DELAY)
+) hp_pcie_bas_burstcount (
+  .clk  (clk_pcie),
+  .din  (pcie_bas_burstcount),
+  .dout (delayed_pcie_bas_burstcount)
+);
+
+hyper_pipe #(
+  .WIDTH ($bits(pcie_bas_byteenable)),
+  .NUM_PIPES(PCIE_DELAY)
+) hp_pcie_bas_byteenable (
+  .clk  (clk_pcie),
+  .din  (pcie_bas_byteenable),
+  .dout (delayed_pcie_bas_byteenable)
+);
+
+hyper_pipe #(
+  .WIDTH ($bits(pcie_bas_address)),
+  .NUM_PIPES(PCIE_DELAY)
+) hp_pcie_bas_address (
+  .clk  (clk_pcie),
+  .din  (pcie_bas_address),
+  .dout (delayed_pcie_bas_address)
+);
+
+
 // PCIe FPGA -> CPU -> FPGA
 always @(posedge clk_pcie) begin
   automatic logic next_pcie_write_0;
@@ -675,21 +739,21 @@ always @(posedge clk_pcie) begin
         end
       end
       PCIE_WAIT_DESC: begin
-        if (pcie_bas_write && !pcie_bas_waitrequest) begin
+        if (delayed_pcie_bas_write && !delayed_pcie_bas_waitrequest) begin
           automatic logic [31:0] cur_queue;
           automatic logic [31:0] cur_address;
 
-          if (pcie_bas_burstcount != 0) begin
+          if (delayed_pcie_bas_burstcount != 0) begin
             burst_offset = 0;
-            burst_size <= pcie_bas_burstcount;
+            burst_size <= delayed_pcie_bas_burstcount;
           end else if (burst_offset + 1 >= burst_size) begin
             $error("Requests beyond burst size.");
           end else begin
             burst_offset = burst_offset + 1;
           end
 
-          cur_queue = pcie_bas_address[32 +: BRAM_TABLE_IDX_WIDTH];
-          cur_address = pcie_bas_address[6 +: RAM_ADDR_LEN]
+          cur_queue = delayed_pcie_bas_address[32 +: BRAM_TABLE_IDX_WIDTH];
+          cur_address = delayed_pcie_bas_address[6 +: RAM_ADDR_LEN]
                   + burst_offset;
 
           if (cur_queue < nb_pkt_queues) begin // pkt queue
@@ -699,12 +763,12 @@ always @(posedge clk_pcie) begin
             // rx dsc queue
             automatic logic [31:0] pkt_per_dsc_queue;
             automatic pcie_rx_dsc_t pcie_pkt_desc =
-              pcie_bas_writedata;
+              delayed_pcie_bas_writedata;
 
             // $display("> pcie_pkt_desc: %p", pcie_pkt_desc);
 
             // dsc queues can receive only one flit per burst
-            assert(pcie_bas_burstcount == 1) else $fatal;
+            assert(delayed_pcie_bas_burstcount == 1) else $fatal;
 
             assert(pcie_pkt_desc.signal == 1) else $fatal;
 
@@ -743,7 +807,7 @@ always @(posedge clk_pcie) begin
             automatic logic [31:0] pkt_buf_queue;
             automatic logic [31:0] pkt_buf_head;
             automatic logic [31:0] tx_dsc_buf_queue;
-            automatic pcie_tx_dsc_t tx_dsc = pcie_bas_writedata;
+            automatic pcie_tx_dsc_t tx_dsc = delayed_pcie_bas_writedata;
             assert(tx_dsc.signal == 0) else $fatal;
 
             // Figure out queue and head from address.
@@ -776,7 +840,7 @@ always @(posedge clk_pcie) begin
           if (cur_address > RAM_SIZE) begin
             $error("Address out of bound");
           end else begin
-            ram[cur_queue][cur_address] <= pcie_bas_writedata;
+            ram[cur_queue][cur_address] <= delayed_pcie_bas_writedata;
           end
 
           rx_cnt <= rx_cnt + 1;
