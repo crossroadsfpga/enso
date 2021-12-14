@@ -137,6 +137,8 @@ function void dma_pkt(
     end else begin
       dma_pkt_flit_cnt <= dma_pkt_flit_cnt + 1;
     end
+  end else begin
+    dma_pkt_flit_drop_cnt <= dma_pkt_flit_drop_cnt + 1;
   end
 endfunction
 
@@ -332,6 +334,8 @@ always @(posedge clk) begin
             end else begin
               dma_dsc_cnt <= dma_dsc_cnt + 1;
             end
+          end else begin
+            dma_dsc_drop_cnt <= dma_dsc_drop_cnt + 1;
           end
 
           state <= START_TRANSFER;
