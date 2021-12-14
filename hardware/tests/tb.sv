@@ -489,6 +489,8 @@ logic [3:0]  burst_size;
 logic [PCIE_ADDR_WIDTH-1:0] next_pcie_address_0;
 logic [31:0]                next_upd_tail;
 
+logic [31:0] last_rx_dsc_q_addr;
+
 logic [63:0] total_rx_length;
 logic [63:0] total_tx_length;
 logic [63:0] max_tx_length;
@@ -540,6 +542,8 @@ always @(posedge clk_pcie) begin
     max_tx_length <= 0;
     tx_queue_full_cnt <= 0;
     total_nb_tx_dscs <= 0;
+
+    last_rx_dsc_q_addr <= 0;
 
     for (c = 0; c < nb_pkt_queues; c++) begin
       pending_pkt_tails[c] <= 0;
@@ -713,6 +717,13 @@ always @(posedge clk_pcie) begin
 
             pcie_writedata_0[32 +: 32] <= cur_address;
             pcie_byteenable_0[4 +: 4] <= 4'hf;
+
+            if ((nb_dsc_queues == 1) && (last_rx_dsc_q_addr != 0)) begin
+              assert(cur_address == (last_rx_dsc_q_addr + 1) % DSC_BUF_SIZE)
+                  else $fatal;
+            end
+
+            last_rx_dsc_q_addr <= cur_address;
 
             // Shoud not receive a descriptor to the same queue
             // before software advanced the head for this queue.
