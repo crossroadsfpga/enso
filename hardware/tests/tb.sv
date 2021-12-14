@@ -21,17 +21,32 @@ module tb;
 `endif
 
 `ifndef RATE
-`define RATE 100; // in Gbps (without Ethernet overhead)
+`define RATE 74 // in Gbps (without Ethernet overhead)
 `endif
 
-// `define DELAY_LAST_PKTS;  // Set it to delay last packets for every queue.
+// `define DELAY_LAST_PKTS  // Set it to delay last packets for every queue.
 
-`define SKIP_PCIE_RD;  // Set it to skip PCIe read after simulation is done.
-// `define CHECK_QUEUE_HEAD_TAIL' // Set it to check head and tail pointers for 
-                               // every pkt queue at the end of the simulation.
+`define SKIP_PCIE_RD  // Set it to skip PCIe read after simulation is done.
+
+`define CHECK_QUEUE_HEAD_TAIL // Set it to check head and tail pointers for 
+                              // every pkt queue at the end of the simulation.
+
+// Number of cycles to delay PCIe signals.
+localparam PCIE_DELAY = 1000;
 
 // Number of cycles to wait before stopping the simulation.
 localparam STOP_DELAY = 100000 + PCIE_DELAY;
+
+// Set number of in-flight descriptor reads that are allowed in the TX path.
+localparam NB_TX_CREDITS = 100;
+
+// Number of cycles to wait before updating the head pointer for the pkt queue.
+localparam UPDATE_HEAD_DELAY = 1000;
+
+// Size of the host buffer used by each queue (in flits).
+localparam DSC_BUF_SIZE = 8192;
+localparam PKT_BUF_SIZE = 8192;
+
 generate
   // We assume this during the test, it does not necessarily hold in general.
   if (((`NB_PKT_QUEUES / `NB_DSC_QUEUES) * `NB_DSC_QUEUES) != `NB_PKT_QUEUES)
@@ -40,20 +55,8 @@ generate
   end
 endgenerate
 
-// #cycles to wait before updating the head pointer for the packet queue
-localparam UPDATE_HEAD_DELAY = 1024;
-
-// size of the host buffer used by each queue (in flits)
-localparam DSC_BUF_SIZE = 8192;
-localparam PKT_BUF_SIZE = 8192;
 localparam RAM_SIZE = DSC_BUF_SIZE + PKT_BUF_SIZE;
 localparam RAM_ADDR_LEN = $clog2(RAM_SIZE);
-
-// Set number of in-flight descriptor reads that are allowed in the TX path.
-localparam NB_TX_CREDITS = 1024;
-
-localparam DMA_BUF_SIZE = 64;
-localparam DMA_BUF_AWIDTH = ($clog2(DMA_BUF_SIZE));
 
 // duration for each bit = 20 * timescale = 20 * 1 ns  = 20ns
 localparam period = 10;
@@ -69,9 +72,6 @@ localparam hi = `PKT_FILE_NB_LINES;
 localparam nb_dsc_queues = `NB_DSC_QUEUES;
 localparam nb_pkt_queues = `NB_PKT_QUEUES;
 localparam pkt_per_dsc_queue = nb_pkt_queues / nb_dsc_queues;
-
-// This determines the number of cycles to wait before stopping the simulation.
-localparam STOP_DELAY = 100000;
 
 logic  clk_status;
 logic  clk_rxmac;
