@@ -1355,7 +1355,7 @@ always @(posedge clk_status) begin
       FD_OUT_PKT: begin
         s_read <= 0;
         if(top_readdata_valid)begin
-          $display("MAX_FD_OUT_FIFO:\t%d", top_readdata);
+          $display("FD_OUT_PKT:\t\t%d", top_readdata);
           conf_state <= MAX_FD_OUT_FIFO;
           s_read <= 1;
           s_addr <= s_addr + 1;
@@ -1364,7 +1364,7 @@ always @(posedge clk_status) begin
       MAX_FD_OUT_FIFO: begin
         s_read <= 0;
         if(top_readdata_valid)begin
-          $display("MAX_FD_OUT_PKT:\t%d", top_readdata);
+          $display("MAX_FD_OUT_FIFO:\t%d", top_readdata);
           conf_state <= DM_IN_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;
