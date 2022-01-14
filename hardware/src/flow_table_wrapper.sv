@@ -2,14 +2,16 @@
 module flow_table_wrapper(
     input logic clk,
     input logic rst,
-    // Packet data
+
+    // Packet data.
     input  var   metadata_t in_meta_data,
     input  logic            in_meta_valid,
     output logic            in_meta_ready,
     output var   metadata_t out_meta_data,
     output logic            out_meta_valid,
     input  logic            out_meta_ready,
-    // Control data
+
+    // Control data.
     input  var   pdu_metadata_t in_control_data,
     input  logic                in_control_valid,
     output logic                in_control_ready,
@@ -168,7 +170,7 @@ logic [FT_SUBTABLE-1:0] p_ft_empty_r;
 logic s_busy;
 logic p_busy;
 assign in_meta_ready = !s_busy;
-//Using out_meta_ready as "stall" signal for this pipeline. 
+// Using out_meta_ready as "stall" signal for this pipeline. 
 assign s_busy = !out_meta_ready;
 
 assign in_control_ready = !p_busy;
@@ -195,7 +197,7 @@ assign p_ft_empty[2] = !ft2_q_b.valid;
 assign p_ft_empty[3] = !ft3_q_b.valid;
 
 // Lookup from Port A of the BRAM. Fully pipelined.  
-//Entry is updated by CPU through port B of the BRAM. 
+// Entry is updated by CPU through port B of the BRAM. 
 always@(posedge clk) begin
     if (rst) begin
         ft0_rden_a <= 1'b0;
@@ -214,17 +216,17 @@ always@(posedge clk) begin
         s_lookup_tuple_r1 <= 0;
         s_lookup_tuple_r2 <= 0;
     end else begin
-        //stall the pipeline if the downstream is not ready
-        if(!s_busy)begin
-            //default values
+        // Stall the pipeline if the downstream is not ready.
+        if (!s_busy)begin
+            // Default values.
             ft0_rden_a <= 1'b0;
             ft1_rden_a <= 1'b0;
             ft2_rden_a <= 1'b0;
             ft3_rden_a <= 1'b0;
             out_meta_valid <= 1'b0;
 
-            //read whenever hashed value is valid
-            //stage 0
+            // Read whenever hashed value is valid.
+            // Stage 0
             if (s_h0_hashed_valid) begin
                 ft0_rden_a <= 1'b1;
                 ft0_addr_a <= s_h0_hashed[FT_AWIDTH-1:0];
@@ -239,19 +241,19 @@ always@(posedge clk) begin
                 s_lookup_tuple <= s_m7.tuple;
             end
 
-            //stage 1
+            // Stage 1.
             rd_valid_a_r <= ft0_rden_a;
             s_meta_r1 <= s_meta_r;
             s_lookup_tuple_r1 <= s_lookup_tuple;
             
-            //stage 2
+            // Stage 2.
             rd_valid_a <= rd_valid_a_r;
             s_meta_r2 <= s_meta_r1;
             s_lookup_tuple_r2 <= s_lookup_tuple_r1;
 
-            //stage 3
-            //assign output whenever the rd data is valid
-            //should be two cycles later. 
+            // Stage 3.
+            // Assign output whenever the rd data is valid (should be two cycles
+            // later). 
             if (rd_valid_a) begin
                 out_meta_valid <= 1'b1;
                 out_meta_data <= s_meta_r2;
@@ -275,7 +277,7 @@ always@(posedge clk) begin
                     end
                 end
                 else begin
-                    // queue id with all 1s indicates drop
+                    // Queue id with all 1s indicates drop.
                     out_meta_data.pkt_queue_id <= '1;
                     out_meta_data.dsc_queue_id <= '1;
                 end
@@ -413,7 +415,7 @@ always@(posedge clk) begin
     end
 end
 
-always@(posedge clk)begin
+always @(posedge clk) begin
     if (!s_busy) begin
         s_m0 <= in_meta_data;
         s_m1 <= s_m0;
@@ -487,7 +489,7 @@ hash_func s_hash3(
     .hashed_valid   (s_h3_hashed_valid)
 );
 
-always@(posedge clk)begin
+always @(posedge clk) begin
     if (!p_busy) begin
         p_c0 <= in_control_data;
         p_c1 <= p_c0;
