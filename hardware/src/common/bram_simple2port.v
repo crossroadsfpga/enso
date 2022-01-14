@@ -101,13 +101,4 @@ module  bram_simple2port  (
         altera_syncram_component.width_b  = DWIDTH,
         altera_syncram_component.width_byteena_a  = 1;
 
-
-
-
-
-
-
-
 endmodule
-
-
