@@ -53,7 +53,6 @@ module cpu_to_fpga  #(
   input logic [31:0]        inflight_desc_limit,
 
   // Counters.
-  output logic [31:0] ignored_dsc_cnt,
   output logic [31:0] queue_full_signals,
   output logic [31:0] dsc_cnt,
   output logic [31:0] empty_tail_cnt,
@@ -87,6 +86,20 @@ typedef struct packed {
   logic [QUEUE_ID_WIDTH-1:0] queue_id;
   logic [5:0] pad2; // must be 64-byte aligned
 } rddm_dst_addr_t;
+
+logic [APP_IDX_WIDTH-1:0] dsc_queue_request_fifo_in_data;
+logic                     dsc_queue_request_fifo_in_valid;
+logic                     dsc_queue_request_fifo_in_ready;
+logic [APP_IDX_WIDTH-1:0] dsc_queue_request_fifo_out_data;
+logic                     dsc_queue_request_fifo_out_valid;
+logic                     dsc_queue_request_fifo_out_ready;
+
+logic                     dsc_q_status_wr_data;
+logic [APP_IDX_WIDTH-1:0] dsc_q_status_rd_addr;
+logic                     dsc_q_status_rd_en;
+logic [APP_IDX_WIDTH-1:0] dsc_q_status_wr_addr;
+logic                     dsc_q_status_wr_en;
+logic                     dsc_q_status_rd_data;
 
 q_state_t    dsc_reads_queue_in_data;
 logic        dsc_reads_queue_in_valid;
@@ -180,35 +193,12 @@ logic [QUEUE_ID_WIDTH-1:0] compl_q_table_h_addrs_addr;
 logic compl_q_table_l_addrs_rd_en;
 logic compl_q_table_h_addrs_rd_en;
 
-logic can_issue_dma_rd;
-
-// Cannot issue a DMA read if one of the queues is almost full or if there is
-// read for BRAM port A in the current cycle (q_table_a_tails.rd_en). When there
-// is a read for port A, there will be a write in the following cycle, which
-// could conflict with the current read if they are accessing the same address.
-assign can_issue_dma_rd = !dsc_reads_queue_alm_full & !q_table_a_tails.rd_en;
-
 logic q_table_a_tails_rd_en_r1;
 logic q_table_a_tails_rd_en_r2;
-
-logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] tail;
-logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] tail_r1;
-logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] tail_r2;
 
 logic [QUEUE_ID_WIDTH-1:0] queue_id;
 logic [QUEUE_ID_WIDTH-1:0] queue_id_r1;
 logic [QUEUE_ID_WIDTH-1:0] queue_id_r2;
-
-logic q_table_a_tails_wr_en;
-logic q_table_a_tails_wr_en_r;
-
-logic [DSC_Q_TABLE_TAILS_DWIDTH-1:0] q_table_a_tails_wr_data;
-logic [DSC_Q_TABLE_TAILS_DWIDTH-1:0] q_table_a_tails_wr_data_r;
-
-logic [QUEUE_ID_WIDTH-1:0] q_table_a_tails_rd_addr;
-
-logic [QUEUE_ID_WIDTH-1:0] q_table_a_tails_wr_addr;
-logic [QUEUE_ID_WIDTH-1:0] q_table_a_tails_wr_addr_r;
 
 // Define mask associated with rb_size. Assume that rb_size is a power of two.
 logic [RB_AWIDTH-1:0] rb_mask;
@@ -216,106 +206,191 @@ always @(posedge clk) begin
   rb_mask <= rb_size - 1;
 end
 
-// HACK(sadok): assume single descriptor queue.
-logic ignored_tail_set;
-logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] ignored_tail;
-
-// Fetch queue state and write new tail in the following cycle.
-function void consume_tx_queue(
-  logic [QUEUE_ID_WIDTH-1:0] addr,
-  logic [PKT_Q_TABLE_TAILS_DWIDTH-1:0] new_tail
+// Bit vector holding the status of every dsc queue.
+// (i.e., if they already have a request in the dsc_queue_request_fifo queue).
+bram_simple2port #(
+  .AWIDTH(APP_IDX_WIDTH),
+  .DWIDTH(1),
+  .DEPTH(MAX_NB_APPS)
+) dsc_q_status(
+  .clock     (clk),
+  .data      (dsc_q_status_wr_data),
+  .rdaddress (dsc_q_status_rd_addr),
+  .rden      (dsc_q_status_rd_en),
+  .wraddress (dsc_q_status_wr_addr),
+  .wren      (dsc_q_status_wr_en),
+  .q         (dsc_q_status_rd_data)
 );
-  q_table_a_tails.rd_en <= 1;
-  q_table_a_tails_rd_addr <= addr;
-  q_table_a_l_addrs.rd_en <= 1;
-  q_table_a_l_addrs.addr <= addr;
-  q_table_a_h_addrs.rd_en <= 1;
-  q_table_a_h_addrs.addr <= addr;
-  queue_id <= addr;
 
-  tail <= new_tail;
+fifo_wrapper_infill_mlab #(
+  .SYMBOLS_PER_BEAT(1),
+  .BITS_PER_SYMBOL(APP_IDX_WIDTH),
+  .FIFO_DEPTH(MAX_NB_APPS)
+) dsc_queue_request_fifo (
+  .clk           (clk),
+  .reset         (rst),
+  .csr_address   (2'b0),
+  .csr_read      (1'b0),
+  .csr_write     (1'b0),
+  .csr_readdata  (),
+  .csr_writedata (32'b0),
+  .in_data       (dsc_queue_request_fifo_in_data),
+  .in_valid      (dsc_queue_request_fifo_in_valid),
+  .in_ready      (dsc_queue_request_fifo_in_ready),
+  .out_data      (dsc_queue_request_fifo_out_data),
+  .out_valid     (dsc_queue_request_fifo_out_valid),
+  .out_ready     (dsc_queue_request_fifo_out_ready)
+);
 
-  // Write tail only in the next cycle, so we can read the current tail first.
-  q_table_a_tails_wr_en <= 1;
-  q_table_a_tails_wr_data <= new_tail;
-  q_table_a_tails_wr_addr <= addr;
-endfunction
+logic [QUEUE_ID_WIDTH-1:0] q_table_tails_addr_r1;
+logic [QUEUE_ID_WIDTH-1:0] q_table_tails_addr_r2;
 
-// Monitor tail pointer updates from the CPU to fetch more descriptors.
-// FIXME(sadok): If the tail is updated too often, the PCIe core may
-//               backpressure. If this causes the queue to get full, some
-//               descriptors may never be read.
+logic dsc_q_status_rd_en_r;
+
+// We monitor tail pointer updates from the CPU to fetch more descriptors.
+// The tricky part is that software may update the ring buffer pointers at any
+// time and as often as it desires. If software updates too often we may not be
+// able to keep up. If we simply ignore some updates and if software never sends
+// a new update for the queue whose update we ignored, we will never fetch the
+// data. This would cause the queue to starve. To prevent this case, we keep an
+// "update queue" that contains at most one update request for each descriptor
+// queue. Since the update queue can only have up to one update per descriptor
+// queue, it will never overflow -- as long as we size it properly. To track
+// which descriptor queues already have an update in the update queue, we also
+// keep a status bit vector that indicates which descriptor queues already have
+// entries in the update queue.
+always @(posedge clk) begin
+  dsc_q_status_rd_en <= 0;
+  dsc_queue_request_fifo_in_valid <= 0;
+
+  q_table_tails_addr_r1 <= q_table_tails.addr;
+  q_table_tails_addr_r2 <= q_table_tails_addr_r1;
+
+  dsc_q_status_rd_en_r <= dsc_q_status_rd_en;
+
+  if (rst) begin
+  end else begin
+    if (q_table_tails.wr_en) begin // A new tail was written from software.
+      // Read current dsc queue status to decide if a new request must be
+      // enqueued.
+      dsc_q_status_rd_addr <= q_table_tails.addr;
+      dsc_q_status_rd_en <= 1;
+    end
+
+    // If the status bit is 0, we must enqueue the request, otherwise ignore it.
+    if (dsc_q_status_rd_en_r & !dsc_q_status_rd_data) begin
+      dsc_queue_request_fifo_in_data <= q_table_tails_addr_r2;
+      dsc_queue_request_fifo_in_valid <= 1;
+    end
+  end
+end
+
+typedef enum {
+  IDLE,
+  DELAY_0,
+  DELAY_1,
+  ENQUEUE_REQUEST
+} dsc_q_request_fsm_state_t;
+
+dsc_q_request_fsm_state_t dsc_q_request_fsm_state;
+
+always_comb begin
+  dsc_queue_request_fifo_out_ready = 0;
+  if (dsc_q_request_fsm_state == IDLE) begin
+    dsc_queue_request_fifo_out_ready =
+      !dsc_q_status_rd_en & !q_table_tails.wr_en & !dsc_reads_queue_alm_full;
+  end
+end
+
 always @(posedge clk) begin
   q_table_a_tails.rd_en <= 0;
+  q_table_a_heads.rd_en <= 0;
   q_table_a_l_addrs.rd_en <= 0;
   q_table_a_h_addrs.rd_en <= 0;
 
-  q_table_a_tails_wr_en <= 0;
-  q_table_a_tails_wr_en_r <= q_table_a_tails_wr_en;
-  q_table_a_tails_wr_data_r <= q_table_a_tails_wr_data;
-  q_table_a_tails_wr_addr_r <= q_table_a_tails_wr_addr;
+  dsc_q_status_wr_en <= 0;
+  q_table_a_heads.wr_en <= 0;
 
-  if (rst) begin
-    ignored_tail_set <= 0;
-  end else if (q_table_tails.wr_en) begin
-    if (can_issue_dma_rd) begin
-      consume_tx_queue(q_table_tails.addr, q_table_tails.wr_data);
-      ignored_tail_set <= 0; // HACK(sadok): assume single descriptor queue.
-    end else begin
-      // HACK(sadok): assume single descriptor queue.
-      ignored_tail_set <= 1;
-      ignored_tail <= q_table_tails.wr_data;
-    end
-  end else if (ignored_tail_set & can_issue_dma_rd) begin
-    // HACK(sadok): assume single descriptor queue.
-    consume_tx_queue(0, ignored_tail);
-    ignored_tail_set <= 0;
-  end
+  dsc_reads_queue_in_valid <= 0;
 
   q_table_a_tails_rd_en_r1 <= q_table_a_tails.rd_en;
   q_table_a_tails_rd_en_r2 <= q_table_a_tails_rd_en_r1;
-  tail_r1 <= tail;
-  tail_r2 <= tail_r1;
+
   queue_id_r1 <= queue_id;
   queue_id_r2 <= queue_id_r1;
-end
-
-// Monitor tail writes where no descriptor read was issued, this counter should
-// remain zero for correctness.
-always @(posedge clk) begin
-  if (rst) begin
-    ignored_dsc_cnt <= 0;
-  end else begin
-    if (q_table_tails.wr_en & !can_issue_dma_rd) begin
-      ignored_dsc_cnt <= ignored_dsc_cnt + 1;
-    end
-  end
-end
-
-// Whenever a queue state read completes, we enqueue it to dsc_reads_queue.
-always @(posedge clk) begin
-  dsc_reads_queue_in_valid <= 0;
 
   if (rst) begin
+    dsc_q_request_fsm_state <= IDLE;
     empty_tail_cnt <= 0;
-  end
-
-  if (q_table_a_tails_rd_en_r2) begin
-    automatic logic [31:0] head;
-    dsc_reads_queue_in_data.queue_id <= queue_id_r2;
-    dsc_reads_queue_in_data.tail <= tail_r2;
-    dsc_reads_queue_in_data.l_addr <= q_table_a_l_addrs.rd_data;
-    dsc_reads_queue_in_data.h_addr <= q_table_a_h_addrs.rd_data;
-
-    head = q_table_a_tails.rd_data;
-    dsc_reads_queue_in_data.head <= head;
-
-    // Don't bother sending if there is nothing to read.
-    if (head != tail_r2) begin
-      dsc_reads_queue_in_valid <= 1;
-    end else begin
-      empty_tail_cnt <= empty_tail_cnt + 1;
+  end else begin
+    // When there is a dsc queue status read it means that software updated the
+    // pointer for that queue. In such case either a request is already in the
+    // queue or it will be added in the next cycle.
+    // we can update status to avoid adding multiple requests to the same queue.
+    if (dsc_q_status_rd_en) begin
+      dsc_q_status_wr_addr <= dsc_q_status_rd_addr;
+      dsc_q_status_wr_data <= 1;
+      dsc_q_status_wr_en <= 1;
     end
+
+    case (dsc_q_request_fsm_state)
+      IDLE: begin
+        if (dsc_queue_request_fifo_out_ready & dsc_queue_request_fifo_out_valid)
+        begin
+          // Make sure next pointer update from software will result in a new
+          // request by writing 0 to the queue status.
+          dsc_q_status_wr_addr <= dsc_queue_request_fifo_out_data;
+          dsc_q_status_wr_data <= 0;
+          dsc_q_status_wr_en <= 1;
+
+          // Read dsc queue state.
+          q_table_a_tails.rd_en <= 1;
+          q_table_a_tails.addr <= dsc_queue_request_fifo_out_data;
+          q_table_a_heads.rd_en <= 1;
+          q_table_a_heads.addr <= dsc_queue_request_fifo_out_data;
+          q_table_a_l_addrs.rd_en <= 1;
+          q_table_a_l_addrs.addr <= dsc_queue_request_fifo_out_data;
+          q_table_a_h_addrs.rd_en <= 1;
+          q_table_a_h_addrs.addr <= dsc_queue_request_fifo_out_data;
+
+          queue_id <= dsc_queue_request_fifo_out_data;
+          dsc_q_request_fsm_state <= DELAY_0;
+        end
+      end
+      DELAY_0: begin
+        if (q_table_tails.wr_en) begin
+          // Concurrent write, retry read.
+          q_table_a_tails.rd_en <= 1;
+        end else begin
+          dsc_q_request_fsm_state <= DELAY_1;
+        end
+      end
+      DELAY_1: begin
+        dsc_q_request_fsm_state <= ENQUEUE_REQUEST;
+      end
+      ENQUEUE_REQUEST: begin
+        // When the queue state read finishes, we enqueue it to dsc_reads_queue.
+        dsc_reads_queue_in_data.queue_id <= queue_id_r2;
+        dsc_reads_queue_in_data.tail <= q_table_a_tails.rd_data;
+        dsc_reads_queue_in_data.head <= q_table_a_heads.rd_data;
+        dsc_reads_queue_in_data.l_addr <= q_table_a_l_addrs.rd_data;
+        dsc_reads_queue_in_data.h_addr <= q_table_a_h_addrs.rd_data;
+
+        // Don't bother sending if there is nothing to read.
+        if (q_table_a_heads.rd_data != q_table_a_tails.rd_data) begin
+          dsc_reads_queue_in_valid <= 1;
+        end else begin
+          empty_tail_cnt <= empty_tail_cnt + 1;
+        end
+
+        // Write tail to head pointer.
+        q_table_a_heads.addr <= queue_id_r2;
+        q_table_a_heads.wr_data <= q_table_a_tails.rd_data;
+        q_table_a_heads.wr_en <= 1;
+
+        dsc_q_request_fsm_state <= IDLE;
+      end
+    endcase
   end
 end
 
@@ -327,11 +402,11 @@ typedef enum
   START_TRANSFER,
   DELAY,
   CONTINUE_TRANSFER
-} state_t;
+} rddm_dsc_state_t;
 
-state_t state;
+rddm_dsc_state_t rddm_dsc_state;
 
-assign dsc_reads_queue_out_ready = (state == START_TRANSFER)
+assign dsc_reads_queue_out_ready = (rddm_dsc_state == START_TRANSFER)
                                    & !rddm_desc_queue_alm_full;
 
 q_state_t last_dsc_reads_queue_out_data;
@@ -362,7 +437,7 @@ function void dma_rd_descriptor(
   last_dsc_reads_queue_out_data <= q_state;
 
   // Unless we need to send multiple transfers, we should go to START_TRANSFER. 
-  state <= START_TRANSFER;
+  rddm_dsc_state <= START_TRANSFER;
 
   // Check if request wraps around.
   if (q_state.tail > q_state.head) begin
@@ -373,14 +448,14 @@ function void dma_rd_descriptor(
     // Since it wraps around, need to send at least two read requests if tail is
     // not 0.
     if (q_state.tail != 0) begin
-      state <= DELAY;
+      rddm_dsc_state <= DELAY;
     end
   end
 
   // Limit number of descriptors fetch at once to MAX_TX_DSC_BATCH.
   if (nb_flits > MAX_TX_DSC_BATCH) begin
     nb_flits = MAX_TX_DSC_BATCH;
-    state <= DELAY;
+    rddm_dsc_state <= DELAY;
   end
 
   last_dsc_reads_queue_out_data.head <= (q_state.head + nb_flits) & rb_mask;
@@ -415,9 +490,9 @@ always @(posedge clk) begin
 
   if (rst) begin
     dsc_cnt_r2 <= 0;
-    state <= START_TRANSFER;
+    rddm_dsc_state <= START_TRANSFER;
   end else begin
-    case (state)
+    case (rddm_dsc_state)
       START_TRANSFER: begin
         // Consume next read request from dsc_reads_queue.
         if (dsc_reads_queue_out_valid & dsc_reads_queue_out_ready) begin
@@ -426,7 +501,7 @@ always @(posedge clk) begin
       end
       // Introducing delay to help with timing.
       DELAY: begin
-        state <= CONTINUE_TRANSFER;
+        rddm_dsc_state <= CONTINUE_TRANSFER;
       end
       CONTINUE_TRANSFER: begin
         dma_rd_descriptor(last_dsc_reads_queue_out_data_r);
@@ -570,11 +645,6 @@ logic [5:0]   out_pkt_empty_r;
 function void done_sending_batch(
   meta_t meta
 );
-  // Write latest head.
-  q_table_a_heads.addr <= meta.queue_id;
-  q_table_a_heads.wr_data <= (meta.head + 1) & rb_mask;
-  q_table_a_heads.wr_en <= 1;
-  
   // Read address to send completion notification.
   addr_rd_en <= 1;
   addr_addr <= meta.queue_id;
@@ -629,8 +699,6 @@ endfunction
 // (Assuming raw sockets for now, that means that headers are populated by
 // software).
 always @(posedge clk) begin
-  q_table_a_heads.wr_en <= 0;
-
   out_pkt_sop_r <= 0;
   out_pkt_eop_r <= 0;
   out_pkt_valid_r <= 0;
@@ -691,8 +759,6 @@ always @(posedge clk) begin
     tx_compl_buf_data <= tx_completion;
   end
 end
-
-assign q_table_a_heads.rd_en = 0;
 
 assign q_table_a_l_addrs.wr_en = 0;
 assign q_table_a_h_addrs.wr_en = 0;
@@ -918,16 +984,7 @@ always @(posedge clk) begin
   end
 end
 
-logic [QUEUE_ID_WIDTH-1:0] q_table_a_tails_addr;
-
 always_comb begin
-  // Tails write address to port A is delayed by 1 cycle.
-  if (q_table_a_tails.rd_en) begin
-    q_table_a_tails_addr = q_table_a_tails_rd_addr;
-  end else begin
-    q_table_a_tails_addr = q_table_a_tails_wr_addr_r;
-  end
-
   compl_q_table_l_addrs_rd_en = addr_rd_en;
   compl_q_table_h_addrs_rd_en = addr_rd_en;
 
@@ -962,20 +1019,22 @@ end
 // TX DSC Queue State BRAMs //
 //////////////////////////////
 
+assign q_table_a_tails.wr_en = 0;
+
 bram_true2port #(
   .AWIDTH(QUEUE_ID_WIDTH),
   .DWIDTH(DSC_Q_TABLE_TAILS_DWIDTH),
   .DEPTH(NB_QUEUES)
 ) q_table_tails_bram (
-  .address_a (q_table_a_tails_addr),
+  .address_a (q_table_a_tails.addr),
   .address_b (q_table_tails.addr[QUEUE_ID_WIDTH-1:0]),
   .clock     (clk),
-  .data_a    (q_table_a_tails_wr_data_r),
-  .data_b    (),
+  .data_a    (q_table_a_tails.wr_data),
+  .data_b    (q_table_tails.wr_data),
   .rden_a    (q_table_a_tails.rd_en),
   .rden_b    (q_table_tails.rd_en),
-  .wren_a    (q_table_a_tails_wr_en_r),
-  .wren_b    (1'b0),
+  .wren_a    (q_table_a_tails.wr_en),
+  .wren_b    (q_table_tails.wr_en),
   .q_a       (q_table_a_tails.rd_data),
   .q_b       (q_table_tails.rd_data)
 );
