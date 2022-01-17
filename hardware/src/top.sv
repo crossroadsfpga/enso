@@ -123,7 +123,6 @@ logic [31:0] cpu_pkt_buf_full_cnt_status;
 logic [31:0] max_pcie_pkt_fifo_status;
 logic [31:0] max_pcie_meta_fifo_status;
 logic [31:0] pcie_rx_ignored_head_cnt_status;
-logic [31:0] pcie_tx_ignored_dsc_cnt_status;
 logic [31:0] pcie_tx_q_full_signals_status;
 logic [31:0] pcie_tx_dsc_cnt_status;
 logic [31:0] pcie_tx_empty_tail_cnt_status;
@@ -410,9 +409,6 @@ logic [31:0] max_pcie_meta_fifo_r2;
 logic [31:0] pcie_rx_ignored_head_cnt;
 logic [31:0] pcie_rx_ignored_head_cnt_r1;
 logic [31:0] pcie_rx_ignored_head_cnt_r2;
-logic [31:0] pcie_tx_ignored_dsc_cnt;
-logic [31:0] pcie_tx_ignored_dsc_cnt_r1;
-logic [31:0] pcie_tx_ignored_dsc_cnt_r2;
 logic [31:0] pcie_tx_q_full_signals;
 logic [31:0] pcie_tx_q_full_signals_r1;
 logic [31:0] pcie_tx_q_full_signals_r2;
@@ -696,9 +692,6 @@ always @(posedge clk_status) begin
     pcie_rx_ignored_head_cnt_r1      <= pcie_rx_ignored_head_cnt;
     pcie_rx_ignored_head_cnt_r2      <= pcie_rx_ignored_head_cnt_r1;
     pcie_rx_ignored_head_cnt_status  <= pcie_rx_ignored_head_cnt_r2;
-    pcie_tx_ignored_dsc_cnt_r1       <= pcie_tx_ignored_dsc_cnt;
-    pcie_tx_ignored_dsc_cnt_r2       <= pcie_tx_ignored_dsc_cnt_r1;
-    pcie_tx_ignored_dsc_cnt_status   <= pcie_tx_ignored_dsc_cnt_r2;
     pcie_tx_q_full_signals_r1        <= pcie_tx_q_full_signals;
     pcie_tx_q_full_signals_r2        <= pcie_tx_q_full_signals_r1;
     pcie_tx_q_full_signals_status    <= pcie_tx_q_full_signals_r2;
@@ -779,16 +772,15 @@ always @(posedge clk_status) begin
                 8'd34 : status_readdata_top <= max_pcie_pkt_fifo_status;
                 8'd35 : status_readdata_top <= max_pcie_meta_fifo_status;
                 8'd36 : status_readdata_top <= pcie_rx_ignored_head_cnt_status;
-                8'd37 : status_readdata_top <= pcie_tx_ignored_dsc_cnt_status;
-                8'd38 : status_readdata_top <= pcie_tx_q_full_signals_status;
-                8'd39 : status_readdata_top <= pcie_tx_dsc_cnt_status;
-                8'd40 : status_readdata_top <= pcie_tx_empty_tail_cnt_status;
-                8'd41 : status_readdata_top <= pcie_tx_dsc_read_cnt_status;
-                8'd42 : status_readdata_top <= pcie_tx_pkt_read_cnt_status;
-                8'd43 : status_readdata_top <= pcie_tx_batch_cnt_status;
-                8'd44 : status_readdata_top <= pcie_tx_max_inflight_dscs_status;
-                8'd45 : status_readdata_top <= pcie_tx_max_nb_req_dscs_status;
-                8'd46 : status_readdata_top <= pcie_tx_dma_pkt_cnt_status;
+                8'd37 : status_readdata_top <= pcie_tx_q_full_signals_status;
+                8'd38 : status_readdata_top <= pcie_tx_dsc_cnt_status;
+                8'd39 : status_readdata_top <= pcie_tx_empty_tail_cnt_status;
+                8'd40 : status_readdata_top <= pcie_tx_dsc_read_cnt_status;
+                8'd41 : status_readdata_top <= pcie_tx_pkt_read_cnt_status;
+                8'd42 : status_readdata_top <= pcie_tx_batch_cnt_status;
+                8'd43 : status_readdata_top <= pcie_tx_max_inflight_dscs_status;
+                8'd44 : status_readdata_top <= pcie_tx_max_nb_req_dscs_status;
+                8'd45 : status_readdata_top <= pcie_tx_dma_pkt_cnt_status;
                 default : status_readdata_top <= 32'h345;
             endcase
         end
@@ -1328,7 +1320,6 @@ pcie_top pcie (
     .cpu_dsc_buf_full_cnt     (cpu_dsc_buf_full_cnt),
     .cpu_pkt_buf_full_cnt     (cpu_pkt_buf_full_cnt),
     .rx_ignored_head_cnt      (pcie_rx_ignored_head_cnt),
-    .tx_ignored_dsc_cnt       (pcie_tx_ignored_dsc_cnt),
     .tx_q_full_signals        (pcie_tx_q_full_signals),
     .tx_dsc_cnt               (pcie_tx_dsc_cnt),
     .tx_empty_tail_cnt        (pcie_tx_empty_tail_cnt),

@@ -77,7 +77,6 @@ module pcie_top (
     output logic [31:0] cpu_dsc_buf_full_cnt,
     output logic [31:0] cpu_pkt_buf_full_cnt,
     output logic [31:0] rx_ignored_head_cnt,
-    output logic [31:0] tx_ignored_dsc_cnt,
     output logic [31:0] tx_q_full_signals,
     output logic [31:0] tx_dsc_cnt,
     output logic [31:0] tx_empty_tail_cnt,
@@ -577,7 +576,6 @@ cpu_to_fpga #(
     .q_table_h_addrs       (tx_dsc_q_table_h_addrs.owner),
     .rb_size               (dsc_rb_size), // TODO(sadok): use different rb size?
     .inflight_desc_limit   (inflight_desc_limit),
-    .ignored_dsc_cnt       (tx_ignored_dsc_cnt),
     .queue_full_signals    (tx_q_full_signals),
     .dsc_cnt               (tx_dsc_cnt),
     .empty_tail_cnt        (tx_empty_tail_cnt),

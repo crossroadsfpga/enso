@@ -304,7 +304,6 @@ typedef enum{
   MAX_PCIE_PKT_FIFO,
   MAX_PCIE_META_FIFO,
   PCIE_RX_IGNORED_HEAD,
-  PCIE_TX_IGNORED_DSC,
   PCIE_TX_Q_FULL_SIGNALS,
   PCIE_TX_DSC_CNT,
   PCIE_TX_EMPTY_TAIL_CNT,
@@ -1627,15 +1626,6 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("PCIE_RX_IGNORED_HEAD:\t%d", top_readdata);
-          conf_state <= PCIE_TX_IGNORED_DSC;
-          s_read <= 1;
-          s_addr <= s_addr + 1;
-        end
-      end
-      PCIE_TX_IGNORED_DSC: begin
-        s_read <= 0;
-        if(top_readdata_valid)begin
-          $display("PCIE_TX_IGNORED_DSC:\t%d", top_readdata);
           conf_state <= PCIE_TX_Q_FULL_SIGNALS;
           s_read <= 1;
           s_addr <= s_addr + 1;
