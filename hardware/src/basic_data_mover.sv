@@ -32,6 +32,7 @@ module basic_data_mover (
     output logic          pcie_rx_meta_valid,
     output var metadata_t pcie_rx_meta_data,
     input  logic          pcie_rx_meta_ready,
+    input  logic          pcie_rx_meta_almost_full,
 
     // TX packet data from PCIe.
     input  logic         pcie_tx_pkt_sop,
@@ -82,10 +83,12 @@ typedef enum
 
 state_t state;
 
+// TODO(sadok): Investigate meta_ready. This seems to be holding back sometimes.
 assign meta_ready = ((state == IDLE) | first_ready | middle_ready) & !almost_full;
 assign first_ready = (state == FIRST) & ((pkt_flags == PKT_DROP)|(flits==1));
 assign middle_ready = (state == MIDDLE) & (flits_cnt == flits-1);
-assign almost_full = eth_pkt_almost_full | pcie_rx_pkt_almost_full;
+assign almost_full =
+    eth_pkt_almost_full | pcie_rx_pkt_almost_full | pcie_rx_meta_almost_full;
 
 // Quick and Dirty tweak for PDU flag.
 always @(posedge clk) begin
