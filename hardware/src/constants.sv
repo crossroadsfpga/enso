@@ -120,7 +120,7 @@ localparam PKT_Q_TABLE_HEADS_DWIDTH = 32;
 localparam PKT_Q_TABLE_L_ADDRS_DWIDTH = 32;
 localparam PKT_Q_TABLE_H_ADDRS_DWIDTH = 32;
 
-// TODO(sadok) reduce BRAM sizes to the values bellow
+// TODO(sadok) reduce BRAM sizes to the values bellow (double check)
 // localparam PKT_Q_TABLE_TAILS_DWIDTH = 8;
 // localparam PKT_Q_TABLE_HEADS_DWIDTH = 8;
 // localparam PKT_Q_TABLE_L_ADDRS_DWIDTH = 10;
@@ -155,7 +155,6 @@ typedef struct packed
 
 typedef struct packed
 {
-    logic [APP_IDX_WIDTH-1:0]      dsc_queue_id;
     logic [FLOW_IDX_WIDTH-1:0]     pkt_queue_id;
     logic [$clog2(MAX_PKT_SIZE):0] size; // in number of flits
 } pkt_meta_t;
@@ -186,7 +185,6 @@ typedef struct packed
     logic valid;
     tuple_t tuple;
     logic [31:0] pkt_queue_id;
-    logic [31:0] dsc_queue_id;
 } fce_t; //Flow context entry
 
 localparam META_WIDTH=256; //Change this will affect hyper_reg_fd
@@ -202,7 +200,6 @@ typedef struct packed
     logic [8:0]               tcp_flags;
     logic [2:0]               pkt_flags;
     logic [31:0]              pkt_queue_id;
-    logic [31:0]              dsc_queue_id;
     logic [PADDING_WIDTH-1:0] padding;
 } metadata_t; //Metadata
 
@@ -211,11 +208,12 @@ typedef struct packed
 localparam F2C_RB_DEPTH = 16384;
 localparam F2C_RB_AWIDTH = ($clog2(F2C_RB_DEPTH));
 localparam PDU_NUM = 256;
+
+// TODO(sadok): remove?
 typedef struct packed
 {
     logic [191:0] padding;
     logic [31:0]  pkt_queue_id;
-    logic [31:0]  dsc_queue_id;
     logic [31:0]  action;
     logic [31:0]  pdu_flit;
     logic [31:0]  pdu_size;
@@ -228,7 +226,6 @@ typedef struct packed
 {
     tuple_t tuple;
     logic [63:0] pkt_queue_id;
-    logic [63:0] dsc_queue_id;
 } pdu_metadata_t; //Metadata
 
 `ifdef SIM

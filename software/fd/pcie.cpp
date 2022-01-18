@@ -139,10 +139,11 @@ static void* get_huge_pages(int queue_id, size_t size) {
     return virt_addr;
 }
 
-int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queues)
+int dma_init(socket_internal* socket_entry, unsigned socket_id,
+             unsigned nb_queues)
 {
     void* uio_mmap_bar2_addr;
-    int queue_id;
+    int dsc_queue_id, pkt_queue_id;
     intel_fpga_pcie_dev *dev = socket_entry->dev;
 
     printf("Running with BATCH_SIZE: %i\n", BATCH_SIZE);
@@ -150,8 +151,9 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
     printf("Running with PKT_BUF_SIZE: %i\n", PKT_BUF_SIZE);
 
     // FIXME(sadok) should find a better identifier than core id
-    queue_id = sched_getcpu() * nb_queues + socket_id;
-    if (queue_id < 0) {
+    pkt_queue_id = sched_getcpu() * nb_queues + socket_id;
+    dsc_queue_id = sched_getcpu();
+    if (pkt_queue_id < 0) {
         std::cerr << "Could not get cpu id" << std::endl;
         return -1;
     }
@@ -170,12 +172,12 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         // MAX_NB_FLOWS as an offset.
         queue_regs_t *dsc_queue_regs = (queue_regs_t *) (
             (uint8_t*) uio_mmap_bar2_addr + 
-            (queue_id + MAX_NB_FLOWS) * MEMORY_SPACE_PER_QUEUE
+            (dsc_queue_id + MAX_NB_FLOWS) * MEMORY_SPACE_PER_QUEUE
         );
 
         dsc_queue.regs = dsc_queue_regs;
-        dsc_queue.rx_buf =
-            (pcie_rx_dsc_t*) get_huge_pages(queue_id, ALIGNED_DSC_BUF_PAIR_SIZE);
+        dsc_queue.rx_buf = (pcie_rx_dsc_t*) get_huge_pages(
+            dsc_queue_id + MAX_NB_FLOWS, ALIGNED_DSC_BUF_PAIR_SIZE);
         if (dsc_queue.rx_buf == NULL) {
             std::cerr << "Could not get huge page" << std::endl;
             return -1;
@@ -223,7 +225,9 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
         dsc_queue.consumed_rx_ids = 0;
         dsc_queue.tx_full_cnt = 0;
 
-        pkt_queue_id_offset = queue_id - socket_id;
+        // HACK(sadok): This only works because pkt queues for the same app are
+        // currently placed back to back.
+        pkt_queue_id_offset = pkt_queue_id;
 
         // HACK(sadok): Holds an associated queue id for every TX descriptor.
         // TODO(sadok): Figure out queue from address.
@@ -239,31 +243,31 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id, unsigned nb_queu
 
     // register associated with the packet queue
     queue_regs_t *pkt_queue_regs = (queue_regs_t *) (
-        (uint8_t*) uio_mmap_bar2_addr + queue_id * MEMORY_SPACE_PER_QUEUE
+        (uint8_t*) uio_mmap_bar2_addr + pkt_queue_id * MEMORY_SPACE_PER_QUEUE
     );
     socket_entry->pkt_queue.regs = pkt_queue_regs;
 
     socket_entry->pkt_queue.buf = 
-        (uint32_t*) get_huge_pages(queue_id, BUF_PAGE_SIZE);
+        (uint32_t*) get_huge_pages(pkt_queue_id, BUF_PAGE_SIZE);
     if (socket_entry->pkt_queue.buf == NULL) {
         std::cerr << "Could not get huge page" << std::endl;
         return -1;
     }
     uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->pkt_queue.buf);
 
-    pkt_queue_regs->rx_mem_low = (uint32_t) phys_addr;
+    pkt_queue_regs->rx_mem_low = (uint32_t) phys_addr + dsc_queue_id;
     pkt_queue_regs->rx_mem_high = (uint32_t) (phys_addr >> 32);
 
     socket_entry->pkt_queue.buf_phys_addr = phys_addr;
 
-    socket_entry->queue_id = queue_id;
+    socket_entry->queue_id = pkt_queue_id - pkt_queue_id_offset;
     socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->rx_head;
     socket_entry->pkt_queue.rx_head = pkt_queue_regs->rx_head;
     socket_entry->pkt_queue.old_rx_head = socket_entry->pkt_queue.rx_head;
     socket_entry->pkt_queue.rx_tail = socket_entry->pkt_queue.rx_head;
 
     // make sure the last tail matches the current head
-    pending_pkt_tails[socket_id] = socket_entry->pkt_queue.rx_head;
+    pending_pkt_tails[socket_entry->queue_id] = socket_entry->pkt_queue.rx_head;
 
     return 0;
 }
@@ -599,7 +603,7 @@ void print_stats(socket_internal* socket_entry, bool print_global)
         printf("Dsc TX head: %d\n\n", dsc_queue.tx_head);
     }
 
-    printf("Pkt RX tail: %d\n", socket_entry->pkt_queue.rx_tail);
-    printf("Pkt RX head: %d\n", socket_entry->pkt_queue.rx_head);
-    printf("Pkt Old RX head: %d\n", socket_entry->pkt_queue.old_rx_head);
+    // printf("Pkt RX tail: %d\n", socket_entry->pkt_queue.rx_tail);
+    // printf("Pkt RX head: %d\n", socket_entry->pkt_queue.rx_head);
+    // printf("Pkt Old RX head: %d\n", socket_entry->pkt_queue.old_rx_head);
 }

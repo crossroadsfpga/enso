@@ -256,7 +256,6 @@ always @(posedge pcie_clk) begin
         if (pcie_rx_meta_buf_ready & pcie_rx_meta_buf_valid) begin
             automatic pkt_meta_with_queues_t meta;
 
-            meta.dsc_queue_id = pcie_rx_meta_buf_data.dsc_queue_id;
             meta.pkt_queue_id = pcie_rx_meta_buf_data.pkt_queue_id;
             meta.size = pcie_rx_meta_buf_data.size;
             meta.descriptor_only = 0;
@@ -441,20 +440,20 @@ end
 pkt_queue_manager #(
     .NB_QUEUES(MAX_NB_FLOWS/NB_PKT_QUEUE_MANAGERS)
 ) pkt_queue_manager_inst [NB_PKT_QUEUE_MANAGERS] (
-    .clk               (pcie_clk),
-    .rst               (!pcie_reset_n | sw_reset),
-    .in_meta_data      (pkt_q_mngr_in_meta_data),
-    .in_meta_valid     (pkt_q_mngr_in_meta_valid),
-    .in_meta_ready     (pkt_q_mngr_in_meta_ready),
-    .out_meta_data     (pkt_q_mngr_out_meta_data),
-    .out_meta_valid    (pkt_q_mngr_out_meta_valid),
-    .out_meta_ready    (pkt_q_mngr_out_meta_ready),
-    .q_table_tails     (pqm_pkt_q_table_tails),
-    .q_table_heads     (pqm_pkt_q_table_heads),
-    .q_table_l_addrs   (pqm_pkt_q_table_l_addrs),
-    .q_table_h_addrs   (pqm_pkt_q_table_h_addrs),
-    .rb_size           (pkt_rb_size),
-    .full_cnt          (pkt_full_counters)
+    .clk             (pcie_clk),
+    .rst             (!pcie_reset_n | sw_reset),
+    .in_meta_data    (pkt_q_mngr_in_meta_data),
+    .in_meta_valid   (pkt_q_mngr_in_meta_valid),
+    .in_meta_ready   (pkt_q_mngr_in_meta_ready),
+    .out_meta_data   (pkt_q_mngr_out_meta_data),
+    .out_meta_valid  (pkt_q_mngr_out_meta_valid),
+    .out_meta_ready  (pkt_q_mngr_out_meta_ready),
+    .q_table_tails   (pqm_pkt_q_table_tails),
+    .q_table_heads   (pqm_pkt_q_table_heads),
+    .q_table_l_addrs (pqm_pkt_q_table_l_addrs),
+    .q_table_h_addrs (pqm_pkt_q_table_h_addrs),
+    .rb_size         (pkt_rb_size),
+    .full_cnt        (pkt_full_counters)
 );
 
 pkt_meta_with_queues_t dsc_q_mngr_in_meta_data;

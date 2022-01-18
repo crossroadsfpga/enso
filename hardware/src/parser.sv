@@ -150,7 +150,6 @@ assign metadata.tcp_flags = {
 };
 assign metadata.pkt_flags = disable_pcie ? PKT_ETH : PKT_PCIE;
 assign metadata.pkt_queue_id = 0;
-assign metadata.dsc_queue_id = 0;
 assign metadata.padding = 0;
 
 assign in_pkt_ready = out_meta_ready;

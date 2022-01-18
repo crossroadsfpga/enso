@@ -182,8 +182,6 @@ always @(posedge clk) begin
                 out_pkt_queue_data.eop <= 1;
 
                 // write descriptor
-                out_meta_queue_data.dsc_queue_id <=
-                    meta.dsc_queue_id[APP_IDX_WIDTH-1:0];
                 out_meta_queue_data.pkt_queue_id <=
                     meta.pkt_queue_id[FLOW_IDX_WIDTH-1:0];
 

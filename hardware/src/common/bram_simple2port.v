@@ -26,6 +26,9 @@ module  bram_simple2port  (
     parameter AWIDTH=9;
     parameter DWIDTH=16;
     parameter DEPTH=512;
+    parameter REG_OUTPUT=1;
+
+    localparam OUTDATA_REG_B = (REG_OUTPUT == 0) ? "UNREGISTERED" : "CLOCK0";
 
     input    clock;
     input  [DWIDTH-1:0]  data;
@@ -77,6 +80,7 @@ module  bram_simple2port  (
                 .sclr (1'b0),
                 .wren_b (1'b0));
     defparam
+        altera_syncram_component.outdata_reg_b  = "CLOCK0",
         altera_syncram_component.address_aclr_b  = "NONE",
         altera_syncram_component.address_reg_b  = "CLOCK0",
         altera_syncram_component.clock_enable_input_a  = "BYPASS",
@@ -90,7 +94,7 @@ module  bram_simple2port  (
         altera_syncram_component.operation_mode  = "DUAL_PORT",
         altera_syncram_component.outdata_aclr_b  = "NONE",
         altera_syncram_component.outdata_sclr_b  = "NONE",
-        altera_syncram_component.outdata_reg_b  = "CLOCK0",
+        altera_syncram_component.outdata_reg_b  = OUTDATA_REG_B,
         altera_syncram_component.power_up_uninitialized  = "FALSE",
         altera_syncram_component.ram_block_type  = "M20K",
         altera_syncram_component.rdcontrol_reg_b  = "CLOCK0",

@@ -40,6 +40,16 @@ module pkt_queue_manager #(
     output logic [31:0] full_cnt
 );
 
+// We use the least significant bits of the packet queue address to store the
+// descriptor queue ID. This checks that we have enough room, considering that
+// the address is always page-aligned and therefore has at least 12 trailing
+// zeros.
+generate
+    if (APP_IDX_WIDTH > 12) begin
+        $error("Cannot represent the descriptor queue ID in 12 bits.");
+    end
+endgenerate
+
 pkt_meta_with_queues_t out_meta_extra;
 queue_state_t out_q_state;
 logic out_drop;
@@ -124,6 +134,13 @@ always @(posedge clk) begin
         local_q = local_queue_id(out_meta_extra.pkt_queue_id);
         delayed_metadata[2] <= out_meta_extra;
         delayed_metadata[2].pkt_q_state <= out_q_state;
+
+        // The least significant bits in kmem_addr are used to keep the
+        // descriptor queue ID.
+        delayed_metadata[2].pkt_q_state.kmem_addr[APP_IDX_WIDTH-1:0] <= 0;
+        delayed_metadata[2].dsc_queue_id <=
+            out_q_state.kmem_addr[APP_IDX_WIDTH-1:0];
+
         delayed_metadata[2].drop_data <= out_drop;
         delayed_metadata[2].drop_meta <= out_drop;
         delayed_metadata[2].needs_dsc <= out_meta_extra.needs_dsc;
@@ -153,15 +170,12 @@ always @(posedge clk) begin
 
         // Metadata with `descriptor_only` set originates from a head pointer
         // update while metadata with `needs_dsc` set means that it originates
-        // from a head update that was merged to a packet to the same queue.
+        // from a head update that was merged with a packet to the same queue.
         if (delayed_metadata[0].needs_dsc) begin
             needs_dsc = 1;
             out_queue_in_data.drop_meta <= 0;
             delayed_metadata[0].descriptor_only <= 1;
         end else if (delayed_metadata[0].descriptor_only) begin
-            // HACK(sadok): assume dsc queue id 0.
-            out_queue_in_data.dsc_queue_id <= 0;
-
             if (delayed_metadata[0].pkt_q_state.head ==
                     delayed_metadata[0].pkt_q_state.tail) begin
                 queue_empty = 1'b1;

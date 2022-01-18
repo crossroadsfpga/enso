@@ -211,7 +211,8 @@ end
 bram_simple2port #(
   .AWIDTH(APP_IDX_WIDTH),
   .DWIDTH(1),
-  .DEPTH(MAX_NB_APPS)
+  .DEPTH(MAX_NB_APPS),
+  .REG_OUTPUT(1)
 ) dsc_q_status(
   .clock     (clk),
   .data      (dsc_q_status_wr_data),
@@ -245,7 +246,8 @@ fifo_wrapper_infill_mlab #(
 logic [QUEUE_ID_WIDTH-1:0] q_table_tails_addr_r1;
 logic [QUEUE_ID_WIDTH-1:0] q_table_tails_addr_r2;
 
-logic dsc_q_status_rd_en_r;
+logic dsc_q_status_rd_en_r1;
+logic dsc_q_status_rd_en_r2;
 
 // We monitor tail pointer updates from the CPU to fetch more descriptors.
 // The tricky part is that software may update the ring buffer pointers at any
@@ -263,10 +265,11 @@ always @(posedge clk) begin
   dsc_q_status_rd_en <= 0;
   dsc_queue_request_fifo_in_valid <= 0;
 
-  q_table_tails_addr_r1 <= q_table_tails.addr;
+  q_table_tails_addr_r1 <= dsc_q_status_rd_addr;
   q_table_tails_addr_r2 <= q_table_tails_addr_r1;
 
-  dsc_q_status_rd_en_r <= dsc_q_status_rd_en;
+  dsc_q_status_rd_en_r1 <= dsc_q_status_rd_en;
+  dsc_q_status_rd_en_r2 <= dsc_q_status_rd_en_r1;
 
   if (rst) begin
   end else begin
@@ -278,7 +281,7 @@ always @(posedge clk) begin
     end
 
     // If the status bit is 0, we must enqueue the request, otherwise ignore it.
-    if (dsc_q_status_rd_en_r & !dsc_q_status_rd_data) begin
+    if (dsc_q_status_rd_en_r2 & !dsc_q_status_rd_data) begin
       dsc_queue_request_fifo_in_data <= q_table_tails_addr_r2;
       dsc_queue_request_fifo_in_valid <= 1;
     end

@@ -620,14 +620,19 @@ always @(posedge clk_pcie) begin
     case (pcie_state)
       PCIE_SET_F2C_PKT_QUEUE: begin
         if (cnt >= 50) begin
+          automatic logic [APP_IDX_WIDTH] dsc_queue_id;
+
           next_pcie_write_0 = 1;
           pcie_address_0 <= cfg_queue << 12;
           pcie_writedata_0 <= 0;
           pcie_byteenable_0 <= 0;
 
-          // pkt queue address
+          dsc_queue_id = cfg_queue / (nb_pkt_queues / nb_dsc_queues);
+
+          // Pkt queue address.
+          // We also write the the corresponding descriptor queue id to the LSB.
           pcie_writedata_0[64 +: 64] <= 64'ha000000080000000 +
-            (cfg_queue << 32);
+                                        (cfg_queue << 32) + dsc_queue_id;
           pcie_byteenable_0[8 +: 8] <= 8'hff;
 
           if (cfg_queue == nb_pkt_queues - 1) begin
