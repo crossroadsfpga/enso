@@ -148,7 +148,7 @@ int main(int argc, const char* argv[])
                         rb_states[buf_idx].head = (my_head + recv_len) % BUF_LEN;
                     }
                     #ifdef ZERO_COPY
-                        free_pkt_buf(socket_fd);
+                        free_pkt_buf(socket_fd, recv_len);
                     #endif
                 }
                 recv_bytes += recv_len;

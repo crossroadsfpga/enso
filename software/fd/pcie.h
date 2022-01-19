@@ -126,9 +126,9 @@ typedef struct {
     uint32_t rx_head;
     uint32_t tx_head;
     uint32_t tx_tail;
-    uint32_t old_rx_head;
     uint32_t pending_rx_ids;
     uint32_t consumed_rx_ids;
+    uint32_t nb_unreported_completions;
 
     // Second cache line:
     queue_regs_t* regs;
@@ -142,11 +142,12 @@ typedef struct {
     queue_regs_t* regs;
     uint32_t* buf_head_ptr;
     uint32_t rx_head;
-    uint32_t old_rx_head;  // The head that HW knows about.
     uint32_t rx_tail;
+    uint64_t phys_buf_offset; // Use to convert between phys and virt address.
 } pkt_queue_t;
 
 typedef struct {
+    dsc_queue_t* dsc_queue;
     intel_fpga_pcie_dev* dev;
     pkt_queue_t pkt_queue;
     int queue_id;
@@ -154,25 +155,73 @@ typedef struct {
 
 int dma_init(socket_internal* socket_entry, unsigned socket_id,
              unsigned nb_queues);
+
 int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
-                              size_t len, socket_internal* socket_entries);
-int get_next_batch(socket_internal* socket_entries, int* sockfd, void** buf,
-                   size_t len);
-void advance_ring_buffer(socket_internal* socket_entries,
-                         socket_internal* socket_entry);
+                              size_t len);
+
+int get_next_batch(dsc_queue_t* dsc_queue, socket_internal* socket_entries,
+                   int* sockfd, void** buf, size_t len);
+
+/*
+ * Free the next `len` bytes in the packet buffer associated with the
+ * `socket_entry` socket. If `len` is greater than the number of allocated bytes
+ * in the buffer, the behavior is undefined.
+ */
+void advance_ring_buffer(socket_internal* socket_entry, size_t len);
+
 int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
                          unsigned int nb_queues);
-int send_to_queue(socket_internal* socket_entries,
-                  socket_internal* socket_entry, void* buf, size_t len);
+
+/*
+ * Send data pointed by `phys_addr` using the 
+ */
+int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len);
+
 int dma_finish(socket_internal* socket_entry);
+
 void print_queue_regs(queue_regs_t * pb);
+
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
+
 void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs);
+
 void print_buffer(uint32_t* buf, uint32_t nb_flits);
+
 void print_block(block_s *block);
+
 void fill_block(uint32_t *addr, block_s *block);
+
 uint32_t tx_copy_head(uint32_t tx_tail, queue_regs_t *global_block, 
-                       block_s *block, uint32_t *kdata);
+                      block_s *block, uint32_t *kdata);
+
 void print_stats(socket_internal* socket_entry, bool print_global);
+
+/*
+ * Update the tx head and the number of TX completions.
+ */
+inline void update_tx_head(dsc_queue_t* dsc_queue)
+{
+    pcie_tx_dsc_t* tx_buf = dsc_queue->tx_buf;
+    uint32_t head = dsc_queue->tx_head;
+    uint32_t tail = dsc_queue->tx_tail;
+
+    // Advance pointer for pkt queues that were already sent.
+    for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
+        if (head == tail) {
+            break;
+        }
+        pcie_tx_dsc_t* tx_dsc = tx_buf + head;
+
+        // Descriptor has not yet been consumed by hardware.
+        if (tx_dsc->signal == 1) {
+            break;
+        }
+
+        ++(dsc_queue->nb_unreported_completions);
+        head = (head + 1) % DSC_BUF_SIZE;
+    }
+
+    dsc_queue->tx_head = head;
+}
 
 #endif // PCIE_H

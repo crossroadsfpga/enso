@@ -6,12 +6,15 @@
 #include "pcie.h"
 #include "api/intel_fpga_pcie_api.hpp"
 
+
+static dsc_queue_t dsc_queue;
+
 // TODO(sadok) replace with hash table?
 static socket_internal open_sockets[MAX_NB_SOCKETS];
 static unsigned int nb_open_sockets = 0;
 
 int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
-    int nb_queues) noexcept // HACK(sadok) using protocol as nb_queues
+           int nb_queues) noexcept // HACK(sadok) using protocol as nb_queues
 {
     intel_fpga_pcie_dev *dev;
     uint16_t bdf = 0;
@@ -43,6 +46,8 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     unsigned int socket_id = nb_open_sockets++;
 
     open_sockets[socket_id].dev = dev;
+    open_sockets[socket_id].dsc_queue = &dsc_queue;
+
     result = dma_init(&open_sockets[socket_id], socket_id, nb_queues);
 
     if (unlikely(result < 0)) {
@@ -83,13 +88,37 @@ int bind(
     return 0;
 }
 
-ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)))
+/*
+ * Return physical address of the buffer associated with the socket.
+ */
+uint64_t get_socket_phys_addr(int sockfd)
+{
+    return open_sockets[sockfd].pkt_queue.buf_phys_addr;
+}
+
+/*
+ * Return virtual address of the buffer associated with the socket.
+ */
+void* get_socket_virt_addr(int sockfd)
+{
+    return (void*) open_sockets[sockfd].pkt_queue.buf;
+}
+
+/*
+ * Convert a socket buffer virtual address to physical address.
+ */
+uint64_t convert_buf_addr_to_phys(int sockfd, void* addr)
+{
+    return (uint64_t) addr + open_sockets[sockfd].pkt_queue.phys_buf_offset;
+}
+
+ssize_t recv(int sockfd, void *buf, size_t len,
+             int flags __attribute__((unused)))
 {
     void* ring_buf;
     socket_internal* socket = &open_sockets[sockfd];
     
-    ssize_t bytes_received = get_next_batch_from_queue(socket, &ring_buf, len,
-                                                       open_sockets);
+    ssize_t bytes_received = get_next_batch_from_queue(socket, &ring_buf, len);
 
     if (unlikely(bytes_received <= 0)) {
         return bytes_received;
@@ -97,31 +126,42 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags __attribute__((unused)
 
     memcpy(buf, ring_buf, bytes_received);
 
-    advance_ring_buffer(open_sockets, socket);
+    advance_ring_buffer(socket, bytes_received);
 
     return bytes_received;
 }
 
-ssize_t recv_zc(int sockfd, void **buf, size_t len, int flags __attribute__((unused)))
+ssize_t recv_zc(int sockfd, void **buf, size_t len,
+                int flags __attribute__((unused)))
 {
-    return get_next_batch_from_queue(&open_sockets[sockfd], buf, len,
-                                     open_sockets);
+    return get_next_batch_from_queue(&open_sockets[sockfd], buf, len);
 }
 
-// TODO: should be able to somehow receive the descriptor queue as parameter
-ssize_t recv_select(int* sockfd, void **buf, size_t len, int flags __attribute__((unused)))
+ssize_t recv_select(int* sockfd, void **buf, size_t len,
+                    int flags __attribute__((unused)))
 {
-    return get_next_batch(open_sockets, sockfd, buf, len);
+    return get_next_batch(&dsc_queue, open_sockets, sockfd, buf, len);
 }
 
-// ssize_t send(int sockfd, void *buf, size_t len, int flags __attribute__((unused)))
-// {
-//     return get_next_batch_from_queue(&open_sockets[sockfd], buf, len);
-// }
-
-void free_pkt_buf(int sockfd)
+ssize_t send(int sockfd, void *phys_addr, size_t len,
+             int flags __attribute__((unused)))
 {
-    advance_ring_buffer(open_sockets, &open_sockets[sockfd]);
+    return send_to_queue(&open_sockets[sockfd], phys_addr, len);
+}
+
+int get_completions()
+{
+    uint32_t completions;
+    update_tx_head(&dsc_queue);
+    completions = dsc_queue.nb_unreported_completions;
+    dsc_queue.nb_unreported_completions = 0;
+
+    return completions;
+}
+
+void free_pkt_buf(int sockfd, size_t len)
+{
+    advance_ring_buffer(&open_sockets[sockfd], len);
 }
 
 int shutdown(int sockfd, int how __attribute__((unused))) noexcept

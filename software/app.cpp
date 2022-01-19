@@ -115,7 +115,7 @@ int main(int argc, const char* argv[])
                 if (recv_len > 0) {
                     ++nb_batches;
                     #ifdef ZERO_COPY
-                    free_pkt_buf(socket_fd);
+                    free_pkt_buf(socket_fd, recv_len);
                     #endif
                 }
                 recv_bytes += recv_len;

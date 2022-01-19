@@ -8,7 +8,6 @@
 #include <string>
 #include <thread>
 
-// #include <immintrin.h>
 #include <x86intrin.h>
 
 #include <sched.h>
@@ -21,6 +20,7 @@
 // #include <arpa/inet.h> 
 
 #define ZERO_COPY
+#define SEND_BACK
 
 #include "app.h"
 
@@ -43,8 +43,8 @@ int main(int argc, const char* argv[])
     uint64_t nb_batches = 0;
 
     if (argc != 6) {
-        std::cerr << "Usage: " << argv[0] << " core port nb_rules nb_queues nb_cycles"
-                  << std::endl;
+        std::cerr << "Usage: " << argv[0]
+                  << " core port nb_rules nb_queues nb_cycles" << std::endl;
         return 1;
     }
 
@@ -60,6 +60,11 @@ int main(int argc, const char* argv[])
     std::thread socket_thread = std::thread([&recv_bytes, port, nb_rules, 
         nb_queues, &nb_batches, &nb_cycles]
     {
+        uint32_t tx_pr_head = 0;
+        uint32_t tx_pr_tail = 0;
+        tx_pending_request_t* tx_pending_requests =
+            new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
+
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
@@ -94,46 +99,71 @@ int main(int argc, const char* argv[])
         while (keep_running) {
             int socket_fd;
             int recv_len = recv_select(&socket_fd, (void**) &buf, BUF_LEN, 0);
+
             if (unlikely(recv_len < 0)) {
                 std::cerr << "Error receiving" << std::endl;
                 exit(4);
             }
-            if (unlikely(recv_len == 0)) {
-                continue;
-            }
-            // Modify every cache line.
-            for (uint32_t i = 0; i < ((uint32_t) recv_len) / 256; i += 4) {
-                ++buf[(i+0)*64 + 63];
-                ++buf[(i+1)*64 + 63];
-                ++buf[(i+2)*64 + 63];
-                ++buf[(i+3)*64 + 63];
 
-                // Flush cache lines to avoid contention with PCIe read.
-                _mm_clflushopt(&buf[(i+0)*64]);
-                _mm_clflushopt(&buf[(i+1)*64]);
-                _mm_clflushopt(&buf[(i+2)*64]);
-                _mm_clflushopt(&buf[(i+3)*64]);
+            if (likely(recv_len != 0)) {
+                // Modify every cache line.
+                for (uint32_t i = 0; i < ((uint32_t) recv_len) / 256; i += 4) {
+                    ++buf[(i+0)*64 + 63];
+                    ++buf[(i+1)*64 + 63];
+                    ++buf[(i+2)*64 + 63];
+                    ++buf[(i+3)*64 + 63];
+
+                    // Flush cache lines to avoid contention with PCIe read.
+                    _mm_clflushopt(&buf[(i+0)*64]);
+                    _mm_clflushopt(&buf[(i+1)*64]);
+                    _mm_clflushopt(&buf[(i+2)*64]);
+                    _mm_clflushopt(&buf[(i+3)*64]);
+                }
+                for (uint32_t i = 0; i < (((uint32_t) recv_len) % 256)/64; ++i)
+                {
+                    ++buf[i*64 + 63];
+                    _mm_clflushopt(&buf[i*64]);
+                }
+                for (uint32_t i = 0; i < nb_cycles; ++i) {
+                    asm("nop");
+                }
+                ++nb_batches;
+                recv_bytes += recv_len;
+
+#ifdef SEND_BACK
+                uint64_t phys_addr = convert_buf_addr_to_phys(socket_fd, buf);
+                send(socket_fd, (void*) phys_addr, recv_len, 0);
+
+                // Save transmission request so that we can free the buffer once
+                // it's complete.
+                tx_pending_requests[tx_pr_tail].socket_fd = socket_fd;
+                tx_pending_requests[tx_pr_tail].length = recv_len;
+                tx_pr_tail = (tx_pr_tail + 1) % (MAX_PENDING_TX_REQUESTS + 1);
+#else
+                free_pkt_buf(socket_fd, recv_len);
+#endif
             }
-            for (uint32_t i = 0; i < (((uint32_t) recv_len) % 256)/64; ++i) {
-                ++buf[i*64 + 63];
-                _mm_clflushopt(&buf[i*64]);
+
+#ifdef SEND_BACK
+            int nb_tx_completions = get_completions();
+
+            // Free data that was already sent.
+            for (int i = 0; i < nb_tx_completions; ++i) {
+                tx_pending_request_t tx_req = tx_pending_requests[tx_pr_head];
+                free_pkt_buf(tx_req.socket_fd, tx_req.length);
+                tx_pr_head = (tx_pr_head + 1) % (MAX_PENDING_TX_REQUESTS + 1);
             }
-            for (uint32_t i = 0; i < nb_cycles; ++i) {
-                asm("nop");
-            }
-            ++nb_batches;
-            free_pkt_buf(socket_fd);
-            recv_bytes += recv_len;
+#endif
         }
 
         // TODO(sadok) it is also common to use the close() syscall to close a
         // UDP socket
         for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-            std::cout << socket_fd << std::endl;
             print_sock_stats(socket_fd);
-            std::cout << std::endl;
             shutdown(socket_fd, SHUT_RDWR);
         }
+
+        delete[] tx_pending_requests;
     });
 
     cpu_set_t cpuset;
