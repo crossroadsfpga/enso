@@ -378,7 +378,7 @@ int get_next_batch(dsc_queue_t* dsc_queue, socket_internal* socket_entries,
 void advance_ring_buffer(socket_internal* socket_entry, size_t len)
 {
     uint32_t rx_pkt_head = socket_entry->pkt_queue.rx_head;
-    uint32_t nb_flits = (len - 1) / 64 + 1;
+    uint32_t nb_flits = ((uint64_t) len - 1) / 64 + 1;
     rx_pkt_head = (rx_pkt_head + nb_flits) % PKT_BUF_SIZE;
 
     asm volatile ("" : : : "memory"); // compiler memory barrier

@@ -156,8 +156,8 @@ int main(int argc, const char* argv[])
 #endif
         }
 
-        // TODO(sadok) it is also common to use the close() syscall to close a
-        // UDP socket
+        // TODO(sadok): it is also common to use the close() syscall to close a
+        // UDP socket.
         for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
             print_sock_stats(socket_fd);
             shutdown(socket_fd, SHUT_RDWR);

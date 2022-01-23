@@ -24,7 +24,7 @@ localparam PKT_AWIDTH = ($clog2(PKT_NUM));
 localparam FT_SUBTABLE = 4;
 localparam FT_SIZE = 8192;
 localparam FT_DEPTH = (FT_SIZE/FT_SUBTABLE);
-localparam FT_AWIDTH= ($clog2(FT_DEPTH));
+localparam FT_AWIDTH = ($clog2(FT_DEPTH));
 
 //packet localparam
 localparam ETH_HDR_LEN=14;
@@ -187,21 +187,21 @@ typedef struct packed
     logic [31:0] pkt_queue_id;
 } fce_t; //Flow context entry
 
-localparam META_WIDTH=256; //Change this will affect hyper_reg_fd
+localparam META_WIDTH=256; // Change this will affect hyper_reg_fd.
 localparam INT_META_WIDTH=(8+TUPLE_DWIDTH+16+PKT_AWIDTH+5+9+3+32+32);
 localparam PADDING_WIDTH = (META_WIDTH - INT_META_WIDTH);
 typedef struct packed
 {
     logic [7:0]               prot;
     tuple_t                   tuple;
-    logic [15:0]              len; //payload length
+    logic [15:0]              len;  // Payload length.
     logic [PKT_AWIDTH-1:0]    pktID;
-    logic [4:0]               flits; //total number of flits
+    logic [4:0]               flits;  // Total number of flits.
     logic [8:0]               tcp_flags;
     logic [2:0]               pkt_flags;
     logic [31:0]              pkt_queue_id;
     logic [PADDING_WIDTH-1:0] padding;
-} metadata_t; //Metadata
+} metadata_t;
 
 // F2C_RB_DEPTH is the number of 512 bits for fpga side rx ring buffer
 // (must be a power of two)
