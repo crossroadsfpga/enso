@@ -447,12 +447,14 @@ logic pcie_bas_write_r;
 ///////////////////////////
 //Read and Write registers
 //////////////////////////
+
 always @ (posedge clk) begin
     if (rst | sw_reset) begin
         fd_in_pkt_cnt <= 0;
         fd_out_pkt_cnt <= 0;
         max_fd_out_fifo <= 0;
         out_pkt_cnt <= 0;
+        rule_set_cnt <= 0;
     end else begin
         if (parser_out_fifo_out_valid & parser_out_fifo_out_ready) begin
             fd_in_pkt_cnt <= fd_in_pkt_cnt + 1;
@@ -460,19 +462,19 @@ always @ (posedge clk) begin
         if (fdw_out_meta_valid & fdw_out_meta_ready) begin
             fd_out_pkt_cnt <= fd_out_pkt_cnt + 1;
         end
-
         if (max_fd_out_fifo <= fdw_out_meta_csr_readdata) begin
             max_fd_out_fifo <= fdw_out_meta_csr_readdata;
         end
-
         if (out_valid & !reg_out_almost_full & out_eop) begin
             out_pkt_cnt <= out_pkt_cnt + 1;
         end
-
+        if (out_conf_ft_valid & out_conf_ft_ready) begin
+            rule_set_cnt <= rule_set_cnt + 1;
+        end
     end
 end
 
-// datamover clock domain
+// Datamover clock domain.
 always @(posedge clk_datamover) begin
     if (rst_datamover | sw_reset) begin
         in_pkt_cnt <= 0;
