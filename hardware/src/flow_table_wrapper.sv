@@ -18,7 +18,7 @@ module flow_table_wrapper(
     output logic                out_control_done
 );
 
-// Service FSM hashing
+// Service FSM hashing.
 tuple_t         s_h0_tuple_in;
 logic           s_h0_tuple_in_valid;
 logic [31:0]    s_h0_initval;
@@ -43,7 +43,7 @@ logic [31:0]    s_h3_initval;
 logic [31:0]    s_h3_hashed;
 logic           s_h3_hashed_valid;
 
-// Placement FSM hashing
+// Placement FSM hashing.
 tuple_t         p_h0_tuple_in;
 logic           p_h0_tuple_in_valid;
 logic [31:0]    p_h0_initval;
@@ -68,7 +68,7 @@ logic [31:0]    p_h3_initval;
 logic [31:0]    p_h3_hashed;
 logic           p_h3_hashed_valid;
 
-// Subtables
+// Subtables.
 logic [FT_AWIDTH-1:0]   ft0_addr_a;
 logic [FT_AWIDTH-1:0]   ft0_addr_b;
 fce_t                   ft0_data_a;
@@ -113,7 +113,7 @@ logic                   ft3_wren_b;
 fce_t                   ft3_q_a;
 fce_t                   ft3_q_b;
 
-// Pipeline stages for S hashing
+// Pipeline stages for S hashing.
 metadata_t s_m0;
 metadata_t s_m1;
 metadata_t s_m2;
@@ -129,15 +129,7 @@ tuple_t s_lookup_tuple;
 tuple_t s_lookup_tuple_r1;
 tuple_t s_lookup_tuple_r2;
 
-// Pipeline stages for P hashing
-pdu_metadata_t p_c0;
-pdu_metadata_t p_c1;
-pdu_metadata_t p_c2;
-pdu_metadata_t p_c3;
-pdu_metadata_t p_c4;
-pdu_metadata_t p_c5;
-pdu_metadata_t p_c6;
-pdu_metadata_t p_c7;
+// Pipeline stages for P hashing.
 fce_t p_insert_fce_r;
 tuple_t p_lookup_tuple;
 
@@ -175,7 +167,7 @@ assign s_busy = !out_meta_ready;
 
 assign in_control_ready = !p_busy;
 
-// Two cycle read delay
+// Two cycle read delay.
 always@(posedge clk) begin
     rd_valid_b_r <= ft0_rden_b;
     rd_valid_b <= rd_valid_b_r;
@@ -217,7 +209,7 @@ always@(posedge clk) begin
         s_lookup_tuple_r2 <= 0;
     end else begin
         // Stall the pipeline if the downstream is not ready.
-        if (!s_busy)begin
+        if (!s_busy) begin
             // Default values.
             ft0_rden_a <= 1'b0;
             ft1_rden_a <= 1'b0;
@@ -226,7 +218,7 @@ always@(posedge clk) begin
             out_meta_valid <= 1'b0;
 
             // Read whenever hashed value is valid.
-            // Stage 0
+            // Stage 0.
             if (s_h0_hashed_valid) begin
                 ft0_rden_a <= 1'b1;
                 ft0_addr_a <= s_h0_hashed[FT_AWIDTH-1:0];
@@ -282,7 +274,7 @@ always@(posedge clk) begin
 end 
 
 
-// Placement FSM
+// Placement FSM.
 always@(posedge clk) begin
     if (rst) begin
         p_state <= P_IDLE;
@@ -331,7 +323,7 @@ always@(posedge clk) begin
                     p_ft_hit_r <= p_ft_hit;
                     p_ft_empty_r <= p_ft_empty;
 
-                    // Update an existing entry
+                    // Update an existing entry.
                     if (p_ft_hit != 0) begin
                         p_state <= P_UPDATE;
                     end
@@ -362,9 +354,9 @@ always@(posedge clk) begin
                     ft3_data_b <= p_insert_fce_r;
                 end
 
-                // Debug
+                // Debug.
                 `hdisplay(("FT: Updated Flow=0x%h, PKT_Q_ID=0x%h",
-                          p_insert_fce_r.tuple,  p_insert_fce_r.pkt_queue_id));
+                          p_insert_fce_r.tuple, p_insert_fce_r.pkt_queue_id));
 
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
@@ -389,9 +381,9 @@ always@(posedge clk) begin
                     ft3_data_b <= p_insert_fce_r;
                 end
 
-                // Debug
+                // Debug.
                 `hdisplay(("FT: Insert Flow=0x%h, PKT_Q_ID=0x%h",
-                          p_insert_fce_r.tuple,  p_insert_fce_r.pkt_queue_id));
+                          p_insert_fce_r.tuple, p_insert_fce_r.pkt_queue_id));
 
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
