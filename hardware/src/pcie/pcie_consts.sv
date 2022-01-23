@@ -39,7 +39,10 @@ typedef struct packed
     logic [363:0] pad;
     logic [19:0]  length; // In bytes (up to 1MB).
     logic [63:0]  addr; // Physical address of the data.
-    logic [63:0]  signal; // 0x1 if set from software, 0x0 if set from hardware.
+    logic [63:0]  signal; // 0x1 if set from software, 0x0 if set from hardware,
+                          // 0x2 if a configuration  descriptor (can only be
+                          // used in queue 0 and has no packet associated with
+                          // it).
 } pcie_tx_dsc_t;
 
 typedef struct packed

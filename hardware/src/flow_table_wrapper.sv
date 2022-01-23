@@ -12,6 +12,11 @@ module flow_table_wrapper(
     input  logic            out_meta_ready,
 
     // Control data.
+    input  var   flow_table_config_t in_control_data,
+    input  logic                     in_control_valid,
+    output logic                     in_control_ready,
+    output logic                     out_control_done,
+
     // Counter.
     output logic [31:0] eviction_cnt
 );
@@ -128,6 +133,14 @@ tuple_t s_lookup_tuple_r1;
 tuple_t s_lookup_tuple_r2;
 
 // Pipeline stages for P hashing.
+flow_table_config_t p_c0;
+flow_table_config_t p_c1;
+flow_table_config_t p_c2;
+flow_table_config_t p_c3;
+flow_table_config_t p_c4;
+flow_table_config_t p_c5;
+flow_table_config_t p_c6;
+flow_table_config_t p_c7;
 fce_t p_insert_fce_r;
 tuple_t p_lookup_tuple;
 

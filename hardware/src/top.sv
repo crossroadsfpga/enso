@@ -204,6 +204,20 @@ logic          parser_out_fifo_out_valid;
 metadata_t     parser_out_fifo_out_data;
 logic          parser_out_fifo_out_ready;
 
+config_flit_t in_config_data;
+logic         in_config_valid;
+logic         in_config_ready;
+
+flow_table_config_t out_conf_ft_data;
+logic               out_conf_ft_valid;
+logic               out_conf_ft_ready;
+
+config_flit_t pcie_out_config_data;
+logic         pcie_out_config_valid;
+logic         pcie_out_config_ready;
+
+logic [31:0] pcie_out_config_fifo_occup;
+
 logic          flow_table_wrapper_out_meta_valid;
 metadata_t     flow_table_wrapper_out_meta_data;
 logic          flow_table_wrapper_out_control_done;
@@ -541,14 +555,14 @@ always @(posedge clk_datamover) begin
         end
     end
 end
-// pcie clock domain
+
+// PCIe clock domain.
 always @(posedge clk_pcie) begin
     if (rst_pcie | sw_reset) begin
         pcie_pkt_cnt <= 0;
         pcie_meta_cnt <= 0;
         rx_dma_pkt_cnt <= 0;
         dma_request_cnt <= 0;
-        rule_set_cnt <= 0;
         max_pdugen_pkt_fifo <= 0;
         max_pdugen_meta_fifo <= 0;
         max_pcie_pkt_fifo <= 0;
@@ -962,6 +976,47 @@ parser_out_fifo (
     .out_empty         ()
 );
 
+configurator configurator_inst (
+    .clk               (clk),
+    .rst               (rst),
+    .in_config_data    (in_config_data),
+    .in_config_valid   (in_config_valid),
+    .in_config_ready   (in_config_ready),
+    .out_conf_ft_data  (out_conf_ft_data),
+    .out_conf_ft_valid (out_conf_ft_valid),
+    .out_conf_ft_ready (out_conf_ft_ready)
+);
+
+dc_fifo_wrapper_infill  #(
+    .SYMBOLS_PER_BEAT(1),
+    .BITS_PER_SYMBOL($bits(config_flit_t)),
+    .FIFO_DEPTH(1024),
+    .USE_PACKETS(0)
+)
+pcie_out_config_fifo (
+    .in_clk            (clk_pcie),
+    .in_reset_n        (!rst),
+    .out_clk           (clk),
+    .out_reset_n       (!rst),
+    .in_csr_address    (1'b0),
+    .in_csr_read       (1'b1),
+    .in_csr_write      (1'b0),
+    .in_csr_readdata   (pcie_out_config_fifo_occup),
+    .in_csr_writedata  (32'b0),
+    .in_data           (pcie_out_config_data),
+    .in_valid          (pcie_out_config_valid),
+    .in_ready          (pcie_out_config_ready),
+    .in_startofpacket  (0),
+    .in_endofpacket    (0),
+    .in_empty          (0),
+    .out_data          (in_config_data),
+    .out_valid         (in_config_valid),
+    .out_ready         (in_config_ready),
+    .out_startofpacket (),
+    .out_endofpacket   (),
+    .out_empty         ()
+);
+
 flow_table_wrapper flow_table_wrapper_0 (
     .clk              (clk),
     .rst              (rst),
@@ -971,6 +1026,10 @@ flow_table_wrapper flow_table_wrapper_0 (
     .out_meta_data    (flow_table_wrapper_out_meta_data),
     .out_meta_valid   (flow_table_wrapper_out_meta_valid),
     .out_meta_ready   (flow_table_wrapper_out_ready),
+    .in_control_data  (out_conf_ft_data),
+    .in_control_valid (out_conf_ft_valid),
+    .in_control_ready (out_conf_ft_ready),
+    .out_control_done (flow_table_wrapper_out_control_done),
     .eviction_cnt     (eviction_cnt)
  );
 
@@ -1319,6 +1378,9 @@ pcie_top pcie (
     .pcie_tx_pkt_empty        (pcie_tx_pkt_empty),
     .pcie_tx_pkt_ready        (pcie_tx_pkt_ready),
     .pcie_tx_pkt_occup        (pcie_tx_pkt_fifo_occup),
+    .out_config_data          (pcie_out_config_data),
+    .out_config_valid         (pcie_out_config_valid),
+    .out_config_ready         (pcie_out_config_ready),
     .disable_pcie             (disable_pcie),
     .sw_reset                 (sw_reset),
     .pcie_core_full_cnt       (pcie_core_full_cnt),

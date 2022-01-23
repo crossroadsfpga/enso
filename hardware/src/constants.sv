@@ -209,24 +209,20 @@ localparam F2C_RB_DEPTH = 16384;
 localparam F2C_RB_AWIDTH = ($clog2(F2C_RB_DEPTH));
 localparam PDU_NUM = 256;
 
-// TODO(sadok): remove?
-typedef struct packed
-{
-    logic [191:0] padding;
-    logic [31:0]  pkt_queue_id;
-    logic [31:0]  action;
-    logic [31:0]  pdu_flit;
-    logic [31:0]  pdu_size;
-    logic [31:0]  prot;
-    tuple_t       tuple;
-    logic [31:0]  pdu_id;
-} pdu_hdr_t;
+typedef struct packed {
+    logic [383:0] pad;
+    logic [63:0]  config_id;
+    logic [63:0]  signal;
+} config_flit_t;
 
-typedef struct packed
-{
-    tuple_t tuple;
-    logic [63:0] pkt_queue_id;
-} pdu_metadata_t; //Metadata
+typedef struct packed {
+    logic [223:0] pad;
+    logic [31:0]  pkt_queue_id;
+    logic [31:0]  prot;
+    tuple_t       tuple;  // 96 bits.
+    logic [63:0]  config_id;
+    logic [63:0]  signal;
+} flow_table_config_t;
 
 `ifdef SIM
 `define hdisplay(A) if (!tb.error_termination_r) $display("%s", $sformatf A )

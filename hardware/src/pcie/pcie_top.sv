@@ -67,6 +67,11 @@ module pcie_top (
     input  logic         pcie_tx_pkt_ready,
     input  logic [31:0]  pcie_tx_pkt_occup,
 
+    // Config buffer output.
+    output var config_flit_t out_config_data,
+    output logic             out_config_valid,
+    input  logic             out_config_ready,
+
     output logic        disable_pcie,
     output logic        sw_reset,
     output logic [31:0] pcie_core_full_cnt,
@@ -556,6 +561,9 @@ cpu_to_fpga #(
     .tx_compl_buf_valid    (tx_compl_buf_valid),
     .tx_compl_buf_ready    (tx_compl_buf_ready),
     .tx_compl_buf_occup    (tx_compl_buf_occup),
+    .out_config_data       (out_config_data),
+    .out_config_valid      (out_config_valid),
+    .out_config_ready      (out_config_ready),
     .pcie_rddm_desc_ready  (pcie_rddm_desc_ready),
     .pcie_rddm_desc_valid  (pcie_rddm_desc_valid),
     .pcie_rddm_desc_data   (pcie_rddm_desc_data),

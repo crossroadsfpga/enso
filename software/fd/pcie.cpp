@@ -424,6 +424,74 @@ int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len)
     return 0;
 }
 
+
+int send_config(socket_internal* socket_entry, pcie_tx_dsc_t* config_dsc)
+{
+    dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
+    pcie_tx_dsc_t* tx_buf = dsc_queue->tx_buf;
+    uint32_t tx_tail = dsc_queue->tx_tail;
+    uint32_t free_slots = (dsc_queue->tx_head - tx_tail - 1) % DSC_BUF_SIZE;
+
+    // Make sure it's a config descriptor.
+    if (config_dsc->signal < 2) {
+        return -1;
+    }
+
+    // Block until we can send.
+    while (unlikely(free_slots == 0)) {
+        ++dsc_queue->tx_full_cnt;
+        update_tx_head(dsc_queue);
+        free_slots = (dsc_queue->tx_head - tx_tail - 1) % DSC_BUF_SIZE;
+    }
+
+    pcie_tx_dsc_t* tx_dsc = tx_buf + tx_tail;
+    *tx_dsc = *config_dsc;
+
+    _mm_clflushopt(tx_dsc);
+
+    tx_tail = (tx_tail + 1) % DSC_BUF_SIZE;
+    dsc_queue->tx_tail = tx_tail;
+
+    asm volatile ("" : : : "memory"); // compiler memory barrier
+    *(dsc_queue->tx_tail_ptr) = tx_tail;
+
+    // Wait for request to be consumed.
+    uint32_t nb_unreported_completions = dsc_queue->nb_unreported_completions;
+    while (dsc_queue->nb_unreported_completions == nb_unreported_completions) {
+        update_tx_head(dsc_queue);
+    }
+    dsc_queue->nb_unreported_completions = nb_unreported_completions;
+
+    return 0;
+}
+
+
+int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
+                      uint16_t src_port, uint32_t dst_ip, uint32_t src_ip,
+                      uint32_t protocol, uint32_t pkt_queue_id)
+{
+    flow_table_config_t config;
+    
+    if (unlikely(pkt_queue_id_offset != 0)) {
+        std::cerr << "Can only send control messages from app 0" << std::endl;
+        return -1;
+    }
+
+    config.signal = 2;
+    config.config_id = 1;  // Flow table entry.
+    config.dst_port = dst_port;
+    config.src_port = src_port;
+    config.dst_ip = dst_ip;
+    config.src_ip = src_ip;
+    config.protocol = protocol;
+    config.pkt_queue_id = pkt_queue_id;
+
+    send_config(socket_entry, (pcie_tx_dsc_t*) &config);
+
+    return 0;
+}
+
+
 int dma_finish(socket_internal* socket_entry)
 {
     dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
@@ -488,12 +556,12 @@ void print_queue_regs(queue_regs* regs)
     printf("tx_mem_high = 0x%08x \n", regs->tx_mem_high);
 }
 
-void print_buffer(uint32_t* buf, uint32_t nb_flits)
+void print_buffer(uint8_t* buf, uint32_t nb_flits)
 {
     for (uint32_t i = 0; i < nb_flits; ++i) {
         for (uint32_t j = 0; j < 8; ++j) {
             for (uint32_t k = 0; k < 8; ++k) {
-                printf("%02x ", ((uint8_t*) buf)[i*64 + j*8 + k] );
+                printf("%02x ", (buf)[i*64 + j*8 + k] );
             }
             printf("\n");
         }

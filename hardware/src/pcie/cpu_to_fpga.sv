@@ -27,6 +27,11 @@ module cpu_to_fpga  #(
   input  logic             tx_compl_buf_ready,
   input  logic [31:0]      tx_compl_buf_occup,
 
+  // Config buffer output.
+  output var config_flit_t out_config_data,
+  output logic             out_config_valid,
+  input  logic             out_config_ready,
+
   // PCIe Read Data Mover (RDDM) signals.
   input  logic         pcie_rddm_desc_ready,
   output logic         pcie_rddm_desc_valid,
@@ -76,6 +81,7 @@ typedef struct packed {
   logic [19:0]                         total_bytes;
   logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] head;
   logic [63:0]                         transfer_addr;
+  logic                                config_only;
 } meta_t;
 
 // Used to encode metadata in the destination address used by the RDDM.
@@ -528,6 +534,7 @@ always @(posedge clk) begin
   rddm_prio_queue_in_valid <= 0;
   meta_queue_in_valid_r <= 0;
   pkt_queue_in_valid <= 0;
+  out_config_valid <= 0;
 
   meta_queue_in_valid <= meta_queue_in_valid_r;
   meta_queue_in_data <= meta_queue_in_data_r;
@@ -549,10 +556,6 @@ always @(posedge clk) begin
       rddm_desc.descriptor_id = 1;  // Make sure this remains different from the
                                     // one used in the `desc` queue.
 
-      // TODO(sadok): should check values in the descriptor to make sure they
-      // are "reasonable." A bad actor may exploit this to read memory that they
-      // do not have access to.
-      assert(tx_dsc.length != 0);
       rddm_desc.nb_dwords = ((tx_dsc.length - 1) >> 2) + 1;
 
       rddm_desc.src_addr = tx_dsc.addr;
@@ -579,6 +582,28 @@ always @(posedge clk) begin
       meta.head = rddm_dst_addr.head;
       meta.transfer_addr = tx_dsc.addr;
 
+      // Configuration descriptor.
+      // TODO(sadok): Ensure that only queue 0 can send config descriptors.
+      // Right now we enable configuration from all queues to make software
+      // implementation easier.
+      if (tx_dsc.signal == 2) begin
+        // Configuration descriptors do not trigger a DMA for a new packet.
+        rddm_prio_queue_in_valid <= 0;
+
+        meta.config_only = 1;
+
+        // Send configuration to config queue.
+        out_config_data <= tx_dsc;
+        out_config_valid <= 1;
+      end else begin
+        // TODO(sadok): should check values in the descriptor to make sure they
+        // are "reasonable." A bad actor may exploit this to read memory that
+        // they do not have access to.
+        assert(tx_dsc.length != 0);
+
+        meta.config_only = 0;
+      end
+
       meta_queue_in_valid_r <= 1;
       meta_queue_in_data_r <= meta;
 
@@ -603,8 +628,9 @@ logic external_address_access;
 always_comb begin
   if (transfer_done) begin
     meta_queue_out_ready = !out_pkt_alm_full & !tx_compl_buf_alm_full
-                           & pkt_queue_out_valid;
-    pkt_queue_out_ready = meta_queue_out_ready;
+      & (pkt_queue_out_valid | meta_queue_out_data.config_only);
+    pkt_queue_out_ready =
+      meta_queue_out_ready & !meta_queue_out_data.config_only;
   end else begin
     meta_queue_out_ready = 0;
     pkt_queue_out_ready = !out_pkt_alm_full & !tx_compl_buf_alm_full;
@@ -729,7 +755,13 @@ always @(posedge clk) begin
       send_flit(batch_pending_bytes, cur_meta);
     end else if (meta_queue_out_ready & meta_queue_out_valid) begin
       cur_meta <= meta_queue_out_data;
-      send_flit(meta_queue_out_data.total_bytes, meta_queue_out_data);
+
+      if (meta_queue_out_data.config_only) begin
+        // Configuration only, no packet to send.
+        done_sending_batch(meta_queue_out_data);
+      end else begin
+        send_flit(meta_queue_out_data.total_bytes, meta_queue_out_data);
+      end
     end
   end
 end
@@ -952,9 +984,9 @@ fifo_wrapper_infill_mlab #(
 
 // Check if queues are being used correctly.
 always @(posedge clk) begin
-  queue_full_signals[31:7] <= 0;
+  queue_full_signals[31:8] <= 0;
   if (rst) begin
-    queue_full_signals[6:0] <= 0;
+    queue_full_signals[7:0] <= 0;
   end else begin
     if (!dsc_reads_queue_in_ready & dsc_reads_queue_in_valid) begin
       queue_full_signals[0] <= 1;
@@ -982,6 +1014,10 @@ always @(posedge clk) begin
     end
     if (!out_pkt_ready & out_pkt_valid) begin
       queue_full_signals[6] <= 1;
+      $fatal;
+    end
+    if (!out_config_ready & out_config_valid) begin
+      queue_full_signals[7] <= 1;
       $fatal;
     end
   end

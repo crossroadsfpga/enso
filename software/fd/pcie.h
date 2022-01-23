@@ -88,28 +88,26 @@ typedef struct queue_regs {
     uint32_t padding[8];
 } queue_regs_t;
 
-typedef struct block {
-    uint32_t pdu_id;
+typedef struct __attribute__((__packed__)) {
+    uint64_t signal;
+    uint64_t config_id;
     uint16_t dst_port;
     uint16_t src_port;
     uint32_t dst_ip;
     uint32_t src_ip;
     uint32_t protocol;
-    uint32_t pdu_size; // in bytes
-    uint32_t pdu_flit;
-    uint32_t action;
-    uint64_t queue_id;
-    uint8_t *pdu_payload; // immediately after pdu_hdr
-} block_s;
+    uint32_t pkt_queue_id;
+    uint8_t  pad[28];
+} flow_table_config_t;
 
-typedef struct {
+typedef struct __attribute__((__packed__))  {
     uint64_t signal;
     uint64_t queue_id;
     uint64_t tail;
     uint64_t pad[5];
 } pcie_rx_dsc_t;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     uint64_t signal;
     uint64_t phys_addr;
     uint64_t length;  // In bytes (up to 1MB).
@@ -169,8 +167,16 @@ int get_next_batch(dsc_queue_t* dsc_queue, socket_internal* socket_entries,
  */
 void advance_ring_buffer(socket_internal* socket_entry, size_t len);
 
-int send_control_message(socket_internal* socket_entry, unsigned int nb_rules,
-                         unsigned int nb_queues);
+/*
+ * Insert flow entry in the data plane flow table.
+ */
+int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
+                      uint16_t src_port, uint32_t dst_ip, uint32_t src_ip,
+                      uint32_t protocol, uint32_t pkt_queue_id);
+/*
+ * Send configuration to the dataplane. (Can only be used with queue 0.)
+ */
+int send_config(socket_internal* socket_entry, pcie_tx_dsc_t* config_dsc);
 
 /*
  * Send data pointed by `phys_addr` using the 
@@ -185,14 +191,7 @@ void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
 
 void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs);
 
-void print_buffer(uint32_t* buf, uint32_t nb_flits);
-
-void print_block(block_s *block);
-
-void fill_block(uint32_t *addr, block_s *block);
-
-uint32_t tx_copy_head(uint32_t tx_tail, queue_regs_t *global_block, 
-                      block_s *block, uint32_t *kdata);
+void print_buffer(uint8_t* buf, uint32_t nb_flits);
 
 void print_stats(socket_internal* socket_entry, bool print_global);
 
@@ -213,7 +212,7 @@ inline void update_tx_head(dsc_queue_t* dsc_queue)
         pcie_tx_dsc_t* tx_dsc = tx_buf + head;
 
         // Descriptor has not yet been consumed by hardware.
-        if (tx_dsc->signal == 1) {
+        if (tx_dsc->signal != 0) {
             break;
         }
 
