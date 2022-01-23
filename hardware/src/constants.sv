@@ -166,8 +166,6 @@ typedef struct packed
     logic [5:0] empty;
 } flit_meta_t;
 
-//96 bits
-localparam TUPLE_DWIDTH = (32+32+16+16);
 typedef struct packed
 {
     logic [31:0] sIP; 
@@ -175,20 +173,18 @@ typedef struct packed
     logic [15:0] sPort; 
     logic [15:0] dPort; 
 } tuple_t;
+localparam TUPLE_DWIDTH = $bits(tuple_t);
 
-localparam PDU_META_WIDTH=(TUPLE_DWIDTH+64);
-
-//1 + 96 + 64 = 195
-localparam FT_DWIDTH = (1+TUPLE_DWIDTH+64);
 typedef struct packed
 {
     logic valid;
     tuple_t tuple;
     logic [31:0] pkt_queue_id;
-} fce_t; //Flow context entry
+} fce_t;  // Flow context entry used at the flow table.
+localparam FT_DWIDTH = $bits(fce_t);
 
-localparam META_WIDTH=256; // Change this will affect hyper_reg_fd.
-localparam INT_META_WIDTH=(8+TUPLE_DWIDTH+16+PKT_AWIDTH+5+9+3+32+32);
+localparam META_WIDTH = 256;  // Change this will affect hyper_reg_fd.
+localparam INT_META_WIDTH = 8 + TUPLE_DWIDTH + 16 + PKT_AWIDTH + 5 + 9 + 3 + 32;
 localparam PADDING_WIDTH = (META_WIDTH - INT_META_WIDTH);
 typedef struct packed
 {

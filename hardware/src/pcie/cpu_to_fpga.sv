@@ -1065,7 +1065,7 @@ bram_true2port #(
   .DWIDTH(DSC_Q_TABLE_TAILS_DWIDTH),
   .DEPTH(NB_QUEUES)
 ) q_table_tails_bram (
-  .address_a (q_table_a_tails.addr),
+  .address_a (q_table_a_tails.addr[QUEUE_ID_WIDTH-1:0]),
   .address_b (q_table_tails.addr[QUEUE_ID_WIDTH-1:0]),
   .clock     (clk),
   .data_a    (q_table_a_tails.wr_data),
