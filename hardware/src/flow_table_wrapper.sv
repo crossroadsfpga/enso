@@ -12,10 +12,8 @@ module flow_table_wrapper(
     input  logic            out_meta_ready,
 
     // Control data.
-    input  var   pdu_metadata_t in_control_data,
-    input  logic                in_control_valid,
-    output logic                in_control_ready,
-    output logic                out_control_done
+    // Counter.
+    output logic [31:0] eviction_cnt
 );
 
 // Service FSM hashing.
@@ -279,6 +277,7 @@ always@(posedge clk) begin
     if (rst) begin
         p_state <= P_IDLE;
         out_control_done <= 1'b0;
+        eviction_cnt <= 0;
     end
     else begin
         case (p_state)
@@ -392,7 +391,8 @@ always@(posedge clk) begin
 
             P_INSERT_EVIC: begin
                 // Unimplemented!
-                p_state <= P_INSERT_EVIC;
+                eviction_cnt <= eviction_cnt + 1;
+                p_state <= P_IDLE;
                 `hdisplay(("Flow Table: Eviction!"));
             end
         endcase

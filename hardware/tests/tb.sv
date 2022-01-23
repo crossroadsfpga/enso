@@ -292,6 +292,7 @@ typedef enum{
   TX_DSC_TAIL_UPD,
   DMA_REQUEST,
   RULE_SET,
+  EVICTION,
   MAX_PDUGEN_PKT_FIFO,
   MAX_PDUGEN_META_FIFO,
   PCIE_CORE_FULL,
@@ -1523,6 +1524,15 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("RULE_SET:\t\t%d", top_readdata);
+          conf_state <= EVICTION;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      EVICTION: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("EVICTION:\t\t%d", top_readdata);
           conf_state <= MAX_PDUGEN_PKT_FIFO;
           s_read <= 1;
           s_addr <= s_addr + 1;
