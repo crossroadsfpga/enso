@@ -174,7 +174,6 @@ always @(posedge clk) begin
         if (delayed_metadata[0].needs_dsc) begin
             needs_dsc = 1;
             out_queue_in_data.drop_meta <= 0;
-            delayed_metadata[0].descriptor_only <= 1;
         end else if (delayed_metadata[0].descriptor_only) begin
             if (delayed_metadata[0].pkt_q_state.head ==
                     delayed_metadata[0].pkt_q_state.tail) begin
