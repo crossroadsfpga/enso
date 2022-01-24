@@ -16,8 +16,7 @@ typedef unsigned int socklen_t;
 
 int socket(int domain, int type, int protocol) noexcept;
 
-int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen,
-         unsigned nb_queues);
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) noexcept;
 
 uint64_t get_socket_phys_addr(int sockfd);
 

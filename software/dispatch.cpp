@@ -45,15 +45,14 @@ int main(int argc, const char* argv[])
     uint64_t recv_bytes = 0;
     uint64_t nb_pkts = 0;
 
-    if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " nb_cores port nb_rules"
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " nb_cores port"
                   << std::endl;
         return 1;
     }
 
     unsigned nb_cores = atoi(argv[1]);
     int port = atoi(argv[2]);
-    unsigned nb_rules = atoi(argv[3]);
 
     std::thread listeners[nb_cores];
     uint64_t* buffers[nb_cores];
@@ -72,11 +71,9 @@ int main(int argc, const char* argv[])
         rb_states[i].head = 0;
         rb_states[i].tail = 0;
     }
-
-    std::cout << "running test with " << nb_rules << " rules" << std::endl;
     
     std::thread socket_thread = std::thread(
-        [&recv_bytes, port, nb_rules, &nb_pkts, rb_states, &buffers, nb_cores]
+        [&recv_bytes, port, &nb_pkts, rb_states, &buffers, nb_cores]
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -96,10 +93,10 @@ int main(int argc, const char* argv[])
             memset(&addr, 0, sizeof(addr));
 
             addr.sin_family = AF_INET;
-            addr.sin_addr.s_addr = inet_addr("10.0.0.2"); // htonl(INADDR_ANY);
+            addr.sin_addr.s_addr = inet_addr("192.168.0.0");
             addr.sin_port = htons(port);
 
-            if (bind(socket_fd, (struct sockaddr*) &addr, nb_rules, 1)) {
+            if (bind(socket_fd, (struct sockaddr*) &addr, sizeof(addr))) {
                 std::cerr << "Problem binding socket (" << errno << "): "
                           << strerror(errno) <<  std::endl;
                 exit(3);

@@ -42,22 +42,22 @@ int main(int argc, const char* argv[])
     uint64_t recv_bytes = 0;
     uint64_t nb_batches = 0;
 
-    if (argc != 6) {
-        std::cerr << "Usage: " << argv[0]
-                  << " core port nb_rules nb_queues nb_cycles" << std::endl;
+    if (argc != 5) {
+        std::cerr << "Usage: " << argv[0] << " core port nb_queues nb_cycles"
+                  << std::endl;
         return 1;
     }
 
+    int core_id = atoi(argv[1]);
     int port = atoi(argv[2]);
-    unsigned nb_rules = atoi(argv[3]);
-    int nb_queues = atoi(argv[4]);
-    uint32_t nb_cycles = atoi(argv[5]);
+    int nb_queues = atoi(argv[3]);
+    uint32_t nb_cycles = atoi(argv[4]);
+
+    uint32_t addr_offset = core_id * nb_queues;
 
     signal(SIGINT, int_handler);
-
-    std::cout << "running test with " << nb_rules << " rules" << std::endl;
     
-    std::thread socket_thread = std::thread([&recv_bytes, port, nb_rules, 
+    std::thread socket_thread = std::thread([&recv_bytes, port, addr_offset, 
         nb_queues, &nb_batches, &nb_cycles]
     {
         uint32_t tx_pr_head = 0;
@@ -83,11 +83,14 @@ int main(int argc, const char* argv[])
             struct sockaddr_in addr;
             memset(&addr, 0, sizeof(addr));
 
+            uint32_t ip_address = ntohl(inet_addr("192.168.0.0"));
+            ip_address += addr_offset + i;
+
             addr.sin_family = AF_INET;
-            addr.sin_addr.s_addr = inet_addr("10.0.0.2"); // htonl(INADDR_ANY);
+            addr.sin_addr.s_addr = htonl(ip_address);
             addr.sin_port = htons(port);
 
-            if (bind(socket_fd, (struct sockaddr*) &addr, nb_rules, nb_rules)) {
+            if (bind(socket_fd, (struct sockaddr*) &addr, sizeof(addr))) {
                 std::cerr << "Problem binding socket (" << errno << "): "
                           << strerror(errno) <<  std::endl;
                 exit(3);
@@ -168,7 +171,7 @@ int main(int argc, const char* argv[])
 
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(atoi(argv[1]), &cpuset);
+    CPU_SET(core_id, &cpuset);
     result = pthread_setaffinity_np(socket_thread.native_handle(),
                                     sizeof(cpuset), &cpuset);
     if (result < 0) {

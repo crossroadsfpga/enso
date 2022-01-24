@@ -58,32 +58,22 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     return socket_id;
 }
 
-int bind(
-    int sockfd,
-    const struct sockaddr *addr __attribute__((unused)),
-    socklen_t addrlen, // HACK(sadok) specifying number of rules
-    unsigned nb_queues // HACK(sadok) should not have this last argument in the
-                       //             bind call
-)
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) noexcept
 {
+    (void) addrlen;  // Avoid unused warnings.
     socket_internal* socket = &open_sockets[sockfd];
+    sockaddr_in* addr_in = (sockaddr_in*) addr;
 
-    // FIXME(sadok): We currently bind all sockets on queue 0.
-    if (socket->queue_id != 0) {
-        std::cerr << "not sending control message" << std::endl;
-        return 0;
-    }
-
-    #ifdef CONTROL_MSG
-    unsigned nb_rules = addrlen;
-    if (send_control_message(socket, nb_rules, nb_queues)) {
-        std::cerr << "Could not send control message" << std::endl;
-        return -1;
-    }
-    #else 
-    (void) addrlen;// avoid unused parameter warning
-    (void) nb_queues;
-    #endif
+    // TODO(sadok): insert flow entry from kernel.
+    insert_flow_entry(
+        socket,
+        ntohs(addr_in->sin_port),
+        0,
+        ntohl(addr_in->sin_addr.s_addr),  // inet_addr("192.168.0.0")
+        0, // inet_addr("192.168.0.0")
+        0x11, // TODO(sadok): support different protocols other than UDP.
+        0
+    );
 
     return 0;
 }
