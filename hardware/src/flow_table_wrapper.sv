@@ -366,10 +366,6 @@ always@(posedge clk) begin
                     ft3_data_b <= p_insert_fce_r;
                 end
 
-                // Debug.
-                `hdisplay(("FT: Updated Flow=0x%h, PKT_Q_ID=0x%h",
-                          p_insert_fce_r.tuple, p_insert_fce_r.pkt_queue_id));
-
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
                 out_control_done <= 1'b1;
@@ -392,10 +388,6 @@ always@(posedge clk) begin
                     ft3_wren_b <= 1'b1;
                     ft3_data_b <= p_insert_fce_r;
                 end
-
-                // Debug.
-                `hdisplay(("FT: Insert Flow=0x%h, PKT_Q_ID=0x%h",
-                          p_insert_fce_r.tuple, p_insert_fce_r.pkt_queue_id));
 
                 p_busy <= 1'b0;
                 p_state <= P_IDLE;
