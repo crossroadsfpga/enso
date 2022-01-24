@@ -723,8 +723,6 @@ always @(posedge clk_pcie) begin
               32'hc0a80000 + nb_config_queues[31:0],
               32'h1f900050
           };
-          // c0a80001c0a800011f900050 <- actual
-          // c0a80000c0a800011f900050,
           flow_table_config.config_id = 1;
           flow_table_config.signal = 2;
 
@@ -752,7 +750,6 @@ always @(posedge clk_pcie) begin
           end
         end
       end
-      // TODO(sadok) assert that RULE_SET == 1
       PCIE_RULE_UPDATE: begin
         if (cnt >= cnt_delay) begin
           pcie_state <= PCIE_WAIT_DESC;
@@ -1122,6 +1119,7 @@ rddm_prio_queue (
 assign pcie_rddm_prio_ready = rddm_prio_queue_occup < (16 - 3);
 
 logic [31:0] last_tail;
+logic [31:0] in_pkt;
 
 //Configure
 //Read and display pkt/flow cnts
@@ -1301,6 +1299,7 @@ always @(posedge clk_status) begin
         if(top_readdata_valid)begin
           $display("---- PRINT STATS ------");
           $display("IN_PKT:\t\t%d", top_readdata);
+          in_pkt <= top_readdata;
           conf_state <= OUT_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;
@@ -1309,7 +1308,13 @@ always @(posedge clk_status) begin
       OUT_PKT: begin
         s_read <= 0;
         if(top_readdata_valid)begin
-          $display("OUT_PKT:\t\t%d", top_readdata);
+          // Make sure all input packets were output.
+          assert(in_pkt == top_readdata) begin
+            $display("OUT_PKT:\t\t%d", top_readdata);
+          end else begin
+            $display("OUT_PKT:\t\t%d <----", top_readdata);
+            $error;
+          end
           conf_state <= INCOMP_OUT_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;
@@ -1517,7 +1522,13 @@ always @(posedge clk_status) begin
       RULE_SET: begin
         s_read <= 0;
         if(top_readdata_valid)begin
-          $display("RULE_SET:\t\t%d", top_readdata);
+          // Ensure that a rule was set for every packet queue.
+          assert(top_readdata == nb_pkt_queues) begin
+            $display("RULE_SET:\t\t%d", top_readdata);
+          end else begin
+            $display("RULE_SET:\t\t%d <----", top_readdata);
+            $error;
+          end
           conf_state <= EVICTION;
           s_read <= 1;
           s_addr <= s_addr + 1;
