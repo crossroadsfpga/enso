@@ -719,9 +719,9 @@ always @(posedge clk_pcie) begin
           flow_table_config.pkt_queue_id = nb_config_queues;
           flow_table_config.prot = 32'h11;
           flow_table_config.tuple = {
-              32'hc0a80000 + dsc_q,
+              32'h0,
               32'hc0a80000 + nb_config_queues[31:0],
-              32'h1f900050
+              32'h00000050
           };
           flow_table_config.config_id = 1;
           flow_table_config.signal = 2;

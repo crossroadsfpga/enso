@@ -9,7 +9,7 @@ import sys
 from itertools import cycle
 
 from tqdm import tqdm
-from scapy.all import IP, TCP, Ether, Raw, bytes_encode, PcapWriter, DLT_EN10MB
+from scapy.all import IP, UDP, Ether, Raw, bytes_encode, PcapWriter, DLT_EN10MB
 
 
 # Bypassing scapy's awfully slow wrpcap, have to use raw packets as input
@@ -32,7 +32,7 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest):
         pkt = (
             Ether() /
             IP(dst=str(dst_ip), src=str(src_ip), len=ipv4_len) /
-            TCP(dport=80, sport=8080, flags='S')
+            UDP(dport=80, sport=8080)
         )
 
         missing_bytes = pkt_size - len(pkt) - 4  # no CRC

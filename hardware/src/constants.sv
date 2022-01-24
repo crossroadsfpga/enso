@@ -35,10 +35,6 @@ localparam IP_V4 = 4'h4;
 localparam PROT_TCP=8'h06;
 localparam PROT_UDP=8'h11;
 
-localparam NS=8'hFF;//reserved
-localparam S_UDP=PROT_UDP;
-localparam S_TCP=PROT_TCP;
-
 //TCP flags
 localparam TCP_FIN=0;
 localparam TCP_SYN=1;

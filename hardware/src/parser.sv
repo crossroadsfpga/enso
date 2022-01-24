@@ -129,28 +129,49 @@ assign tcp_win = in_pkt_data[127:112];     //16
 assign tcp_chsm = in_pkt_data[111:96];     //16
 assign tcp_urgp = in_pkt_data[95:80];      //16
 
-assign support = (eth_type == PROT_ETH) & (ip_version == IP_V4)
-            & (ip_ihl == 5) & ((ip_prot == PROT_TCP) | (ip_prot == PROT_UDP));
+always_comb begin
+    support = (eth_type == PROT_ETH) & (ip_version == IP_V4)
+        & (ip_ihl == 5) & ((ip_prot == PROT_TCP) | (ip_prot == PROT_UDP));
 
-assign metadata.len = {
-    (ip_prot == PROT_TCP) ?
-          (ip_len - (ip_ihl << 2) - (tcp_do << 2))
-        : (ip_len - (ip_ihl << 2) - 32'd8)
-}[15:0];
-assign metadata.tuple.sIP = ip_sip;
-assign metadata.tuple.dIP = {ip_dip_high,ip_dip_low};
-assign metadata.tuple.sPort = tcp_sport;
-assign metadata.tuple.dPort = tcp_dport;
-assign metadata.prot = support ? ((ip_prot == PROT_TCP) ? S_TCP : S_UDP) : NS;
-assign metadata.pktID = in_meta_data.pktID;
-assign metadata.flits = in_meta_data.flits;
-assign metadata.tcp_flags = {
-    tcp_ns, tcp_cwr, tcp_ece, tcp_urg, tcp_fack, tcp_psh, tcp_rst, tcp_syn,
-    tcp_fin
-};
-assign metadata.pkt_flags = disable_pcie ? PKT_ETH : PKT_PCIE;
-assign metadata.pkt_queue_id = 0;
-assign metadata.padding = 0;
+    if (ip_prot == PROT_TCP) begin
+        metadata.len = { ip_len - (ip_ihl << 2) - (tcp_do << 2) }[15:0];
+    end else begin
+        metadata.len = { ip_len - (ip_ihl << 2) - 32'd8 }[15:0];
+    end
+
+    // TODO(sadok): Might want to reconsider this in the future.
+    case (ip_prot)
+        PROT_TCP: begin
+            metadata.tuple.sIP = ip_sip;
+            metadata.tuple.dIP = {ip_dip_high, ip_dip_low};
+            metadata.tuple.sPort = tcp_sport;
+            metadata.tuple.dPort = tcp_dport;
+        end
+        PROT_UDP: begin
+            // UDP packets lookup the flow table based on destination only.
+            metadata.tuple.sIP = 32'h0;
+            metadata.tuple.dIP = {ip_dip_high, ip_dip_low};
+            metadata.tuple.sPort = 16'h0;
+            metadata.tuple.dPort = udp_dport;
+        end
+        default: begin
+            metadata.tuple.sIP = 32'h0;
+            metadata.tuple.dIP = {ip_dip_high, ip_dip_low};
+            metadata.tuple.sPort = 16'h0;
+            metadata.tuple.dPort = 16'h0;
+        end
+    endcase
+
+    metadata.prot = ip_prot;
+    metadata.pktID = in_meta_data.pktID;
+    metadata.flits = in_meta_data.flits;
+    metadata.tcp_flags = {tcp_ns, tcp_cwr, tcp_ece, tcp_urg, tcp_fack, tcp_psh,
+                          tcp_rst, tcp_syn, tcp_fin};
+    metadata.pkt_flags = disable_pcie ? PKT_ETH : PKT_PCIE;
+    metadata.pkt_queue_id = 0;
+    metadata.padding = 0;
+end
+
 
 assign in_pkt_ready = out_meta_ready;
 assign in_meta_ready = out_meta_ready;
