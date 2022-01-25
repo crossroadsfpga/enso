@@ -38,7 +38,7 @@ localparam PCIE_DELAY = 1000;
 localparam STOP_DELAY = 100000 + PCIE_DELAY;
 
 // Set number of in-flight descriptor reads that are allowed in the TX path.
-localparam NB_TX_CREDITS = 100;
+localparam NB_TX_CREDITS = 500;
 
 // Number of cycles to wait before updating the head pointer for the pkt queue.
 localparam UPDATE_HEAD_DELAY = 1000;
