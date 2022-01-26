@@ -157,10 +157,6 @@ function logic [3:0] start_burst(
       flits_in_transfer = meta.size[3:0];
     end
 
-    if (meta.size == 1) begin
-      assert(data.sop);
-    end
-
     // The DMA transfer cannot go across the buffer limit.
     if (flits_in_transfer > (pkt_rb_size_r[RB_AWIDTH-1:0]
                              - meta.pkt_q_state.tail)) begin
@@ -233,6 +229,8 @@ always @(posedge clk) begin
         end else if (can_start_transfer) begin
           automatic logic [3:0] missing_flits_in_transfer;
 
+          assert(pkt_buf_out_data.sop);
+
           transf_meta.pkt_meta <= cur_meta;
           missing_flits_in_transfer = start_burst(pkt_buf_out_data, cur_meta);
           transf_meta.missing_flits_in_transfer <= missing_flits_in_transfer;
@@ -244,8 +242,10 @@ always @(posedge clk) begin
             // directly to START_BURST.
             state <= START_BURST;
           end else if (cur_meta.needs_dsc) begin
+            assert(pkt_buf_out_data.eop);
             state <= SEND_DESCRIPTOR;
           end else begin
+            assert(pkt_buf_out_data.eop);
             state <= START_TRANSFER;
           end
         end
@@ -258,13 +258,15 @@ always @(posedge clk) begin
           transf_meta.missing_flits_in_transfer <=
             transf_meta.missing_flits_in_transfer - 1;
 
-          // last flit in burst
+          // Last flit in burst.
           if (transf_meta.missing_flits_in_transfer == 1) begin
             if (transf_meta.pkt_meta.size > 1) begin
               state <= START_BURST;
             end else if (transf_meta.pkt_meta.needs_dsc) begin
+              assert(pkt_buf_out_data.eop);
               state <= SEND_DESCRIPTOR;
             end else begin
+              assert(pkt_buf_out_data.eop);
               state <= START_TRANSFER;
             end
           end
@@ -287,8 +289,10 @@ always @(posedge clk) begin
             // directly to START_BURST.
             state <= START_BURST;
           end else if (transf_meta.pkt_meta.needs_dsc) begin
+            assert(pkt_buf_out_data.eop);
             state <= SEND_DESCRIPTOR;
           end else begin
+            assert(pkt_buf_out_data.eop);
             state <= START_TRANSFER;
           end
         end
