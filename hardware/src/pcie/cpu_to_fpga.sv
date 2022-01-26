@@ -695,12 +695,12 @@ function void send_flit(
   automatic logic [19:0] current_pkt_pending_bytes;
 
   out_pkt_data_r <= pkt_queue_out_data;
-  out_pkt_empty_r <= 0;  // TODO(sadok): handle unaligned packets.
+  out_pkt_empty_r <= 0;
   out_pkt_valid_r <= 1;
 
   if (ready_for_next_pkt) begin
     out_pkt_sop_r <= 1;
-    current_pkt_pending_bytes = pkt_len_le; // TODO(sadok): L2 header/trailer?
+    current_pkt_pending_bytes = pkt_len_le + ETH_HDR_LEN;
   end else begin
     current_pkt_pending_bytes = pkt_pending_bytes;
   end
@@ -709,6 +709,7 @@ function void send_flit(
     out_pkt_eop_r <= 1;
     ready_for_next_pkt <= 1;
     pkt_pending_bytes <= 0;
+    out_pkt_empty_r <= 64 - current_pkt_pending_bytes;
   end else begin
     ready_for_next_pkt <= 0;
     pkt_pending_bytes <= current_pkt_pending_bytes - 64;
