@@ -517,7 +517,6 @@ int dma_finish(socket_internal* socket_entry)
         dsc_queue->regs->tx_mem_high = 0;
         munmap(dsc_queue->rx_buf, ALIGNED_DSC_BUF_PAIR_SIZE);
         free(pending_pkt_tails);
-        // free(rx_pkt_queue_ids);
         free(dsc_queue->last_rx_ids);
     }
 
@@ -579,12 +578,10 @@ void print_stats(socket_internal* socket_entry, bool print_global)
     dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
 
     if (print_global) {
-        printf("TX descriptor queue full counter: %lu\n\n", dsc_queue->tx_full_cnt);
+        printf("TX descriptor queue full counter: %lu\n\n",
+               dsc_queue->tx_full_cnt);
         printf("Dsc RX head: %d\n", dsc_queue->rx_head);
         printf("Dsc TX tail: %d\n", dsc_queue->tx_tail);
         printf("Dsc TX head: %d\n\n", dsc_queue->tx_head);
     }
-
-    // printf("Pkt RX tail: %d\n", socket_entry->pkt_queue.rx_tail);
-    // printf("Pkt RX head: %d\n", socket_entry->pkt_queue.rx_head);
 }
