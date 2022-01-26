@@ -1,5 +1,5 @@
 `include "./constants.sv"
-/* 
+/*
  * Parse the Ethernet frame to data for kernel. Convert Big endian to little
  * endian.
  */
@@ -142,22 +142,28 @@ always_comb begin
     // TODO(sadok): Might want to reconsider this in the future.
     case (ip_prot)
         PROT_TCP: begin
-            metadata.tuple.sIP = ip_sip;
+            // The first packet should find a queue based on destination only.
+            if (tcp_syn) begin
+                metadata.tuple.sIP = 32'h0;
+                metadata.tuple.sPort = 16'h0;
+            end else begin
+                metadata.tuple.sIP = ip_sip;
+                metadata.tuple.sPort = tcp_sport;
+            end
             metadata.tuple.dIP = {ip_dip_high, ip_dip_low};
-            metadata.tuple.sPort = tcp_sport;
             metadata.tuple.dPort = tcp_dport;
         end
         PROT_UDP: begin
             // UDP packets lookup the flow table based on destination only.
             metadata.tuple.sIP = 32'h0;
-            metadata.tuple.dIP = {ip_dip_high, ip_dip_low};
             metadata.tuple.sPort = 16'h0;
+            metadata.tuple.dIP = {ip_dip_high, ip_dip_low};
             metadata.tuple.dPort = udp_dport;
         end
         default: begin
             metadata.tuple.sIP = 32'h0;
-            metadata.tuple.dIP = {ip_dip_high, ip_dip_low};
             metadata.tuple.sPort = 16'h0;
+            metadata.tuple.dIP = {ip_dip_high, ip_dip_low};
             metadata.tuple.dPort = 16'h0;
         end
     endcase
