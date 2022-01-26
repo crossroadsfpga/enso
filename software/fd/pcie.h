@@ -185,6 +185,8 @@ int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len);
 
 int dma_finish(socket_internal* socket_entry);
 
+uint32_t get_pkt_queue_id_from_socket(socket_internal* socket_entry);
+
 void print_queue_regs(queue_regs_t * pb);
 
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);

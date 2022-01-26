@@ -524,6 +524,11 @@ int dma_finish(socket_internal* socket_entry)
     return 0;
 }
 
+uint32_t get_pkt_queue_id_from_socket(socket_internal* socket_entry)
+{
+    return (uint32_t) socket_entry->queue_id + pkt_queue_id_offset;
+}
+
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range)
 {
     for (unsigned int i = 0; i < range*16; ++i) {

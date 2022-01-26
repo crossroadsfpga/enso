@@ -64,15 +64,17 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) noexcept
     socket_internal* socket = &open_sockets[sockfd];
     sockaddr_in* addr_in = (sockaddr_in*) addr;
 
+    uint32_t pkt_queue_id = get_pkt_queue_id_from_socket(socket);
+
     // TODO(sadok): insert flow entry from kernel.
     insert_flow_entry(
         socket,
         ntohs(addr_in->sin_port),
         0,
-        ntohl(addr_in->sin_addr.s_addr),  // inet_addr("192.168.0.0")
-        0, // inet_addr("192.168.0.0")
-        0x11, // TODO(sadok): support different protocols other than UDP.
-        0
+        ntohl(addr_in->sin_addr.s_addr),
+        0,
+        0x11, // TODO(sadok): support protocols other than UDP.
+        pkt_queue_id
     );
 
     return 0;
