@@ -462,8 +462,15 @@ logic pcie_bas_write_r;
 //Read and Write registers
 //////////////////////////
 
+logic sw_reset_r1;
+logic sw_reset_r2;
+
 always @ (posedge clk) begin
-    if (rst | sw_reset) begin
+    // Add pipeline stages to help with timing.
+    sw_reset_r1 <= sw_reset;
+    sw_reset_r2 <= sw_reset_r1;
+
+    if (rst | sw_reset_r2) begin
         fd_in_pkt_cnt <= 0;
         fd_out_pkt_cnt <= 0;
         max_fd_out_fifo <= 0;
@@ -488,9 +495,16 @@ always @ (posedge clk) begin
     end
 end
 
+logic sw_reset_dm_r1;
+logic sw_reset_dm_r2;
+
 // Datamover clock domain.
 always @(posedge clk_datamover) begin
-    if (rst_datamover | sw_reset) begin
+    // Add pipeline stages to help with timing.
+    sw_reset_dm_r1 <= sw_reset;
+    sw_reset_dm_r2 <= sw_reset_dm_r1;
+
+    if (rst_datamover | sw_reset_dm_r2) begin
         in_pkt_cnt <= 0;
         out_pkt_cnt_incomp <= 0;
         out_pkt_cnt_parser <= 0;
