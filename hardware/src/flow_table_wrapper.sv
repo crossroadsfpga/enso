@@ -242,6 +242,9 @@ always@(posedge clk) begin
 
                 s_meta_r <= s_m7;
                 s_lookup_tuple <= s_m7.tuple;
+
+                // Save hash.
+                s_meta_r.hash <= s_h0_hashed;
             end
 
             // Stage 1.

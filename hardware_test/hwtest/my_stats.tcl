@@ -13,7 +13,13 @@ set MAX_NB_FLOWS 8192
 set REGS_PER_PKT_QUEUE 4
 set REGS_PER_DSC_QUEUE 8
 
-set PKT_QUEUE_OFFSET 3
+#PCIE reg
+set PCIE_CTRL_REG       0
+
+set NB_CTRL_REGS 4
+set NB_QUEUE_REGS 16384
+
+set PKT_QUEUE_OFFSET $NB_CTRL_REGS
 set DSC_QUEUE_OFFSET [
     expr $PKT_QUEUE_OFFSET + $MAX_NB_FLOWS * $REGS_PER_PKT_QUEUE]
 
@@ -92,12 +98,6 @@ set PCIE_TX_BATCH_CNT         43
 set PCIE_TX_MAX_INFLIGHT_DSCS 44
 set PCIE_TX_MAX_NB_REQ_DSCS   45
 set TX_DMA_PKT                46
-
-#PCIE reg
-set PCIE_CTRL_REG       0
-
-set NB_CTRL_REGS 3
-set NB_QUEUE_REGS 16384
 
 set log 0
 #clock period
@@ -846,6 +846,20 @@ proc set_nb_tx_credits {nb_tx_credits} {
     set wr_reg [expr $PCIE_CTRL_REG + 2]
 
     reg_write $PCIE_BASE $wr_reg $nb_tx_credits
+
+    set_clear
+    set_up
+}
+
+proc set_nb_fallback_queues {nb_fallback_queues} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+    global rdata
+    global wdata
+
+    set wr_reg [expr $PCIE_CTRL_REG + 3]
+
+    reg_write $PCIE_BASE $wr_reg $nb_fallback_queues
 
     set_clear
     set_up

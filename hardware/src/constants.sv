@@ -101,7 +101,7 @@ localparam MMIO_OFFSET = (MAX_NB_APPS + MAX_NB_FLOWS) * FLITS_PER_PAGE;
 localparam REG_SIZE = 4; // in bytes
 localparam REGS_PER_PKT_Q = 4;
 localparam REGS_PER_DSC_Q = 8;
-localparam NB_CONTROL_REGS = 3;
+localparam NB_CONTROL_REGS = 4;
 localparam NB_QUEUE_REGS = MAX_NB_APPS * REGS_PER_DSC_Q 
                          + MAX_NB_FLOWS * REGS_PER_PKT_Q;
 localparam JTAG_ADDR_WIDTH = ($clog2(NB_QUEUE_REGS + NB_CONTROL_REGS));
@@ -180,7 +180,8 @@ typedef struct packed
 localparam FT_DWIDTH = $bits(fce_t);
 
 localparam META_WIDTH = 256;  // Change this will affect hyper_reg_fd.
-localparam INT_META_WIDTH = 8 + TUPLE_DWIDTH + 16 + PKT_AWIDTH + 5 + 9 + 3 + 32;
+localparam INT_META_WIDTH =
+    8 + TUPLE_DWIDTH + 16 + PKT_AWIDTH + 5 + 9 + 3 + 32 + 32;
 localparam PADDING_WIDTH = (META_WIDTH - INT_META_WIDTH);
 typedef struct packed
 {
@@ -192,6 +193,7 @@ typedef struct packed
     logic [8:0]               tcp_flags;
     logic [2:0]               pkt_flags;
     logic [31:0]              pkt_queue_id;
+    logic [31:0]              hash;
     logic [PADDING_WIDTH-1:0] padding;
 } metadata_t;
 

@@ -72,8 +72,12 @@ module pcie_top (
     output logic             out_config_valid,
     input  logic             out_config_ready,
 
+    // Configuration signals.
     output logic        disable_pcie,
     output logic        sw_reset,
+    output logic [31:0] nb_fallback_queues,
+
+    // Counters.
     output logic [31:0] pcie_core_full_cnt,
     output logic [31:0] rx_dma_dsc_cnt,
     output logic [31:0] rx_dma_dsc_drop_cnt,
@@ -129,6 +133,8 @@ end
 assign dsc_rb_size = control_regs[1][0 +: RB_AWIDTH+1];
 
 assign inflight_desc_limit = control_regs[2];
+
+assign nb_fallback_queues = control_regs[3];
 
 logic [BRAM_TABLE_IDX_WIDTH-1:0] queue_id;
 assign queue_id = pcie_address_0[12 +: BRAM_TABLE_IDX_WIDTH];

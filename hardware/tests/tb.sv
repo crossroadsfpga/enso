@@ -8,6 +8,10 @@ module tb;
 `define PKT_FILE_NB_LINES 2400
 `endif
 
+`ifndef NB_FALLBACK_QUEUES
+`define NB_FALLBACK_QUEUES 0
+`endif
+
 `ifndef NB_DSC_QUEUES
 `define NB_DSC_QUEUES 4
 `endif
@@ -262,6 +266,7 @@ typedef enum{
   CONFIGURE_0,
   CONFIGURE_1,
   CONFIGURE_2,
+  CONFIGURE_3,
   READ_MEMORY,
   READ_PCIE_START,
   READ_PCIE_PKT_Q,
@@ -1157,11 +1162,17 @@ always @(posedge clk_status) begin
         conf_state <= CONFIGURE_2;
       end
       CONFIGURE_2: begin
-        automatic logic [25:0] dsc_buf_size = DSC_BUF_SIZE;
         s_addr <= 30'h2A00_0002;
         s_write <= 1;
 
         s_writedata <= NB_TX_CREDITS;
+        conf_state <= CONFIGURE_3;
+      end
+      CONFIGURE_3: begin
+        s_addr <= 30'h2A00_0003;
+        s_write <= 1;
+
+        s_writedata <= `NB_FALLBACK_QUEUES;
         conf_state <= READ_MEMORY;
       end
       READ_MEMORY: begin

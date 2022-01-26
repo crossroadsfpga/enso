@@ -231,6 +231,7 @@ logic [31:0]   fdw_out_meta_csr_readdata;
 logic          fdw_out_meta_valid;
 metadata_t     fdw_out_meta_data;
 logic          fdw_out_meta_ready;
+logic [31:0]   nb_fallback_queues;
 
 logic          dm_in_meta_valid;
 metadata_t     dm_in_meta_data;
@@ -1048,14 +1049,15 @@ flow_table_wrapper flow_table_wrapper_0 (
  );
 
 flow_director_wrapper flow_director_inst (
-    .clk            (clk),
-    .rst            (rst),
-    .in_meta_data   (fdw_in_meta_data),
-    .in_meta_valid  (fdw_in_meta_valid),
-    .in_meta_ready  (fdw_in_meta_ready),
-    .out_meta_data  (fdw_out_meta_data),
-    .out_meta_valid (fdw_out_meta_valid),
-    .out_meta_ready (fdw_out_meta_ready)
+    .clk                (clk),
+    .rst                (rst),
+    .in_meta_data       (fdw_in_meta_data),
+    .in_meta_valid      (fdw_in_meta_valid),
+    .in_meta_ready      (fdw_in_meta_ready),
+    .out_meta_data      (fdw_out_meta_data),
+    .out_meta_valid     (fdw_out_meta_valid),
+    .out_meta_ready     (fdw_out_meta_ready),
+    .nb_fallback_queues (nb_fallback_queues)
 );
 
 dc_fifo_wrapper_infill  #(
@@ -1397,6 +1399,7 @@ pcie_top pcie (
     .out_config_ready         (pcie_out_config_ready),
     .disable_pcie             (disable_pcie),
     .sw_reset                 (sw_reset),
+    .nb_fallback_queues       (nb_fallback_queues),
     .pcie_core_full_cnt       (pcie_core_full_cnt),
     .rx_dma_dsc_cnt           (rx_dma_dsc_cnt),
     .rx_dma_dsc_drop_cnt      (rx_dma_dsc_drop_cnt),
