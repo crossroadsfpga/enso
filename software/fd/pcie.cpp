@@ -109,13 +109,35 @@ static void* get_huge_pages(int queue_id, size_t size) {
         return NULL;
     }
 
-    void* virt_addr = (void*) mmap(NULL, size,
+    void* virt_addr = (void*) mmap(NULL, size * 2,
         PROT_READ | PROT_WRITE, MAP_SHARED | MAP_HUGETLB, fd, 0);
 
     if (virt_addr == (void*) -1) {
         std::cerr << "(" << errno << ") Could not mmap huge page" << std::endl;
         close(fd);
         unlink(huge_pages_path);
+        return NULL;
+    }
+
+    // Allocate same huge page at the end of the last one.
+    if (lseek(fd, 0, SEEK_SET) != 0) {
+        std::cerr << "(" << errno << ") Could not lseek to beginning of page"
+                  << std::endl;
+        close(fd);
+        unlink(huge_pages_path);
+        free(virt_addr);
+        return NULL;
+    }
+    
+    void* ret = (void*) mmap((uint8_t*) virt_addr + size, size,
+        PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_HUGETLB, fd, 0);
+
+    if (ret == (void*) -1) {
+        std::cerr << "(" << errno << ") Could not mmap second huge page"
+                  << std::endl;
+        close(fd);
+        unlink(huge_pages_path);
+        free(virt_addr);
         return NULL;
     }
     
@@ -471,11 +493,6 @@ int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
                       uint32_t protocol, uint32_t pkt_queue_id)
 {
     flow_table_config_t config;
-    
-    if (unlikely(pkt_queue_id_offset != 0)) {
-        std::cerr << "Can only send control messages from app 0" << std::endl;
-        return -1;
-    }
 
     config.signal = 2;
     config.config_id = 1;  // Flow table entry.
