@@ -120,15 +120,6 @@ static void* get_huge_pages(int queue_id, size_t size) {
     }
 
     // Allocate same huge page at the end of the last one.
-    if (lseek(fd, 0, SEEK_SET) != 0) {
-        std::cerr << "(" << errno << ") Could not lseek to beginning of page"
-                  << std::endl;
-        close(fd);
-        unlink(huge_pages_path);
-        free(virt_addr);
-        return NULL;
-    }
-    
     void* ret = (void*) mmap((uint8_t*) virt_addr + size, size,
         PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_HUGETLB, fd, 0);
 
