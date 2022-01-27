@@ -159,7 +159,15 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
     printf("Running with DSC_BUF_SIZE: %i\n", DSC_BUF_SIZE);
     printf("Running with PKT_BUF_SIZE: %i\n", PKT_BUF_SIZE);
 
-    // FIXME(sadok) should find a better identifier than core id
+    // We need this to allow the same huge page to be mapped to contiguous
+    // memory regions.
+    // TODO(sadok): support other buffer sizes. It may be possible to support
+    // other buffer sizes by overlaying regular pages on top of the huge pages.
+    // We might use those only for requests that overlap to avoid adding too
+    // many entries to the TLB.
+    assert(PKT_BUF_SIZE*64 == BUF_PAGE_SIZE);
+
+    // FIXME(sadok) should find a better identifier than core id.
     pkt_queue_id = sched_getcpu() * nb_queues + socket_id;
     dsc_queue_id = sched_getcpu();
     if (pkt_queue_id < 0) {
@@ -316,7 +324,7 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
                                 size_t len)
 {
     uint32_t* pkt_buf = socket_entry->pkt_queue.buf;
-    uint32_t pkt_buf_head = socket_entry->pkt_queue.rx_head;
+    uint32_t pkt_buf_head = socket_entry->pkt_queue.rx_tail;
     int queue_id = socket_entry->queue_id;
 
     *buf = &pkt_buf[pkt_buf_head * 16];
@@ -329,24 +337,12 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
 
     _mm_prefetch(buf, _MM_HINT_T0);
 
-    // TODO(sadok): map the same page back to the end of the buffer so that we
-    // can handle this case while avoiding that we trim the request to the end
-    // of the buffer.
-    // To ensure that we can return a contiguous region, we ceil the tail to 
-    // PKT_BUF_SIZE
-    uint32_t ceiled_tail;
-    
-    if (pkt_buf_tail > pkt_buf_head) {
-        ceiled_tail = pkt_buf_tail;
-    } else {
-        ceiled_tail = PKT_BUF_SIZE;
-    }
+    uint32_t flit_aligned_size = 
+        ((pkt_buf_tail - pkt_buf_head) % PKT_BUF_SIZE) * 64;
 
-    uint32_t flit_aligned_size = (ceiled_tail - pkt_buf_head) * 64;
-
-    // reached the buffer limit
+    // Reached the buffer limit.
     if (unlikely(flit_aligned_size > len)) {
-        flit_aligned_size = len & 0xffffffc0; // align len to 64 bytes
+        flit_aligned_size = len & 0xffffffc0;  // Align len to 64 bytes.
     }
 
     pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % PKT_BUF_SIZE;

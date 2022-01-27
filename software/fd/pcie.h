@@ -43,8 +43,6 @@ typedef uint32_t pkt_q_id_t;
 #define PKT_BUF_SIZE 1024
 #endif
 
-#define C2F_BUFFER_SIZE 512
-
 #define BUF_PAGE_SIZE (1UL << 21) // using 2MB huge pages (size in bytes)
 
 // Sizes aligned to the huge page size, but if both buffers fit in a single
