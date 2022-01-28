@@ -401,10 +401,16 @@ int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len)
     dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
     pcie_tx_dsc_t* tx_buf = dsc_queue->tx_buf;
     uint32_t tx_tail = dsc_queue->tx_tail;
-    int32_t length = len;
+    uint64_t missing_bytes = len;
 
-    while (length > 0) {
+    uint64_t transf_addr = (uint64_t) phys_addr;
+    uint64_t hugepage_mask = ~((uint64_t) BUF_PAGE_SIZE - 1);
+    uint64_t hugepage_base_addr = transf_addr & hugepage_mask;
+    uint64_t hugepage_boundary = hugepage_base_addr + BUF_PAGE_SIZE;
+
+    while (missing_bytes > 0) {
         uint32_t free_slots = (dsc_queue->tx_head - tx_tail - 1) % DSC_BUF_SIZE;
+        
         // Block until we can send.
         while (unlikely(free_slots == 0)) {
             ++dsc_queue->tx_full_cnt;
@@ -413,16 +419,23 @@ int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len)
         }
 
         pcie_tx_dsc_t* tx_dsc = tx_buf + tx_tail;
-        tx_dsc->length = std::min((uint64_t) length,
-                                  (uint64_t) MAX_TRANSFER_LEN);
+        uint64_t req_length = std::min(missing_bytes,
+                                       (uint64_t) MAX_TRANSFER_LEN);
 
+        // If transmission wraps around hugepage, we need to send two requests.
+        req_length = std::min(req_length, hugepage_boundary - transf_addr);
+
+        tx_dsc->length = req_length;
         tx_dsc->signal = 1;
-        tx_dsc->phys_addr = (uint64_t) phys_addr;
+        tx_dsc->phys_addr = transf_addr;
+
+        uint64_t huge_page_offset = (transf_addr + req_length) % BUF_PAGE_SIZE;
+        transf_addr = hugepage_base_addr + huge_page_offset;
 
         _mm_clflushopt(tx_dsc);
 
         tx_tail = (tx_tail + 1) % DSC_BUF_SIZE;
-        length -= MAX_TRANSFER_LEN;
+        missing_bytes -= req_length;
     }
 
     dsc_queue->tx_tail = tx_tail;
