@@ -26,6 +26,7 @@
 #include "pcie.h"
 
 static uint32_t* pending_pkt_tails;
+uint8_t* wrap_tracker;
 
 // HACK(sadok) This is used to decrement the packet queue id and use it as an
 // index to the pending_pkt_tails array. This only works because packet queues
@@ -230,6 +231,13 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
         }
         memset(pending_pkt_tails, 0, nb_queues);
 
+        wrap_tracker = (uint8_t*) malloc(DSC_BUF_SIZE/8);
+        if (wrap_tracker == NULL) {
+            std::cerr << "Could not allocate memory" << std::endl;
+            return -1;
+        }
+        memset(wrap_tracker, 0, DSC_BUF_SIZE/8);
+
         dsc_queue->last_rx_ids =
             (pkt_q_id_t*) malloc(DSC_BUF_SIZE * sizeof(pkt_q_id_t));
         if (dsc_queue->last_rx_ids == NULL) {
@@ -422,8 +430,15 @@ int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len)
         uint64_t req_length = std::min(missing_bytes,
                                        (uint64_t) MAX_TRANSFER_LEN);
 
-        // If transmission wraps around hugepage, we need to send two requests.
-        req_length = std::min(req_length, hugepage_boundary - transf_addr);
+        // If transmission wraps around hugepage, we need to send two requests
+        // and set a bit in the wrap tracker.
+        uint64_t missing_bytes_in_page = hugepage_boundary - transf_addr;
+
+        uint8_t wrap_tracker_mask =
+            (req_length > missing_bytes_in_page) << (tx_tail & 0x7);
+        wrap_tracker[tx_tail / 8] |= wrap_tracker_mask;
+
+        req_length = std::min(req_length, missing_bytes_in_page);
 
         tx_dsc->length = req_length;
         tx_dsc->signal = 1;
@@ -509,6 +524,42 @@ int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
 }
 
 
+void update_tx_head(dsc_queue_t* dsc_queue)
+{
+    pcie_tx_dsc_t* tx_buf = dsc_queue->tx_buf;
+    uint32_t head = dsc_queue->tx_head;
+    uint32_t tail = dsc_queue->tx_tail;
+
+    // Advance pointer for pkt queues that were already sent.
+    for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
+        if (head == tail) {
+            break;
+        }
+        pcie_tx_dsc_t* tx_dsc = tx_buf + head;
+
+        // Descriptor has not yet been consumed by hardware.
+        if (tx_dsc->signal != 0) {
+            break;
+        }
+
+        // Requests that wrap around need two descriptors but should only signal
+        // a single completion notification. Therefore, we only increment
+        // `nb_unreported_completions` in the second descriptor.
+        // TODO(sadok): If we implement the logic to have two descriptors in the
+        // same cache line, we can get rid of `wrap_tracker` and instead check
+        // for two descriptors.
+        uint8_t wrap_tracker_mask = 1 << (head & 0x7);
+        uint8_t no_wrap = !(wrap_tracker[head / 8] & wrap_tracker_mask);
+        dsc_queue->nb_unreported_completions += no_wrap;
+        wrap_tracker[head / 8] &= ~wrap_tracker_mask;
+
+        head = (head + 1) % DSC_BUF_SIZE;
+    }
+
+    dsc_queue->tx_head = head;
+}
+
+
 int dma_finish(socket_internal* socket_entry)
 {
     dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
@@ -534,6 +585,7 @@ int dma_finish(socket_internal* socket_entry)
         dsc_queue->regs->tx_mem_high = 0;
         munmap(dsc_queue->rx_buf, ALIGNED_DSC_BUF_PAIR_SIZE);
         free(pending_pkt_tails);
+        free(wrap_tracker);
         free(dsc_queue->last_rx_ids);
     }
 
@@ -601,4 +653,7 @@ void print_stats(socket_internal* socket_entry, bool print_global)
         printf("Dsc TX tail: %d\n", dsc_queue->tx_tail);
         printf("Dsc TX head: %d\n\n", dsc_queue->tx_head);
     }
+
+    printf("Pkt RX tail: %d\n", socket_entry->pkt_queue.rx_tail);
+    printf("Pkt RX head: %d\n", socket_entry->pkt_queue.rx_head);
 }

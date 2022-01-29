@@ -181,6 +181,11 @@ int send_config(socket_internal* socket_entry, pcie_tx_dsc_t* config_dsc);
  */
 int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len);
 
+/*
+ * Update the tx head and the number of TX completions.
+ */
+void update_tx_head(dsc_queue_t* dsc_queue);
+
 int dma_finish(socket_internal* socket_entry);
 
 uint32_t get_pkt_queue_id_from_socket(socket_internal* socket_entry);
@@ -194,33 +199,5 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs);
 void print_buffer(uint8_t* buf, uint32_t nb_flits);
 
 void print_stats(socket_internal* socket_entry, bool print_global);
-
-/*
- * Update the tx head and the number of TX completions.
- */
-inline void update_tx_head(dsc_queue_t* dsc_queue)
-{
-    pcie_tx_dsc_t* tx_buf = dsc_queue->tx_buf;
-    uint32_t head = dsc_queue->tx_head;
-    uint32_t tail = dsc_queue->tx_tail;
-
-    // Advance pointer for pkt queues that were already sent.
-    for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
-        if (head == tail) {
-            break;
-        }
-        pcie_tx_dsc_t* tx_dsc = tx_buf + head;
-
-        // Descriptor has not yet been consumed by hardware.
-        if (tx_dsc->signal != 0) {
-            break;
-        }
-
-        ++(dsc_queue->nb_unreported_completions);
-        head = (head + 1) % DSC_BUF_SIZE;
-    }
-
-    dsc_queue->tx_head = head;
-}
 
 #endif // PCIE_H
