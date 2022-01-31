@@ -134,10 +134,9 @@ int main(int argc, const char* argv[])
                 recv_bytes += recv_len;
 
 #ifdef SEND_BACK
-                uint16_t pkt_len = 128;
+                uint16_t pkt_len = 64; // HACK(sadok): Hardcoded packet size!
                 uint64_t phys_addr = convert_buf_addr_to_phys(socket_fd, buf);
                 for (int i = 0; i < recv_len/pkt_len; ++i) {
-
                     send(socket_fd, (void*) phys_addr, pkt_len, 0);
                     phys_addr = (phys_addr + pkt_len);
                     // Save transmission request so that we can free the buffer once
