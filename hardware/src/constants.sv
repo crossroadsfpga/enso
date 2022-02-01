@@ -218,6 +218,15 @@ typedef struct packed {
     logic [63:0]  signal;
 } flow_table_config_t;
 
+function logic [511:0] swap_flit_endianness(logic [511:0] flit);
+    automatic integer i = 0;
+    automatic logic [511:0] swapped_flit;
+    for (i = 0; i < 512/8; i = i + 1) begin
+        swapped_flit[512-(i+1)*8 +: 8] = flit[i*8 +: 8];
+    end
+    return swapped_flit;
+endfunction
+
 `ifdef SIM
 `define hdisplay(A) if (!tb.error_termination_r) $display("%s", $sformatf A )
 // `define hdisplay(A);

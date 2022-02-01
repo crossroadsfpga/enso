@@ -665,11 +665,17 @@ logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] compl_head_r2;
 
 logic [QUEUE_ID_WIDTH-1:0] addr_addr;
 
-logic         out_pkt_sop_r;
-logic         out_pkt_eop_r;
-logic         out_pkt_valid_r;
-logic [511:0] out_pkt_data_r;
-logic [5:0]   out_pkt_empty_r;
+logic         out_pkt_sop_r1;
+logic         out_pkt_eop_r1;
+logic         out_pkt_valid_r1;
+logic [511:0] out_pkt_data_r1;
+logic [5:0]   out_pkt_empty_r1;
+
+logic         out_pkt_sop_r2;
+logic         out_pkt_eop_r2;
+logic         out_pkt_valid_r2;
+logic [511:0] out_pkt_data_r2;
+logic [5:0]   out_pkt_empty_r2;
 
 function void done_sending_batch(
   meta_t meta
@@ -694,22 +700,22 @@ function void send_flit(
   automatic logic [15:0] pkt_len_le = {pkt_len_be[7:0], pkt_len_be[15:8]};
   automatic logic [19:0] current_pkt_pending_bytes;
 
-  out_pkt_data_r <= pkt_queue_out_data;
-  out_pkt_empty_r <= 0;
-  out_pkt_valid_r <= 1;
+  out_pkt_data_r2 <= pkt_queue_out_data;
+  out_pkt_empty_r2 <= 0;
+  out_pkt_valid_r2 <= 1;
 
   if (ready_for_next_pkt) begin
-    out_pkt_sop_r <= 1;
+    out_pkt_sop_r2 <= 1;
     current_pkt_pending_bytes = pkt_len_le + ETH_HDR_LEN;
   end else begin
     current_pkt_pending_bytes = pkt_pending_bytes;
   end
 
   if (current_pkt_pending_bytes <= 64) begin
-    out_pkt_eop_r <= 1;
+    out_pkt_eop_r2 <= 1;
     ready_for_next_pkt <= 1;
     pkt_pending_bytes <= 0;
-    out_pkt_empty_r <= 64 - current_pkt_pending_bytes;
+    out_pkt_empty_r2 <= 64 - current_pkt_pending_bytes;
   end else begin
     ready_for_next_pkt <= 0;
     pkt_pending_bytes <= current_pkt_pending_bytes - 64;
@@ -729,16 +735,24 @@ endfunction
 // (Assuming raw sockets for now, that means that headers are populated by
 // software).
 always @(posedge clk) begin
-  out_pkt_sop_r <= 0;
-  out_pkt_eop_r <= 0;
-  out_pkt_valid_r <= 0;
-  out_pkt_empty_r <= 0;
+  out_pkt_sop_r2 <= 0;
+  out_pkt_eop_r2 <= 0;
+  out_pkt_valid_r2 <= 0;
+  out_pkt_empty_r2 <= 0;
 
-  out_pkt_sop <= out_pkt_sop_r;
-  out_pkt_eop <= out_pkt_eop_r;
-  out_pkt_valid <= out_pkt_valid_r;
-  out_pkt_data <= out_pkt_data_r;
-  out_pkt_empty <= out_pkt_empty_r;
+  out_pkt_sop_r1 <= out_pkt_sop_r2;
+  out_pkt_eop_r1 <= out_pkt_eop_r2;
+  out_pkt_valid_r1 <= out_pkt_valid_r2;
+  out_pkt_data_r1 <= out_pkt_data_r2;
+  out_pkt_empty_r1 <= out_pkt_empty_r2;
+
+  out_pkt_sop <= out_pkt_sop_r1;
+  out_pkt_eop <= out_pkt_eop_r1;
+  out_pkt_valid <= out_pkt_valid_r1;
+  out_pkt_empty <= out_pkt_empty_r1;
+
+  // Must swap endianness before sending data to network.
+  out_pkt_data <= swap_flit_endianness(out_pkt_data_r1);
 
   // If there is an access from JTAG/MMIO, we need to retry the read.
   if (!external_address_access) begin

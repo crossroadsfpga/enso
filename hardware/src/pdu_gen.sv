@@ -35,80 +35,8 @@ logic [511:0] pdu_data_swap;
 logic [15:0] pdu_size;
 logic [15:0] pdu_flit;
 
-// // swap endianess
-// always_comb begin
-//     automatic integer i = 0;
-//     for (i = 0; i < 512/8; i = i + 1) begin
-//         pdu_data_swap[512-(i+1)*8 +: 8] = pdu_data_r2[i*8 +: 8];
-//     end
-// end
-
-assign pdu_data_swap = {
-    pdu_data[7:0],
-    pdu_data[15:8],
-    pdu_data[23:16],
-    pdu_data[31:24],
-    pdu_data[39:32],
-    pdu_data[47:40],
-    pdu_data[55:48],
-    pdu_data[63:56],
-    pdu_data[71:64],
-    pdu_data[79:72],
-    pdu_data[87:80],
-    pdu_data[95:88],
-    pdu_data[103:96],
-    pdu_data[111:104],
-    pdu_data[119:112],
-    pdu_data[127:120],
-    pdu_data[135:128],
-    pdu_data[143:136],
-    pdu_data[151:144],
-    pdu_data[159:152],
-    pdu_data[167:160],
-    pdu_data[175:168],
-    pdu_data[183:176],
-    pdu_data[191:184],
-    pdu_data[199:192],
-    pdu_data[207:200],
-    pdu_data[215:208],
-    pdu_data[223:216],
-    pdu_data[231:224],
-    pdu_data[239:232],
-    pdu_data[247:240],
-    pdu_data[255:248],
-    pdu_data[263:256],
-    pdu_data[271:264],
-    pdu_data[279:272],
-    pdu_data[287:280],
-    pdu_data[295:288],
-    pdu_data[303:296],
-    pdu_data[311:304],
-    pdu_data[319:312],
-    pdu_data[327:320],
-    pdu_data[335:328],
-    pdu_data[343:336],
-    pdu_data[351:344],
-    pdu_data[359:352],
-    pdu_data[367:360],
-    pdu_data[375:368],
-    pdu_data[383:376],
-    pdu_data[391:384],
-    pdu_data[399:392],
-    pdu_data[407:400],
-    pdu_data[415:408],
-    pdu_data[423:416],
-    pdu_data[431:424],
-    pdu_data[439:432],
-    pdu_data[447:440],
-    pdu_data[455:448],
-    pdu_data[463:456],
-    pdu_data[471:464],
-    pdu_data[479:472],
-    pdu_data[487:480],
-    pdu_data[495:488],
-    pdu_data[503:496],
-    pdu_data[511:504]
-};
+// Swap endianness.
+assign pdu_data_swap = swap_flit_endianness(pdu_data);
 
 assign out_pkt_queue_data.data = pdu_data_swap;
 
