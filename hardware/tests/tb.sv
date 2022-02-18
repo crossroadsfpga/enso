@@ -1777,26 +1777,28 @@ dc_fifo_wrapper input_fifo (
 );
 
 top top_inst (
-  //clk & rst
+  // Clk & rst.
   .clk                          (clk_user),
   .rst                          (rst),
   .clk_datamover                (clk_datamover),
   .rst_datamover                (rst_datamover),
   .clk_pcie                     (clk_pcie),
   .rst_pcie                     (rst),
-  //Ethernet in & out data
+
+  // Ethernet in & out data.
   .in_data                      (reg_top_in_data),
   .in_valid                     (reg_top_in_valid),
   .in_sop                       (reg_top_in_startofpacket),
   .in_eop                       (reg_top_in_endofpacket),
   .in_empty                     (reg_top_in_empty),
-  .reg_out_data                 (top_out_data),
-  .reg_out_valid                (top_out_valid),
+  .out_data                     (top_out_data),
+  .out_valid                    (top_out_valid),
   .out_almost_full              (reg_top_out_almost_full),
-  .reg_out_sop                  (top_out_startofpacket),
-  .reg_out_eop                  (top_out_endofpacket),
-  .reg_out_empty                (top_out_empty),
-  //PCIe
+  .out_sop                      (top_out_startofpacket),
+  .out_eop                      (top_out_endofpacket),
+  .out_empty                    (top_out_empty),
+
+  // PCIe.
   .pcie_wrdm_desc_ready         (pcie_wrdm_desc_ready),
   .pcie_wrdm_desc_valid         (pcie_wrdm_desc_valid),
   .pcie_wrdm_desc_data          (pcie_wrdm_desc_data),
@@ -1843,7 +1845,8 @@ top top_inst (
   .reg_esram_pkt_buf_rdaddress  (esram_pkt_buf_rdaddress),
   .esram_pkt_buf_rd_valid       (reg_esram_pkt_buf_rd_valid),
   .esram_pkt_buf_rddata         (reg_esram_pkt_buf_rddata),
-  //JTAG
+
+  // JTAG.
   .clk_status                   (clk_status),
   .status_addr                  (s_addr),
   .status_read                  (s_read),

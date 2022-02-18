@@ -15,11 +15,11 @@ module top (
     input  logic [511:0] in_data,
     input  logic [5:0]   in_empty,
     input  logic         in_valid,
-    output logic [511:0] reg_out_data,
-    output logic         reg_out_valid,
-    output logic         reg_out_sop,
-    output logic         reg_out_eop,
-    output logic [5:0]   reg_out_empty,
+    output logic [511:0] out_data,
+    output logic         out_valid,
+    output logic         out_sop,
+    output logic         out_eop,
+    output logic [5:0]   out_empty,
     input  logic         out_almost_full,
 
     // PCIe
@@ -134,13 +134,13 @@ logic [31:0] pcie_tx_max_inflight_dscs_status;
 logic [31:0] pcie_tx_max_nb_req_dscs_status;
 logic [31:0] pcie_tx_dma_pkt_cnt_status;
 
-//Register I/O
-logic  [511:0]  out_data;
-logic  [5:0]    out_empty;
-logic           out_valid;
+// Register I/O.
+logic  [511:0]  eth_out_pkt_fifo_out_data;
+logic  [5:0]    eth_out_pkt_fifo_out_empty;
+logic           eth_out_pkt_fifo_out_valid;
 logic           out_valid_int;
-logic           out_sop;
-logic           out_eop;
+logic           eth_out_pkt_fifo_out_sop;
+logic           eth_out_pkt_fifo_out_eop;
 
 logic  [511:0]  reg_in_data;
 logic  [5:0]    reg_in_empty;
@@ -487,7 +487,8 @@ always @ (posedge clk) begin
         if (max_fd_out_fifo <= fdw_out_meta_csr_readdata) begin
             max_fd_out_fifo <= fdw_out_meta_csr_readdata;
         end
-        if (out_valid & !reg_out_almost_full & out_eop) begin
+        if (eth_out_pkt_fifo_out_valid & !reg_out_almost_full
+                & eth_out_pkt_fifo_out_eop) begin
             out_pkt_cnt <= out_pkt_cnt + 1;
         end
         if (out_conf_ft_valid & out_conf_ft_ready) begin
@@ -848,7 +849,7 @@ assign input_comp_eth_sop   = reg_in_sop;
 assign input_comp_eth_eop   = reg_in_eop;
 assign input_comp_eth_empty = reg_in_empty;
 
-assign out_valid_int = out_valid & !reg_out_almost_full;
+assign out_valid_int = eth_out_pkt_fifo_out_valid & !reg_out_almost_full;
 //pdumeta occupancy cnt
 
 //connect flow_director_wrapper with flow_table_wrapper
@@ -876,13 +877,13 @@ hyper_pipe_root reg_io_inst (
     .in_sop                 (in_sop),
     .in_eop                 (in_eop),
     .in_empty               (in_empty),
-    .out_data               (out_data),
+    .out_data               (eth_out_pkt_fifo_out_data),
     .out_valid              (out_valid_int),
     .out_almost_full        (out_almost_full),
-    .out_sop                (out_sop),
-    .out_eop                (out_eop),
-    .out_empty              (out_empty),
-    //eSRAM
+    .out_sop                (eth_out_pkt_fifo_out_sop),
+    .out_eop                (eth_out_pkt_fifo_out_eop),
+    .out_empty              (eth_out_pkt_fifo_out_empty),
+    // eSRAM.
     .esram_pkt_buf_wren     (esram_pkt_buf_wren),
     .esram_pkt_buf_wraddress(esram_pkt_buf_wraddress),
     .esram_pkt_buf_wrdata   (esram_pkt_buf_wrdata),
@@ -890,18 +891,18 @@ hyper_pipe_root reg_io_inst (
     .esram_pkt_buf_rdaddress(esram_pkt_buf_rdaddress),
     .esram_pkt_buf_rd_valid (esram_pkt_buf_rd_valid),
     .esram_pkt_buf_rddata   (esram_pkt_buf_rddata),
-    //output
+    // Output.
     .reg_in_data                (reg_in_data),
     .reg_in_valid               (reg_in_valid),
     .reg_in_sop                 (reg_in_sop),
     .reg_in_eop                 (reg_in_eop),
     .reg_in_empty               (reg_in_empty),
-    .reg_out_data               (reg_out_data),
-    .reg_out_valid              (reg_out_valid),
+    .reg_out_data               (out_data),
+    .reg_out_valid              (out_valid),
     .reg_out_almost_full        (reg_out_almost_full),
-    .reg_out_sop                (reg_out_sop),
-    .reg_out_eop                (reg_out_eop),
-    .reg_out_empty              (reg_out_empty),
+    .reg_out_sop                (out_sop),
+    .reg_out_eop                (out_eop),
+    .reg_out_empty              (out_empty),
     .reg_esram_pkt_buf_wren     (reg_esram_pkt_buf_wren),
     .reg_esram_pkt_buf_wraddress(reg_esram_pkt_buf_wraddress),
     .reg_esram_pkt_buf_wrdata   (reg_esram_pkt_buf_wrdata),
@@ -1289,12 +1290,12 @@ dc_fifo_wrapper_infill eth_out_pkt_fifo (
     .in_startofpacket  (dm_eth_pkt_sop),
     .in_endofpacket    (dm_eth_pkt_eop),
     .in_empty          (dm_eth_pkt_empty),
-    .out_data          (out_data),
-    .out_valid         (out_valid),
+    .out_data          (eth_out_pkt_fifo_out_data),
+    .out_valid         (eth_out_pkt_fifo_out_valid),
     .out_ready         (!reg_out_almost_full),
-    .out_startofpacket (out_sop),
-    .out_endofpacket   (out_eop),
-    .out_empty         (out_empty)
+    .out_startofpacket (eth_out_pkt_fifo_out_sop),
+    .out_endofpacket   (eth_out_pkt_fifo_out_eop),
+    .out_empty         (eth_out_pkt_fifo_out_empty)
 );
 
 dc_back_pressure #(
