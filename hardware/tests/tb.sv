@@ -348,9 +348,7 @@ always #(period_tx) clk_txmac = ~clk_txmac;
 always #(period_user) clk_user = ~clk_user;
 always #(period_esram_ref) clk_esram_ref = ~clk_esram_ref;
 always #(period_esram) clk_esram = ~clk_esram;
-always #(period_pcie) begin
-  clk_pcie = ~clk_pcie;
-end
+always #(period_pcie) clk_pcie = ~clk_pcie;
 
 //
 //read raw data
@@ -423,7 +421,7 @@ begin
       if (addr < (hi - nb_pkt_queues * `PKT_SIZE / 64 - 1)
           && !error_termination) begin  // Not sending last packets.
 `else
-      if (addr < hi && !error_termination) begin
+      if (addr < hi-1 && !error_termination) begin
 `endif
         addr <= addr + 1;
         l8_rx_valid <= 1;
@@ -435,7 +433,7 @@ begin
         $display("Flits: %d", hi);
       end else if (!stop && stop_cnt < STOP_DELAY/2) begin
         // Send last packets if not already sent.
-        if (addr < hi && !error_termination) begin
+        if (addr < hi-1 && !error_termination) begin
           addr <= addr + 1;
           l8_rx_valid <= 1;
         end
