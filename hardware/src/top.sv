@@ -2,12 +2,12 @@
 `include "./constants.sv"
 module top (
     // clk & rst.
-    input  logic         clk,
-    input  logic         rst,
-    input  logic         clk_datamover,
-    input  logic         rst_datamover,
-    input  logic         clk_pcie,
-    input  logic         rst_pcie,
+    input  logic clk,
+    input  logic rst,
+    input  logic clk_datamover,
+    input  logic rst_datamover,
+    input  logic clk_pcie,
+    input  logic rst_pcie,
 
     // Ethernet In & out.
     input  logic         in_sop,
@@ -22,7 +22,7 @@ module top (
     output logic [5:0]   out_empty,
     input  logic         out_almost_full,
 
-    // PCIe
+    // PCIe.
     input  logic         pcie_wrdm_desc_ready,
     output logic         pcie_wrdm_desc_valid,
     output logic [173:0] pcie_wrdm_desc_data,
@@ -66,7 +66,7 @@ module top (
     input  logic [63:0]  pcie_rddm_byteenable,
     output logic         pcie_rddm_waitrequest,
 
-    // eSRAM
+    // eSRAM.
     output  logic                     reg_esram_pkt_buf_wren,
     output  logic [PKTBUF_AWIDTH-1:0] reg_esram_pkt_buf_wraddress,
     output  logic [519:0]             reg_esram_pkt_buf_wrdata,
@@ -75,14 +75,14 @@ module top (
     input   logic                     esram_pkt_buf_rd_valid,
     input   logic [519:0]             esram_pkt_buf_rddata,
 
-    // JTAG
-    input   logic                    clk_status,
-    input   logic   [29:0]           status_addr,
-    input   logic                    status_read,
-    input   logic                    status_write,
-    input   logic   [31:0]           status_writedata,
-    output  logic   [31:0]           status_readdata,
-    output  logic                    status_readdata_valid
+    // JTAG.
+    input   logic          clk_status,
+    input   logic   [29:0] status_addr,
+    input   logic          status_read,
+    input   logic          status_write,
+    input   logic   [31:0] status_writedata,
+    output  logic   [31:0] status_readdata,
+    output  logic          status_readdata_valid
 );
 
 //counters
