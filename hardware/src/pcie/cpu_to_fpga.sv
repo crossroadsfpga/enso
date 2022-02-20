@@ -2,7 +2,8 @@
 
 /*
  * This module implements the communication from the CPU to the FPGA (TX). It is
- * also responsible for managing the TX descriptor queue BRAMs.
+ * also responsible for managing the TX descriptor queue BRAMs. It outputs both
+ * packets and configuration requests.
  */
 
 module cpu_to_fpga  #(
