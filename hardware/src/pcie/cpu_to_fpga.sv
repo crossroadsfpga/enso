@@ -410,7 +410,8 @@ logic [31:0] dsc_cnt_r2;
 typedef enum
 {
   START_TRANSFER,
-  DELAY,
+  RDDM_DSC_STATE_DELAY_0,
+  RDDM_DSC_STATE_DELAY_1,
   CONTINUE_TRANSFER
 } rddm_dsc_state_t;
 
@@ -420,7 +421,8 @@ assign dsc_reads_queue_out_ready = (rddm_dsc_state == START_TRANSFER)
                                    & !rddm_desc_queue_alm_full;
 
 q_state_t last_dsc_reads_queue_out_data;
-q_state_t last_dsc_reads_queue_out_data_r;
+q_state_t last_dsc_reads_queue_out_data_r1;
+q_state_t last_dsc_reads_queue_out_data_r2;
 
 logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] nb_flits_r;
 
@@ -458,14 +460,14 @@ function void dma_rd_descriptor(
     // Since it wraps around, need to send at least two read requests if tail is
     // not 0.
     if (q_state.tail != 0) begin
-      rddm_dsc_state <= DELAY;
+      rddm_dsc_state <= RDDM_DSC_STATE_DELAY_0;
     end
   end
 
   // Limit number of descriptors fetch at once to MAX_TX_DSC_BATCH.
   if (nb_flits > MAX_TX_DSC_BATCH) begin
     nb_flits = MAX_TX_DSC_BATCH;
-    rddm_dsc_state <= DELAY;
+    rddm_dsc_state <= RDDM_DSC_STATE_DELAY_0;
   end
 
   last_dsc_reads_queue_out_data.head <= (q_state.head + nb_flits) & rb_mask;
@@ -496,7 +498,8 @@ always @(posedge clk) begin
   // Used to add to dsc_cnt_r2.
   nb_flits_r <= 0;
 
-  last_dsc_reads_queue_out_data_r <= last_dsc_reads_queue_out_data;
+  last_dsc_reads_queue_out_data_r1 <= last_dsc_reads_queue_out_data;
+  last_dsc_reads_queue_out_data_r2 <= last_dsc_reads_queue_out_data_r1;
 
   if (rst) begin
     dsc_cnt_r2 <= 0;
@@ -510,11 +513,14 @@ always @(posedge clk) begin
         end
       end
       // Introducing delay to help with timing.
-      DELAY: begin
+      RDDM_DSC_STATE_DELAY_0: begin
+        rddm_dsc_state <= RDDM_DSC_STATE_DELAY_1;
+      end
+      RDDM_DSC_STATE_DELAY_1: begin
         rddm_dsc_state <= CONTINUE_TRANSFER;
       end
       CONTINUE_TRANSFER: begin
-        dma_rd_descriptor(last_dsc_reads_queue_out_data_r);
+        dma_rd_descriptor(last_dsc_reads_queue_out_data_r2);
       end
     endcase
   end
@@ -678,6 +684,18 @@ logic         out_pkt_valid_r2;
 logic [511:0] out_pkt_data_r2;
 logic [5:0]   out_pkt_empty_r2;
 
+logic         out_pkt_sop_r3;
+logic         out_pkt_eop_r3;
+logic         out_pkt_valid_r3;
+logic [511:0] out_pkt_data_r3;
+logic [5:0]   out_pkt_empty_r3;
+
+logic         out_pkt_sop_r4;
+logic         out_pkt_eop_r4;
+logic         out_pkt_valid_r4;
+logic [511:0] out_pkt_data_r4;
+logic [5:0]   out_pkt_empty_r4;
+
 function void done_sending_batch(
   meta_t meta
 );
@@ -701,22 +719,22 @@ function void send_flit(
   automatic logic [15:0] pkt_len_le = {pkt_len_be[7:0], pkt_len_be[15:8]};
   automatic logic [19:0] current_pkt_pending_bytes;
 
-  out_pkt_data_r2 <= pkt_queue_out_data;
-  out_pkt_empty_r2 <= 0;
-  out_pkt_valid_r2 <= 1;
+  out_pkt_data_r4 <= pkt_queue_out_data;
+  out_pkt_empty_r4 <= 0;
+  out_pkt_valid_r4 <= 1;
 
   if (ready_for_next_pkt) begin
-    out_pkt_sop_r2 <= 1;
+    out_pkt_sop_r4 <= 1;
     current_pkt_pending_bytes = pkt_len_le + ETH_HDR_LEN;
   end else begin
     current_pkt_pending_bytes = pkt_pending_bytes;
   end
 
   if (current_pkt_pending_bytes <= 64) begin
-    out_pkt_eop_r2 <= 1;
+    out_pkt_eop_r4 <= 1;
     ready_for_next_pkt <= 1;
     pkt_pending_bytes <= 0;
-    out_pkt_empty_r2 <= 64 - current_pkt_pending_bytes;
+    out_pkt_empty_r4 <= 64 - current_pkt_pending_bytes;
   end else begin
     ready_for_next_pkt <= 0;
     pkt_pending_bytes <= current_pkt_pending_bytes - 64;
@@ -736,10 +754,22 @@ endfunction
 // (Assuming raw sockets for now, that means that headers are populated by
 // software).
 always @(posedge clk) begin
-  out_pkt_sop_r2 <= 0;
-  out_pkt_eop_r2 <= 0;
-  out_pkt_valid_r2 <= 0;
-  out_pkt_empty_r2 <= 0;
+  out_pkt_sop_r4 <= 0;
+  out_pkt_eop_r4 <= 0;
+  out_pkt_valid_r4 <= 0;
+  out_pkt_empty_r4 <= 0;
+
+  out_pkt_sop_r3 <= out_pkt_sop_r4;
+  out_pkt_eop_r3 <= out_pkt_eop_r4;
+  out_pkt_valid_r3 <= out_pkt_valid_r4;
+  out_pkt_data_r3 <= out_pkt_data_r4;
+  out_pkt_empty_r3 <= out_pkt_empty_r4;
+
+  out_pkt_sop_r2 <= out_pkt_sop_r3;
+  out_pkt_eop_r2 <= out_pkt_eop_r3;
+  out_pkt_valid_r2 <= out_pkt_valid_r3;
+  out_pkt_data_r2 <= out_pkt_data_r3;
+  out_pkt_empty_r2 <= out_pkt_empty_r3;
 
   out_pkt_sop_r1 <= out_pkt_sop_r2;
   out_pkt_eop_r1 <= out_pkt_eop_r2;
