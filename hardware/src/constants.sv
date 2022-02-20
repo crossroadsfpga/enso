@@ -205,7 +205,8 @@ localparam PDU_NUM = 256;
 
 typedef enum logic [63:0] {
     FLOW_TABLE_CONFIG_ID = 1,
-    TIMESTAMP_CONFIG_ID = 2
+    TIMESTAMP_CONFIG_ID = 2,
+    RATE_LIMIT_CONFIG_ID = 3
 } config_id_t;
 
 typedef struct packed {
@@ -225,11 +226,21 @@ typedef struct packed {
 
 typedef struct packed {
     logic [319:0] pad1;
-    logic         enable;
+    logic         enable;  // Set to 1 to enable timestamping.
     logic [62:0]  pad2;
     logic [63:0]  config_id;
     logic [63:0]  signal;
 } timestamp_config_t;
+
+typedef struct packed {
+    logic [319:0] pad1;
+    logic         enable;  // Set to 1 to enable rate-limiting.
+    logic [30:0]  pad2;
+    logic [15:0]  numerator;  // Set rate numerator.
+    logic [15:0]  denominator;  // Set rate denominator.
+    logic [63:0]  config_id;
+    logic [63:0]  signal;
+} rate_limit_config_t;
 
 function logic [511:0] swap_flit_endianness(logic [511:0] flit);
     automatic integer i = 0;

@@ -68,7 +68,7 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) noexcept
 
     // TODO(sadok): insert flow entry from kernel.
     insert_flow_entry(
-        socket,
+        socket->dsc_queue,
         ntohs(addr_in->sin_port),
         0,
         ntohl(addr_in->sin_addr.s_addr),
@@ -138,22 +138,49 @@ ssize_t recv_select(int* sockfd, void **buf, size_t len,
 ssize_t send(int sockfd, void *phys_addr, size_t len,
              int flags __attribute__((unused)))
 {
-    return send_to_queue(&open_sockets[sockfd], phys_addr, len);
+    return send_to_queue(open_sockets[sockfd].dsc_queue, phys_addr, len);
 }
 
-int get_completions()
+uint32_t get_completions()
 {
-    uint32_t completions;
-    update_tx_head(&dsc_queue);
-    completions = dsc_queue.nb_unreported_completions;
-    dsc_queue.nb_unreported_completions = 0;
-
-    return completions;
+    return get_unreported_completions(&dsc_queue);
 }
 
 void free_pkt_buf(int sockfd, size_t len)
 {
     advance_ring_buffer(&open_sockets[sockfd], len);
+}
+
+int enable_device_timestamp()
+{
+    if (nb_open_sockets == 0) {
+        return -2;
+    }
+    return enable_timestamp(open_sockets[0].dsc_queue);
+}
+
+int disable_device_timestamp()
+{
+    if (nb_open_sockets == 0) {
+        return -2;
+    }
+    return disable_timestamp(open_sockets[0].dsc_queue);
+}
+
+int enable_device_rate_limit(uint16_t num, uint16_t den)
+{
+    if (nb_open_sockets == 0) {
+        return -2;
+    }
+    return enable_rate_limit(open_sockets[0].dsc_queue, num, den);
+}
+
+int disable_device_rate_limit()
+{
+    if (nb_open_sockets == 0) {
+        return -2;
+    }
+    return disable_rate_limit(open_sockets[0].dsc_queue);
 }
 
 int shutdown(int sockfd, int how __attribute__((unused))) noexcept
@@ -168,6 +195,8 @@ int shutdown(int sockfd, int how __attribute__((unused))) noexcept
         std::cerr << "Could not switch to CMD use mode!\n";
         return -1;
     }
+
+    --nb_open_sockets;
 
     // TODO(sadok) remove entry from the NIC flow table
 

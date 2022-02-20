@@ -148,10 +148,10 @@ int main(int argc, const char* argv[])
             }
 
 #ifdef SEND_BACK
-            int nb_tx_completions = get_completions();
+            uint32_t nb_tx_completions = get_completions();
 
             // Free data that was already sent.
-            for (int i = 0; i < nb_tx_completions; ++i) {
+            for (uint32_t i = 0; i < nb_tx_completions; ++i) {
                 tx_pending_request_t tx_req = tx_pending_requests[tx_pr_head];
                 free_pkt_buf(tx_req.socket_fd, tx_req.length);
                 tx_pr_head = (tx_pr_head + 1) % (MAX_PENDING_TX_REQUESTS + 1);

@@ -404,9 +404,8 @@ void advance_ring_buffer(socket_internal* socket_entry, size_t len)
     socket_entry->pkt_queue.rx_head = rx_pkt_head;
 }
 
-int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len)
+int send_to_queue(dsc_queue_t* dsc_queue, void* phys_addr, size_t len)
 {
-    dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
     pcie_tx_dsc_t* tx_buf = dsc_queue->tx_buf;
     uint32_t tx_tail = dsc_queue->tx_tail;
     uint64_t missing_bytes = len;
@@ -462,9 +461,19 @@ int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len)
 }
 
 
-int send_config(socket_internal* socket_entry, pcie_tx_dsc_t* config_dsc)
+uint32_t get_unreported_completions(dsc_queue_t* dsc_queue)
 {
-    dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
+    uint32_t completions;
+    update_tx_head(dsc_queue);
+    completions = dsc_queue->nb_unreported_completions;
+    dsc_queue->nb_unreported_completions = 0;
+
+    return completions;
+}
+
+
+int send_config(dsc_queue_t* dsc_queue, pcie_tx_dsc_t* config_dsc)
+{
     pcie_tx_dsc_t* tx_buf = dsc_queue->tx_buf;
     uint32_t tx_tail = dsc_queue->tx_tail;
     uint32_t free_slots = (dsc_queue->tx_head - tx_tail - 1) % DSC_BUF_SIZE;
@@ -503,7 +512,7 @@ int send_config(socket_internal* socket_entry, pcie_tx_dsc_t* config_dsc)
 }
 
 
-int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
+int insert_flow_entry(dsc_queue_t* dsc_queue, uint16_t dst_port,
                       uint16_t src_port, uint32_t dst_ip, uint32_t src_ip,
                       uint32_t protocol, uint32_t pkt_queue_id)
 {
@@ -518,23 +527,23 @@ int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
     config.protocol = protocol;
     config.pkt_queue_id = pkt_queue_id;
 
-    return send_config(socket_entry, (pcie_tx_dsc_t*) &config);
+    return send_config(dsc_queue, (pcie_tx_dsc_t*) &config);
 }
 
 
-int enable_timestamp(socket_internal* socket_entry)
+int enable_timestamp(dsc_queue_t* dsc_queue)
 {
     timestamp_config_t config;
     
     config.signal = 2;
     config.config_id = TIMESTAMP_CONFIG_ID;
-    config.enable = 1;
+    config.enable = -1;
     
-    return send_config(socket_entry, (pcie_tx_dsc_t*) &config);
+    return send_config(dsc_queue, (pcie_tx_dsc_t*) &config);
 }
 
 
-int disable_timestamp(socket_internal* socket_entry)
+int disable_timestamp(dsc_queue_t* dsc_queue)
 {
     timestamp_config_t config;
     
@@ -542,7 +551,33 @@ int disable_timestamp(socket_internal* socket_entry)
     config.config_id = TIMESTAMP_CONFIG_ID;
     config.enable = 0;
     
-    return send_config(socket_entry, (pcie_tx_dsc_t*) &config);
+    return send_config(dsc_queue, (pcie_tx_dsc_t*) &config);
+}
+
+
+int enable_rate_limit(dsc_queue_t* dsc_queue, uint16_t num, uint16_t den)
+{
+    rate_limit_config_t config;
+
+    config.signal = 2;
+    config.config_id = RATE_LIMIT_CONFIG_ID;
+    config.denominator = den;
+    config.numerator = num;
+    config.enable = -1;
+
+    return send_config(dsc_queue, (pcie_tx_dsc_t*) &config);
+}
+
+
+int disable_rate_limit(dsc_queue_t* dsc_queue)
+{
+    rate_limit_config_t config;
+
+    config.signal = 2;
+    config.config_id = RATE_LIMIT_CONFIG_ID;
+    config.enable = 0;
+
+    return send_config(dsc_queue, (pcie_tx_dsc_t*) &config);
 }
 
 

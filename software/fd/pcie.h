@@ -26,6 +26,8 @@ typedef uint32_t pkt_q_id_t;
 
 #define MAX_TRANSFER_LEN 1048576
 
+#define MAX_PENDING_TX_REQUESTS (DSC_BUF_SIZE-1)
+
 #ifndef BATCH_SIZE
 // Maximum number of packets to process in call to get_next_batch_from_queue
 #define BATCH_SIZE 64
@@ -77,6 +79,14 @@ typedef uint32_t pkt_q_id_t;
 // we must also change this value.
 #define NS_PER_TIMESTAMP_CYCLE 5
 
+// Offset of the RTT when timestamp is enabled (in bytes).
+#define PACKET_RTT_OFFSET 18
+
+// The maximum number of flits (64 byte chunks) that the hardware can send per
+// second. This is simply the frequency of the `rate_limiter` module -- which is
+// currently 200MHz.
+#define MAX_HARDWARE_FLIT_RATE (200e6)
+
 typedef struct queue_regs {
     uint32_t rx_tail;
     uint32_t rx_head;
@@ -91,7 +101,8 @@ typedef struct queue_regs {
 
 enum ConfigId {
     FLOW_TABLE_CONFIG_ID = 1,
-    TIMESTAMP_CONFIG_ID = 2
+    TIMESTAMP_CONFIG_ID = 2,
+    RATE_LIMIT_CONFIG_ID = 3
 };
 
 typedef struct __attribute__((__packed__)) {
@@ -112,6 +123,15 @@ typedef struct __attribute__((__packed__)) {
     uint64_t enable;
     uint8_t  pad[40];
 } timestamp_config_t;
+
+typedef struct __attribute__((__packed__)) {
+    uint64_t signal;
+    uint64_t config_id;
+    uint16_t denominator;
+    uint16_t numerator;
+    uint32_t enable;
+    uint8_t  pad[40];
+} rate_limit_config_t;
 
 typedef struct __attribute__((__packed__))  {
     uint64_t signal;
@@ -181,45 +201,151 @@ int get_next_batch(dsc_queue_t* dsc_queue, socket_internal* socket_entries,
  */
 void advance_ring_buffer(socket_internal* socket_entry, size_t len);
 
-/*
- * Insert flow entry in the data plane flow table.
+/**
+ * insert_flow_entry() - Insert flow entry in the data plane flow table.
+ * @dsc_queue: Descriptor queue to send configuration through.
+ * @dst_port: Destination port number of the flow entry.
+ * @src_port: Source port number of the flow entry.
+ * @dst_ip: Destination IP address of the flow entry.
+ * @src_ip: Source IP address of the flow entry.
+ * @protocol: Protocol of the flow entry.
+ * @pkt_queue_id: Packet queue ID that will be associated with the flow entry.
+ * 
+ * Inserts a rule in the data plane flow table that will direct all packets
+ * matching the flow entry to the `pkt_queue_id`.
+ * 
+ * Return: Return 0 if configuration was successful.
  */
-int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
+int insert_flow_entry(dsc_queue_t* dsc_queue, uint16_t dst_port,
                       uint16_t src_port, uint32_t dst_ip, uint32_t src_ip,
                       uint32_t protocol, uint32_t pkt_queue_id);
 
-/*
- * Enable hardware timestamping. All outgoing packets will receive a timestamp
- * and all incoming packets will have an RTT (in number of cycles). Use
- * `get_pkt_rtt` to retrieve the value.
+/**
+ * enable_timestamp() - Enable hardware timestamping.
+ * @dsc_queue: Descriptor queue to send configuration through.
+ * 
+ * All outgoing packets will receive a timestamp and all incoming packets will
+ * have an RTT (in number of cycles). Use `get_pkt_rtt` to retrieve the value.
+ * 
+ * Return: Return 0 if configuration was successful.
  */
-int enable_timestamp(socket_internal* socket_entry);
+int enable_timestamp(dsc_queue_t* dsc_queue);
 
-/*
- * Disable hardware timestamping.
+/**
+ * disable_timestamp() - Disable hardware timestamping.
+ * @dsc_queue: Descriptor queue to send configuration through.
+ * 
+ * Return: Return 0 if configuration was successful.
  */
-int disable_timestamp(socket_internal* socket_entry);
+int disable_timestamp(dsc_queue_t* dsc_queue);
 
-/*
- * Return RTT, in number of cycles, for a given packet. This assumes that the
- * packet has been timestamped by hardware. To enable this call the
- * `enable_timestamp` function. If timestamp is not enabled the value returned
- * is undefined.
+/**
+ * enable_rate_limit() - Enable hardware rate limit.
+ * @dsc_queue: Descriptor queue to send configuration through.
+ * @num: Rate numerator.
+ * @den: Rate denominator.
+ * 
+ * Once rate limiting is enabled, packets from all queues are sent at a rate of
+ * (num/den * MAX_HARDWARE_FLIT_RATE) flits per second (a flit is 64 bytes).
+ * Note that this is slightly different from how we typically define throughput
+ * and you may need to take the packet sizes into account to set this properly.
+ * 
+ * For example, suppose that you are sending 64-byte packets. Each packet 
+ * occupies exactly one flit. For this packet size, line rate at 100 Gbps is
+ * 148.8Mpps. So if MAX_HARDWARE_FLIT_RATE is 200MHz, line rate actually
+ * corresponds to a 744/1000 rate. Therefore, if you want to send at 50Gbps (50%
+ * of line rate), you can use a 372/1000 (or 93/250) rate.
+ * 
+ * The other thing to notice is that, while it might be tempting to use a large
+ * denominator in order to increase the rate precision. This has the side effect
+ * of increasing burstiness. The way the rate limit is implemented, we send a
+ * burst of `num` consecutive flits every `den` cycles. Which means that if
+ * `num` is too large, it might overflow the receiver buffer. For instance, in
+ * the example above, 93/250 would be a better rate than 372/1000. And 3/8 would
+ * be even better with a slight loss in precision.
+ * 
+ * You can find the maximum packet rate for any packet size by using the
+ * expression: line_rate/((pkt_size + 20)*8). So for 100Gbps and 128-byte
+ * packets we have: 100e9/((128+20)*8) packets per second. Given that each
+ * packet is two flits, for MAX_HARDWARE_FLIT_RATE=200e6, the maximum rate is
+ * 100e9/((128+20)*8)*2/200e6, which is approximately 125/148.
+ * 
+ * Return: Return 0 if configuration was successful.
  */
-uint32_t get_pkt_rtt(uint8_t* pkt);
+int enable_rate_limit(dsc_queue_t* dsc_queue, uint16_t num, uint16_t den);
 
-/*
- * Send configuration to the dataplane. (Can only be used with queue 0.)
+/**
+ * disable_rate_limit() - Disable hardware rate limit.
+ * @dsc_queue: Descriptor queue to send configuration through.
+ * 
+ * Return: Return 0 if configuration was successful.
  */
-int send_config(socket_internal* socket_entry, pcie_tx_dsc_t* config_dsc);
+int disable_rate_limit(dsc_queue_t* dsc_queue);
 
-/*
- * Send data pointed by `phys_addr` using the 
+/**
+ * get_pkt_rtt() - Return RTT, in number of cycles, for a given packet.
+ * @pkt: Packet to retrieve the RTT from.
+ * 
+ * This assumes that the packet has been timestamped by hardware. To enable
+ * timestamping call the `enable_timestamp` function.
+ * 
+ * Return: Return RTT measure for the packet in nanoseconds. If timestamp is
+ *         not enabled the value returned is undefined.
  */
-int send_to_queue(socket_internal* socket_entry, void* phys_addr, size_t len);
+inline uint32_t get_pkt_rtt(uint8_t* pkt)
+{
+    uint32_t rtt = *((uint32_t*) (pkt + PACKET_RTT_OFFSET));
+    return rtt * NS_PER_TIMESTAMP_CYCLE;
+}
 
-/*
- * Update the tx head and the number of TX completions.
+/**
+ * send_config() - Send configuration to the dataplane.
+ * @dsc_queue: Descriptor queue to send configuration through.
+ * @config_dsc: Configuration descriptor.
+ * 
+ * Return: Return 0 if configuration was successful.
+ */
+int send_config(dsc_queue_t* dsc_queue, pcie_tx_dsc_t* config_dsc);
+
+/**
+ * send_to_queue() - Send data through a given queue.
+ * @dsc_queue: Descriptor queue to send data through.
+ * @phys_addr: Physical memory address of the data to be sent.
+ * @len: Length, in bytes, of the data.
+ * 
+ * This function returns as soon as a transmission requests has been enqueued to
+ * the TX dsc queue. That means that it is not safe to modify or deallocate the
+ * buffer pointed by `phys_addr` right after it returns. Instead, the caller
+ * must use `get_unreported_completions` to figure out when the transmission is
+ * complete.
+ * 
+ * This function currently blocks if there is not enough space in the descriptor
+ * queue.
+ * 
+ * Return: Return 0 if transfer was successful.
+ */
+int send_to_queue(dsc_queue_t* dsc_queue, void* phys_addr, size_t len);
+
+/**
+ * get_unreported_completions() - Return the number of transmission requests
+ * that were completed since the last call to this function.
+ * @dsc_queue: Descriptor queue to get completions from.
+ * 
+ * Since transmissions are always completed in order, one can figure out which
+ * transmissions were completed by keeping track of all the calls to 
+ * `send_to_queue`. There can be only up to `MAX_PENDING_TX_REQUESTS` requests
+ * completed between two calls to `send_to_queue`. However, if `send` is called
+ * multiple times, without calling `get_unreported_completions` the number of
+ * completed requests can surpass `MAX_PENDING_TX_REQUESTS`.
+ * 
+ * Return: Return the number of transmission requests that were completed since
+ *         the last call to this function.
+ */
+uint32_t get_unreported_completions(dsc_queue_t* dsc_queue);
+
+/**
+ * update_tx_head() - Update the tx head and the number of TX completions.
+ * @dsc_queue: Descriptor queue to be updated.
  */
 void update_tx_head(dsc_queue_t* dsc_queue);
 

@@ -216,6 +216,10 @@ timestamp_config_t conf_ts_data;
 logic              conf_ts_valid;
 logic              conf_ts_ready;
 
+rate_limit_config_t conf_rl_data;
+logic               conf_rl_valid;
+logic               conf_rl_ready;
+
 config_flit_t pcie_out_config_data;
 logic         pcie_out_config_valid;
 logic         pcie_out_config_ready;
@@ -882,7 +886,13 @@ logic         timestamp_inst_tx_out_pkt_sop;
 logic         timestamp_inst_tx_out_pkt_eop;
 logic [5:0]   timestamp_inst_tx_out_pkt_empty;
 
-//////////////////// Instantiation //////////////////////////////////
+logic [511:0] rate_limiter_inst_out_pkt_data;
+logic         rate_limiter_inst_out_pkt_valid;
+logic         rate_limiter_inst_out_pkt_ready;
+logic         rate_limiter_inst_out_pkt_sop;
+logic         rate_limiter_inst_out_pkt_eop;
+logic [5:0]   rate_limiter_inst_out_pkt_empty;
+
 timestamp timestamp_inst (
     .clk              (clk_datamover),
     .rst              (rst_datamover),
@@ -898,12 +908,12 @@ timestamp timestamp_inst (
     .rx_out_pkt_sop   (timestamp_inst_rx_out_pkt_sop),
     .rx_out_pkt_eop   (timestamp_inst_rx_out_pkt_eop),
     .rx_out_pkt_empty (timestamp_inst_rx_out_pkt_empty),
-    .tx_in_pkt_data   (dm_eth_pkt_data),
-    .tx_in_pkt_valid  (dm_eth_pkt_valid),
-    .tx_in_pkt_ready  (dm_eth_pkt_ready),
-    .tx_in_pkt_sop    (dm_eth_pkt_sop),
-    .tx_in_pkt_eop    (dm_eth_pkt_eop),
-    .tx_in_pkt_empty  (dm_eth_pkt_empty),
+    .tx_in_pkt_data   (rate_limiter_inst_out_pkt_data),
+    .tx_in_pkt_valid  (rate_limiter_inst_out_pkt_valid),
+    .tx_in_pkt_ready  (rate_limiter_inst_out_pkt_ready),
+    .tx_in_pkt_sop    (rate_limiter_inst_out_pkt_sop),
+    .tx_in_pkt_eop    (rate_limiter_inst_out_pkt_eop),
+    .tx_in_pkt_empty  (rate_limiter_inst_out_pkt_empty),
     .tx_out_pkt_data  (timestamp_inst_tx_out_pkt_data),
     .tx_out_pkt_valid (timestamp_inst_tx_out_pkt_valid),
     .tx_out_pkt_ready (timestamp_inst_tx_out_pkt_ready),
@@ -913,6 +923,26 @@ timestamp timestamp_inst (
     .conf_ts_data     (conf_ts_data),
     .conf_ts_valid    (conf_ts_valid),
     .conf_ts_ready    (conf_ts_ready)
+);
+
+rate_limiter rate_limiter_inst (
+    .clk           (clk_datamover),
+    .rst           (rst_datamover),
+    .in_pkt_data   (dm_eth_pkt_data),
+    .in_pkt_valid  (dm_eth_pkt_valid),
+    .in_pkt_ready  (dm_eth_pkt_ready),
+    .in_pkt_sop    (dm_eth_pkt_sop),
+    .in_pkt_eop    (dm_eth_pkt_eop),
+    .in_pkt_empty  (dm_eth_pkt_empty),
+    .out_pkt_data  (rate_limiter_inst_out_pkt_data),
+    .out_pkt_valid (rate_limiter_inst_out_pkt_valid),
+    .out_pkt_ready (rate_limiter_inst_out_pkt_ready),
+    .out_pkt_sop   (rate_limiter_inst_out_pkt_sop),
+    .out_pkt_eop   (rate_limiter_inst_out_pkt_eop),
+    .out_pkt_empty (rate_limiter_inst_out_pkt_empty),
+    .conf_rl_data  (conf_rl_data),
+    .conf_rl_valid (conf_rl_valid),
+    .conf_rl_ready (conf_rl_ready)
 );
 
 hyper_pipe_root reg_io_inst (
@@ -1056,7 +1086,10 @@ configurator configurator_inst (
     .out_conf_ft_ready (conf_ft_ready),
     .out_conf_ts_data  (conf_ts_data),
     .out_conf_ts_valid (conf_ts_valid),
-    .out_conf_ts_ready (conf_ts_ready)
+    .out_conf_ts_ready (conf_ts_ready),
+    .out_conf_rl_data  (conf_rl_data),
+    .out_conf_rl_valid (conf_rl_valid),
+    .out_conf_rl_ready (conf_rl_ready)
 );
 
 dc_fifo_wrapper_infill  #(

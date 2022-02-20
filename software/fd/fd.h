@@ -6,13 +6,13 @@
 
 #include <arpa/inet.h>
 
+// TODO(sadok): Do not expose pcie.h here.
 #include "pcie.h"
 
 typedef unsigned short sa_family_t;
 typedef unsigned int socklen_t;
 
 #define MAX_NB_SOCKETS 16384
-#define MAX_PENDING_TX_REQUESTS (DSC_BUF_SIZE-1)
 
 int socket(int domain, int type, int protocol) noexcept;
 
@@ -51,8 +51,31 @@ ssize_t send(int sockfd, void *phys_addr, size_t len, int flags);
  * times, without calling `get_completions` the number of completed requests can
  * surpass `MAX_PENDING_TX_REQUESTS`.
  */
-int get_completions();
+uint32_t get_completions();
 
+/*
+ * Enable hardware timestamping for the device. This applies to all sockets.
+ */
+int enable_device_timestamp();
+
+/*
+ * Disable hardware timestamping for the device. This applies to all sockets.
+ */
+int disable_device_timestamp();
+
+/*
+ * Enable hardware rate limit for the device. This applies to all sockets.
+ */
+int enable_device_rate_limit(uint16_t num, uint16_t den);
+
+/*
+ * Disable hardware rate limit for the device. This applies to all sockets.
+ */
+int disable_device_rate_limit();
+
+/*
+ * Free packet buffer. Use this to free received packets.
+ */
 void free_pkt_buf(int sockfd, size_t len);
 
 // ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,

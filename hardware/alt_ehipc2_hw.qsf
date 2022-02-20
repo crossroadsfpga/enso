@@ -269,6 +269,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE src/pdu_gen.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/pcie_top.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/parser.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/timestamp.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/rate_limiter.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/constants.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/configurator.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/my_stats.sv
