@@ -9,19 +9,31 @@ module configurator(
 
   output var flow_table_config_t out_conf_ft_data,
   output logic                   out_conf_ft_valid,
-  input  logic                   out_conf_ft_ready
+  input  logic                   out_conf_ft_ready,
+
+  output var timestamp_config_t out_conf_ts_data,
+  output logic                  out_conf_ts_valid,
+  input  logic                  out_conf_ts_ready
 );
 
 always_comb begin
-  in_config_ready = out_conf_ft_ready;
-  out_conf_ft_valid = 0;
+  in_config_ready = out_conf_ft_ready & out_conf_ts_ready;
 
-  // TODO(sadok): will need to look into `config_id` once we have multiple
-  // configuration output paths. But for now, since we only have a single one,
-  // we can short circuit the input and output.
+  out_conf_ft_valid = 0;
+  out_conf_ts_valid = 0;
+
+  out_conf_ft_data = in_config_data;
+  out_conf_ts_data = in_config_data;
+
   if (in_config_valid) begin
-    out_conf_ft_valid = 1;
-    out_conf_ft_data = in_config_data;
+    case (in_config_data.config_id)
+      FLOW_TABLE_CONFIG_ID: begin
+        out_conf_ft_valid = 1;
+      end
+      TIMESTAMP_CONFIG_ID: begin
+        out_conf_ts_valid = 1;
+      end
+    endcase
   end
 end
 

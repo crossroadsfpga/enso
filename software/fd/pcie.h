@@ -73,7 +73,10 @@ typedef uint32_t pkt_q_id_t;
 #define likely(x)       __builtin_expect((x),1)
 #define unlikely(x)     __builtin_expect((x),0)
 
-#define REGISTERS_PER_APP 8
+// Assumes that the FPGA `clk_datamover` runs at 200MHz. If we change the clock,
+// we must also change this value.
+#define NS_PER_TIMESTAMP_CYCLE 5
+
 typedef struct queue_regs {
     uint32_t rx_tail;
     uint32_t rx_head;
@@ -86,6 +89,11 @@ typedef struct queue_regs {
     uint32_t padding[8];
 } queue_regs_t;
 
+enum ConfigId {
+    FLOW_TABLE_CONFIG_ID = 1,
+    TIMESTAMP_CONFIG_ID = 2
+};
+
 typedef struct __attribute__((__packed__)) {
     uint64_t signal;
     uint64_t config_id;
@@ -97,6 +105,13 @@ typedef struct __attribute__((__packed__)) {
     uint32_t pkt_queue_id;
     uint8_t  pad[28];
 } flow_table_config_t;
+
+typedef struct __attribute__((__packed__)) {
+    uint64_t signal;
+    uint64_t config_id;
+    uint64_t enable;
+    uint8_t  pad[40];
+} timestamp_config_t;
 
 typedef struct __attribute__((__packed__))  {
     uint64_t signal;
@@ -122,9 +137,10 @@ typedef struct {
     uint32_t rx_head;
     uint32_t tx_head;
     uint32_t tx_tail;
-    uint32_t pending_rx_ids;
-    uint32_t consumed_rx_ids;
+    uint16_t pending_rx_ids;
+    uint16_t consumed_rx_ids;
     uint32_t nb_unreported_completions;
+    uint32_t __gap;
 
     // Second cache line:
     queue_regs_t* regs;
@@ -171,6 +187,27 @@ void advance_ring_buffer(socket_internal* socket_entry, size_t len);
 int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
                       uint16_t src_port, uint32_t dst_ip, uint32_t src_ip,
                       uint32_t protocol, uint32_t pkt_queue_id);
+
+/*
+ * Enable hardware timestamping. All outgoing packets will receive a timestamp
+ * and all incoming packets will have an RTT (in number of cycles). Use
+ * `get_pkt_rtt` to retrieve the value.
+ */
+int enable_timestamp(socket_internal* socket_entry);
+
+/*
+ * Disable hardware timestamping.
+ */
+int disable_timestamp(socket_internal* socket_entry);
+
+/*
+ * Return RTT, in number of cycles, for a given packet. This assumes that the
+ * packet has been timestamped by hardware. To enable this call the
+ * `enable_timestamp` function. If timestamp is not enabled the value returned
+ * is undefined.
+ */
+uint32_t get_pkt_rtt(uint8_t* pkt);
+
 /*
  * Send configuration to the dataplane. (Can only be used with queue 0.)
  */

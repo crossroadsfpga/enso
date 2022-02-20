@@ -203,6 +203,11 @@ localparam F2C_RB_DEPTH = 16384;
 localparam F2C_RB_AWIDTH = ($clog2(F2C_RB_DEPTH));
 localparam PDU_NUM = 256;
 
+typedef enum logic [63:0] {
+    FLOW_TABLE_CONFIG_ID = 1,
+    TIMESTAMP_CONFIG_ID = 2
+} config_id_t;
+
 typedef struct packed {
     logic [383:0] pad;
     logic [63:0]  config_id;
@@ -217,6 +222,14 @@ typedef struct packed {
     logic [63:0]  config_id;
     logic [63:0]  signal;
 } flow_table_config_t;
+
+typedef struct packed {
+    logic [319:0] pad1;
+    logic         enable;
+    logic [62:0]  pad2;
+    logic [63:0]  config_id;
+    logic [63:0]  signal;
+} timestamp_config_t;
 
 function logic [511:0] swap_flit_endianness(logic [511:0] flit);
     automatic integer i = 0;

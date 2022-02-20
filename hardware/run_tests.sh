@@ -8,9 +8,11 @@ trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
 declare -a tests=(
     # 'test_pcie_top'
-    'test_cpu_to_fpga'
+    # 'test_cpu_to_fpga'
     # 'test_queue_manager'
     # 'test_prefetch_rb'
+    'test_timestamp'
+    # 'sketch'
 )
 
 sim_lib_path="$HOME/sim_lib/verilog_libs"

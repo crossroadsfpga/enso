@@ -510,7 +510,7 @@ int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
     flow_table_config_t config;
 
     config.signal = 2;
-    config.config_id = 1;  // Flow table entry.
+    config.config_id = FLOW_TABLE_CONFIG_ID;
     config.dst_port = dst_port;
     config.src_port = src_port;
     config.dst_ip = dst_ip;
@@ -518,9 +518,31 @@ int insert_flow_entry(socket_internal* socket_entry, uint16_t dst_port,
     config.protocol = protocol;
     config.pkt_queue_id = pkt_queue_id;
 
-    send_config(socket_entry, (pcie_tx_dsc_t*) &config);
+    return send_config(socket_entry, (pcie_tx_dsc_t*) &config);
+}
 
-    return 0;
+
+int enable_timestamp(socket_internal* socket_entry)
+{
+    timestamp_config_t config;
+    
+    config.signal = 2;
+    config.config_id = TIMESTAMP_CONFIG_ID;
+    config.enable = 1;
+    
+    return send_config(socket_entry, (pcie_tx_dsc_t*) &config);
+}
+
+
+int disable_timestamp(socket_internal* socket_entry)
+{
+    timestamp_config_t config;
+    
+    config.signal = 2;
+    config.config_id = TIMESTAMP_CONFIG_ID;
+    config.enable = 0;
+    
+    return send_config(socket_entry, (pcie_tx_dsc_t*) &config);
 }
 
 

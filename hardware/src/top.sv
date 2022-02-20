@@ -208,9 +208,13 @@ config_flit_t in_config_data;
 logic         in_config_valid;
 logic         in_config_ready;
 
-flow_table_config_t out_conf_ft_data;
-logic               out_conf_ft_valid;
-logic               out_conf_ft_ready;
+flow_table_config_t conf_ft_data;
+logic               conf_ft_valid;
+logic               conf_ft_ready;
+
+timestamp_config_t conf_ts_data;
+logic              conf_ts_valid;
+logic              conf_ts_ready;
 
 config_flit_t pcie_out_config_data;
 logic         pcie_out_config_valid;
@@ -491,7 +495,7 @@ always @ (posedge clk) begin
                 & eth_out_pkt_fifo_out_eop) begin
             out_pkt_cnt <= out_pkt_cnt + 1;
         end
-        if (out_conf_ft_valid & out_conf_ft_ready) begin
+        if (conf_ft_valid & conf_ft_ready) begin
             rule_set_cnt <= rule_set_cnt + 1;
         end
     end
@@ -864,52 +868,101 @@ always @(posedge clk_datamover) begin
     dm_disable_pcie_r1 <= disable_pcie;
     dm_disable_pcie <= dm_disable_pcie_r1;
 end
+
+logic [511:0] timestamp_inst_rx_out_pkt_data;
+logic         timestamp_inst_rx_out_pkt_valid;
+logic         timestamp_inst_rx_out_pkt_sop;
+logic         timestamp_inst_rx_out_pkt_eop;
+logic [5:0]   timestamp_inst_rx_out_pkt_empty;
+
+logic [511:0] timestamp_inst_tx_out_pkt_data;
+logic         timestamp_inst_tx_out_pkt_valid;
+logic         timestamp_inst_tx_out_pkt_ready;
+logic         timestamp_inst_tx_out_pkt_sop;
+logic         timestamp_inst_tx_out_pkt_eop;
+logic [5:0]   timestamp_inst_tx_out_pkt_empty;
+
 //////////////////// Instantiation //////////////////////////////////
+timestamp timestamp_inst (
+    .clk              (clk_datamover),
+    .rst              (rst_datamover),
+    .rx_in_pkt_data   (in_data),
+    .rx_in_pkt_valid  (in_valid),
+    .rx_in_pkt_ready  (),
+    .rx_in_pkt_sop    (in_sop),
+    .rx_in_pkt_eop    (in_eop),
+    .rx_in_pkt_empty  (in_empty),
+    .rx_out_pkt_data  (timestamp_inst_rx_out_pkt_data),
+    .rx_out_pkt_valid (timestamp_inst_rx_out_pkt_valid),
+    .rx_out_pkt_ready (1'b1),
+    .rx_out_pkt_sop   (timestamp_inst_rx_out_pkt_sop),
+    .rx_out_pkt_eop   (timestamp_inst_rx_out_pkt_eop),
+    .rx_out_pkt_empty (timestamp_inst_rx_out_pkt_empty),
+    .tx_in_pkt_data   (dm_eth_pkt_data),
+    .tx_in_pkt_valid  (dm_eth_pkt_valid),
+    .tx_in_pkt_ready  (dm_eth_pkt_ready),
+    .tx_in_pkt_sop    (dm_eth_pkt_sop),
+    .tx_in_pkt_eop    (dm_eth_pkt_eop),
+    .tx_in_pkt_empty  (dm_eth_pkt_empty),
+    .tx_out_pkt_data  (timestamp_inst_tx_out_pkt_data),
+    .tx_out_pkt_valid (timestamp_inst_tx_out_pkt_valid),
+    .tx_out_pkt_ready (timestamp_inst_tx_out_pkt_ready),
+    .tx_out_pkt_sop   (timestamp_inst_tx_out_pkt_sop),
+    .tx_out_pkt_eop   (timestamp_inst_tx_out_pkt_eop),
+    .tx_out_pkt_empty (timestamp_inst_tx_out_pkt_empty),
+    .conf_ts_data     (conf_ts_data),
+    .conf_ts_valid    (conf_ts_valid),
+    .conf_ts_ready    (conf_ts_ready)
+);
+
 hyper_pipe_root reg_io_inst (
-    //clk & rst
-    .clk                    (clk),
-    .rst                    (rst),
-    .clk_datamover          (clk_datamover),
-    .rst_datamover          (rst_datamover),
-    //Ethernet in & out data
-    .in_data                (in_data),
-    .in_valid               (in_valid),
-    .in_sop                 (in_sop),
-    .in_eop                 (in_eop),
-    .in_empty               (in_empty),
-    .out_data               (eth_out_pkt_fifo_out_data),
-    .out_valid              (out_valid_int),
-    .out_almost_full        (out_almost_full),
-    .out_sop                (eth_out_pkt_fifo_out_sop),
-    .out_eop                (eth_out_pkt_fifo_out_eop),
-    .out_empty              (eth_out_pkt_fifo_out_empty),
+    // Clk & rst.
+    .clk           (clk),
+    .rst           (rst),
+    .clk_datamover (clk_datamover),
+    .rst_datamover (rst_datamover),
+
+    // Ethernet in & out data.
+    .in_data         (timestamp_inst_rx_out_pkt_data),
+    .in_valid        (timestamp_inst_rx_out_pkt_valid),
+    .in_sop          (timestamp_inst_rx_out_pkt_sop),
+    .in_eop          (timestamp_inst_rx_out_pkt_eop),
+    .in_empty        (timestamp_inst_rx_out_pkt_empty),
+    .out_data        (eth_out_pkt_fifo_out_data),
+    .out_valid       (out_valid_int),
+    .out_almost_full (out_almost_full),
+    .out_sop         (eth_out_pkt_fifo_out_sop),
+    .out_eop         (eth_out_pkt_fifo_out_eop),
+    .out_empty       (eth_out_pkt_fifo_out_empty),
+
     // eSRAM.
-    .esram_pkt_buf_wren     (esram_pkt_buf_wren),
-    .esram_pkt_buf_wraddress(esram_pkt_buf_wraddress),
-    .esram_pkt_buf_wrdata   (esram_pkt_buf_wrdata),
-    .esram_pkt_buf_rden     (esram_pkt_buf_rden),
-    .esram_pkt_buf_rdaddress(esram_pkt_buf_rdaddress),
-    .esram_pkt_buf_rd_valid (esram_pkt_buf_rd_valid),
-    .esram_pkt_buf_rddata   (esram_pkt_buf_rddata),
+    .esram_pkt_buf_wren      (esram_pkt_buf_wren),
+    .esram_pkt_buf_wraddress (esram_pkt_buf_wraddress),
+    .esram_pkt_buf_wrdata    (esram_pkt_buf_wrdata),
+    .esram_pkt_buf_rden      (esram_pkt_buf_rden),
+    .esram_pkt_buf_rdaddress (esram_pkt_buf_rdaddress),
+    .esram_pkt_buf_rd_valid  (esram_pkt_buf_rd_valid),
+    .esram_pkt_buf_rddata    (esram_pkt_buf_rddata),
+
     // Output.
-    .reg_in_data                (reg_in_data),
-    .reg_in_valid               (reg_in_valid),
-    .reg_in_sop                 (reg_in_sop),
-    .reg_in_eop                 (reg_in_eop),
-    .reg_in_empty               (reg_in_empty),
-    .reg_out_data               (out_data),
-    .reg_out_valid              (out_valid),
-    .reg_out_almost_full        (reg_out_almost_full),
-    .reg_out_sop                (out_sop),
-    .reg_out_eop                (out_eop),
-    .reg_out_empty              (out_empty),
-    .reg_esram_pkt_buf_wren     (reg_esram_pkt_buf_wren),
-    .reg_esram_pkt_buf_wraddress(reg_esram_pkt_buf_wraddress),
-    .reg_esram_pkt_buf_wrdata   (reg_esram_pkt_buf_wrdata),
-    .reg_esram_pkt_buf_rden     (reg_esram_pkt_buf_rden),
-    .reg_esram_pkt_buf_rdaddress(reg_esram_pkt_buf_rdaddress),
-    .reg_esram_pkt_buf_rd_valid (reg_esram_pkt_buf_rd_valid),
-    .reg_esram_pkt_buf_rddata   (reg_esram_pkt_buf_rddata)
+    .reg_in_data                 (reg_in_data),
+    .reg_in_valid                (reg_in_valid),
+    .reg_in_sop                  (reg_in_sop),
+    .reg_in_eop                  (reg_in_eop),
+    .reg_in_empty                (reg_in_empty),
+    .reg_out_data                (out_data),
+    .reg_out_valid               (out_valid),
+    .reg_out_almost_full         (reg_out_almost_full),
+    .reg_out_sop                 (out_sop),
+    .reg_out_eop                 (out_eop),
+    .reg_out_empty               (out_empty),
+    .reg_esram_pkt_buf_wren      (reg_esram_pkt_buf_wren),
+    .reg_esram_pkt_buf_wraddress (reg_esram_pkt_buf_wraddress),
+    .reg_esram_pkt_buf_wrdata    (reg_esram_pkt_buf_wrdata),
+    .reg_esram_pkt_buf_rden      (reg_esram_pkt_buf_rden),
+    .reg_esram_pkt_buf_rdaddress (reg_esram_pkt_buf_rdaddress),
+    .reg_esram_pkt_buf_rd_valid  (reg_esram_pkt_buf_rd_valid),
+    .reg_esram_pkt_buf_rddata    (reg_esram_pkt_buf_rddata)
 );
 
 input_comp input_comp_0 (
@@ -998,9 +1051,12 @@ configurator configurator_inst (
     .in_config_data    (in_config_data),
     .in_config_valid   (in_config_valid),
     .in_config_ready   (in_config_ready),
-    .out_conf_ft_data  (out_conf_ft_data),
-    .out_conf_ft_valid (out_conf_ft_valid),
-    .out_conf_ft_ready (out_conf_ft_ready)
+    .out_conf_ft_data  (conf_ft_data),
+    .out_conf_ft_valid (conf_ft_valid),
+    .out_conf_ft_ready (conf_ft_ready),
+    .out_conf_ts_data  (conf_ts_data),
+    .out_conf_ts_valid (conf_ts_valid),
+    .out_conf_ts_ready (conf_ts_ready)
 );
 
 dc_fifo_wrapper_infill  #(
@@ -1042,9 +1098,9 @@ flow_table_wrapper flow_table_wrapper_0 (
     .out_meta_data    (flow_table_wrapper_out_meta_data),
     .out_meta_valid   (flow_table_wrapper_out_meta_valid),
     .out_meta_ready   (flow_table_wrapper_out_ready),
-    .in_control_data  (out_conf_ft_data),
-    .in_control_valid (out_conf_ft_valid),
-    .in_control_ready (out_conf_ft_ready),
+    .in_control_data  (conf_ft_data),
+    .in_control_valid (conf_ft_valid),
+    .in_control_ready (conf_ft_ready),
     .out_control_done (flow_table_wrapper_out_control_done),
     .eviction_cnt     (eviction_cnt)
  );
@@ -1284,12 +1340,12 @@ dc_fifo_wrapper_infill eth_out_pkt_fifo (
     .in_csr_write      (1'b0),
     .in_csr_readdata   (dm_eth_pkt_in_csr_readdata),
     .in_csr_writedata  (),
-    .in_data           (dm_eth_pkt_data),
-    .in_valid          (dm_eth_pkt_valid),
-    .in_ready          (dm_eth_pkt_ready),
-    .in_startofpacket  (dm_eth_pkt_sop),
-    .in_endofpacket    (dm_eth_pkt_eop),
-    .in_empty          (dm_eth_pkt_empty),
+    .in_data           (timestamp_inst_tx_out_pkt_data),
+    .in_valid          (timestamp_inst_tx_out_pkt_valid),
+    .in_ready          (timestamp_inst_tx_out_pkt_ready),
+    .in_startofpacket  (timestamp_inst_tx_out_pkt_sop),
+    .in_endofpacket    (timestamp_inst_tx_out_pkt_eop),
+    .in_empty          (timestamp_inst_tx_out_pkt_empty),
     .out_data          (eth_out_pkt_fifo_out_data),
     .out_valid         (eth_out_pkt_fifo_out_valid),
     .out_ready         (!reg_out_almost_full),
