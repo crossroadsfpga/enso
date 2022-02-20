@@ -561,16 +561,9 @@ module my_stats (
             o_rx_sop <= rx_sop_r1;
             o_rx_eop <= rx_eop_r1;
             o_rx_empty <= rx_empty_r1;
-        end 
-
-        if(rx_sop_r)begin
-            //o_rx_data <= {rx_data[511:480],timestamp,rx_data[447:0]};
-            //o_rx_data <= {32'b0,timestamp,rx_data[447:0]};
-            rx_data_r1 <= {rx_pkt_cnt,timestamp,rx_data_r[447:0]};
-        end else begin
-            rx_data_r1 <= rx_data_r;
         end
 
+        rx_data_r1 <= rx_data_r;
         o_rx_data <= rx_data_r1;
     end
 
