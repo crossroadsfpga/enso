@@ -14,7 +14,7 @@
 #include <pthread.h>
 
 // pick one of the two below
-#include "fd/fd.h"
+#include "norman/socket.h"
 // #include <sys/socket.h>
 // #include <netinet/in.h>
 // #include <arpa/inet.h> 
