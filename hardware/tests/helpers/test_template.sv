@@ -16,15 +16,15 @@ initial cnt = 0;
 always #(PERIOD) clk = ~clk;
 
 always @(posedge clk) begin
+  cnt <= cnt + 1;
   if (cnt < 10) begin
-    cnt <= cnt + 1;
   end else if (cnt == 10) begin
     rst <= 0;
-    cnt <= cnt + 1;
   end else if (cnt == 11) begin
     /* Insert logic here */
+  end else if (cnt == 100) begin
+    $finish;
   end
-  
 end
 
 endmodule
