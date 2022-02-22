@@ -3,6 +3,10 @@
 #ifndef PCIE_H
 #define PCIE_H
 
+#include <byteswapp.h>
+#include <netinet/ether.h>
+#include <netinet/ip.h>
+
 #include "api/intel_fpga_pcie_api.hpp"
 
 #define RULE_ID_LINE_LEN 64 // bytes
@@ -87,6 +91,10 @@ typedef uint32_t pkt_q_id_t;
 // currently 200MHz.
 #define MAX_HARDWARE_FLIT_RATE (200e6)
 
+#define _norman_compiler_memory_barrier() do { \
+    asm volatile ("" : : : "memory");   \
+} while (0)
+
 typedef struct queue_regs {
     uint32_t rx_tail;
     uint32_t rx_head;
@@ -166,6 +174,18 @@ typedef struct {
     queue_regs_t* regs;
     uint64_t tx_full_cnt;
     uint32_t ref_cnt;
+
+    uint8_t* wrap_tracker;
+    uint32_t* pending_pkt_tails;
+
+    // HACK(sadok): This is used to decrement the packet queue id and use it as
+    // an index to the pending_pkt_tails array. This only works because packet
+    // queues for the same app are contiguous. This will no longer hold in the
+    // future. How bad would it be to use a hash table to keep
+    // `pending_pkt_tails`?
+    // Another option is to get rid of the pending_pkt_tails array and instead
+    // save the tails with `last_rx_ids`.
+    uint32_t pkt_queue_id_offset;
 } dsc_queue_t;
 
 typedef struct {
@@ -192,7 +212,7 @@ int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
                               size_t len);
 
 int get_next_batch(dsc_queue_t* dsc_queue, socket_internal* socket_entries,
-                   int* sockfd, void** buf, size_t len);
+                   int* pkt_queue_id, void** buf, size_t len);
 
 /*
  * Free the next `len` bytes in the packet buffer associated with the
@@ -295,7 +315,7 @@ int disable_rate_limit(dsc_queue_t* dsc_queue);
 inline uint32_t get_pkt_rtt(uint8_t* pkt)
 {
     uint32_t rtt = *((uint32_t*) (pkt + PACKET_RTT_OFFSET));
-    return rtt * NS_PER_TIMESTAMP_CYCLE;
+    return be32toh(rtt) * NS_PER_TIMESTAMP_CYCLE;
 }
 
 /**
@@ -362,5 +382,13 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs);
 void print_buffer(uint8_t* buf, uint32_t nb_flits);
 
 void print_stats(socket_internal* socket_entry, bool print_global);
+
+static inline uint16_t get_pkt_size(uint8_t *addr) {
+    struct ether_header* l2_hdr = (struct ether_header*) addr;
+    struct iphdr* l3_hdr = (struct iphdr*) (l2_hdr + 1);
+    uint16_t total_len = be16toh(l3_hdr->tot_len) + sizeof(*l2_hdr);
+
+    return total_len;
+}
 
 #endif // PCIE_H

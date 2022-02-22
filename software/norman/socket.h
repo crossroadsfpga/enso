@@ -12,6 +12,7 @@
 typedef unsigned short sa_family_t;
 typedef unsigned int socklen_t;
 
+#define MAX_NB_CORES 128
 #define MAX_NB_SOCKETS 16384
 
 int socket(int domain, int type, int protocol) noexcept;
@@ -28,7 +29,8 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags);
 
 ssize_t recv_zc(int sockfd, void **buf, size_t len, int flags);
 
-ssize_t recv_select(int* sockfd, void **buf, size_t len, int flags);
+ssize_t recv_select(int ref_sockfd, int* sockfd, void **buf, size_t len,
+                    int flags);
 
 /*
  * Send the bytes pointed by address `phys_addr` through the `sockfd` socket.
@@ -51,7 +53,7 @@ ssize_t send(int sockfd, void *phys_addr, size_t len, int flags);
  * times, without calling `get_completions` the number of completed requests can
  * surpass `MAX_PENDING_TX_REQUESTS`.
  */
-uint32_t get_completions();
+uint32_t get_completions(int ref_sockfd);
 
 /*
  * Enable hardware timestamping for the device. This applies to all sockets.

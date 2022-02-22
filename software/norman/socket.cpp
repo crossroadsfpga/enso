@@ -7,7 +7,7 @@
 #include "api/intel_fpga_pcie_api.hpp"
 
 
-static dsc_queue_t dsc_queue;
+static dsc_queue_t dsc_queue [MAX_NB_CORES];
 
 // TODO(sadok) replace with hash table?
 static socket_internal open_sockets[MAX_NB_SOCKETS];
@@ -32,9 +32,6 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
         std::cerr << "Error initializing: " << ex.what() << std::endl;
         return -1;
     }
-    std::cout << std::hex << std::showbase;
-    std::cout << "Opened a handle to BAR " << dev->get_bar();
-    std::cout << " of a device with BDF " << dev->get_dev() << std::endl;
 
     result = dev->use_cmd(true);
     if (unlikely(result == 0)) {
@@ -46,7 +43,7 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     unsigned int socket_id = nb_open_sockets++;
 
     open_sockets[socket_id].dev = dev;
-    open_sockets[socket_id].dsc_queue = &dsc_queue;
+    open_sockets[socket_id].dsc_queue = &dsc_queue[sched_getcpu()];
 
     result = dma_init(&open_sockets[socket_id], socket_id, nb_queues);
 
@@ -129,10 +126,11 @@ ssize_t recv_zc(int sockfd, void **buf, size_t len,
     return get_next_batch_from_queue(&open_sockets[sockfd], buf, len);
 }
 
-ssize_t recv_select(int* sockfd, void **buf, size_t len,
+ssize_t recv_select(int ref_sockfd, int* sockfd, void **buf, size_t len,
                     int flags __attribute__((unused)))
 {
-    return get_next_batch(&dsc_queue, open_sockets, sockfd, buf, len);
+    dsc_queue_t* dsc_queue = open_sockets[ref_sockfd].dsc_queue;
+    return get_next_batch(dsc_queue, open_sockets, sockfd, buf, len);
 }
 
 ssize_t send(int sockfd, void *phys_addr, size_t len,
@@ -141,9 +139,10 @@ ssize_t send(int sockfd, void *phys_addr, size_t len,
     return send_to_queue(open_sockets[sockfd].dsc_queue, phys_addr, len);
 }
 
-uint32_t get_completions()
+uint32_t get_completions(int ref_sockfd)
 {
-    return get_unreported_completions(&dsc_queue);
+    dsc_queue_t* dsc_queue = open_sockets[ref_sockfd].dsc_queue;
+    return get_unreported_completions(dsc_queue);
 }
 
 void free_pkt_buf(int sockfd, size_t len)

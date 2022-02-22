@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
-#include <endian.h>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -25,23 +24,6 @@
 // #include "intel_fpga_pcie_link_test.hpp"
 #include "pcie.h"
 
-static uint32_t* pending_pkt_tails;
-uint8_t* wrap_tracker;
-
-// HACK(sadok) This is used to decrement the packet queue id and use it as an
-// index to the pending_pkt_tails array. This only works because packet queues
-// for the same app are contiguous. This will no longer hold in the future. How
-// bad would it be to use a hash table to keep pending_pkt_tails?
-// Another option is to get rid of the pending_pkt_tails array and instead save
-// the tails with `last_rx_ids`.
-static uint32_t pkt_queue_id_offset;
-
-static inline uint16_t get_pkt_size(uint8_t *addr) {
-    uint16_t l2_len = 14 + 4;
-    uint16_t l3_len = be16toh(*((uint16_t*) (addr+14+2))); // ipv4 total length
-    uint16_t total_len = l2_len + l3_len;
-    return total_len;
-}
 
 void print_buf(void* buf, const uint32_t nb_cache_lines)
 {
@@ -59,41 +41,43 @@ void print_buf(void* buf, const uint32_t nb_cache_lines)
     }
 }
 
-// adapted from ixy
-static void* virt_to_phys(void* virt) {
+
+// Adapted from ixy.
+static uint64_t virt_to_phys(void* virt) {
 	long pagesize = sysconf(_SC_PAGESIZE);
     int fd = open("/proc/self/pagemap", O_RDONLY);
     if (fd < 0) {
-        return NULL;
+        return 0;
     }
 	// pagemap is an array of pointers for each normal-sized page
 	if (lseek(fd, (uintptr_t) virt / pagesize * sizeof(uintptr_t),
             SEEK_SET) < 0) {
         close(fd);
-        return NULL;
+        return 0;
     }
 	
     uintptr_t phy = 0;
     if (read(fd, &phy, sizeof(phy)) < 0) {
         close(fd);
-        return NULL;
+        return 0;
     }
     close(fd);
 
 	if (!phy) {
-        return NULL;
+        return 0;
 	}
 	// bits 0-54 are the page number
-	return (void*) ((phy & 0x7fffffffffffffULL) * pagesize 
-                    + ((uintptr_t) virt) % pagesize);
+	return (uint64_t) ((phy & 0x7fffffffffffffULL) * pagesize 
+                       + ((uintptr_t) virt) % pagesize);
 }
 
-// adapted from ixy
-static void* get_huge_pages(int queue_id, size_t size) {
+
+// Adapted from ixy.
+static void* get_huge_page(int queue_id, size_t size) {
     int fd;
     char huge_pages_path[128];
 
-    snprintf(huge_pages_path, 128, "/mnt/huge/fd:%i", queue_id);
+    snprintf(huge_pages_path, 128, "/mnt/huge/norman:%i", queue_id);
 
     fd = open(huge_pages_path, O_CREAT | O_RDWR, S_IRWXU);
     if (fd == -1) {
@@ -141,12 +125,13 @@ static void* get_huge_pages(int queue_id, size_t size) {
         return NULL;
     }
 
-    // don't keep it around in the hugetlbfs
+    // Don't keep it around in the hugetlbfs.
     close(fd);
     unlink(huge_pages_path);
 
     return virt_addr;
 }
+
 
 int dma_init(socket_internal* socket_entry, unsigned socket_id,
              unsigned nb_queues)
@@ -193,8 +178,23 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
             (dsc_queue_id + MAX_NB_FLOWS) * MEMORY_SPACE_PER_QUEUE
         );
 
+        // Make sure the queue is disabled.
+        dsc_queue_regs->rx_mem_low = 0;
+        dsc_queue_regs->rx_mem_high = 0;
+        _norman_compiler_memory_barrier();
+        while (dsc_queue_regs->rx_mem_low != 0
+                || dsc_queue_regs->rx_mem_high != 0)
+            continue;
+
+        // Make sure head and tail start at zero.
+        dsc_queue_regs->rx_head = 0;
+        dsc_queue_regs->rx_tail = 0;
+        _norman_compiler_memory_barrier();
+        while (dsc_queue_regs->rx_head != 0 || dsc_queue_regs->rx_tail != 0)
+            continue;
+
         dsc_queue->regs = dsc_queue_regs;
-        dsc_queue->rx_buf = (pcie_rx_dsc_t*) get_huge_pages(
+        dsc_queue->rx_buf = (pcie_rx_dsc_t*) get_huge_page(
             dsc_queue_id + MAX_NB_FLOWS, ALIGNED_DSC_BUF_PAIR_SIZE);
         if (dsc_queue->rx_buf == NULL) {
             std::cerr << "Could not get huge page" << std::endl;
@@ -203,7 +203,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
         dsc_queue->tx_buf = (pcie_tx_dsc_t*) (
             (uint64_t) dsc_queue->rx_buf + ALIGNED_DSC_BUF_PAIR_SIZE / 2);
 
-        uint64_t phys_addr = (uint64_t) virt_to_phys(dsc_queue->rx_buf);
+        uint64_t phys_addr = virt_to_phys(dsc_queue->rx_buf);
 
         // Use first half of the huge page for RX and second half for TX.
         dsc_queue_regs->rx_mem_low = (uint32_t) phys_addr;
@@ -223,20 +223,20 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
         dsc_queue_regs->tx_head = dsc_queue->tx_head;
 
         // HACK(sadok) assuming that we know the number of queues beforehand
-        pending_pkt_tails = (uint32_t*) malloc(
-            sizeof(*pending_pkt_tails) * nb_queues);
-        if (pending_pkt_tails == NULL) {
+        dsc_queue->pending_pkt_tails = (uint32_t*) malloc(
+            sizeof(*(dsc_queue->pending_pkt_tails)) * nb_queues);
+        if (dsc_queue->pending_pkt_tails == NULL) {
             std::cerr << "Could not allocate memory" << std::endl;
             return -1;
         }
-        memset(pending_pkt_tails, 0, nb_queues);
+        memset(dsc_queue->pending_pkt_tails, 0, nb_queues);
 
-        wrap_tracker = (uint8_t*) malloc(DSC_BUF_SIZE/8);
-        if (wrap_tracker == NULL) {
+        dsc_queue->wrap_tracker = (uint8_t*) malloc(DSC_BUF_SIZE/8);
+        if (dsc_queue->wrap_tracker == NULL) {
             std::cerr << "Could not allocate memory" << std::endl;
             return -1;
         }
-        memset(wrap_tracker, 0, DSC_BUF_SIZE/8);
+        memset(dsc_queue->wrap_tracker, 0, DSC_BUF_SIZE/8);
 
         dsc_queue->last_rx_ids =
             (pkt_q_id_t*) malloc(DSC_BUF_SIZE * sizeof(pkt_q_id_t));
@@ -252,7 +252,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
 
         // HACK(sadok): This only works because pkt queues for the same app are
         // currently placed back to back.
-        pkt_queue_id_offset = pkt_queue_id;
+        dsc_queue->pkt_queue_id_offset = pkt_queue_id;
     }
 
     ++(dsc_queue->ref_cnt);
@@ -263,31 +263,49 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
     );
     socket_entry->pkt_queue.regs = pkt_queue_regs;
 
+    // Make sure the queue is disabled.
+    pkt_queue_regs->rx_mem_low = 0;
+    pkt_queue_regs->rx_mem_high = 0;
+    _norman_compiler_memory_barrier();
+    while (pkt_queue_regs->rx_mem_low != 0 || pkt_queue_regs->rx_mem_high != 0)
+        continue;
+    
+    // Make sure head and tail start at zero.
+    pkt_queue_regs->rx_head = 0;
+    pkt_queue_regs->rx_tail = 0;
+    _norman_compiler_memory_barrier();
+    while (pkt_queue_regs->rx_head != 0 || pkt_queue_regs->rx_tail != 0)
+        continue;
+
     socket_entry->pkt_queue.buf = 
-        (uint32_t*) get_huge_pages(pkt_queue_id, BUF_PAGE_SIZE);
+        (uint32_t*) get_huge_page(pkt_queue_id, BUF_PAGE_SIZE);
     if (socket_entry->pkt_queue.buf == NULL) {
         std::cerr << "Could not get huge page" << std::endl;
         return -1;
     }
-    uint64_t phys_addr = (uint64_t) virt_to_phys(socket_entry->pkt_queue.buf);
-
-    pkt_queue_regs->rx_mem_low = (uint32_t) phys_addr + dsc_queue_id;
-    pkt_queue_regs->rx_mem_high = (uint32_t) (phys_addr >> 32);
+    uint64_t phys_addr = virt_to_phys(socket_entry->pkt_queue.buf);
 
     socket_entry->pkt_queue.buf_phys_addr = phys_addr;
     socket_entry->pkt_queue.phys_buf_offset =
         phys_addr - (uint64_t) (socket_entry->pkt_queue.buf);
 
-    socket_entry->queue_id = pkt_queue_id - pkt_queue_id_offset;
+    socket_entry->queue_id = pkt_queue_id - dsc_queue->pkt_queue_id_offset;
     socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->rx_head;
-    socket_entry->pkt_queue.rx_head = pkt_queue_regs->rx_head;
-    socket_entry->pkt_queue.rx_tail = socket_entry->pkt_queue.rx_head;
+    socket_entry->pkt_queue.rx_head = 0;
+    socket_entry->pkt_queue.rx_tail = 0;
 
     // make sure the last tail matches the current head
-    pending_pkt_tails[socket_entry->queue_id] = socket_entry->pkt_queue.rx_head;
+    dsc_queue->pending_pkt_tails[socket_entry->queue_id] = 
+        socket_entry->pkt_queue.rx_head;
+
+    // Setting the address enables the queue. Do this last.
+    _norman_compiler_memory_barrier();
+    pkt_queue_regs->rx_mem_low = (uint32_t) phys_addr + dsc_queue_id;
+    pkt_queue_regs->rx_mem_high = (uint32_t) (phys_addr >> 32);
 
     return 0;
 }
+
 
 static inline uint16_t get_new_tails(dsc_queue_t* dsc_queue)
 {
@@ -306,8 +324,9 @@ static inline uint16_t get_new_tails(dsc_queue_t* dsc_queue)
         cur_desc->signal = 0;
         dsc_buf_head = (dsc_buf_head + 1) % DSC_BUF_SIZE;
 
-        pkt_q_id_t pkt_queue_id = cur_desc->queue_id - pkt_queue_id_offset;
-        pending_pkt_tails[pkt_queue_id] = (uint32_t) cur_desc->tail;
+        pkt_q_id_t pkt_queue_id =
+            cur_desc->queue_id - dsc_queue->pkt_queue_id_offset;
+        dsc_queue->pending_pkt_tails[pkt_queue_id] = (uint32_t) cur_desc->tail;
         dsc_queue->last_rx_ids[nb_consumed_dscs] = pkt_queue_id;
 
         ++nb_consumed_dscs;
@@ -320,7 +339,7 @@ static inline uint16_t get_new_tails(dsc_queue_t* dsc_queue)
 
     if (likely(nb_consumed_dscs > 0)) {
         // update descriptor buffer head
-        asm volatile ("" : : : "memory"); // compiler memory barrier
+        _norman_compiler_memory_barrier();
         *(dsc_queue->rx_head_ptr) = dsc_buf_head;
         dsc_queue->rx_head = dsc_buf_head;
     }
@@ -328,16 +347,18 @@ static inline uint16_t get_new_tails(dsc_queue_t* dsc_queue)
     return nb_consumed_dscs;
 }
 
+
 static inline int consume_queue(socket_internal* socket_entry, void** buf,
                                 size_t len)
 {
     uint32_t* pkt_buf = socket_entry->pkt_queue.buf;
     uint32_t pkt_buf_head = socket_entry->pkt_queue.rx_tail;
+    dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
     int queue_id = socket_entry->queue_id;
 
     *buf = &pkt_buf[pkt_buf_head * 16];
 
-    uint32_t pkt_buf_tail = pending_pkt_tails[queue_id];
+    uint32_t pkt_buf_tail = dsc_queue->pending_pkt_tails[queue_id];
 
     if (pkt_buf_tail == pkt_buf_head) {
         return 0;
@@ -359,6 +380,7 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
     return flit_aligned_size;
 }
 
+
 int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
                               size_t len)
 {
@@ -366,9 +388,10 @@ int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
     return consume_queue(socket_entry, buf, len);
 }
 
-// return next batch among all open sockets
+
+// Return next batch among all open sockets.
 int get_next_batch(dsc_queue_t* dsc_queue, socket_internal* socket_entries,
-                   int* sockfd, void** buf, size_t len)
+                   int* pkt_queue_id, void** buf, size_t len)
 {
     // Consume up to a batch of descriptors at a time. If the number of
     // consumed is the same as the number of pending, we are done processing
@@ -383,14 +406,15 @@ int get_next_batch(dsc_queue_t* dsc_queue, socket_internal* socket_entries,
         }
     }
 
-    pkt_q_id_t pkt_queue_id =
+    pkt_q_id_t __pkt_queue_id =
         dsc_queue->last_rx_ids[dsc_queue->consumed_rx_ids++];
-    *sockfd = pkt_queue_id;
+    *pkt_queue_id = __pkt_queue_id;
 
-    socket_internal* socket_entry = &socket_entries[pkt_queue_id];
+    socket_internal* socket_entry = &socket_entries[__pkt_queue_id];
 
     return consume_queue(socket_entry, buf, len);
 }
+
 
 void advance_ring_buffer(socket_internal* socket_entry, size_t len)
 {
@@ -398,11 +422,12 @@ void advance_ring_buffer(socket_internal* socket_entry, size_t len)
     uint32_t nb_flits = ((uint64_t) len - 1) / 64 + 1;
     rx_pkt_head = (rx_pkt_head + nb_flits) % PKT_BUF_SIZE;
 
-    asm volatile ("" : : : "memory"); // compiler memory barrier
+    _norman_compiler_memory_barrier();
     *(socket_entry->pkt_queue.buf_head_ptr) = rx_pkt_head;
 
     socket_entry->pkt_queue.rx_head = rx_pkt_head;
 }
+
 
 int send_to_queue(dsc_queue_t* dsc_queue, void* phys_addr, size_t len)
 {
@@ -435,7 +460,7 @@ int send_to_queue(dsc_queue_t* dsc_queue, void* phys_addr, size_t len)
 
         uint8_t wrap_tracker_mask =
             (req_length > missing_bytes_in_page) << (tx_tail & 0x7);
-        wrap_tracker[tx_tail / 8] |= wrap_tracker_mask;
+        dsc_queue->wrap_tracker[tx_tail / 8] |= wrap_tracker_mask;
 
         req_length = std::min(req_length, missing_bytes_in_page);
 
@@ -454,7 +479,7 @@ int send_to_queue(dsc_queue_t* dsc_queue, void* phys_addr, size_t len)
 
     dsc_queue->tx_tail = tx_tail;
 
-    asm volatile ("" : : : "memory"); // compiler memory barrier
+    _norman_compiler_memory_barrier();
     *(dsc_queue->tx_tail_ptr) = tx_tail;
 
     return 0;
@@ -498,7 +523,7 @@ int send_config(dsc_queue_t* dsc_queue, pcie_tx_dsc_t* config_dsc)
     tx_tail = (tx_tail + 1) % DSC_BUF_SIZE;
     dsc_queue->tx_tail = tx_tail;
 
-    asm volatile ("" : : : "memory"); // compiler memory barrier
+    _norman_compiler_memory_barrier();
     *(dsc_queue->tx_tail_ptr) = tx_tail;
 
     // Wait for request to be consumed.
@@ -606,9 +631,10 @@ void update_tx_head(dsc_queue_t* dsc_queue)
         // same cache line, we can get rid of `wrap_tracker` and instead check
         // for two descriptors.
         uint8_t wrap_tracker_mask = 1 << (head & 0x7);
-        uint8_t no_wrap = !(wrap_tracker[head / 8] & wrap_tracker_mask);
+        uint8_t no_wrap =
+            !(dsc_queue->wrap_tracker[head / 8] & wrap_tracker_mask);
         dsc_queue->nb_unreported_completions += no_wrap;
-        wrap_tracker[head / 8] &= ~wrap_tracker_mask;
+        dsc_queue->wrap_tracker[head / 8] &= ~wrap_tracker_mask;
 
         head = (head + 1) % DSC_BUF_SIZE;
     }
@@ -621,8 +647,6 @@ int dma_finish(socket_internal* socket_entry)
 {
     dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
     queue_regs_t* pkt_queue_regs = socket_entry->pkt_queue.regs;
-    pkt_queue_regs->rx_tail = 0;
-    pkt_queue_regs->rx_head = 0;
     pkt_queue_regs->rx_mem_low = 0;
     pkt_queue_regs->rx_mem_high = 0;
 
@@ -633,36 +657,27 @@ int dma_finish(socket_internal* socket_entry)
     }
 
     if (--(dsc_queue->ref_cnt) == 0) {
-        dsc_queue->regs->rx_tail = 0;
-        dsc_queue->regs->rx_head = 0;
         dsc_queue->regs->rx_mem_low = 0;
         dsc_queue->regs->rx_mem_high = 0;
 
         dsc_queue->regs->tx_mem_low = 0;
         dsc_queue->regs->tx_mem_high = 0;
         munmap(dsc_queue->rx_buf, ALIGNED_DSC_BUF_PAIR_SIZE);
-        free(pending_pkt_tails);
-        free(wrap_tracker);
+        free(dsc_queue->pending_pkt_tails);
+        free(dsc_queue->wrap_tracker);
         free(dsc_queue->last_rx_ids);
     }
 
     return 0;
 }
 
+
 uint32_t get_pkt_queue_id_from_socket(socket_internal* socket_entry)
 {
-    return (uint32_t) socket_entry->queue_id + pkt_queue_id_offset;
+    dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
+    return (uint32_t) socket_entry->queue_id + dsc_queue->pkt_queue_id_offset;
 }
 
-void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range)
-{
-    for (unsigned int i = 0; i < range*16; ++i) {
-        if (i%16==0) {
-            printf("\n");
-        }
-        printf("rp_addr[%d] = 0x%08x \n", 16*start + i, rp_addr[16*start+i]);
-    }
-}
 
 void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs)
 {
@@ -672,6 +687,7 @@ void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs)
         printf("fpga_reg[%d] = 0x%08x \n", i, temp_r);
     }
 } 
+
 
 void print_queue_regs(queue_regs* regs)
 {
@@ -686,6 +702,7 @@ void print_queue_regs(queue_regs* regs)
     printf("tx_mem_high = 0x%08x \n", regs->tx_mem_high);
 }
 
+
 void print_buffer(uint8_t* buf, uint32_t nb_flits)
 {
     for (uint32_t i = 0; i < nb_flits; ++i) {
@@ -698,6 +715,7 @@ void print_buffer(uint8_t* buf, uint32_t nb_flits)
         printf("\n");
     }
 }
+
 
 void print_stats(socket_internal* socket_entry, bool print_global)
 {

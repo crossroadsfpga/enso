@@ -98,7 +98,8 @@ int main(int argc, const char* argv[])
 
         while (keep_running) {
             int socket_fd;
-            int recv_len = recv_select(&socket_fd, (void**) &buf, BUF_LEN, 0);
+            int recv_len =
+                recv_select(0, &socket_fd, (void**) &buf, BUF_LEN, 0);
 
             if (unlikely(recv_len < 0)) {
                 std::cerr << "Error receiving" << std::endl;
@@ -148,7 +149,7 @@ int main(int argc, const char* argv[])
             }
 
 #ifdef SEND_BACK
-            int nb_tx_completions = get_completions();
+            int nb_tx_completions = get_completions(0);
 
             // Free data that was already sent.
             for (int i = 0; i < nb_tx_completions; ++i) {
