@@ -24,9 +24,6 @@
 #define BUF_LEN (1024*128)
 #define CACHE_LINE_SIZE 64
 
-#define likely(x)       __builtin_expect((x),1)
-#define unlikely(x)     __builtin_expect((x),0)
-
 static volatile int keep_running = 1;
 
 struct rb_state {

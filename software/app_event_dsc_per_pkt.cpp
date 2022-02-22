@@ -26,9 +26,6 @@
 
 #define BUF_LEN 100000
 
-#define likely(x)       __builtin_expect((x),1)
-#define unlikely(x)     __builtin_expect((x),0)
-
 static volatile int keep_running = 1;
 
 void int_handler(int signal __attribute__((unused)))
