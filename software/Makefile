@@ -16,11 +16,15 @@ EVENT_SRCS = app_event.cpp
 EVENT_OBJS = $(subst .cpp,.o,$(EVENT_SRCS))
 EVENT_EXEC = app_event
 
+PKTGEN_SRCS = pktgen.cpp
+PKTGEN_OBJS = $(subst .cpp,.o,$(PKTGEN_SRCS))
+PKTGEN_EXEC = pktgen
+
 # switch to use static or dynamic library
 LIB = norman/libnorman.a
 # LIB = norman/libnorman.so
 
-all: $(EXEC) $(DISPATCH_EXEC) $(EVENT_EXEC) .depend
+all: $(EXEC) $(DISPATCH_EXEC) $(EVENT_EXEC) $(PKTGEN_EXEC) .depend
 
 .cpp.o:
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -46,6 +50,9 @@ $(DISPATCH_EXEC): $(LIB) $(DISPATCH_OBJS)
 $(EVENT_EXEC): $(LIB) $(EVENT_OBJS)
 	$(LD) $(EVENT_OBJS) $(LDFLAGS) -o $(EVENT_EXEC)
 
+$(PKTGEN_EXEC): $(LIB) $(PKTGEN_OBJS)
+	$(LD) $(PKTGEN_OBJS) $(LDFLAGS) -lpcap -o $(PKTGEN_EXEC)
+
 clean:
-	$(RM) $(EXEC) $(OBJS) $(DISPATCH_OBJS) $(EVENT_OBJS) .depend
+	$(RM) $(EXEC) $(OBJS) $(DISPATCH_OBJS) $(EVENT_OBJS) $(PKTGEN_OBJS) .depend
 	+$(MAKE) clean -C norman
