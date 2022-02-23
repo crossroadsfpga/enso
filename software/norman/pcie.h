@@ -3,7 +3,7 @@
 #ifndef PCIE_H
 #define PCIE_H
 
-#include <byteswapp.h>
+#include <endian.h>
 #include <netinet/ether.h>
 #include <netinet/ip.h>
 
