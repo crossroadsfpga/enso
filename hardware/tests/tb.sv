@@ -910,7 +910,9 @@ always @(posedge clk_pcie) begin
             pkt_buf_base_addr = 64'ha000000000000000 + (pkt_q << 32);
             tx_dsc_q_addr = nb_pkt_queues + nb_dsc_queues + dsc_q;
 
-            assert(rx_pkt_buf_tail != tx_pkt_buf_head);
+            if (rx_pkt_buf_tail == tx_pkt_buf_head) begin
+              continue;
+            end
 
             if (rx_pkt_buf_tail > tx_pkt_buf_head) begin
               automatic pcie_tx_dsc_t tx_dsc = 0;
