@@ -1045,9 +1045,9 @@ always @(posedge clk_pcie) begin
     end
 
     // Emulate PCIe BAS wait
-    // if (cnt[8]) begin
-    //     pcie_bas_waitrequest <= !pcie_bas_waitrequest;
-    // end
+    if (cnt[8]) begin
+        pcie_bas_waitrequest <= !pcie_bas_waitrequest;
+    end
 
     pcie_write_0 <= next_pcie_write_0;
   end
