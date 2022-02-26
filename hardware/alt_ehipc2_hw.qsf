@@ -8,22 +8,34 @@ set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
 
 # Pin & Location Assignments
 # ==========================
-set_location_assignment PIN_AM3 -to o_tx_serial[0]
-set_location_assignment PIN_AL5 -to i_rx_serial[0]
-set_location_assignment PIN_AL1 -to o_tx_serial[1]
-set_location_assignment PIN_AK7 -to i_rx_serial[1]
+
+# Ethernet Port 0
+set_location_assignment PIN_AN51 -to o_tx_serial_0[0]
+set_location_assignment PIN_AL51 -to o_tx_serial_0[1]
+set_location_assignment PIN_AJ51 -to o_tx_serial_0[2]
+set_location_assignment PIN_AG51 -to o_tx_serial_0[3]
+set_location_assignment PIN_AM45 -to i_rx_serial_0[0]
+set_location_assignment PIN_AK45 -to i_rx_serial_0[1]
+set_location_assignment PIN_AH45 -to i_rx_serial_0[2]
+set_location_assignment PIN_AF45 -to i_rx_serial_0[3]
+set_location_assignment PIN_AJ43 -to i_clk_ref_0
+
+# Use Ethernet Port 1
+set_location_assignment PIN_AM3 -to o_tx_serial_1[0]
+set_location_assignment PIN_AL1 -to o_tx_serial_1[1]
+set_location_assignment PIN_AJ1 -to o_tx_serial_1[2]
+set_location_assignment PIN_AH3 -to o_tx_serial_1[3]
+set_location_assignment PIN_AL5 -to i_rx_serial_1[0]
+set_location_assignment PIN_AK7 -to i_rx_serial_1[1]
+set_location_assignment PIN_AH7 -to i_rx_serial_1[2]
+set_location_assignment PIN_AG5 -to i_rx_serial_1[3]
+set_location_assignment PIN_AJ9 -to i_clk_ref_1
+
 set_location_assignment PIN_AV16 -to qsfp_rstn
 set_location_assignment PIN_BC16 -to qsfp_lowpwr
-set_location_assignment PIN_AJ1 -to o_tx_serial[2]
-set_location_assignment PIN_AH7 -to i_rx_serial[2]
-set_location_assignment PIN_AH3 -to o_tx_serial[3]
-set_location_assignment PIN_AG5 -to i_rx_serial[3]
-set_location_assignment PIN_AJ9 -to i_clk_ref
-
 set_location_assignment PIN_BE17 -to clk50
 set_location_assignment PIN_BL14 -to cpu_resetn
 
-#Zhipeng Add new signals
 set_location_assignment PIN_AT13 -to in_clk100
 set_location_assignment PIN_AU13 -to "in_clk100(n)"
 set_location_assignment PIN_AU31 -to clk_esram_ref
@@ -156,10 +168,12 @@ set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
 # ------------------------
 # start ENTITY(alt_ehipc2)
 
-	# Fitter Assignments
-	# ==================
-	set_instance_assignment -name GXB_0PPM_CORECLK ON -to i_rx_serial[*] -entity alt_ehipc2
-	set_instance_assignment -name GXB_0PPM_CORECLK ON -to o_tx_serial[*] -entity alt_ehipc2
+# Fitter Assignments
+# ==================
+set_instance_assignment -name GXB_0PPM_CORECLK ON -to i_rx_serial_0[*] -entity alt_ehipc2
+set_instance_assignment -name GXB_0PPM_CORECLK ON -to o_tx_serial_0[*] -entity alt_ehipc2
+set_instance_assignment -name GXB_0PPM_CORECLK ON -to i_rx_serial_1[*] -entity alt_ehipc2
+set_instance_assignment -name GXB_0PPM_CORECLK ON -to o_tx_serial_1[*] -entity alt_ehipc2
 
 # end ENTITY(alt_ehipc2)
 # ----------------------
@@ -167,65 +181,72 @@ set_global_assignment -name PWRMGT_PAGE_COMMAND_ENABLE ON
 # ---------------------------
 # start ENTITY(alt_ehipc2_hw)
 
-	# Project-Wide Assignments
-	# ========================
-	set_instance_assignment -name MESSAGE_DISABLE 13410 -to qsfp_lowpwr -entity alt_ehipc2_hw
-	set_instance_assignment -name MESSAGE_DISABLE 13410 -to qsfp_rstn -entity alt_ehipc2_hw
-	#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_io[2] -entity alt_ehipc2_hw
-	#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_io[3] -entity alt_ehipc2_hw
-	#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_io[8] -entity alt_ehipc2_hw
-	#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_io[9] -entity alt_ehipc2_hw
-	#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_led[*] -entity alt_ehipc2_hw
+# Project-Wide Assignments
+# ========================
+set_instance_assignment -name MESSAGE_DISABLE 13410 -to qsfp_lowpwr -entity alt_ehipc2_hw
+set_instance_assignment -name MESSAGE_DISABLE 13410 -to qsfp_rstn -entity alt_ehipc2_hw
+#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_io[2] -entity alt_ehipc2_hw
+#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_io[3] -entity alt_ehipc2_hw
+#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_io[8] -entity alt_ehipc2_hw
+#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_io[9] -entity alt_ehipc2_hw
+#set_instance_assignment -name MESSAGE_DISABLE 13410 -to user_led[*] -entity alt_ehipc2_hw
 
-	# Fitter Assignments
-	# ==================
-	set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to i_rx_serial[*] -entity alt_ehipc2_hw
-	set_instance_assignment -name IO_STANDARD "HSSI DIFFERENTIAL I/O" -to o_tx_serial[*] -entity alt_ehipc2_hw
-	set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_1V -to i_rx_serial[*] -entity alt_ehipc2_hw
-	set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_1V -to o_tx_serial[*] -entity alt_ehipc2_hw
-	set_instance_assignment -name IO_STANDARD LVDS -to i_clk_ref -entity alt_ehipc2_hw
-	set_instance_assignment -name IO_STANDARD LVDS -to "i_clk_ref_r(n)" -entity alt_ehipc2_hw
-	set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_resetn -entity alt_ehipc2_hw
-	set_instance_assignment -name IO_STANDARD "1.8 V" -to eQSFP_resetL -entity alt_ehipc2_hw
-	set_instance_assignment -name IO_STANDARD "1.8 V" -to eQSFP_LPmode -entity alt_ehipc2_hw
+# Fitter Assignments
+# ==================
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to i_rx_serial_0[*] -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HSSI DIFFERENTIAL I/O" -to o_tx_serial_0[*] -entity alt_ehipc2_hw
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_1V -to i_rx_serial_0[*] -entity alt_ehipc2_hw
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_1V -to o_tx_serial_0[*] -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD LVDS -to i_clk_ref_0 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD LVDS -to "i_clk_ref_0(n)" -entity alt_ehipc2_hw
 
-#Zhipeng add new
-    set_instance_assignment -name IO_STANDARD LVDS -to in_clk100 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD LVDS -to clk_esram_ref -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "3.0-V LVTTL" -to pcie_rstn_pin_perst -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD LVDS -to refclk_clk -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out0 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in0 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out1 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in1 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out2 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in2 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out3 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in3 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out4 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in4 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out5 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in5 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out6 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in6 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out7 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in7 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out8 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in8 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out9 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in9 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out10 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in10 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out11 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in11 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out12 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in12 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out13 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in13 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out14 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in14 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out15 -entity alt_ehipc2_hw
-    set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in15 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to i_rx_serial_1[*] -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HSSI DIFFERENTIAL I/O" -to o_tx_serial_1[*] -entity alt_ehipc2_hw
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_1V -to i_rx_serial_1[*] -entity alt_ehipc2_hw
+set_instance_assignment -name XCVR_VCCR_VCCT_VOLTAGE 1_1V -to o_tx_serial_1[*] -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD LVDS -to i_clk_ref_1 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD LVDS -to "i_clk_ref_1(n)" -entity alt_ehipc2_hw
+
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_resetn -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "1.8 V" -to eQSFP_resetL -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "1.8 V" -to eQSFP_LPmode -entity alt_ehipc2_hw
+
+set_instance_assignment -name IO_STANDARD LVDS -to in_clk100 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD LVDS -to clk_esram_ref -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "3.0-V LVTTL" -to pcie_rstn_pin_perst -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD LVDS -to refclk_clk -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out0 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in0 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out1 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in1 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out2 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in2 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out3 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in3 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out4 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in4 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out5 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in5 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out6 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in6 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out7 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in7 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out8 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in8 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out9 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in9 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out10 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in10 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out11 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in11 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out12 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in12 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out13 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in13 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out14 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in14 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out15 -entity alt_ehipc2_hw
+set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in15 -entity alt_ehipc2_hw
     
 
 # end ENTITY(alt_ehipc2_hw)
@@ -296,6 +317,7 @@ set_global_assignment -name VERILOG_FILE src/common/rom_2port_noreg.v
 set_global_assignment -name VERILOG_FILE src/common/rom_2port.v
 set_global_assignment -name VERILOG_FILE src/common/mlab_ram.v
 set_global_assignment -name VERILOG_FILE src/common/mlab_dc_ram.v
+set_global_assignment -name VERILOG_FILE src/common/hyperpipe_vlat.v
 set_global_assignment -name VERILOG_FILE src/common/fifo_wrapper_mlab.v
 set_global_assignment -name VERILOG_FILE src/common/fifo_wrapper_infill_mlab.v
 set_global_assignment -name VERILOG_FILE src/common/fifo_wrapper_infill.v

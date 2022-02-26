@@ -22,6 +22,9 @@ module top (
     output logic [5:0]   out_empty,
     input  logic         out_almost_full,
 
+    // Select Ethernet port.
+    output logic eth_port_nb,
+
     // PCIe.
     input  logic         pcie_wrdm_desc_ready,
     output logic         pcie_wrdm_desc_valid,
@@ -240,6 +243,7 @@ logic          fdw_out_meta_valid;
 metadata_t     fdw_out_meta_data;
 logic          fdw_out_meta_ready;
 logic [31:0]   nb_fallback_queues;
+logic          pcie_eth_port_nb;
 
 logic          dm_in_meta_valid;
 metadata_t     dm_in_meta_data;

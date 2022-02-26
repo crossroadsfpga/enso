@@ -56,7 +56,7 @@ module cpu_to_fpga  #(
 
   // Config signals.
   input logic [RB_AWIDTH:0] rb_size,
-  input logic [31:0]        inflight_desc_limit,
+  input logic [30:0]        inflight_desc_limit,
 
   // Counters.
   output logic [31:0] queue_full_signals,
@@ -145,7 +145,7 @@ logic         pkt_queue_out_valid;
 logic         pkt_queue_out_ready;
 logic [31:0]  pkt_queue_occup;
 
-logic [31:0] inflight_descriptors;
+logic [$bits(inflight_desc_limit)-1:0] inflight_descriptors;
 
 localparam RDDM_WREQ_ALLOWANCE = 16;
 
@@ -896,7 +896,7 @@ end
 
 logic has_enough_credit;
 logic has_enough_credit_r;
-logic [31:0] nb_requested_descriptors;
+logic [$bits(inflight_desc_limit)-1:0] nb_requested_descriptors;
 
 always_comb begin
   automatic rddm_desc_t rddm_desc = pcie_rddm_desc_data;
@@ -943,7 +943,8 @@ always @(posedge clk) begin
       max_inflight_dscs <= inflight_descriptors;
     end
     if (nb_requested_descriptors > max_nb_req_dscs) begin
-      max_nb_req_dscs <= nb_requested_descriptors;
+      max_nb_req_dscs[$bits(nb_requested_descriptors)-1:0] <=
+        nb_requested_descriptors;
     end
   end
 end

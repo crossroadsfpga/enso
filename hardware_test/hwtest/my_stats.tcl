@@ -844,8 +844,27 @@ proc set_nb_tx_credits {nb_tx_credits} {
     global wdata
 
     set wr_reg [expr $PCIE_CTRL_REG + 2]
+    set rdata [reg_read $PCIE_BASE $wr_reg]
+    set wdata [expr (($rdata & 0x80000000) | ($nb_tx_credits & 0x7fffffff))]
 
     reg_write $PCIE_BASE $wr_reg $nb_tx_credits
+
+    set_clear
+    set_up
+}
+
+proc set_eth_port {eth_port} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+    global rdata
+    global wdata
+
+    set wr_reg [expr $PCIE_CTRL_REG + 2]
+
+    set rdata [reg_read $PCIE_BASE $wr_reg]
+    set wdata [expr (($rdata & 0x7fffffff) | ($eth_port << 31))]
+
+    reg_write $PCIE_BASE $wr_reg $wdata
 
     set_clear
     set_up

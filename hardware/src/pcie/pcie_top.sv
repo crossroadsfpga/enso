@@ -76,6 +76,7 @@ module pcie_top (
     output logic        disable_pcie,
     output logic        sw_reset,
     output logic [31:0] nb_fallback_queues,
+    output logic        eth_port_nb,
 
     // Counters.
     output logic [31:0] pcie_core_full_cnt,
@@ -113,7 +114,7 @@ localparam HEAD_UPD_QUEUE_LEN = 128;
 logic [RB_AWIDTH:0] dsc_rb_size;
 logic [RB_AWIDTH:0] pkt_rb_size;
 
-logic [31:0] inflight_desc_limit;
+logic [31-$bits(eth_port_nb):0] inflight_desc_limit;
 
 logic [31:0] control_regs [NB_CONTROL_REGS];
 
@@ -132,7 +133,9 @@ end
 
 assign dsc_rb_size = control_regs[1][0 +: RB_AWIDTH+1];
 
-assign inflight_desc_limit = control_regs[2];
+assign inflight_desc_limit = control_regs[2][0 +: $bits(inflight_desc_limit)];
+assign eth_port_nb =
+    control_regs[2][$bits(inflight_desc_limit) +: $bits(eth_port_nb)];
 
 assign nb_fallback_queues = control_regs[3];
 

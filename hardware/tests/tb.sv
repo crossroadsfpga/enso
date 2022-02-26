@@ -51,6 +51,9 @@ localparam UPDATE_HEAD_DELAY = 1000;
 localparam DSC_BUF_SIZE = 8192;
 localparam PKT_BUF_SIZE = 8192;
 
+// Ethernet port to use.
+localparam ETH_PORT_NB = 1;
+
 generate
   // We assume this during the test, it does not necessarily hold in general.
   if (((`NB_PKT_QUEUES / `NB_DSC_QUEUES) * `NB_DSC_QUEUES) != `NB_PKT_QUEUES)
@@ -134,6 +137,7 @@ logic           reg_top_out_valid;
 logic           reg_top_out_startofpacket;
 logic           reg_top_out_endofpacket;
 logic           reg_top_out_almost_full;
+logic           reg_top_eth_port_nb;
 
 logic  [511:0]  l8_tx_data;
 logic  [5:0]    l8_tx_empty;
@@ -1162,10 +1166,12 @@ always @(posedge clk_status) begin
         conf_state <= CONFIGURE_2;
       end
       CONFIGURE_2: begin
+        automatic logic eth_port_nb = ETH_PORT_NB;
+        automatic logic [30:0] nb_tx_credits = NB_TX_CREDITS;
         s_addr <= 30'h2A00_0002;
         s_write <= 1;
 
-        s_writedata <= NB_TX_CREDITS;
+        s_writedata <= {eth_port_nb, nb_tx_credits};
         conf_state <= CONFIGURE_3;
       end
       CONFIGURE_3: begin
@@ -1314,6 +1320,9 @@ always @(posedge clk_status) begin
           conf_state <= OUT_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;
+
+          // End of simulation assertions.
+          assert(reg_top_eth_port_nb == ETH_PORT_NB);
         end
       end
       OUT_PKT: begin
@@ -1794,6 +1803,7 @@ top top_inst (
   .out_data                     (top_out_data),
   .out_valid                    (top_out_valid),
   .out_almost_full              (reg_top_out_almost_full),
+  .eth_port_nb                  (reg_top_eth_port_nb),
   .out_sop                      (top_out_startofpacket),
   .out_eop                      (top_out_endofpacket),
   .out_empty                    (top_out_empty),

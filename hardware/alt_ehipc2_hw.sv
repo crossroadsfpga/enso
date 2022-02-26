@@ -30,10 +30,15 @@ module alt_ehipc2_hw (
     output wire  qsfp_lowpwr,   // LPMode
     output wire  qsfp_rstn,   // ResetL
 
-    // 10G IO
-    input wire i_clk_ref,
-    input wire [3:0] i_rx_serial,
-    output wire [3:0] o_tx_serial,
+    // Ethernet Port 0.
+    // input wire i_clk_ref_0,
+    // input wire [3:0] i_rx_serial_0,
+    // output wire [3:0] o_tx_serial_0,
+
+    // Ethernet Port 1.
+    input wire i_clk_ref_1,
+    input wire [3:0] i_rx_serial_1,
+    output wire [3:0] o_tx_serial_1,
 
     // PCIe
     input  wire         refclk_clk,
@@ -270,6 +275,14 @@ module alt_ehipc2_hw (
     logic         reg_esram_pkt_buf_rd_valid;
     logic [519:0] reg_esram_pkt_buf_rddata;
 
+    logic eth_port_nb;
+    logic i_clk_ref;
+    logic [3:0] i_rx_serial;
+    logic [3:0] o_tx_serial;
+
+    assign o_tx_serial_1 = o_tx_serial;
+    assign i_clk_ref = i_clk_ref_1;
+    assign i_rx_serial = i_rx_serial_1;
     // Master : support lane0 and lane1
     atx_pll_e50g_master atx_m (
         .pll_refclk0           (i_clk_ref),
@@ -613,6 +626,9 @@ module alt_ehipc2_hw (
         .out_sop         (top_out_startofpacket),
         .out_eop         (top_out_endofpacket),
         .out_empty       (top_out_empty),
+
+        // Select Ethernet port.
+        .eth_port_nb (eth_port_nb),
 
         // PCIe
         .pcie_wrdm_desc_ready   (pcie_wrdm_desc_ready),
