@@ -23,7 +23,7 @@
 - `RX_DMA_PKT`: Number of packets sent to the DMA engine (RX path).
 - `RX_PKT_HEAD_UPD`: Number of updates to the RX packet queue head pointer from software.
 - `TX_DSC_TAIL_UPD`: Number of updates to the TX descriptor queue tail pointer from software.
-- `DMA_REQUEST`: Number of actual DMA requests  sent to PCIe, a single packet may require multiple DMA requests, either because the packet is large or because we need to send a descriptor.
+- `DMA_REQUEST`: Number of actual DMA requests  sent to PCIe, a single packet may require multiple DMA requests as each flit requires a separate DMA requests and some packets also need a descriptor.
 - `RULE_SET`: Number of rules set in the Flow Table.
 - `EVICTION`: Number of evictions in the Flow Table. Evictions are currently not implemented so this counter effectively reports the number of ignored evictions.
 - `MAX_PDUGEN_PKT_FIFO`: Maximum occupancy of the packet FIFO in the `pdu_gen` module. If either this FIFO or `MAX_PDUGEN_META_FIFO` are at their maximum capacity, this indicates that the DMA engine is not able to consume packets fast enough.
