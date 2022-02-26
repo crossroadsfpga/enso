@@ -37,7 +37,9 @@ module pkt_queue_manager #(
     input logic [RB_AWIDTH:0] rb_size,
 
     // counters
-    output logic [31:0] full_cnt
+    output logic [31:0] full_cnt,
+    output logic [31:0] in_cnt,
+    output logic [31:0] out_cnt
 );
 
 // We use the least significant bits of the packet queue address to store the
@@ -225,7 +227,9 @@ queue_manager_inst (
     .q_table_l_addrs (q_table_l_addrs),
     .q_table_h_addrs (q_table_h_addrs),
     .rb_size         (rb_size),
-    .full_cnt        (full_cnt)
+    .full_cnt        (full_cnt),
+    .in_cnt          (in_cnt),
+    .out_cnt         (out_cnt)
 );
 
 fifo_wrapper_infill_mlab #(

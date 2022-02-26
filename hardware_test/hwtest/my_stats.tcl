@@ -85,19 +85,23 @@ set RX_DMA_DSC_DROP_CNT       30
 set RX_DMA_PKT_FLIT_CNT       31
 set RX_DMA_PKT_FLIT_DROP_CNT  32
 set CPU_DSC_BUF_FULL          33
-set CPU_PKT_BUF_FULL          34
-set MAX_PCIE_PKT_FIFO         35
-set MAX_PCIE_META_FIFO        36
-set PCIE_RX_IGNORED_HEAD      37
-set PCIE_TX_Q_FULL_SIGNALS    38
-set PCIE_TX_DSC_CNT           39
-set PCIE_TX_EMPTY_TAIL_CNT    40
-set PCIE_TX_DSC_READ_CNT      41
-set PCIE_TX_PKT_READ_CNT      42
-set PCIE_TX_BATCH_CNT         43
-set PCIE_TX_MAX_INFLIGHT_DSCS 44
-set PCIE_TX_MAX_NB_REQ_DSCS   45
-set TX_DMA_PKT                46
+set CPU_DSC_BUF_IN            34
+set CPU_DSC_BUF_OUT           35
+set CPU_PKT_BUF_FULL          36
+set CPU_PKT_BUF_IN            37
+set CPU_PKT_BUF_OUT           38
+set MAX_PCIE_PKT_FIFO         39
+set MAX_PCIE_META_FIFO        40
+set PCIE_RX_IGNORED_HEAD      41
+set PCIE_TX_Q_FULL_SIGNALS    42
+set PCIE_TX_DSC_CNT           43
+set PCIE_TX_EMPTY_TAIL_CNT    44
+set PCIE_TX_DSC_READ_CNT      45
+set PCIE_TX_PKT_READ_CNT      46
+set PCIE_TX_BATCH_CNT         47
+set PCIE_TX_MAX_INFLIGHT_DSCS 48
+set PCIE_TX_MAX_NB_REQ_DSCS   49
+set TX_DMA_PKT                50
 
 set log 0
 #clock period
@@ -513,7 +517,11 @@ proc get_top_stats {} {
     global RX_DMA_PKT_FLIT_CNT
     global RX_DMA_PKT_FLIT_DROP_CNT
     global CPU_DSC_BUF_FULL
+    global CPU_DSC_BUF_IN
+    global CPU_DSC_BUF_OUT
     global CPU_PKT_BUF_FULL
+    global CPU_PKT_BUF_IN
+    global CPU_PKT_BUF_OUT
     global MAX_PCIE_PKT_FIFO
     global MAX_PCIE_META_FIFO
     global PCIE_RX_IGNORED_HEAD
@@ -562,7 +570,11 @@ proc get_top_stats {} {
     read_top_reg RX_DMA_PKT_FLIT_CNT       $RX_DMA_PKT_FLIT_CNT       $fp
     read_top_reg RX_DMA_PKT_FLIT_DROP_CNT  $RX_DMA_PKT_FLIT_DROP_CNT  $fp
     read_top_reg CPU_DSC_BUF_FULL          $CPU_DSC_BUF_FULL          $fp
+    read_top_reg CPU_DSC_BUF_IN            $CPU_DSC_BUF_IN            $fp
+    read_top_reg CPU_DSC_BUF_OUT           $CPU_DSC_BUF_OUT           $fp
     read_top_reg CPU_PKT_BUF_FULL          $CPU_PKT_BUF_FULL          $fp
+    read_top_reg CPU_PKT_BUF_IN            $CPU_PKT_BUF_IN            $fp
+    read_top_reg CPU_PKT_BUF_OUT           $CPU_PKT_BUF_OUT           $fp
     read_top_reg MAX_PCIE_PKT_FIFO         $MAX_PCIE_PKT_FIFO         $fp
     read_top_reg MAX_PCIE_META_FIFO        $MAX_PCIE_META_FIFO        $fp
     read_top_reg PCIE_RX_IGNORED_HEAD      $PCIE_RX_IGNORED_HEAD      $fp

@@ -85,7 +85,11 @@ module pcie_top (
     output logic [31:0] rx_dma_pkt_flit_cnt,
     output logic [31:0] rx_dma_pkt_flit_drop_cnt,
     output logic [31:0] cpu_dsc_buf_full_cnt,
+    output logic [31:0] cpu_dsc_buf_in_cnt,
+    output logic [31:0] cpu_dsc_buf_out_cnt,
     output logic [31:0] cpu_pkt_buf_full_cnt,
+    output logic [31:0] cpu_pkt_buf_in_cnt,
+    output logic [31:0] cpu_pkt_buf_out_cnt,
     output logic [31:0] rx_ignored_head_cnt,
     output logic [31:0] tx_q_full_signals,
     output logic [31:0] tx_dsc_cnt,
@@ -403,7 +407,11 @@ logic                  pkt_q_mngr_in_meta_ready  [NB_PKT_QUEUE_MANAGERS];
 logic                  pkt_q_mngr_out_meta_ready [NB_PKT_QUEUE_MANAGERS];
 
 logic [31:0] pkt_full_counters [NB_PKT_QUEUE_MANAGERS];
+logic [31:0] pkt_in_counters [NB_PKT_QUEUE_MANAGERS];
+logic [31:0] pkt_out_counters [NB_PKT_QUEUE_MANAGERS];
 logic [31:0] cpu_pkt_buf_full_cnt_r;
+logic [31:0] cpu_pkt_buf_in_cnt_r;
+logic [31:0] cpu_pkt_buf_out_cnt_r;
 
 logic st_mux_ord_ready;
 
@@ -416,11 +424,15 @@ logic [NON_NEG_PKT_QM_MSB:0] pkt_q_mngr_id;
 always_comb begin
     in_queue_out_ready = 0;
     cpu_pkt_buf_full_cnt_r = 0;
+    cpu_pkt_buf_in_cnt_r = 0;
+    cpu_pkt_buf_out_cnt_r = 0;
 
     for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
         pkt_q_mngr_in_meta_data[i] = in_queue_out_data;
         pkt_q_mngr_in_meta_valid[i] = 0;
         cpu_pkt_buf_full_cnt_r += pkt_full_counters[i];
+        cpu_pkt_buf_in_cnt_r += pkt_in_counters[i];
+        cpu_pkt_buf_out_cnt_r += pkt_out_counters[i];
     end
 
     if (PKT_QM_ID_WIDTH > 0) begin
@@ -438,6 +450,8 @@ end
 
 always @(posedge pcie_clk) begin
     cpu_pkt_buf_full_cnt <= cpu_pkt_buf_full_cnt_r;
+    cpu_pkt_buf_in_cnt <= cpu_pkt_buf_in_cnt_r;
+    cpu_pkt_buf_out_cnt <= cpu_pkt_buf_out_cnt_r;
 end
 
 // Count TX dsc tail pointer updates.
@@ -467,7 +481,9 @@ pkt_queue_manager #(
     .q_table_l_addrs (pqm_pkt_q_table_l_addrs),
     .q_table_h_addrs (pqm_pkt_q_table_h_addrs),
     .rb_size         (pkt_rb_size),
-    .full_cnt        (pkt_full_counters)
+    .full_cnt        (pkt_full_counters),
+    .in_cnt          (pkt_in_counters),
+    .out_cnt         (pkt_out_counters)
 );
 
 pkt_meta_with_queues_t dsc_q_mngr_in_meta_data;
@@ -512,7 +528,9 @@ rx_dsc_queue_manager #(
     .q_table_l_addrs (rx_dsc_q_table_l_addrs.owner),
     .q_table_h_addrs (rx_dsc_q_table_h_addrs.owner),
     .rb_size         (dsc_rb_size),
-    .full_cnt        (cpu_dsc_buf_full_cnt)
+    .full_cnt        (cpu_dsc_buf_full_cnt),
+    .in_cnt          (cpu_dsc_buf_in_cnt),
+    .out_cnt         (cpu_dsc_buf_out_cnt)
 );
 
 tx_transfer_t tx_compl_buf_data;

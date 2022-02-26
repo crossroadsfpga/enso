@@ -313,7 +313,11 @@ typedef enum{
   RX_DMA_PKT_FLIT_CNT,
   RX_DMA_PKT_FLIT_DROP_CNT,
   CPU_DSC_BUF_FULL,
+  CPU_DSC_BUF_IN,
+  CPU_DSC_BUF_OUT,
   CPU_PKT_BUF_FULL,
+  CPU_PKT_BUF_IN,
+  CPU_PKT_BUF_OUT,
   MAX_PCIE_PKT_FIFO,
   MAX_PCIE_META_FIFO,
   PCIE_RX_IGNORED_HEAD,
@@ -1634,6 +1638,24 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("CPU_DSC_BUF_FULL:\t%d", top_readdata);
+          conf_state <= CPU_DSC_BUF_IN;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      CPU_DSC_BUF_IN: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("CPU_DSC_BUF_IN:\t%d", top_readdata);
+          conf_state <= CPU_DSC_BUF_OUT;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      CPU_DSC_BUF_OUT: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("CPU_DSC_BUF_OUT:\t%d", top_readdata);
           conf_state <= CPU_PKT_BUF_FULL;
           s_read <= 1;
           s_addr <= s_addr + 1;
@@ -1643,6 +1665,24 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("CPU_PKT_BUF_FULL:\t%d", top_readdata);
+          conf_state <= CPU_PKT_BUF_IN;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      CPU_PKT_BUF_IN: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("CPU_PKT_BUF_IN:\t%d", top_readdata);
+          conf_state <= CPU_PKT_BUF_OUT;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      CPU_PKT_BUF_OUT: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("CPU_PKT_BUF_OUT:\t%d", top_readdata);
           conf_state <= MAX_PCIE_PKT_FIFO;
           s_read <= 1;
           s_addr <= s_addr + 1;

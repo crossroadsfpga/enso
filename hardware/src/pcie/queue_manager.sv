@@ -44,7 +44,9 @@ module queue_manager #(
     input logic [RB_AWIDTH:0] rb_size,
 
     // counters
-    output logic [31:0] full_cnt
+    output logic [31:0] full_cnt,
+    output logic [31:0] in_cnt,
+    output logic [31:0] out_cnt
 );
 
 // The BRAM port b's are exposed outside the module while port a's are only used
@@ -277,8 +279,9 @@ always @(posedge clk) begin
             out_queue_meta_valid <= 1;
             last_queue <= cur_state.queue;
 
-            if (cur_state.queue_full) begin
-                // No space left in the host buffer. Must drop the packet.
+            if (cur_state.queue_full || (cur_state.addr == 0)) begin
+                // No space left in the host buffer or address not configured.
+                // Must drop the packet.
                 out_queue_drop <= 1;
             end else begin
                 // Increment tail only if not pass through.
@@ -311,15 +314,21 @@ end
 logic [31:0] full_cnt_r1;
 logic [31:0] full_cnt_r2;
 
+logic queue_full_r;
+logic queue_state_rd_ready_r;
+
 // Keep track of dropped packets.
 always @(posedge clk) begin
     full_cnt <= full_cnt_r1;
     full_cnt_r1 <= full_cnt_r2;
 
+    queue_full_r <= queue_full;
+    queue_state_rd_ready_r <= queue_state_rd_ready;
+
     if (rst) begin
         full_cnt_r2 <= 0;
     end else begin
-        if (out_queue_drop) begin
+        if (queue_state_rd_ready_r & queue_full_r) begin
             full_cnt_r2 <= full_cnt_r2 + 1;
         end
     end
@@ -346,6 +355,20 @@ out_queue (
     .out_valid     (out_meta_valid),
     .out_ready     (out_meta_ready)
 );
+
+always @(posedge clk) begin
+    if (rst) begin
+        in_cnt <= 0;
+        out_cnt <= 0;
+    end else begin
+        if (in_queue_out_valid & in_queue_out_ready) begin
+            in_cnt <= in_cnt + 1;
+        end
+        if (out_queue_meta_valid_r2 & out_queue_meta_ready) begin
+            out_cnt <= out_cnt + 1;
+        end
+    end
+end
 
 logic q_table_a_tails_rd_en_r;
 logic q_table_a_tails_rd_en_r2;
