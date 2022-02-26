@@ -54,6 +54,9 @@ localparam PKT_BUF_SIZE = 8192;
 // Ethernet port to use.
 localparam ETH_PORT_NB = 1;
 
+// Maximum number of flits that can be sent in a single TX transfer.
+localparam MAX_FLITS_TX_TRANSFER = 16384;
+
 generate
   // We assume this during the test, it does not necessarily hold in general.
   if (((`NB_PKT_QUEUES / `NB_DSC_QUEUES) * `NB_DSC_QUEUES) != `NB_PKT_QUEUES)
@@ -568,6 +571,37 @@ hyper_pipe #(
 );
 
 
+function automatic void transfer_tx_data(
+  logic     [31:0] tx_dsc_buf_addr,
+  ref logic [31:0] tx_dsc_buf_tail,
+  logic     [63:0] tx_pkt_buf_base_addr,
+  ref logic [31:0] tx_pkt_buf_head,
+  logic     [31:0] nb_flits
+);
+  while (nb_flits > 0) begin
+    automatic pcie_tx_dsc_t tx_dsc = 0;
+    tx_dsc.signal = 1;
+    tx_dsc.addr = tx_pkt_buf_base_addr + tx_pkt_buf_head * 64;
+    if (nb_flits > MAX_FLITS_TX_TRANSFER) begin
+      tx_dsc.length = MAX_FLITS_TX_TRANSFER * 64;
+    end else begin
+      tx_dsc.length = nb_flits * 64;
+    end
+    total_tx_length += tx_dsc.length;
+    total_nb_tx_dscs++;
+
+    if (tx_dsc.length > max_tx_length) begin
+      max_tx_length = tx_dsc.length;
+    end
+
+    ram[tx_dsc_buf_addr][tx_dsc_buf_tail] <= tx_dsc;
+    tx_dsc_buf_tail = (tx_dsc_buf_tail + 1) % DSC_BUF_SIZE;
+    tx_pkt_buf_head = (tx_pkt_buf_head + nb_flits) % PKT_BUF_SIZE;
+    nb_flits -= tx_dsc.length / 64;
+  end
+endfunction
+
+
 // PCIe FPGA -> CPU -> FPGA
 always @(posedge clk_pcie) begin
   automatic logic next_pcie_write_0;
@@ -888,90 +922,60 @@ always @(posedge clk_pcie) begin
           automatic integer dsc_q = pkt_q / pkt_per_dsc_queue;
           automatic integer free_slot =
             (tx_dsc_heads[dsc_q] - tx_dsc_tails[dsc_q] - 1) % DSC_BUF_SIZE;
+          automatic logic [31:0] tx_dsc_q_addr;
+          automatic logic [31:0] rx_pkt_buf_tail;
+          automatic logic [31:0] rx_pkt_buf_head;
+          automatic logic [31:0] tx_pkt_buf_head;
+          automatic logic [31:0] tx_dsc_tail = tx_dsc_tails[dsc_q];
+          automatic logic [63:0] pkt_buf_base_addr;
+          automatic logic [31:0] nb_flits;
 
-          // Check if TX dsc buffer has enough room for at least 2 descriptors.
-          if (free_slot < 2) begin
-            tx_queue_full_cnt <= tx_queue_full_cnt + 1;
+          if (!pending_pkt_tails_valid[pkt_q]) begin
             continue;
           end
-          if (pending_pkt_tails_valid[pkt_q]) begin
-            automatic logic [31:0] tx_dsc_q_addr;
-            automatic logic [31:0] rx_pkt_buf_tail;
-            automatic logic [31:0] rx_pkt_buf_head;
-            automatic logic [31:0] tx_pkt_buf_head;
-            automatic logic [63:0] pkt_buf_base_addr;
 
-            rx_pkt_buf_tail = pending_pkt_tails[pkt_q];
-            rx_pkt_buf_head = last_pkt_heads[pkt_q];
-            tx_pkt_buf_head = tx_pkt_heads[pkt_q];
+          rx_pkt_buf_tail = pending_pkt_tails[pkt_q];
+          rx_pkt_buf_head = last_pkt_heads[pkt_q];
+          tx_pkt_buf_head = tx_pkt_heads[pkt_q];
+          nb_flits = (rx_pkt_buf_tail - tx_pkt_buf_head) % PKT_BUF_SIZE;
 
-            pending_pkt_tails_valid[pkt_q] <= 0;
-
-            last_upd_pkt_q = pkt_q;
-            last_upd_dsc_q <= dsc_q;
-
-            // Enqueue TX descriptor.
-            pkt_buf_base_addr = 64'ha000000000000000 + (pkt_q << 32);
-            tx_dsc_q_addr = nb_pkt_queues + nb_dsc_queues + dsc_q;
-
-            if (rx_pkt_buf_tail == tx_pkt_buf_head) begin
-              continue;
-            end
-
-            if (rx_pkt_buf_tail > tx_pkt_buf_head) begin
-              automatic pcie_tx_dsc_t tx_dsc = 0;
-              tx_dsc.signal = 1;
-              tx_dsc.addr = pkt_buf_base_addr + tx_pkt_buf_head * 64;
-              tx_dsc.length = (rx_pkt_buf_tail - tx_pkt_buf_head) * 64;
-              total_tx_length += tx_dsc.length;
-              total_nb_tx_dscs++;
-
-              if (tx_dsc.length > max_tx_length) begin
-                max_tx_length = tx_dsc.length;
-              end
-
-              ram[tx_dsc_q_addr][tx_dsc_tails[dsc_q]] <= tx_dsc;
-              tx_dsc_tails[dsc_q] <= (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
-            end else begin  // Data wrap around buffer.
-              automatic pcie_tx_dsc_t tx_dsc = 0;
-              tx_dsc.signal = 1;
-              tx_dsc.addr = pkt_buf_base_addr + tx_pkt_buf_head * 64;
-              tx_dsc.length = (DSC_BUF_SIZE - tx_pkt_buf_head) * 64;
-              total_tx_length += tx_dsc.length;
-              total_nb_tx_dscs++;
-
-              if (tx_dsc.length > max_tx_length) begin
-                max_tx_length = tx_dsc.length;
-              end
-
-              ram[tx_dsc_q_addr][tx_dsc_tails[dsc_q]] <= tx_dsc;
-
-              // Send second descriptor.
-              tx_dsc.addr = pkt_buf_base_addr;
-              tx_dsc.length = rx_pkt_buf_tail * 64;
-              total_tx_length += tx_dsc.length;
-              total_nb_tx_dscs++;
-
-              if (tx_dsc.length > max_tx_length) begin
-                max_tx_length = tx_dsc.length;
-              end
-
-              ram[tx_dsc_q_addr][(tx_dsc_tails[dsc_q]+1) % DSC_BUF_SIZE] <=
-                tx_dsc;
-
-              // Ignore second descriptor if it has zero length.
-              if (tx_dsc.length == 0) begin
-                tx_dsc_tails[dsc_q] <= (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
-              end else begin
-                tx_dsc_tails[dsc_q] <= (tx_dsc_tails[dsc_q] + 2) % DSC_BUF_SIZE;
-              end
-            end
-
-            tx_pkt_heads[pkt_q] <= rx_pkt_buf_tail;
-            tx_dsc_tail_pending <= 1'b1;
-
-            break;
+          if (nb_flits == 0) begin
+            continue;
           end
+
+          // Check if TX dsc buffer has enough room. We add 1 in case the
+          // transfer wraps around.
+          if ((((nb_flits-1)/MAX_FLITS_TX_TRANSFER + 1) + 1) > free_slot) begin
+            continue;
+          end
+
+          pending_pkt_tails_valid[pkt_q] <= 0;
+
+          last_upd_pkt_q = pkt_q;
+          last_upd_dsc_q <= dsc_q;
+
+          pkt_buf_base_addr = 64'ha000000000000000 + (pkt_q << 32);
+          tx_dsc_q_addr = nb_pkt_queues + nb_dsc_queues + dsc_q;
+
+          if (rx_pkt_buf_tail == tx_pkt_buf_head) begin
+            continue;
+          end
+
+          // Data wrap around buffer.
+          if (rx_pkt_buf_tail < tx_pkt_buf_head) begin
+            nb_flits = DSC_BUF_SIZE - tx_pkt_buf_head;
+            transfer_tx_data(tx_dsc_q_addr, tx_dsc_tail, pkt_buf_base_addr,
+                             tx_pkt_buf_head, nb_flits);
+          end
+          nb_flits = rx_pkt_buf_tail - tx_pkt_buf_head;
+          transfer_tx_data(tx_dsc_q_addr, tx_dsc_tail, pkt_buf_base_addr,
+                           tx_pkt_buf_head, nb_flits);
+
+          tx_dsc_tails[dsc_q] <= tx_dsc_tail;
+          tx_pkt_heads[pkt_q] <= tx_pkt_buf_head;
+          tx_dsc_tail_pending <= 1'b1;
+
+          break;
         end
         if (last_upd_pkt_q == nb_pkt_queues - 1) begin
           pkt_q_consume_delay_cnt <= UPDATE_HEAD_DELAY;
