@@ -1405,6 +1405,16 @@ dc_bp_output_pkt_fifo (
     .almost_full    (dm_eth_pkt_almost_full)
 );
 
+// We don't care about configuration delay.
+hyperpipe_vlat #(
+    .WIDTH($bits(eth_port_nb)),
+    .MAX_PIPE(100)
+) eth_port_nb_hp_vlat (
+    .clk (clk_datamover),
+    .din (pcie_eth_port_nb),
+    .dout(eth_port_nb)
+);
+
 
 //////////////////// PKT BUFFER and its Emptylist //////////////////////////////
 dc_fifo_wrapper #(
@@ -1494,6 +1504,7 @@ pcie_top pcie (
     .disable_pcie             (disable_pcie),
     .sw_reset                 (sw_reset),
     .nb_fallback_queues       (nb_fallback_queues),
+    .eth_port_nb              (pcie_eth_port_nb),
     .pcie_core_full_cnt       (pcie_core_full_cnt),
     .rx_dma_dsc_cnt           (rx_dma_dsc_cnt),
     .rx_dma_dsc_drop_cnt      (rx_dma_dsc_drop_cnt),
