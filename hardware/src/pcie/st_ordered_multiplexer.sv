@@ -1,10 +1,7 @@
 `include "pcie_consts.sv"
 
-/*
- * Streaming multiplexer that takes an "order" stream that indicates the order
- * that it should serve each stream.
- */
-
+/// Streaming multiplexer that takes an "order" stream that indicates the order
+/// that it should serve each stream.
 module st_ordered_multiplexer #(
     parameter NB_IN,
     parameter DWIDTH=250,
@@ -13,17 +10,17 @@ module st_ordered_multiplexer #(
     input logic clk,
     input logic rst,
 
-    // Interface: in
+    /// Data input streams.
     input  var logic              in_valid [NB_IN],
     output var logic              in_ready [NB_IN],
     input  var logic [DWIDTH-1:0] in_data  [NB_IN],
 
-    // Interface: out
+    /// Data output stream.
     output logic              out_valid,
     input  logic              out_ready,
     output logic [DWIDTH-1:0] out_data,
 
-    // Order stream
+    /// Order stream.
     input  logic                     order_valid,
     output logic                     order_ready,
     input  logic [$clog2(NB_IN)-1:0] order_data

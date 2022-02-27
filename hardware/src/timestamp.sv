@@ -1,11 +1,9 @@
 `include "./constants.sv"
 
-/*
- * Timestamp outgoing packets and calculate RTT for incoming packets using this
- * timestamp. For incoming packets we also replace the timestamp with the RTT
- * (in number of cycles). Must be explicitly enabled using the configuration
- * interface. Otherwise this module does nothing.
- */
+/// Timestamp outgoing packets and calculate RTT for incoming packets using this
+/// timestamp. For incoming packets we also replace the timestamp with the RTT
+/// (in number of cycles). Must be explicitly enabled using the configuration
+/// interface. Otherwise this module does nothing.
 module timestamp #(
     parameter TIMESTAMP_WIDTH=32,
     parameter TIMESTAMP_OFFSET=(112+32) // Bytes 4--7 of IPv4 header.
@@ -13,7 +11,7 @@ module timestamp #(
     input logic clk,
     input logic rst,
 
-    // RX input.
+    /// RX input.
     input  logic [511:0] rx_in_pkt_data,
     input  logic         rx_in_pkt_valid,
     output logic         rx_in_pkt_ready,
@@ -21,7 +19,7 @@ module timestamp #(
     input  logic         rx_in_pkt_eop,
     input  logic [5:0]   rx_in_pkt_empty,
 
-    // RX output.
+    /// RX output.
     output logic [511:0] rx_out_pkt_data,
     output logic         rx_out_pkt_valid,
     input  logic         rx_out_pkt_ready,
@@ -29,7 +27,7 @@ module timestamp #(
     output logic         rx_out_pkt_eop,
     output logic [5:0]   rx_out_pkt_empty,
 
-    // TX input.
+    /// TX input.
     input  logic [511:0] tx_in_pkt_data,
     input  logic         tx_in_pkt_valid,
     output logic         tx_in_pkt_ready,
@@ -37,7 +35,7 @@ module timestamp #(
     input  logic         tx_in_pkt_eop,
     input  logic [5:0]   tx_in_pkt_empty,
 
-    // TX output.
+    /// TX output.
     output logic [511:0] tx_out_pkt_data,
     output logic         tx_out_pkt_valid,
     input  logic         tx_out_pkt_ready,
@@ -45,7 +43,7 @@ module timestamp #(
     output logic         tx_out_pkt_eop,
     output logic [5:0]   tx_out_pkt_empty,
 
-    // Configuration.
+    /// Configuration.
     input  var timestamp_config_t conf_ts_data,
     input  logic                  conf_ts_valid,
     output logic                  conf_ts_ready

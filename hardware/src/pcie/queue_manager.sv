@@ -1,51 +1,68 @@
 `include "pcie_consts.sv"
 
-/*
- * This module manages generic queues. It fetches the appropriate packet
- * queue state and adds it to the packet's metadata. It also advances the
- * queue's pointer. This means that packets cannot be dropped after they go
- * through this module.
- */
-
+/// This module manages generic queues. It fetches the appropriate packet queue
+/// state and adds it to the packet's metadata. It also advances the queue's
+/// pointer. This means that packets cannot be dropped after they go through
+/// this module.
 module queue_manager #(
+    /// Number of queue in the module.
     parameter NB_QUEUES,
-    parameter EXTRA_META_BITS, // Number fo bits in the extra metadata
-    parameter UNIT_POINTER=0, // Set it to 1 to advance pointer by a single unit
+    
+    /// Number of bits in the extra metadata.
+    parameter EXTRA_META_BITS,
+    
+    /// Set to 1 to advance pointer by a single unit.
+    parameter UNIT_POINTER=0,
+    
+    /// Queue ID width.
     parameter QUEUE_ID_WIDTH=$clog2(NB_QUEUES),
+    
+    /// Depth of the input FIFO.
     parameter IN_FIFO_DEPTH=16,
+
+    /// Depth of the output FIFO.
     parameter OUT_FIFO_DEPTH=16,
+
+    /// Almost full threshold for the output FIFO.
     parameter ALMOST_FULL_THRESHOLD=(OUT_FIFO_DEPTH - 8)
 )(
     input logic clk,
     input logic rst,
 
-    // input metadata stream
+    /// If set, the packet passes through without changing the queue state
+    /// (i.e., we do not advance the queue pointer).
     input  logic                          in_pass_through,
+
+    /// Input metadata stream.
     input  logic [QUEUE_ID_WIDTH-1:0]     in_queue_id,
-    input  logic [$clog2(MAX_PKT_SIZE):0] in_size, // in number of flits
+    input  logic [$clog2(MAX_PKT_SIZE):0] in_size, /// (In number of flits.)
     input  logic [EXTRA_META_BITS-1:0]    in_meta_extra,
     input  logic                          in_meta_valid,
     output logic                          in_meta_ready,
 
-    // output metadata stream
+    /// Output metadata stream.
     output var queue_state_t              out_q_state,
     output logic                          out_drop,
     output logic [EXTRA_META_BITS-1:0]    out_meta_extra,
     output logic                          out_meta_valid,
     input  logic                          out_meta_ready,
 
-    // BRAM signals for queues
+    /// BRAM signals for queues.
     bram_interface_io.owner q_table_tails,
     bram_interface_io.owner q_table_heads,
     bram_interface_io.owner q_table_l_addrs,
     bram_interface_io.owner q_table_h_addrs,
 
-    // config signals
+    /// Config signals.
     input logic [RB_AWIDTH:0] rb_size,
 
-    // counters
+    /// Number of packets dropped because the queue was full.
     output logic [31:0] full_cnt,
+
+    /// Number of input packets.
     output logic [31:0] in_cnt,
+
+    /// Number of output packets.
     output logic [31:0] out_cnt
 );
 
