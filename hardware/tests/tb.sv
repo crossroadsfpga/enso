@@ -1810,6 +1810,9 @@ always @(posedge clk_status) begin
   end
 end
 
+`ASSERT_KNOWN_IF(TopReadDataKnown, top_readdata, top_readdata_valid, clk_status,
+                 rst)
+
 dc_fifo_wrapper input_fifo (
   .in_clk            (clk_rxmac),
   .in_reset_n        (!rst),
