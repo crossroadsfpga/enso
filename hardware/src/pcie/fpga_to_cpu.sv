@@ -95,6 +95,12 @@ logic         pcie_bas_write_r2;
 logic [511:0] pcie_bas_writedata_r2;
 logic [3:0]   pcie_bas_burstcount_r2;
 
+logic [63:0]  pcie_bas_address_r3;
+logic [63:0]  pcie_bas_byteenable_r3;
+logic         pcie_bas_write_r3;
+logic [511:0] pcie_bas_writedata_r3;
+logic [3:0]   pcie_bas_burstcount_r3;
+
 typedef struct packed
 {
   pkt_meta_with_queues_t pkt_meta;
@@ -116,14 +122,14 @@ function void dma_pkt(
     // Assume that it is a burst when flits_in_transfer == 0, no need to set
     // address.
     if (flits_in_transfer != 0) begin
-      pcie_bas_address_r2 <=
+      pcie_bas_address_r3 <=
         meta.pkt_q_state.kmem_addr + 64 * meta.pkt_q_state.tail;
     end
 
-    pcie_bas_byteenable_r2 <= 64'hffffffffffffffff;
-    pcie_bas_writedata_r2 <= data.data;
-    pcie_bas_write_r2 <= !meta.drop_data;
-    pcie_bas_burstcount_r2 <= flits_in_transfer;
+    pcie_bas_byteenable_r3 <= 64'hffffffffffffffff;
+    pcie_bas_writedata_r3 <= data.data;
+    pcie_bas_write_r3 <= !meta.drop_data;
+    pcie_bas_burstcount_r3 <= flits_in_transfer;
 
     // Increment and pad tail.
     transf_meta.pkt_meta.pkt_q_state.tail <= {
@@ -194,16 +200,16 @@ always @(posedge clk) begin
   if (rst) begin
     state <= START_TRANSFER;
     pcie_core_full_cnt_r <= 0;
-    pcie_bas_write_r2 <= 0;
+    pcie_bas_write_r3 <= 0;
     dma_dsc_cnt <= 0;
     dma_dsc_drop_cnt <= 0;
     dma_pkt_flit_cnt <= 0;
     dma_pkt_flit_drop_cnt <= 0;
   end else begin
     // Make sure the previous transfer is complete before setting
-    // pcie_bas_write_r2 to 0.
+    // pcie_bas_write_r3 to 0.
     if (!pcie_bas_waitrequest) begin
-      pcie_bas_write_r2 <= 0;
+      pcie_bas_write_r3 <= 0;
     end else begin
       pcie_core_full_cnt_r <= pcie_core_full_cnt_r + 1;
     end
@@ -218,11 +224,11 @@ always @(posedge clk) begin
           tx_dsc.length = tx_compl_buf_out_data.length;
           tx_dsc.pad = 0;
 
-          pcie_bas_address_r2 <= tx_compl_buf_out_data.descriptor_addr;
-          pcie_bas_byteenable_r2 <= 64'hffffffffffffffff;
-          pcie_bas_writedata_r2 <= tx_dsc;
-          pcie_bas_write_r2 <= 1;
-          pcie_bas_burstcount_r2 <= 1;
+          pcie_bas_address_r3 <= tx_compl_buf_out_data.descriptor_addr;
+          pcie_bas_byteenable_r3 <= 64'hffffffffffffffff;
+          pcie_bas_writedata_r3 <= tx_dsc;
+          pcie_bas_write_r3 <= 1;
+          pcie_bas_burstcount_r3 <= 1;
         end else if (next_meta_dsc_only) begin
           transf_meta.pkt_meta <= cur_meta;
           state <= SEND_DESCRIPTOR;
@@ -322,11 +328,11 @@ always @(posedge clk) begin
 
           // Skip DMA when addresses are not set
           if (pkt_q_state.kmem_addr != 0 && dsc_q_state.kmem_addr != 0) begin
-            pcie_bas_address_r2 <= dsc_q_state.kmem_addr + 64 * dsc_q_state.tail;
-            pcie_bas_byteenable_r2 <= 64'hffffffffffffffff;
-            pcie_bas_writedata_r2 <= pcie_pkt_desc;
-            pcie_bas_write_r2 <= !transf_meta.pkt_meta.drop_meta;
-            pcie_bas_burstcount_r2 <= 1;
+            pcie_bas_address_r3 <= dsc_q_state.kmem_addr + 64 * dsc_q_state.tail;
+            pcie_bas_byteenable_r3 <= 64'hffffffffffffffff;
+            pcie_bas_writedata_r3 <= pcie_pkt_desc;
+            pcie_bas_write_r3 <= !transf_meta.pkt_meta.drop_meta;
+            pcie_bas_burstcount_r3 <= 1;
 
             if (transf_meta.pkt_meta.drop_meta) begin
               dma_dsc_drop_cnt <= dma_dsc_drop_cnt + 1;
@@ -358,6 +364,12 @@ always @(posedge clk) begin
     metadata_buf_out_valid_r2 <= 0;
   end else begin
     if (!pcie_bas_waitrequest) begin
+      pcie_bas_address_r2 <= pcie_bas_address_r3;
+      pcie_bas_byteenable_r2 <= pcie_bas_byteenable_r3;
+      pcie_bas_write_r2 <= pcie_bas_write_r3;
+      pcie_bas_writedata_r2 <= pcie_bas_writedata_r3;
+      pcie_bas_burstcount_r2 <= pcie_bas_burstcount_r3;
+
       pcie_bas_address_r1 <= pcie_bas_address_r2;
       pcie_bas_byteenable_r1 <= pcie_bas_byteenable_r2;
       pcie_bas_write_r1 <= pcie_bas_write_r2;
