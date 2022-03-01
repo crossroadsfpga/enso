@@ -1,10 +1,9 @@
 // Quartus Prime Verilog Template
-//
-// Hyper-Pipelining Variable Latency Module
-// 
-// This adds a variable number of pipeline stages (up to MAX_PIPE) between din
-// and dout. The number of pipeline stages are defined at compilation time.
 
+/// Hyper-Pipelining Variable Latency Module
+/// 
+/// This adds a variable number of pipeline stages (up to MAX_PIPE) between din
+/// and dout. The number of pipeline stages are defined at compilation time.
 module hyperpipe_vlat #(
   parameter WIDTH = 1,
   parameter MAX_PIPE = 100  // Valid range for MAX_PIPE: 0 to 100 inclusive.
