@@ -2,7 +2,6 @@
 
 import binascii
 import ipaddress
-import math
 import os
 import sys
 
@@ -22,7 +21,7 @@ def wrpcap(pcap_name, raw_packets):
             pkt_wr._write_packet(raw_pkt)
 
 
-def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest):
+def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest, batch_size):
     sample_pkts = []
     ipv4_len = pkt_size - 14 - 4
     for i in range(nb_dest):
@@ -41,17 +40,22 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest):
         pkt = bytes_encode(pkt)
         sample_pkts.append(pkt)
 
+    def cycle_batches():
+        for pkt in cycle(sample_pkts):
+            for _ in range(batch_size):
+                yield pkt
+
     def pkt_gen():
-        for _, pkt in zip(tqdm(range(nb_pkts)), cycle(sample_pkts)):
+        for _, pkt in zip(tqdm(range(nb_pkts)), cycle_batches()):
             yield pkt
 
     wrpcap(out_pcap, pkt_gen())
 
 
 def main():
-    if len(sys.argv) != 6:
+    if (len(sys.argv) < 6) or (len(sys.argv) > 7):
         print('Usage:', sys.argv[0],
-              'nb_pkts pkt_size nb_src nb_dest output_pcap')
+              'nb_pkts pkt_size nb_src nb_dest output_pcap [batch_size]')
         sys.exit(1)
 
     nb_pkts = int(sys.argv[1])
@@ -59,13 +63,17 @@ def main():
     nb_src = int(sys.argv[3])
     nb_dest = int(sys.argv[4])
     out_pcap = sys.argv[5]
+    if len(sys.argv) > 6:
+        batch_size = int(sys.argv[6])
+    else:
+        batch_size = 1
 
     try:
         os.remove(out_pcap)
     except OSError:
         pass
 
-    generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest)
+    generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest, batch_size)
 
 
 if __name__ == "__main__":
