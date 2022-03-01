@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage ./run_vsim_afs.sh rate nb_pkts pkt_size nb_dsc_queues nb_pkt_queues
+# Usage ./run_tb.sh rate nb_pkts pkt_size nb_dsc_queues nb_pkt_queues
 # Optionally append --gui to the command to run graphical interface.
 
 # exit when error occurs
