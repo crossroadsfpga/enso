@@ -151,6 +151,7 @@ struct RxStats {
     uint64_t pkts;
     uint64_t bytes;
     uint64_t rtt_sum;
+    std::unordered_map<uint32_t, uint64_t> rtt_hist;
 };
 
 struct TxStats {
@@ -326,25 +327,23 @@ int main(int argc, const char* argv[])
     RxStats rx_stats;
     TxStats tx_stats;
 
-    std::atomic<bool> done(false);
+    std::atomic<bool> rx_done(false);
+    std::atomic<bool> rx_ready(false);
 
     signal(SIGINT, int_handler);
-    
-    std::thread pktgen_thread = std::thread([
-        nb_queues, rate_num, rate_den, nb_pkts, total_bytes_to_send,
-        pkts_in_last_buffer, &pkt_buffers, &rx_stats, &tx_stats, &done
-    ]{
-        std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        std::cout << "Running pktgen on core " << sched_getcpu() << std::endl;
+    std::thread rx_thread = std::thread([
+        nb_queues, rate_num, rate_den, &rx_stats, &rx_done, &rx_ready
+    ]{
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         for (int i = 0; i < nb_queues; ++i) {
-            std::cout << "creating queue " << i << std::endl;
+            std::cout << "Creating queue " << i << std::endl;
             int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
 
             if (socket_fd == -1) {
                 std::cerr << "Problem creating socket (" << errno << "): "
-                          << strerror(errno) << std::endl;
+                            << strerror(errno) << std::endl;
                 exit(2);
             }
         }
@@ -352,18 +351,55 @@ int main(int argc, const char* argv[])
         enable_device_rate_limit(rate_num, rate_den);
         enable_device_timestamp();
 
+        std::cout << "Running RX on core " << sched_getcpu() << std::endl;
+
+        rx_ready = true;
+
+        while (keep_running) {
+            receive_pkts(rx_stats);
+        }
+
+        // Receive packets for a little bit longer.
+        for (uint64_t i = 0; i < NB_FLUSH_RX; ++i) {
+            receive_pkts(rx_stats);
+        }
+
+        disable_device_rate_limit();
+        disable_device_timestamp();
+
+        for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
+            // print_sock_stats(socket_fd);
+            shutdown(socket_fd, SHUT_RDWR);
+        }
+
+        rx_done = true;
+    });
+    
+    std::thread tx_thread = std::thread([
+        nb_pkts, total_bytes_to_send, pkts_in_last_buffer, nb_queues,
+        &pkt_buffers, &tx_stats, &rx_ready
+    ]{
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        std::cout << "Running TX on core " << sched_getcpu() << std::endl;
+
         auto current_pkt_buf = pkt_buffers.begin();
         uint32_t cur_bytes_sent = 0;
         uint32_t transmissions_pending = 0;
         uint64_t ignored_reclaims = 0;
         uint64_t total_remaining_bytes = total_bytes_to_send;
-        std::unordered_map<uint32_t, uint64_t> rtt_hist;
 
-        std::cout << "Starting packet generation" << std::endl;
+        std::cout << "Creating TX queue" << std::endl;
+        int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
+        std::cout << "socket fd: " << socket_fd << std::endl;
+
+        if (socket_fd == -1) {
+            std::cerr << "Problem creating socket (" << errno << "): "
+                        << strerror(errno) << std::endl;
+            exit(2);
+        }
 
         while (keep_running) {
-            receive_pkts(rx_stats);
-
             if (likely(transmissions_pending < (DSC_BUF_SIZE - 1))) {
                 uint32_t transmission_length = (uint32_t) std::min(
                     (uint64_t) (HUGEPAGE_SIZE / NB_TRANSFERS_PER_BUFFER),
@@ -375,7 +411,7 @@ int main(int argc, const char* argv[])
                 void* phys_addr = 
                     (void*) (current_pkt_buf->phys_addr + cur_bytes_sent);
 
-                send(0, phys_addr, transmission_length, 0);
+                send(socket_fd, phys_addr, transmission_length, 0);
                 tx_stats.bytes += transmission_length;
                 ++transmissions_pending;
 
@@ -401,43 +437,37 @@ int main(int argc, const char* argv[])
             }
 
             // Reclaim TX descriptor buffer space.
-            if ((transmissions_pending > DSC_BUF_SIZE / 4)) {
+            if ((transmissions_pending > (DSC_BUF_SIZE / 4))) {
                 if (ignored_reclaims > TX_RECLAIM_DELAY) {
                     ignored_reclaims = 0;
-                    transmissions_pending -= get_completions(0);
+                    transmissions_pending -= get_completions(socket_fd);
                 } else {
                     ++ignored_reclaims;
                 }
             }
         }
-
-        // Receive packets for a little bit longer.
-        for (uint64_t i = 0; i < NB_FLUSH_RX; ++i) {
-            receive_pkts(rx_stats);
-        }
-
-        disable_device_rate_limit();
-        disable_device_timestamp();
-
-        for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-            print_sock_stats(socket_fd);
-            shutdown(socket_fd, SHUT_RDWR);
-        }
-
-        done = true;
     });
 
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
-    int result = pthread_setaffinity_np(pktgen_thread.native_handle(),
+    int result = pthread_setaffinity_np(rx_thread.native_handle(),
                                         sizeof(cpuset), &cpuset);
     if (result < 0) {
-        std::cerr << "Error setting CPU affinity" << std::endl;
+        std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
         return 6;
     }
 
-    while (!done) {
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id + 1, &cpuset);
+    result = pthread_setaffinity_np(tx_thread.native_handle(),
+                                    sizeof(cpuset), &cpuset);
+    if (result < 0) {
+        std::cerr << "Error setting CPU affinity for TX thread." << std::endl;
+        return 7;
+    }
+
+    while (!rx_done) {
         uint64_t last_rx_bytes = rx_stats.bytes;
         uint64_t last_rx_pkts = rx_stats.pkts;
         uint64_t last_tx_bytes = tx_stats.bytes;
@@ -481,7 +511,8 @@ int main(int argc, const char* argv[])
                   << std::endl << std::endl;
     }
 
-    pktgen_thread.join();
+    tx_thread.join();
+    rx_thread.join();
 
     return 0;
 }
