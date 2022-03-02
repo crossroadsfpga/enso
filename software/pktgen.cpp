@@ -6,6 +6,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <future>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -34,6 +35,8 @@
 // If defined, ignore received packets.
 // #define IGNORE_RX
 
+// Number of attempts to receive packets after we are done transmitting.
+#define NB_FLUSH_RX (1 << 28)
 
 static volatile int keep_running = 1;
 
@@ -143,6 +146,19 @@ struct PcapHandlerContext {
     pcap_t* pcap;
 };
 
+struct RxStats {
+    RxStats() : pkts(0), bytes(0), rtt_sum(0) {}
+    uint64_t pkts;
+    uint64_t bytes;
+    uint64_t rtt_sum;
+};
+
+struct TxStats {
+    TxStats() : pkts(0), bytes(0) {}
+    uint64_t pkts;
+    uint64_t bytes;
+};
+
 
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
                       const u_char *pkt_bytes)
@@ -172,12 +188,52 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
     context->free_flits -= len_flits;
 }
 
+inline void receive_pkts(struct RxStats& rx_stats)
+{
+#ifdef IGNORE_RX
+    (void) rtt_sum;
+    (void) rx_pkts;
+    (void) rx_bytes;
+#else  // IGNORE_RX
+    uint8_t* recv_buf;
+    int socket_fd;
+    int recv_len = recv_select(0, &socket_fd, (void**) &recv_buf, BUF_LEN, 0);
+    
+    if (unlikely(recv_len < 0)) {
+        std::cerr << "Error receiving" << std::endl;
+        exit(4);
+    }
+
+    if (likely(recv_len > 0)) {
+        int processed_bytes = 0;
+        uint8_t* pkt = recv_buf;
+
+        while (processed_bytes < recv_len) {
+            uint16_t pkt_len = get_pkt_len(pkt);
+            uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+            uint16_t pkt_aligned_len = nb_flits * 64;
+            uint32_t rtt = get_pkt_rtt(pkt);
+
+            rx_stats.rtt_sum += rtt;
+            // rtt_hist[rtt]++;
+
+            pkt += pkt_aligned_len;
+            processed_bytes += pkt_aligned_len;
+            ++(rx_stats.pkts);
+        }
+
+        rx_stats.bytes += recv_len;
+        free_pkt_buf(socket_fd, recv_len);
+    }
+#endif  // IGNORE_RX
+}
+
 
 int main(int argc, const char* argv[])
 {
-    if (argc != 6) {
+    if (argc != 7) {
         std::cerr << "Usage: " << argv[0]
-                  << " pcap_file core_id rate_num rate_den nb_queues"
+                  << " pcap_file core_id rate_num rate_den nb_queues nb_pkts"
                   << std::endl;
         return 1;
     }
@@ -187,6 +243,7 @@ int main(int argc, const char* argv[])
     const uint16_t rate_num = atoi(argv[3]);
     const uint16_t rate_den = atoi(argv[4]);
     const int nb_queues = atoi(argv[5]);
+    const uint64_t nb_pkts = atoll(argv[6]);
 
     char errbuf[PCAP_ERRBUF_SIZE];
 
@@ -222,17 +279,60 @@ int main(int argc, const char* argv[])
         }
     }
 
-    uint64_t tx_bytes = 0;
-    uint64_t tx_pkts = 0;
-    uint64_t rx_bytes = 0;
-    uint64_t rx_pkts = 0;
-    uint64_t aggregated_rtt = 0;
+    // To restrict the number of packets, we track the total number of bytes.
+    // This avoids the need to look at every sent packet only to figure out the
+    // number bytes to send in the very last buffer. But to be able to do this,
+    // we need to compute the total number of bytes that we have to send.
+    uint64_t total_bytes_to_send;
+    uint64_t pkts_in_last_buffer = 0;
+    if (nb_pkts > 0) {
+        uint64_t total_pkts_in_buffers = 0;
+        uint64_t total_bytes_in_buffers = 0;
+        for (auto buffer : pkt_buffers) {
+            total_pkts_in_buffers += buffer.nb_pkts;
+            total_bytes_in_buffers += buffer.length;
+        }
+
+        uint64_t nb_pkts_remaining = nb_pkts % total_pkts_in_buffers;
+        uint64_t nb_full_iters = nb_pkts / total_pkts_in_buffers;
+        
+        total_bytes_to_send = nb_full_iters * total_bytes_in_buffers;
+
+        for (auto buffer : pkt_buffers) {
+            if (nb_pkts_remaining < buffer.nb_pkts) {
+                pkts_in_last_buffer = nb_pkts_remaining;
+
+                uint8_t* pkt = buffer.buf;
+                while (nb_pkts_remaining > 0) {
+                    uint16_t pkt_len = get_pkt_len(pkt);
+                    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+
+                    total_bytes_to_send += nb_flits * 64;
+                    --nb_pkts_remaining;
+
+                    pkt = get_next_pkt(pkt);
+                }
+                break;
+            }
+            total_bytes_to_send += buffer.length;
+            nb_pkts_remaining -= buffer.nb_pkts;
+        }
+    } else {
+        // Treat nb_pkts == 0 as unbounded. The following value should be enough
+        // to send 64-byte packets for around 400 years using Tb Ethernet.
+        total_bytes_to_send = 0xffffffffffffffff;
+    }
+
+    RxStats rx_stats;
+    TxStats tx_stats;
+
+    std::atomic<bool> done(false);
 
     signal(SIGINT, int_handler);
     
     std::thread pktgen_thread = std::thread([
-        nb_queues, rate_num, rate_den, &pkt_buffers, &tx_bytes, &tx_pkts,
-        &rx_bytes, &rx_pkts, &aggregated_rtt
+        nb_queues, rate_num, rate_den, nb_pkts, total_bytes_to_send,
+        pkts_in_last_buffer, &pkt_buffers, &rx_stats, &tx_stats, &done
     ]{
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -256,65 +356,41 @@ int main(int argc, const char* argv[])
         uint32_t cur_bytes_sent = 0;
         uint32_t transmissions_pending = 0;
         uint64_t ignored_reclaims = 0;
+        uint64_t total_remaining_bytes = total_bytes_to_send;
         std::unordered_map<uint32_t, uint64_t> rtt_hist;
 
         std::cout << "Starting packet generation" << std::endl;
 
         while (keep_running) {
-#ifndef IGNORE_RX
-            uint8_t* recv_buf;
-            int socket_fd;
-
-            int recv_len = recv_select(0, &socket_fd, (void**) &recv_buf, BUF_LEN,
-                                       0);
-            
-            if (unlikely(recv_len < 0)) {
-                std::cerr << "Error receiving" << std::endl;
-                exit(4);
-            }
-
-            if (likely(recv_len > 0)) {
-                int processed_bytes = 0;
-                uint8_t* pkt = recv_buf;
-
-                while (processed_bytes < recv_len) {
-                    uint16_t pkt_len = get_pkt_size(pkt);
-                    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-                    uint16_t pkt_aligned_len = nb_flits * 64;
-                    uint32_t rtt = get_pkt_rtt(pkt);
-
-                    aggregated_rtt += rtt;
-                    // rtt_hist[rtt]++;
-
-                    pkt += pkt_aligned_len;
-                    processed_bytes += pkt_aligned_len;
-                    ++rx_pkts;
-                }
-
-                rx_bytes += recv_len;
-                free_pkt_buf(socket_fd, recv_len);
-            }
-#endif  // IGNORE_RX
+            receive_pkts(rx_stats);
 
             if (likely(transmissions_pending < (DSC_BUF_SIZE - 1))) {
-
-                uint32_t transmission_length = std::min(
-                    (uint32_t) (HUGEPAGE_SIZE / NB_TRANSFERS_PER_BUFFER),
-                    current_pkt_buf->length - cur_bytes_sent
+                uint32_t transmission_length = (uint32_t) std::min(
+                    (uint64_t) (HUGEPAGE_SIZE / NB_TRANSFERS_PER_BUFFER),
+                    total_remaining_bytes
                 );
+                transmission_length = std::min(transmission_length,
+                    current_pkt_buf->length - cur_bytes_sent);
 
                 void* phys_addr = 
                     (void*) (current_pkt_buf->phys_addr + cur_bytes_sent);
 
                 send(0, phys_addr, transmission_length, 0);
-                tx_bytes += transmission_length;
+                tx_stats.bytes += transmission_length;
                 ++transmissions_pending;
 
                 cur_bytes_sent += transmission_length;
+                total_remaining_bytes -= transmission_length;
+
+                if (unlikely(total_remaining_bytes == 0)) {
+                    tx_stats.pkts += pkts_in_last_buffer;
+                    keep_running = 0;
+                    break;
+                }
                 
                 // Move to next packet buffer.
                 if (cur_bytes_sent == current_pkt_buf->length) {
-                    tx_pkts += current_pkt_buf->nb_pkts;
+                    tx_stats.pkts += current_pkt_buf->nb_pkts;
                     current_pkt_buf = std::next(current_pkt_buf);
                     if (current_pkt_buf == pkt_buffers.end()) {
                         current_pkt_buf = pkt_buffers.begin();
@@ -335,6 +411,11 @@ int main(int argc, const char* argv[])
             }
         }
 
+        // Receive packets for a little bit longer.
+        for (uint64_t i = 0; i < NB_FLUSH_RX; ++i) {
+            receive_pkts(rx_stats);
+        }
+
         disable_device_rate_limit();
         disable_device_timestamp();
 
@@ -342,6 +423,8 @@ int main(int argc, const char* argv[])
             print_sock_stats(socket_fd);
             shutdown(socket_fd, SHUT_RDWR);
         }
+
+        done = true;
     });
 
     cpu_set_t cpuset;
@@ -354,42 +437,45 @@ int main(int argc, const char* argv[])
         return 6;
     }
 
-    while (keep_running) {
-        uint64_t last_rx_bytes = rx_bytes;
-        uint64_t last_rx_pkts = rx_pkts;
-        uint64_t last_tx_bytes = tx_bytes;
-        uint64_t last_tx_pkts = tx_pkts;
-        uint64_t last_aggregated_rtt = aggregated_rtt;
+    while (!done) {
+        uint64_t last_rx_bytes = rx_stats.bytes;
+        uint64_t last_rx_pkts = rx_stats.pkts;
+        uint64_t last_tx_bytes = tx_stats.bytes;
+        uint64_t last_tx_pkts = tx_stats.pkts;
+        uint64_t last_aggregated_rtt = rx_stats.rtt_sum;
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        uint64_t rx_goodput_mbps = (rx_bytes - last_rx_bytes) * 8. / 1e6;
-        uint64_t rx_pkt_rate = rx_pkts - last_rx_pkts;
+        uint64_t rx_goodput_mbps = (rx_stats.bytes - last_rx_bytes) * 8. / 1e6;
+        uint64_t rx_pkt_rate = rx_stats.pkts - last_rx_pkts;
         uint64_t rx_pkt_rate_kpps = rx_pkt_rate / 1e3;
-        uint64_t tx_goodput_mbps = (tx_bytes - last_tx_bytes) * 8. / 1e6;
-        uint64_t tx_pkt_rate = tx_pkts - last_tx_pkts;
+        uint64_t tx_goodput_mbps = (tx_stats.bytes - last_tx_bytes) * 8. / 1e6;
+        uint64_t tx_pkt_rate = tx_stats.pkts - last_tx_pkts;
         uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
         uint64_t rtt_ns;
         if (rx_pkt_rate != 0) {
-            rtt_ns = (aggregated_rtt - last_aggregated_rtt) / rx_pkt_rate;
+            rtt_ns = (rx_stats.rtt_sum - last_aggregated_rtt) / rx_pkt_rate;
         } else {
             rtt_ns = 0;
         }
+
+        // TODO(sadok): don't print metrics that are unreliable before the first
+        // two samples.
 
         std::cout << std::dec
                   << "RX:"
                   << "  Goodput: " << rx_goodput_mbps << " Mbps"
                   << "  Rate: " << rx_pkt_rate_kpps << " kpps"
                   << std::endl
-                  << "     #bytes: " << rx_bytes
-                  << "  #packets: " << rx_pkts
+                  << "     #bytes: " << rx_stats.bytes
+                  << "  #packets: " << rx_stats.pkts
                   << std::endl
                   << "TX:"
                   << "  Goodput: " << tx_goodput_mbps << " Mbps"
                   << "  Rate: " << tx_pkt_rate_kpps << " kpps"
                   << std::endl
-                  << "     #bytes: " << tx_bytes
-                  << "  #packets: " << tx_pkts
+                  << "     #bytes: " << tx_stats.bytes
+                  << "  #packets: " << tx_stats.pkts
                   << std::endl
                   << "RTT: " << rtt_ns << " ns  "
                   << std::endl << std::endl;
