@@ -30,14 +30,11 @@ $readmemh("./input_gen/m10_100.pkt", arr, lo, hi); //change to new .pkt file
   - top.sv is the top level module of core logic. Various counters are used to monitor the correctness of the datapath.
     - input_comp.sv: Store input pkt to Global Pkt Buffer, update emptylist, extract header to Parser
     - parser.sv: Take the header flit, fill in the metadata fields, pass the metadata to Flow Director
-    - flow_director_wrapper.sv: Wrapper file for flow_director. Add FIFOs and Register I/O layer for Design Partition.
-      - flow_director.sv: Dummy flow director that directly passes the signals. **This is the file you need to modify first**. 
+    - flow_director.sv: Dummy flow director that directly passes the signals. **This is the file you need to modify first**.
     - basic_data_mover.sv: Take the metadata from Flow Director and then fetch pkt from Global Pkt Buffer, then (1) forward the pkt to Ethernet output, or (2) drop pkt, or (3) send to PCIe, depending on the pkt_flag field.
     - pdu_gen.sv: Take the metadata from basic_data_mover and pkts data to form a block for PCIe transmission. 
-  - esram_wrapper.sv: Global Pkt Buffer. In simulation, it is a BRAM to speed up simulation. During Synthesis, it is mapped to eSRAM.   
-  - pcie_top.sv : PCIe top-level. Dummy module when `SIM` is defined. 
-    - fpga2cpu_pcie.sv : Handle the FPGA->CPU transfer. FPGA side pushes data to ring buffer. The other side of the ring buffer will fetch data in batch and starts DMA to CPU.
-      - ring_buffer.sv: The ring_buffer at FPGA side. 
+  - esram_wrapper.sv: Global Pkt Buffer. In simulation, it is a BRAM to speed up simulation. During Synthesis, it is mapped to eSRAM.
+  - pcie_top.sv : PCIe top-level. Dummy module when `SIM` is defined.
   - my_stats.sv: Performance monitor to monitor the throughput of RX and TX of Ethernet core. Also able to track the latency spent of our design.  
 
 ### Note:

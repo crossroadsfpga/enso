@@ -896,11 +896,10 @@ assign input_comp_eth_empty = reg_in_empty;
 assign out_valid_int = eth_out_pkt_fifo_out_valid & !reg_out_almost_full;
 //pdumeta occupancy cnt
 
-//connect flow_director_wrapper with flow_table_wrapper
+// Connect flow_director with flow_table_wrapper.
 assign fdw_in_meta_data  = flow_table_wrapper_out_meta_data;
 assign fdw_in_meta_valid = flow_table_wrapper_out_meta_valid;
 assign flow_table_wrapper_out_ready = fdw_in_meta_ready;
-//assign parser_out_fifo_out_ready = fdw_in_meta_ready;
 
 
 //sync disable_pcie to clk_datamover domain
@@ -1174,7 +1173,7 @@ flow_table_wrapper flow_table_wrapper_0 (
     .eviction_cnt     (eviction_cnt)
  );
 
-flow_director_wrapper flow_director_inst (
+flow_director flow_director_inst (
     .clk                (clk),
     .rst                (rst),
     .in_meta_data       (fdw_in_meta_data),

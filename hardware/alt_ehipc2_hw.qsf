@@ -301,7 +301,6 @@ set_global_assignment -name SYSTEMVERILOG_FILE src/hyper_pipe.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/hash_func.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/pcie/fpga_to_cpu.sv
 set_global_assignment -name VERILOG_FILE src/common/prefetch_rb.sv -hdl_version SystemVerilog_2009
-set_global_assignment -name SYSTEMVERILOG_FILE src/flow_director_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/esram_wrapper.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/dc_back_pressure.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/basic_data_mover.sv
