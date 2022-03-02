@@ -4,6 +4,18 @@ CXXFLAGS = -Wall -ansi -Wextra -O2 -g -std=c++11 \
 	-I norman/api/linux -m64 -march=native -mavx
 LDFLAGS = -O2 -g -Lnorman -lnorman -pthread -m64 -march=native
 
+ifdef DSC_BUF_SIZE
+CXXFLAGS += -D DSC_BUF_SIZE=$(DSC_BUF_SIZE)
+endif
+
+ifdef PKT_BUF_SIZE
+CXXFLAGS += -D PKT_BUF_SIZE=$(PKT_BUF_SIZE)
+endif
+
+ifdef BATCH_SIZE
+CXXFLAGS += -D BATCH_SIZE=$(BATCH_SIZE)
+endif
+
 SRCS = app.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
 EXEC = app
