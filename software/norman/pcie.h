@@ -383,12 +383,18 @@ void print_buffer(uint8_t* buf, uint32_t nb_flits);
 
 void print_stats(socket_internal* socket_entry, bool print_global);
 
-static inline uint16_t get_pkt_size(uint8_t *addr) {
+static inline uint16_t get_pkt_len(uint8_t *addr) {
     struct ether_header* l2_hdr = (struct ether_header*) addr;
     struct iphdr* l3_hdr = (struct iphdr*) (l2_hdr + 1);
     uint16_t total_len = be16toh(l3_hdr->tot_len) + sizeof(*l2_hdr);
 
     return total_len;
+}
+
+static inline uint8_t* get_next_pkt(uint8_t *pkt) {
+    uint16_t pkt_len = get_pkt_len(pkt);
+    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+    return pkt + nb_flits * 64;
 }
 
 #endif // PCIE_H
