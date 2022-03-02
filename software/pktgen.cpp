@@ -166,10 +166,10 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
 {
     struct PcapHandlerContext* context = (struct PcapHandlerContext*) user;
     uint32_t len = pkt_hdr->len;
-    uint32_t len_flits = (len - 1) / 64 + 1;
+    uint32_t nb_flits = (len - 1) / 64 + 1;
 
     // Need to allocate another huge page.
-    if (len_flits > context->free_flits) {
+    if (nb_flits > context->free_flits) {
         uint8_t* buf = (uint8_t*) get_huge_page(HUGEPAGE_SIZE);
         if (buf == NULL) {
             pcap_breakloop(context->pcap);
@@ -184,9 +184,9 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
 
     memcpy(dest, pkt_bytes, len);
 
-    pkt_buffer.length += len_flits * 64;  // Packets must be cache aligned.
+    pkt_buffer.length += nb_flits * 64;  // Packets must be cache aligned.
     ++(pkt_buffer.nb_pkts);
-    context->free_flits -= len_flits;
+    context->free_flits -= nb_flits;
 }
 
 inline void receive_pkts(struct RxStats& rx_stats)
