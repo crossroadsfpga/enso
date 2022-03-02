@@ -28,6 +28,7 @@ fi
 # Copy newest source.
 cp $SCRIPT_DIR/hardware/alt_ehipc2_hw.* \
   $quartus_project_root/hardware_test_design/
+rm -rf $quartus_project_root/hardware_test_design/src
 cp -r $SCRIPT_DIR/hardware/src $quartus_project_root/hardware_test_design/
 
 # run synthesis
