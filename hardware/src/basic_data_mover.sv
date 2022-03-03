@@ -87,8 +87,7 @@ state_t state;
 assign meta_ready = ((state == IDLE) | first_ready | middle_ready) & !almost_full;
 assign first_ready = (state == FIRST) & ((pkt_flags == PKT_DROP)|(flits==1));
 assign middle_ready = (state == MIDDLE) & (flits_cnt == flits-1);
-assign almost_full =
-    eth_pkt_almost_full | pcie_rx_pkt_almost_full | pcie_rx_meta_almost_full;
+assign almost_full = pcie_rx_pkt_almost_full | pcie_rx_meta_almost_full;
 
 // Quick and Dirty tweak for PDU flag.
 always @(posedge clk) begin
@@ -245,6 +244,8 @@ always @(posedge clk) begin
 
         // TODO(sadok): Re-enable return path for incoming packets to Ethernet.
         // Right now Ethernet TX is being used exclusively for PCIe TX.
+        // When re-enabling the return path, must make sure that
+        // eth_pkt_almost_full is being considered in the `almost_full` signal.
         // eth_pkt_data <= pkt_buffer_readdata.data;
         // eth_pkt_sop <= 0;
         // eth_pkt_eop <= 0;
