@@ -889,9 +889,36 @@ proc set_nb_fallback_queues {nb_fallback_queues} {
     global wdata
 
     set wr_reg [expr $PCIE_CTRL_REG + 3]
+    set rdata [reg_read $PCIE_BASE $wr_reg]
+    set wdata [expr (($rdata & 0x80000000) | ($nb_fallback_queues & 0x7fffffff))]
 
-    reg_write $PCIE_BASE $wr_reg $nb_fallback_queues
+    reg_write $PCIE_BASE $wr_reg $wdata
 
     set_clear
     set_up
+}
+
+proc set_rr {rr_value} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+    global rdata
+    global wdata
+
+    set wr_reg [expr $PCIE_CTRL_REG + 3]
+
+    set rdata [reg_read $PCIE_BASE $wr_reg]
+    set wdata [expr (($rdata & 0x7fffffff) | ($rr_value << 31))]
+
+    reg_write $PCIE_BASE $wr_reg $wdata
+
+    set_clear
+    set_up
+}
+
+proc enable_rr {} {
+    set_rr 1
+}
+
+proc disable_rr {} {
+    set_rr 0
 }

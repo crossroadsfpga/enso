@@ -247,6 +247,7 @@ logic          fdw_out_meta_valid;
 metadata_t     fdw_out_meta_data;
 logic          fdw_out_meta_ready;
 logic [31:0]   nb_fallback_queues;
+logic          enable_rr;
 logic          pcie_eth_port_nb;
 
 logic          dm_in_meta_valid;
@@ -1182,7 +1183,8 @@ flow_director flow_director_inst (
     .out_meta_data      (fdw_out_meta_data),
     .out_meta_valid     (fdw_out_meta_valid),
     .out_meta_ready     (fdw_out_meta_ready),
-    .nb_fallback_queues (nb_fallback_queues)
+    .nb_fallback_queues (nb_fallback_queues),
+    .enable_rr          (enable_rr)
 );
 
 dc_fifo_wrapper_infill  #(
@@ -1535,6 +1537,7 @@ pcie_top pcie (
     .disable_pcie             (disable_pcie),
     .sw_reset                 (sw_reset),
     .nb_fallback_queues       (nb_fallback_queues),
+    .enable_rr                (enable_rr),
     .eth_port_nb              (pcie_eth_port_nb),
     .pcie_core_full_cnt       (pcie_core_full_cnt),
     .rx_dma_dsc_cnt           (rx_dma_dsc_cnt),
