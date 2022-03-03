@@ -129,7 +129,7 @@ always @(posedge clk) begin
     if (!emptylist_in_ready & emptylist_in_valid) begin
         hterminate("PKT emptylist is full!");
     end
-    `ifdef DEBUG
+    `ifdef VERBOSE
     if (meta_valid & meta_ready) begin
         `hdisplay(("pkt:%d,length:%d,flag:%d",
             meta_data.pktID,meta_data.len,meta_data.pkt_flags));
