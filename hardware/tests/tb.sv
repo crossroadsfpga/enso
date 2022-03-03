@@ -294,6 +294,7 @@ typedef enum{
   PKT_DROP,
   PKT_PCIE,
   MAX_DM2PCIE_FIFO,
+  MAX_DM2PCIE_META_FIFO,
   PCIE_PKT,
   PCIE_META,
   DM_PCIE_PKT,
@@ -318,6 +319,8 @@ typedef enum{
   CPU_PKT_BUF_FULL,
   CPU_PKT_BUF_IN,
   CPU_PKT_BUF_OUT,
+  PCIE_ST_ORD_IN,
+  PCIE_ST_ORD_OUT,
   MAX_PCIE_PKT_FIFO,
   MAX_PCIE_META_FIFO,
   PCIE_RX_IGNORED_HEAD,
@@ -329,7 +332,9 @@ typedef enum{
   PCIE_TX_BATCH_CNT,
   PCIE_TX_MAX_INFLIGHT_DSCS,
   PCIE_TX_MAX_NB_REQ_DSCS,
-  TX_DMA_PKT
+  TX_DMA_PKT,
+  PCIE_FULL_SIGNALS_1,
+  PCIE_FULL_SIGNALS_2
 } c_state_t;
 
 c_state_t conf_state;
@@ -1461,6 +1466,15 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("MAX_DM2PCIE_FIFO:\t%d", top_readdata);
+          conf_state <= MAX_DM2PCIE_META_FIFO;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      MAX_DM2PCIE_META_FIFO: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("MAX_DM2PCIE_MET_FIFO:%d", top_readdata);
           conf_state <= PCIE_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;
@@ -1683,6 +1697,24 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("CPU_PKT_BUF_OUT:\t%d", top_readdata);
+          conf_state <= PCIE_ST_ORD_IN;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      PCIE_ST_ORD_IN: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("PCIE_ST_ORD_IN:\t%d", top_readdata);
+          conf_state <= PCIE_ST_ORD_OUT;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      PCIE_ST_ORD_OUT: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("PCIE_ST_ORD_OUT:\t%d", top_readdata);
           conf_state <= MAX_PCIE_PKT_FIFO;
           s_read <= 1;
           s_addr <= s_addr + 1;
@@ -1791,6 +1823,24 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("TX_DMA_PKT:\t\t%d", top_readdata);
+          conf_state <= PCIE_FULL_SIGNALS_1;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      PCIE_FULL_SIGNALS_1: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("PCIE_FULL_SIGNALS_1:\t%d", top_readdata);
+          conf_state <= PCIE_FULL_SIGNALS_2;
+          s_read <= 1;
+          s_addr <= s_addr + 1;
+        end
+      end
+      PCIE_FULL_SIGNALS_2: begin
+        s_read <= 0;
+        if(top_readdata_valid)begin
+          $display("PCIE_FULL_SIGNALS_2:\t%d", top_readdata);
 
           $display("\nTB stats:");
           $display("Flits read from memory (pkt): %d", rddm_write_pkt_cnt);

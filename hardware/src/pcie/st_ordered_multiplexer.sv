@@ -23,7 +23,13 @@ module st_ordered_multiplexer #(
     /// Order stream.
     input  logic                     order_valid,
     output logic                     order_ready,
-    input  logic [$clog2(NB_IN)-1:0] order_data
+    input  logic [$clog2(NB_IN)-1:0] order_data,
+
+    /// Number of input order entries.
+    output logic [31:0] in_ord_cnt,
+
+    /// Number of consumed order entries.
+    output logic [31:0] out_ord_cnt
 );
 
 generate
@@ -55,13 +61,12 @@ logic              out_fifo_almost_full;
 assign out_fifo_almost_full = out_fifo_occup > 16;
 
 always_comb begin
-    next_stream_valid = !out_fifo_almost_full & next_stream_id_valid 
-                         & in_valid[next_stream_id];
-    out_order_ready = !next_stream_id_valid | next_stream_valid;
     for (integer i = 0; i < NB_IN; i++) begin
-        in_ready[i] = !out_fifo_almost_full & next_stream_id_valid 
-                       & (i == next_stream_id); 
+        in_ready[i] = 0; 
     end
+    in_ready[next_stream_id] = !out_fifo_almost_full & next_stream_id_valid;
+    next_stream_valid = in_ready[next_stream_id] & in_valid[next_stream_id];
+    out_order_ready = !next_stream_id_valid | next_stream_valid;
 end
 
 always @(posedge clk) begin
@@ -132,5 +137,19 @@ out_fifo (
     .out_valid     (out_valid),
     .out_ready     (out_ready)
 );
+
+always @(posedge clk) begin
+    if (rst) begin
+        in_ord_cnt <= 0;
+        out_ord_cnt <= 0;
+    end else begin
+        if (order_valid & order_ready) begin
+            in_ord_cnt <= in_ord_cnt + 1;
+        end
+        if (out_order_valid & out_order_ready) begin
+            out_ord_cnt <= out_ord_cnt + 1;
+        end
+    end
+end
 
 endmodule

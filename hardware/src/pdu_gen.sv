@@ -4,7 +4,7 @@ module pdu_gen #(
     parameter OUT_PKT_Q_DEPTH=64,
     parameter OUT_META_Q_DEPTH=128,
     parameter PKT_Q_ALMOST_FULL_THRESHOLD=OUT_PKT_Q_DEPTH - MAX_PKT_SIZE * 2,
-    parameter META_Q_ALMOST_FULL_THRESHOLD=OUT_META_Q_DEPTH - 4
+    parameter META_Q_ALMOST_FULL_THRESHOLD=OUT_META_Q_DEPTH - 8
 )(
     input  logic           clk,
     input  logic           rst,
@@ -123,6 +123,8 @@ always @(posedge clk) begin
     end
 end
 
+logic out_pkt_queue_out_valid;
+
 fifo_wrapper_infill_mlab #(
     .SYMBOLS_PER_BEAT(1),
     .BITS_PER_SYMBOL($bits(pcie_pkt_buf_data)),
@@ -140,9 +142,11 @@ out_pkt_queue (
     .in_valid      (out_pkt_queue_valid),
     .in_ready      (out_pkt_queue_ready),
     .out_data      (pcie_pkt_buf_data),
-    .out_valid     (pcie_pkt_buf_valid),
+    .out_valid     (out_pkt_queue_out_valid),
     .out_ready     (pcie_pkt_buf_ready)
 );
+
+assign pcie_pkt_buf_valid = out_pkt_queue_out_valid & pcie_pkt_buf_ready;
 
 fifo_wrapper_infill_mlab #(
     .SYMBOLS_PER_BEAT(1),

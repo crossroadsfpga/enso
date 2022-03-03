@@ -87,7 +87,7 @@ logic queue_manager_out_meta_valid;
 
 logic [31:0] out_queue_occup;
 logic out_queue_almost_full;
-assign out_queue_almost_full = out_queue_occup > 4;
+assign out_queue_almost_full = out_queue_occup > 10;
 assign queue_manager_out_meta_ready = !out_queue_almost_full;
 
 pkt_meta_with_queues_t delayed_metadata [3];
@@ -235,7 +235,7 @@ queue_manager_inst (
 fifo_wrapper_infill_mlab #(
     .SYMBOLS_PER_BEAT(1),
     .BITS_PER_SYMBOL($bits(pkt_meta_with_queues_t)),
-    .FIFO_DEPTH(8)
+    .FIFO_DEPTH(16)
 )
 out_queue (
     .clk           (clk),

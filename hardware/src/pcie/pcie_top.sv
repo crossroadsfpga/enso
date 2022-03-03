@@ -91,6 +91,8 @@ module pcie_top (
     output logic [31:0] cpu_pkt_buf_full_cnt,
     output logic [31:0] cpu_pkt_buf_in_cnt,
     output logic [31:0] cpu_pkt_buf_out_cnt,
+    output logic [31:0] st_ord_in_cnt,
+    output logic [31:0] st_ord_out_cnt,
     output logic [31:0] rx_ignored_head_cnt,
     output logic [31:0] tx_q_full_signals,
     output logic [31:0] tx_dsc_cnt,
@@ -103,6 +105,8 @@ module pcie_top (
     output logic [31:0] tx_dma_pkt_cnt,
     output logic [31:0] rx_pkt_head_upd_cnt,
     output logic [31:0] tx_dsc_tail_upd_cnt,
+    output logic [31:0] top_full_signals_1,
+    output logic [31:0] top_full_signals_2,
 
     // status register bus
     input  logic        clk_status,
@@ -259,7 +263,7 @@ always @(posedge pcie_clk) begin
         rx_pkt_head_upd_cnt <= 0;
     end else begin
         // Prioritize serving head updates over incoming metadata.
-        if (head_upd_queue_out_valid & head_upd_queue_out_ready) begin
+        if (head_upd_queue_out_ready & head_upd_queue_out_valid) begin
             automatic pkt_meta_with_queues_t meta;
 
             meta.pkt_queue_id = head_upd_queue_out_data;
@@ -416,37 +420,53 @@ logic [31:0] cpu_pkt_buf_in_cnt_r;
 logic [31:0] cpu_pkt_buf_out_cnt_r;
 
 logic st_mux_ord_ready;
+logic st_mux_ord_valid;
 
-// use to default ranges to a single bit when using a single pkt queue manager.
+// Use to default ranges to a single bit when using a single pkt queue manager.
 localparam NON_NEG_PKT_QM_MSB = PKT_QM_ID_WIDTH ? PKT_QM_ID_WIDTH - 1 : 0;
 
 logic [NON_NEG_PKT_QM_MSB:0] pkt_q_mngr_id;
+logic [NON_NEG_PKT_QM_MSB:0] in_queue_out_data_r_valid;
+pkt_meta_with_queues_t in_queue_out_data_r;
 
-// Direct `in_queue` output to the appropriate queue manager
+// Direct `in_queue` output to the appropriate queue manager.
 always_comb begin
-    in_queue_out_ready = 0;
-    cpu_pkt_buf_full_cnt_r = 0;
-    cpu_pkt_buf_in_cnt_r = 0;
-    cpu_pkt_buf_out_cnt_r = 0;
+    st_mux_ord_valid = 0;
 
     for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
-        pkt_q_mngr_in_meta_data[i] = in_queue_out_data;
+        pkt_q_mngr_in_meta_data[i] = in_queue_out_data_r;
         pkt_q_mngr_in_meta_valid[i] = 0;
-        cpu_pkt_buf_full_cnt_r += pkt_full_counters[i];
-        cpu_pkt_buf_in_cnt_r += pkt_in_counters[i];
-        cpu_pkt_buf_out_cnt_r += pkt_out_counters[i];
     end
 
     if (PKT_QM_ID_WIDTH > 0) begin
-        pkt_q_mngr_id = in_queue_out_data.pkt_queue_id[NON_NEG_PKT_QM_MSB:0];
+        pkt_q_mngr_id = in_queue_out_data_r.pkt_queue_id[NON_NEG_PKT_QM_MSB:0];
     end else begin
         pkt_q_mngr_id = 0;
     end
 
-    if (in_queue_out_valid) begin
-        in_queue_out_ready =
+    if (in_queue_out_data_r_valid) begin
+        st_mux_ord_valid =
             st_mux_ord_ready & pkt_q_mngr_in_meta_ready[pkt_q_mngr_id];
-        pkt_q_mngr_in_meta_valid[pkt_q_mngr_id] = st_mux_ord_ready;
+        pkt_q_mngr_in_meta_valid[pkt_q_mngr_id] = st_mux_ord_valid;
+    end
+
+    in_queue_out_ready = !in_queue_out_data_r_valid | st_mux_ord_valid;
+end
+
+always @(posedge pcie_clk) begin
+    if (!pcie_reset_n | sw_reset) begin
+        in_queue_out_data_r_valid <= 0;
+    end else begin
+        // Saved output has been consumed.
+        if (st_mux_ord_valid) begin
+            in_queue_out_data_r_valid <= 0;
+        end
+
+        // Save queue output.
+        if (in_queue_out_valid & in_queue_out_ready) begin
+            in_queue_out_data_r <= in_queue_out_data;
+            in_queue_out_data_r_valid <= 1;
+        end
     end
 end
 
@@ -454,6 +474,19 @@ always @(posedge pcie_clk) begin
     cpu_pkt_buf_full_cnt <= cpu_pkt_buf_full_cnt_r;
     cpu_pkt_buf_in_cnt <= cpu_pkt_buf_in_cnt_r;
     cpu_pkt_buf_out_cnt <= cpu_pkt_buf_out_cnt_r;
+end
+
+// Aggregate counters from different packet queue managers.
+always_comb begin
+    cpu_pkt_buf_full_cnt_r = 0;
+    cpu_pkt_buf_in_cnt_r = 0;
+    cpu_pkt_buf_out_cnt_r = 0;
+
+    for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
+        cpu_pkt_buf_full_cnt_r += pkt_full_counters[i];
+        cpu_pkt_buf_in_cnt_r += pkt_in_counters[i];
+        cpu_pkt_buf_out_cnt_r += pkt_out_counters[i];
+    end
 end
 
 // Count TX dsc tail pointer updates.
@@ -509,16 +542,18 @@ st_ordered_multiplexer #(
     .out_valid   (dsc_q_mngr_in_meta_valid),
     .out_ready   (dsc_q_mngr_in_meta_ready),
     .out_data    (dsc_q_mngr_in_meta_data),
-    .order_valid (in_queue_out_valid & in_queue_out_ready),
+    .order_valid (st_mux_ord_valid),
     .order_ready (st_mux_ord_ready),
-    .order_data  (pkt_q_mngr_id)
+    .order_data  (pkt_q_mngr_id),
+    .in_ord_cnt  (st_ord_in_cnt),
+    .out_ord_cnt (st_ord_out_cnt)
 );
 
 rx_dsc_queue_manager #(
     .NB_QUEUES(MAX_NB_APPS)
 ) rx_dsc_queue_manager_inst (
     .clk             (pcie_clk),
-    .rst             (!pcie_reset_n),
+    .rst             (!pcie_reset_n | sw_reset),
     .in_meta_data    (dsc_q_mngr_in_meta_data),
     .in_meta_valid   (dsc_q_mngr_in_meta_valid),
     .in_meta_ready   (dsc_q_mngr_in_meta_ready),
@@ -631,8 +666,105 @@ always @(posedge pcie_clk) begin
     end
 end
 
+
+`ifdef DEBUG
+logic [31:0] top_full_signals_1_d;
+logic [31:0] top_full_signals_2_d;
+
+generate
+    // We assume this for the following tests, it does not necessarily hold in
+    // general.
+    if (NB_PKT_QUEUE_MANAGERS > 32) begin
+      $error("The queue checking code assumes that NB_PKT_QUEUE_MANAGERS<=32");
+    end
+endgenerate
+
+// Check if queues are being used correctly.
+always @(posedge pcie_clk) begin
+    if (!pcie_reset_n) begin
+        top_full_signals_1_d[31:0] <= 0;
+        top_full_signals_2_d[31:0] <= 0;
+    end else begin
+        for (integer i = 0; i < NB_PKT_QUEUE_MANAGERS; i++) begin
+            assert(!$isunknown(pkt_q_mngr_in_meta_valid[i]));
+            assert(!$isunknown(pkt_q_mngr_in_meta_ready[i]));
+            if (pkt_q_mngr_in_meta_valid[i] & !pkt_q_mngr_in_meta_ready[i])
+            begin
+                top_full_signals_1_d[i] <= 1;
+                $fatal;
+            end
+        end
+        if (head_upd_queue_in_valid & !head_upd_queue_in_ready) begin
+            top_full_signals_2_d[0] <= 1;
+            $fatal;
+        end
+        if (in_queue_in_valid & !in_queue_in_ready) begin
+            top_full_signals_2_d[1] <= 1;
+            $fatal;
+        end
+        if (dsc_q_mngr_in_meta_valid & !dsc_q_mngr_in_meta_ready) begin
+            top_full_signals_2_d[2] <= 1;
+            $fatal;
+        end
+        if (pcie_rx_pkt_buf_valid & !pcie_rx_pkt_buf_ready) begin
+            top_full_signals_2_d[3] <= 1;
+            $fatal;
+        end
+        if (f2c_in_meta_valid & !f2c_in_meta_ready) begin
+            top_full_signals_2_d[4] <= 1;
+            $fatal;
+        end
+        if (tx_compl_buf_valid & !tx_compl_buf_ready) begin
+            top_full_signals_2_d[5] <= 1;
+            $fatal;
+        end
+    end
+end
+
+hyperpipe_vlat #(
+    .WIDTH($bits(top_full_signals_1_d)),
+    .MAX_PIPE(100)
+) top_full_signals_1_vlat (
+    .clk (pcie_clk),
+    .din (top_full_signals_1_d),
+    .dout(top_full_signals_1)
+);
+
+hyperpipe_vlat #(
+    .WIDTH($bits(top_full_signals_2_d)),
+    .MAX_PIPE(100)
+) top_full_signals_2_vlat (
+    .clk (pcie_clk),
+    .din (top_full_signals_2_d),
+    .dout(top_full_signals_2)
+);
+
+`else  // DEBUG
+assign top_full_signals_1 = 0;
+assign top_full_signals_2 = 0;
+`endif  // DEBUG
+
 // Remove these if start using WRDM.
 assign pcie_wrdm_desc_valid = 0;
 assign pcie_wrdm_prio_valid = 0;
+
+`ASSERT_KNOWN(HeadUpdQueueInValid, head_upd_queue_in_valid, pcie_clk,
+              !pcie_reset_n)
+`ASSERT_KNOWN(HeadUpdQueueInReady, head_upd_queue_in_ready, pcie_clk,
+              !pcie_reset_n)
+`ASSERT_KNOWN(InQueueInValid, in_queue_in_valid, pcie_clk, !pcie_reset_n)
+`ASSERT_KNOWN(InQueueInReady, in_queue_in_ready, pcie_clk, !pcie_reset_n)
+`ASSERT_KNOWN(DscQMngrInMetaValid, dsc_q_mngr_in_meta_valid, pcie_clk,
+              !pcie_reset_n)
+`ASSERT_KNOWN(DscQMngrInMetaReady, dsc_q_mngr_in_meta_ready, pcie_clk,
+              !pcie_reset_n)
+`ASSERT_KNOWN(PcieRxPktBufValid, pcie_rx_pkt_buf_valid, pcie_clk,
+              !pcie_reset_n)
+`ASSERT_KNOWN(PcieRxPktBufReady, pcie_rx_pkt_buf_ready, pcie_clk,
+              !pcie_reset_n)
+`ASSERT_KNOWN(F2CInMetaValid, f2c_in_meta_valid, pcie_clk, !pcie_reset_n)
+`ASSERT_KNOWN(F2CInMetaReady, f2c_in_meta_ready, pcie_clk, !pcie_reset_n)
+`ASSERT_KNOWN(TxComplBufValid, tx_compl_buf_valid, pcie_clk, !pcie_reset_n)
+`ASSERT_KNOWN(TxComplBufReady, tx_compl_buf_ready, pcie_clk, !pcie_reset_n)
 
 endmodule

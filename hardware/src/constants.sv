@@ -4,6 +4,8 @@
 // `define NO_PCIE //Should comment this during synthesis
 `define USE_BRAM //Replace the esram with BRAM.
 
+// Enables debug logic.
+`define DEBUG
 
 `include "common/prim_assert.sv"
 
