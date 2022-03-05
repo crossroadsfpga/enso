@@ -32,14 +32,14 @@ logic [$bits(out[0].rd_data)-1:0] out_rd_data [NB_BRAMS];
 logic                             out_rd_en   [NB_BRAMS];
 logic                             out_wr_en   [NB_BRAMS];
 generate;
-    for (genvar i = 0; i < NB_BRAMS; i++) begin
+    for (genvar i = 0; i < NB_BRAMS; i++) begin : gen_output
         assign out[i].addr = out_addr[i];
         assign out[i].wr_data = out_wr_data[i];
         assign out[i].rd_en = out_rd_en[i];
         assign out[i].wr_en = out_wr_en[i];
 
         assign out_rd_data[i] = out[i].rd_data;
-    end    
+    end : gen_output
 endgenerate
 
 localparam NON_NEG_BRAM_ID_MSB = BRAM_ID_WIDTH ? BRAM_ID_WIDTH - 1 : 0;
