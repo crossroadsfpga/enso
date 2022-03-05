@@ -233,6 +233,8 @@ always_comb begin
     end
 end
 
+logic queue_full_r;
+
 // Read fetched queue states and push metadata out.
 always @(posedge clk) begin
     tail_wr_en <= 0;
@@ -310,6 +312,8 @@ always @(posedge clk) begin
             new_tail <= cur_state.tail;
             wr_queue <= cur_state.queue;
 
+            queue_full_r <= cur_state.queue_full;
+
             last_states[1].valid <= 1;
             last_states[1].queue <= cur_state.queue;
             last_states[1].tail <= cur_state.tail;
@@ -331,15 +335,13 @@ end
 logic [31:0] full_cnt_r1;
 logic [31:0] full_cnt_r2;
 
-logic queue_full_r;
 logic queue_state_rd_ready_r;
 
 // Keep track of dropped packets.
 always @(posedge clk) begin
-    full_cnt <= full_cnt_r1;
     full_cnt_r1 <= full_cnt_r2;
+    full_cnt <= full_cnt_r1;
 
-    queue_full_r <= queue_full;
     queue_state_rd_ready_r <= queue_state_rd_ready;
 
     if (rst) begin
@@ -378,7 +380,7 @@ always @(posedge clk) begin
         in_cnt <= 0;
         out_cnt <= 0;
     end else begin
-        if (in_queue_out_valid & in_queue_out_ready) begin
+        if (in_meta_valid & in_meta_ready) begin
             in_cnt <= in_cnt + 1;
         end
         if (out_queue_meta_valid_r2 & out_queue_meta_ready) begin
