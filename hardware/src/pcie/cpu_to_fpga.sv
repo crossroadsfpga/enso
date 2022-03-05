@@ -1,11 +1,8 @@
 `include "pcie_consts.sv"
 
-/*
- * This module implements the communication from the CPU to the FPGA (TX). It is
- * also responsible for managing the TX descriptor queue BRAMs. It outputs both
- * packets and configuration requests.
- */
-
+/// This module implements the communication from the CPU to the FPGA (TX). It
+/// is also responsible for managing the TX descriptor queue BRAMs. It outputs
+/// both packets and configuration requests.
 module cpu_to_fpga  #(
     parameter NB_QUEUES,
     parameter QUEUE_ID_WIDTH=$clog2(NB_QUEUES)
@@ -13,7 +10,7 @@ module cpu_to_fpga  #(
   input logic clk,
   input logic rst,
 
-  // Packet buffer output.
+  /// Packet buffer output.
   output logic         out_pkt_sop,
   output logic         out_pkt_eop,
   output logic         out_pkt_valid,
@@ -22,18 +19,18 @@ module cpu_to_fpga  #(
   input  logic         out_pkt_ready,
   input  logic [31:0]  out_pkt_occup,
 
-  // TX completion buffer output.
+  /// TX completion buffer output.
   output var tx_transfer_t tx_compl_buf_data,
   output logic             tx_compl_buf_valid,
   input  logic             tx_compl_buf_ready,
   input  logic [31:0]      tx_compl_buf_occup,
 
-  // Config buffer output.
+  /// Config buffer output.
   output var config_flit_t out_config_data,
   output logic             out_config_valid,
   input  logic             out_config_ready,
 
-  // PCIe Read Data Mover (RDDM) signals.
+  /// PCIe Read Data Mover (RDDM) signals.
   input  logic         pcie_rddm_desc_ready,
   output logic         pcie_rddm_desc_valid,
   output logic [173:0] pcie_rddm_desc_data,
@@ -48,17 +45,19 @@ module cpu_to_fpga  #(
   input  logic [63:0]  pcie_rddm_byteenable,
   output logic         pcie_rddm_waitrequest,
 
-  // BRAM signals for TX descriptor queues.
+  /// BRAM signals for TX descriptor queues.
   bram_interface_io.owner q_table_tails,
   bram_interface_io.owner q_table_heads,
   bram_interface_io.owner q_table_l_addrs,
   bram_interface_io.owner q_table_h_addrs,
 
-  // Config signals.
+  /// Configure ring buffer size.
   input logic [RB_AWIDTH:0] rb_size,
-  input logic [30:0]        inflight_desc_limit,
 
-  // Counters.
+  /// Configure maximum number of in-flight descriptors.
+  input logic [30:0] inflight_desc_limit,
+
+  /// Counters.
   output logic [31:0] queue_full_signals,
   output logic [31:0] dsc_cnt,
   output logic [31:0] empty_tail_cnt,

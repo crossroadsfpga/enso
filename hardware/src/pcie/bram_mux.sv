@@ -1,10 +1,7 @@
 `include "pcie_consts.sv"
 
-/*
- * Use to joing multiple BRAM blocks into one (adds 1 cycle delay for write and
- * 2 cycles for read)
- */
-
+/// Use to join multiple BRAM blocks into one (adds 1 cycle delay for write and
+/// 2 cycles for read)
 module bram_mux #(
     parameter NB_BRAMS
 ) (
