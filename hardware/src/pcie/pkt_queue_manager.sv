@@ -1,44 +1,48 @@
 `include "pcie_consts.sv"
 
-/*
- * This module specializes the generic queue manager to packet queues.
- * 
- * It is also responsible for determining when to send descriptors for incoming
- * packets. It sends descriptors reactively to head pointer updates from
- * software. The first packet for every queue is accompanied by a descriptor.
- * The following packets for the same queue will only have a descriptor after
- * software consumed the first one. This keeps the invariant that we only have
- * a single descriptor for each queue at any given moment.
- */
-
+/// This module specializes the generic queue manager to packet queues.
+/// 
+/// It is also responsible for determining when to send descriptors for incoming
+/// packets. It sends descriptors reactively to head pointer updates from
+/// software. The first packet for every queue is accompanied by a descriptor.
+/// The following packets for the same queue will only have a descriptor after
+/// software consumed the first one. This keeps the invariant that we only have
+/// a single descriptor for each queue at any given moment.
 module pkt_queue_manager #(
     parameter NB_QUEUES
 )(
     input logic clk,
     input logic rst,
 
-    // input metadata stream
+    /// Input metadata stream.
     input  var pkt_meta_with_queues_t in_meta_data,
     input  logic                      in_meta_valid,
     output logic                      in_meta_ready,
 
-    // output metadata stream
+    /// Output metadata stream.
     output var pkt_meta_with_queues_t out_meta_data,
     output logic                      out_meta_valid,
     input  logic                      out_meta_ready,
 
-    // BRAM signals for queues
+    /// BRAM signals for queues.
     bram_interface_io.owner q_table_tails,
     bram_interface_io.owner q_table_heads,
     bram_interface_io.owner q_table_l_addrs,
     bram_interface_io.owner q_table_h_addrs,
 
-    // config signals
+    /// Configure the ring buffer size.
     input logic [RB_AWIDTH:0] rb_size,
+    
+    /// If set, forces a descriptor to be sent for every packet.
+    input logic desc_per_pkt,
 
-    // counters
+    /// Number of packets dropped because the queue was full.
     output logic [31:0] full_cnt,
+
+    /// Number of input packets.
     output logic [31:0] in_cnt,
+
+    /// Number of output packets.
     output logic [31:0] out_cnt
 );
 
@@ -194,7 +198,9 @@ always @(posedge clk) begin
         out_queue_in_valid <= 1;
 
         // If queue is empty, next packet should have a descriptor.
-        set_queue_status(delayed_queue[0], !queue_empty);
+        // Moreover, if `desc_per_pkt` is enabled, we always set the status
+        // queue status to 0.
+        set_queue_status(delayed_queue[0], !queue_empty & !desc_per_pkt);
 
         last_queues[0] <= delayed_queue[0];
     end

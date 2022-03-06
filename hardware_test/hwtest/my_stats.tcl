@@ -896,7 +896,7 @@ proc set_eth_port {eth_port} {
     set_up
 }
 
-proc set_nb_fallback_queues {nb_fallback_queues} {
+proc set_nb_fallback_queues {nb_fb_queues} {
     global PCIE_BASE
     global PCIE_CTRL_REG
     global rdata
@@ -904,12 +904,37 @@ proc set_nb_fallback_queues {nb_fallback_queues} {
 
     set wr_reg [expr $PCIE_CTRL_REG + 3]
     set rdata [reg_read $PCIE_BASE $wr_reg]
-    set wdata [expr (($rdata & 0x80000000) | ($nb_fallback_queues & 0x7fffffff))]
+    set wdata [expr (($rdata & 0xc0000000) | ($nb_fb_queues & 0x3fffffff))]
 
     reg_write $PCIE_BASE $wr_reg $wdata
 
     set_clear
     set_up
+}
+
+proc set_desc_per_pkt {desc_per_pkt_value} {
+    global PCIE_BASE
+    global PCIE_CTRL_REG
+    global rdata
+    global wdata
+
+    set wr_reg [expr $PCIE_CTRL_REG + 3]
+
+    set rdata [reg_read $PCIE_BASE $wr_reg]
+    set wdata [expr (($rdata & 0xbfffffff) | ($desc_per_pkt_value << 30))]
+
+    reg_write $PCIE_BASE $wr_reg $wdata
+
+    set_clear
+    set_up
+}
+
+proc enable_desc_per_pkt {} {
+    set_desc_per_pkt 1
+}
+
+proc disable_desc_per_pkt {} {
+    set_desc_per_pkt 0
 }
 
 proc set_rr {rr_value} {

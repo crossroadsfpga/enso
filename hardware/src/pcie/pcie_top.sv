@@ -125,6 +125,8 @@ logic [RB_AWIDTH:0] pkt_rb_size;
 
 logic [31-$bits(eth_port_nb):0] inflight_desc_limit;
 
+logic desc_per_pkt;
+
 logic [31:0] control_regs [NB_CONTROL_REGS];
 
 assign disable_pcie = control_regs[0][0];
@@ -146,7 +148,8 @@ assign inflight_desc_limit = control_regs[2][0 +: $bits(inflight_desc_limit)];
 assign eth_port_nb =
     control_regs[2][$bits(inflight_desc_limit) +: $bits(eth_port_nb)];
 
-assign nb_fallback_queues = {1'b0, control_regs[3][30:0]};
+assign nb_fallback_queues = {2'b00, control_regs[3][29:0]};
+assign desc_per_pkt = control_regs[3][30];
 assign enable_rr = control_regs[3][31];
 
 logic [BRAM_TABLE_IDX_WIDTH-1:0] queue_id;
@@ -516,6 +519,7 @@ pkt_queue_manager #(
     .q_table_l_addrs (pqm_pkt_q_table_l_addrs),
     .q_table_h_addrs (pqm_pkt_q_table_h_addrs),
     .rb_size         (pkt_rb_size),
+    .desc_per_pkt    (desc_per_pkt),
     .full_cnt        (pkt_full_counters),
     .in_cnt          (pkt_in_counters),
     .out_cnt         (pkt_out_counters)
