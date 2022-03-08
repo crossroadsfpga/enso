@@ -20,8 +20,6 @@
 
 #include "norman/socket.h"
 
-// #include "rdtsc.h"
-
 #include "app.h"
 
 #define BUF_LEN 10000000
@@ -35,8 +33,11 @@
 // If defined, ignore received packets.
 // #define IGNORE_RX
 
+// If defined use separate cores for RX and TX.
+// #define MULTICORE
+
 // Number of attempts to receive packets after we are done transmitting.
-#define NB_FLUSH_RX (1 << 28)
+#define NB_FLUSH_RX (1 << 30)
 
 static volatile int keep_running = 1;
 
@@ -161,6 +162,23 @@ struct TxStats {
     uint64_t bytes;
 };
 
+struct TxArgs {
+    TxArgs(std::vector<PktBuffer>& pkt_buffers, uint64_t total_bytes_to_send,
+           uint64_t pkts_in_last_buffer, int socket_fd)
+        : ignored_reclaims(0), total_remaining_bytes(total_bytes_to_send),
+          transmissions_pending(0), cur_bytes_sent(0),
+          pkts_in_last_buffer(pkts_in_last_buffer), pkt_buffers(pkt_buffers),
+          current_pkt_buf(pkt_buffers.begin()), socket_fd(socket_fd)
+    {}
+    uint64_t ignored_reclaims;
+    uint64_t total_remaining_bytes;
+    uint32_t transmissions_pending;
+    uint32_t cur_bytes_sent;
+    uint64_t pkts_in_last_buffer;
+    std::vector<PktBuffer>& pkt_buffers;
+    std::vector<PktBuffer>::iterator current_pkt_buf;
+    int socket_fd;
+};
 
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
                       const u_char *pkt_bytes)
@@ -229,6 +247,54 @@ inline void receive_pkts(struct RxStats& rx_stats)
         free_pkt_buf(socket_fd, recv_len);
     }
 #endif  // IGNORE_RX
+}
+
+inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
+{
+    if (likely(tx_args.transmissions_pending < (DSC_BUF_SIZE - 1))) {
+        uint32_t transmission_length = (uint32_t) std::min(
+            (uint64_t) (HUGEPAGE_SIZE / NB_TRANSFERS_PER_BUFFER),
+            tx_args.total_remaining_bytes
+        );
+        transmission_length = std::min(transmission_length,
+            tx_args.current_pkt_buf->length - tx_args.cur_bytes_sent);
+
+        void* phys_addr = (void*) (tx_args.current_pkt_buf->phys_addr
+                                   + tx_args.cur_bytes_sent);
+
+        send(tx_args.socket_fd, phys_addr, transmission_length, 0);
+        tx_stats.bytes += transmission_length;
+        ++tx_args.transmissions_pending;
+
+        tx_args.cur_bytes_sent += transmission_length;
+        tx_args.total_remaining_bytes -= transmission_length;
+
+        if (unlikely(tx_args.total_remaining_bytes == 0)) {
+            tx_stats.pkts += tx_args.pkts_in_last_buffer;
+            keep_running = 0;
+        }
+        
+        // Move to next packet buffer.
+        if (tx_args.cur_bytes_sent == tx_args.current_pkt_buf->length) {
+            tx_stats.pkts += tx_args.current_pkt_buf->nb_pkts;
+            tx_args.current_pkt_buf = std::next(tx_args.current_pkt_buf);
+            if (tx_args.current_pkt_buf == tx_args.pkt_buffers.end()) {
+                tx_args.current_pkt_buf = tx_args.pkt_buffers.begin();
+            }
+
+            tx_args.cur_bytes_sent = 0;
+        }
+    }
+
+    // Reclaim TX descriptor buffer space.
+    if ((tx_args.transmissions_pending > (DSC_BUF_SIZE / 4))) {
+        if (tx_args.ignored_reclaims > TX_RECLAIM_DELAY) {
+            tx_args.ignored_reclaims = 0;
+            tx_args.transmissions_pending -= get_completions(tx_args.socket_fd);
+        } else {
+            ++tx_args.ignored_reclaims;
+        }
+    }
 }
 
 
@@ -334,6 +400,7 @@ int main(int argc, const char* argv[])
 
     signal(SIGINT, int_handler);
 
+#ifdef MULTICORE
     std::thread rx_thread = std::thread([
         nb_queues, rate_num, rate_den, &rx_stats, &rx_done, &rx_ready
     ]{
@@ -382,18 +449,7 @@ int main(int argc, const char* argv[])
         &pkt_buffers, &tx_stats, &rx_ready
     ]{
         std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        std::cout << "Running TX on core " << sched_getcpu() << std::endl;
-
-        auto current_pkt_buf = pkt_buffers.begin();
-        uint32_t cur_bytes_sent = 0;
-        uint32_t transmissions_pending = 0;
-        uint64_t ignored_reclaims = 0;
-        uint64_t total_remaining_bytes = total_bytes_to_send;
-
-        std::cout << "Creating TX queue" << std::endl;
         int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
-        std::cout << "socket fd: " << socket_fd << std::endl;
 
         if (socket_fd == -1) {
             std::cerr << "Problem creating socket (" << errno << "): "
@@ -401,52 +457,11 @@ int main(int argc, const char* argv[])
             exit(2);
         }
 
+        TxArgs tx_args(pkt_buffers, total_bytes_to_send, pkts_in_last_buffer,
+                       socket_fd);
+
         while (keep_running) {
-            if (likely(transmissions_pending < (DSC_BUF_SIZE - 1))) {
-                uint32_t transmission_length = (uint32_t) std::min(
-                    (uint64_t) (HUGEPAGE_SIZE / NB_TRANSFERS_PER_BUFFER),
-                    total_remaining_bytes
-                );
-                transmission_length = std::min(transmission_length,
-                    current_pkt_buf->length - cur_bytes_sent);
-
-                void* phys_addr = 
-                    (void*) (current_pkt_buf->phys_addr + cur_bytes_sent);
-
-                send(socket_fd, phys_addr, transmission_length, 0);
-                tx_stats.bytes += transmission_length;
-                ++transmissions_pending;
-
-                cur_bytes_sent += transmission_length;
-                total_remaining_bytes -= transmission_length;
-
-                if (unlikely(total_remaining_bytes == 0)) {
-                    tx_stats.pkts += pkts_in_last_buffer;
-                    keep_running = 0;
-                    break;
-                }
-                
-                // Move to next packet buffer.
-                if (cur_bytes_sent == current_pkt_buf->length) {
-                    tx_stats.pkts += current_pkt_buf->nb_pkts;
-                    current_pkt_buf = std::next(current_pkt_buf);
-                    if (current_pkt_buf == pkt_buffers.end()) {
-                        current_pkt_buf = pkt_buffers.begin();
-                    }
-
-                    cur_bytes_sent = 0;
-                }
-            }
-
-            // Reclaim TX descriptor buffer space.
-            if ((transmissions_pending > (DSC_BUF_SIZE / 4))) {
-                if (ignored_reclaims > TX_RECLAIM_DELAY) {
-                    ignored_reclaims = 0;
-                    transmissions_pending -= get_completions(socket_fd);
-                } else {
-                    ++ignored_reclaims;
-                }
-            }
+            transmit_pkts(tx_args, tx_stats);
         }
     });
 
@@ -468,6 +483,68 @@ int main(int argc, const char* argv[])
         std::cerr << "Error setting CPU affinity for TX thread." << std::endl;
         return 7;
     }
+
+#else  // MULTICORE
+     std::thread rx_tx_thread = std::thread([
+        nb_queues, rate_num, rate_den, &rx_stats, &rx_done, &rx_ready,
+        nb_pkts, total_bytes_to_send, pkts_in_last_buffer, &pkt_buffers,
+        &tx_stats
+    ]{
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        for (int i = 0; i < nb_queues; ++i) {
+            std::cout << "Creating queue " << i << std::endl;
+            int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
+
+            if (socket_fd == -1) {
+                std::cerr << "Problem creating socket (" << errno << "): "
+                            << strerror(errno) << std::endl;
+                exit(2);
+            }
+        }
+
+        enable_device_rate_limit(rate_num, rate_den);
+        enable_device_timestamp();
+
+        std::cout << "Running RX on core " << sched_getcpu() << std::endl;
+
+        rx_ready = true;
+
+        int socket_fd = 0;  // Using first socket to transmit.
+        TxArgs tx_args(pkt_buffers, total_bytes_to_send, pkts_in_last_buffer,
+                       socket_fd);
+
+        while (keep_running) {
+            receive_pkts(rx_stats);
+            transmit_pkts(tx_args, tx_stats);
+        }
+
+        // Receive packets for a little bit longer.
+        for (uint64_t i = 0; i < NB_FLUSH_RX; ++i) {
+            receive_pkts(rx_stats);
+        }
+
+        disable_device_rate_limit();
+        disable_device_timestamp();
+
+        for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
+            // print_sock_stats(socket_fd);
+            shutdown(socket_fd, SHUT_RDWR);
+        }
+
+        rx_done = true;
+    });
+
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+    int result = pthread_setaffinity_np(rx_tx_thread.native_handle(),
+                                        sizeof(cpuset), &cpuset);
+    if (result < 0) {
+        std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
+        return 6;
+    }
+#endif  // MULTICORE
 
     while (!rx_done) {
         uint64_t last_rx_bytes = rx_stats.bytes;
@@ -520,8 +597,12 @@ int main(int argc, const char* argv[])
                   << std::endl << std::endl;
     }
 
+#ifdef MULTICORE
     tx_thread.join();
     rx_thread.join();
+#else  // MULTICORE
+    rx_tx_thread.join();
+#endif  // MULTICORE
 
     return 0;
 }
