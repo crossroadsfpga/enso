@@ -36,14 +36,21 @@
 // If defined use separate cores for RX and TX.
 // #define MULTICORE
 
-// Number of attempts to receive packets after we are done transmitting.
-#define NB_FLUSH_RX (1 << 30)
+// When we are done transmitting. The RX thread still tries to receive all
+// packets. The following defines the maximum number of times that we can try to
+// receive packets in a row while getting no packet back. Once this happens we
+// assume that we are no longer receiving packets and can stop trying.
+#define ITER_NO_PKT_THRESH (1 << 20)
 
 static volatile int keep_running = 1;
+static volatile int force_stop = 0;
 
 
 void int_handler(int signal __attribute__((unused)))
 {
+    if (!keep_running) {
+        force_stop = 1;
+    }
     keep_running = 0;
 }
 
@@ -208,8 +215,9 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
     context->free_flits -= nb_flits;
 }
 
-inline void receive_pkts(struct RxStats& rx_stats)
+inline uint64_t receive_pkts(struct RxStats& rx_stats)
 {
+    uint64_t nb_pkts = 0;
 #ifdef IGNORE_RX
     (void) rtt_sum;
     (void) rx_pkts;
@@ -239,14 +247,16 @@ inline void receive_pkts(struct RxStats& rx_stats)
 
             pkt += pkt_aligned_len;
             processed_bytes += pkt_aligned_len;
-            ++(rx_stats.pkts);
+            ++nb_pkts;
         }
 
+        rx_stats.pkts += nb_pkts;
         ++(rx_stats.nb_batches);
         rx_stats.bytes += recv_len;
         free_pkt_buf(socket_fd, recv_len);
     }
 #endif  // IGNORE_RX
+    return nb_pkts;
 }
 
 inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
@@ -428,10 +438,19 @@ int main(int argc, const char* argv[])
             receive_pkts(rx_stats);
         }
 
-        // Receive packets for a little bit longer.
-        for (uint64_t i = 0; i < NB_FLUSH_RX; ++i) {
-            receive_pkts(rx_stats);
+        uint64_t nb_iters_no_pkt = 0;
+
+        // Receive packets until packets stop arriving or user force stops.
+        while(!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
+            uint64_t nb_pkts = receive_pkts(rx_stats);
+            if (unlikely(nb_pkts == 0)) {
+                ++nb_iters_no_pkt;
+            } else {
+                nb_iters_no_pkt = 0;
+            }
         }
+        
+        rx_done = true;
 
         disable_device_rate_limit();
         disable_device_timestamp();
@@ -440,8 +459,6 @@ int main(int argc, const char* argv[])
             // print_sock_stats(socket_fd);
             shutdown(socket_fd, SHUT_RDWR);
         }
-
-        rx_done = true;
     });
     
     std::thread tx_thread = std::thread([
@@ -519,10 +536,19 @@ int main(int argc, const char* argv[])
             transmit_pkts(tx_args, tx_stats);
         }
 
-        // Receive packets for a little bit longer.
-        for (uint64_t i = 0; i < NB_FLUSH_RX; ++i) {
-            receive_pkts(rx_stats);
+        uint64_t nb_iters_no_pkt = 0;
+
+        // Receive packets until packets stop arriving or user force stops.
+        while(!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
+            uint64_t nb_pkts = receive_pkts(rx_stats);
+            if (unlikely(nb_pkts == 0)) {
+                ++nb_iters_no_pkt;
+            } else {
+                nb_iters_no_pkt = 0;
+            }
         }
+        
+        rx_done = true;
 
         disable_device_rate_limit();
         disable_device_timestamp();
@@ -531,8 +557,6 @@ int main(int argc, const char* argv[])
             // print_sock_stats(socket_fd);
             shutdown(socket_fd, SHUT_RDWR);
         }
-
-        rx_done = true;
     });
 
     cpu_set_t cpuset;
