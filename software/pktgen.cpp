@@ -151,6 +151,7 @@ struct RxStats {
     uint64_t pkts;
     uint64_t bytes;
     uint64_t rtt_sum;
+    uint64_t nb_batches;
     std::unordered_map<uint32_t, uint64_t> rtt_hist;
 };
 
@@ -223,6 +224,7 @@ inline void receive_pkts(struct RxStats& rx_stats)
             ++(rx_stats.pkts);
         }
 
+        ++(rx_stats.nb_batches);
         rx_stats.bytes += recv_len;
         free_pkt_buf(socket_fd, recv_len);
     }
@@ -470,6 +472,7 @@ int main(int argc, const char* argv[])
     while (!rx_done) {
         uint64_t last_rx_bytes = rx_stats.bytes;
         uint64_t last_rx_pkts = rx_stats.pkts;
+        uint64_t last_rx_batches = rx_stats.nb_batches;
         uint64_t last_tx_bytes = tx_stats.bytes;
         uint64_t last_tx_pkts = tx_stats.pkts;
         uint64_t last_aggregated_rtt = rx_stats.rtt_sum;
@@ -478,15 +481,19 @@ int main(int argc, const char* argv[])
 
         uint64_t rx_goodput_mbps = (rx_stats.bytes - last_rx_bytes) * 8. / 1e6;
         uint64_t rx_pkt_rate = rx_stats.pkts - last_rx_pkts;
+        uint64_t rx_nb_batches = rx_stats.nb_batches - last_rx_batches;
         uint64_t rx_pkt_rate_kpps = rx_pkt_rate / 1e3;
         uint64_t tx_goodput_mbps = (tx_stats.bytes - last_tx_bytes) * 8. / 1e6;
         uint64_t tx_pkt_rate = tx_stats.pkts - last_tx_pkts;
         uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
         uint64_t rtt_ns;
+        uint64_t mean_pkt_per_batch;
         if (rx_pkt_rate != 0) {
             rtt_ns = (rx_stats.rtt_sum - last_aggregated_rtt) / rx_pkt_rate;
+            mean_pkt_per_batch = rx_pkt_rate / rx_nb_batches;
         } else {
             rtt_ns = 0;
+            mean_pkt_per_batch = 0;
         }
 
         // TODO(sadok): don't print metrics that are unreliable before the first
@@ -499,6 +506,8 @@ int main(int argc, const char* argv[])
                   << std::endl
                   << "     #bytes: " << rx_stats.bytes
                   << "  #packets: " << rx_stats.pkts
+                  << std::endl
+                  << "     Mean #packets/batch: " << mean_pkt_per_batch
                   << std::endl
                   << "TX:"
                   << "  Goodput: " << tx_goodput_mbps << " Mbps"
