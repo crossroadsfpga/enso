@@ -190,6 +190,9 @@ static int parse_args(int argc, char** argv, struct parsed_args_t& parsed_args)
           case CMD_OPT_QUEUES_NUM:
             parsed_args.nb_queues = atoi(optarg);
             break;
+          case CMD_OPT_MULTICORE_NUM:
+            parsed_args.multicore = true;
+            break;
           case CMD_OPT_RTT_HIST_NUM:
             parsed_args.enable_rtt_history = true;
             parsed_args.hist_file = optarg;
