@@ -309,13 +309,15 @@ int disable_rate_limit(dsc_queue_t* dsc_queue);
  * This assumes that the packet has been timestamped by hardware. To enable
  * timestamping call the `enable_timestamp` function.
  * 
+ * To convert from number of cycles to ns. Do `cycles * NS_PER_TIMESTAMP_CYCLE`.
+ * 
  * Return: Return RTT measure for the packet in nanoseconds. If timestamp is
  *         not enabled the value returned is undefined.
  */
 inline uint32_t get_pkt_rtt(uint8_t* pkt)
 {
     uint32_t rtt = *((uint32_t*) (pkt + PACKET_RTT_OFFSET));
-    return be32toh(rtt) * NS_PER_TIMESTAMP_CYCLE;
+    return be32toh(rtt);
 }
 
 /**
