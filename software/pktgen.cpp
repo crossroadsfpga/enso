@@ -6,6 +6,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <future>
 #include <iostream>
 #include <string>
@@ -13,6 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <getopt.h>
 #include <sched.h>
 #include <pthread.h>
 
@@ -33,8 +35,8 @@
 // If defined, ignore received packets.
 // #define IGNORE_RX
 
-// If defined use separate cores for RX and TX.
-// #define MULTICORE
+// If defined, show mean number of packets in all received batches.
+// #define SHOW_BATCH
 
 // When we are done transmitting. The RX thread still tries to receive all
 // packets. The following defines the maximum number of times that we can try to
@@ -42,9 +44,23 @@
 // assume that we are no longer receiving packets and can stop trying.
 #define ITER_NO_PKT_THRESH (1 << 20)
 
+// Default core ID to run.
+#define DEFAULT_CORE_ID 0
+
+// Default number of queues to use.
+#define DEFAULT_NB_QUEUES 4
+
+// Default histogram array offset.
+#define DEFAULT_HIST_OFFSET 400
+
+// Default histogram array length.
+#define DEFAULT_HIST_LEN 100000
+
+// Number of CLI arguments.
+#define NB_CLI_ARGS 3
+
 static volatile int keep_running = 1;
 static volatile int force_stop = 0;
-
 
 void int_handler(int signal __attribute__((unused)))
 {
@@ -52,6 +68,155 @@ void int_handler(int signal __attribute__((unused)))
         force_stop = 1;
     }
     keep_running = 0;
+}
+
+
+static void print_usage(const char* program_name) {
+    printf(
+        "%s PCAP_FILE RATE_NUM RATE_DEN [--help] |\n"
+        " [--count NB_PKTS]\n"
+        " [--core CORE_ID]\n"
+        " [--queues NB_QUEUES]\n"
+        " [--multicore]\n"
+        " [--rtt]\n"
+        " [--rtt-hist HIST_FILE]\n"
+        " [--rtt-hist-offset HIST_OFFSET]\n"
+        " [--rtt-hist-len HIST_LEN]\n\n"
+
+        "  PCAP_FILE: Pcap file with packets to transmit.\n"
+        "  RATE_NUM: Numerator of the rate used to transmit packets.\n"
+        "  RATE_DEN: Denominator of the rate used to transmit packets.\n\n"
+
+        "  --help: Show this help and exit.\n"
+        "  --count: Specify number of packets to transmit.\n"
+        "  --core: Specify CORE_ID to run on (default: %d).\n"
+        "  --queues: Specify number of RX queues (default: %d).\n"
+        "  --multicore: Use separate cores for receiving and transmitting.\n"
+        "  --rtt: Enable packet timestamping and report average RTT.\n"
+        "  --rtt-hist: Save RTT histogram to HIST_FILE (implies --rtt).\n"
+        "  --rtt-hist-offset: Offset to be used when saving the histogram\n"
+        "                     (default: %d).\n"
+        "  --rtt-hist-len: Size of the histogram array (default: %d).\n"
+        "                  If an RTT is outside the RTT hist array range, it\n"
+        "                  will still be saved, but there will be a\n"
+        "                  performance penalty.\n",
+        program_name, DEFAULT_CORE_ID, DEFAULT_NB_QUEUES, DEFAULT_HIST_OFFSET,
+        DEFAULT_HIST_LEN
+    );
+}
+
+
+#define CMD_OPT_HELP "help"
+#define CMD_OPT_COUNT "count"
+#define CMD_OPT_CORE "core"
+#define CMD_OPT_QUEUES "queues"
+#define CMD_OPT_MULTICORE "multicore"
+#define CMD_OPT_RTT "rtt"
+#define CMD_OPT_RTT_HIST "rtt-hist"
+#define CMD_OPT_RTT_HIST_OFF "rtt-hist-offset"
+#define CMD_OPT_RTT_HIST_LEN "rtt-hist-len"
+
+// Map long options to short options.
+enum {
+    CMD_OPT_HELP_NUM = 256,
+    CMD_OPT_COUNT_NUM,
+    CMD_OPT_CORE_NUM,
+    CMD_OPT_QUEUES_NUM,
+    CMD_OPT_MULTICORE_NUM,
+    CMD_OPT_RTT_NUM,
+    CMD_OPT_RTT_HIST_NUM,
+    CMD_OPT_RTT_HIST_OFF_NUM,
+    CMD_OPT_RTT_HIST_LEN_NUM
+};
+
+
+static const char short_options[] = "";
+
+static const struct option long_options[] = {
+    {CMD_OPT_HELP, no_argument, NULL, CMD_OPT_HELP_NUM},
+    {CMD_OPT_COUNT, required_argument, NULL, CMD_OPT_COUNT_NUM},
+    {CMD_OPT_CORE, required_argument, NULL, CMD_OPT_CORE_NUM},
+    {CMD_OPT_QUEUES, required_argument, NULL, CMD_OPT_QUEUES_NUM},
+    {CMD_OPT_MULTICORE, no_argument, NULL, CMD_OPT_MULTICORE_NUM},
+    {CMD_OPT_RTT, no_argument, NULL, CMD_OPT_RTT_NUM},
+    {CMD_OPT_RTT_HIST, required_argument, NULL, CMD_OPT_RTT_HIST_NUM},
+    {CMD_OPT_RTT_HIST_OFF, required_argument, NULL, CMD_OPT_RTT_HIST_OFF_NUM},
+    {CMD_OPT_RTT_HIST_LEN, required_argument, NULL, CMD_OPT_RTT_HIST_LEN_NUM},
+    {0, 0, 0, 0}
+};
+
+
+struct parsed_args_t {
+    int core_id;
+    uint32_t nb_queues;
+    bool multicore;
+    bool enable_rtt;
+    bool enable_rtt_history;
+    std::string hist_file;
+    std::string pcap_file;
+    uint16_t rate_num;
+    uint16_t rate_den;
+    uint64_t nb_pkts;
+    uint32_t rtt_hist_offset;
+    uint32_t rtt_hist_len;
+};
+
+
+static int parse_args(int argc, char** argv, struct parsed_args_t& parsed_args)
+{
+    int opt;
+    int long_index;
+
+    parsed_args.nb_pkts = 0;
+    parsed_args.core_id = DEFAULT_CORE_ID;
+    parsed_args.nb_queues = DEFAULT_NB_QUEUES;
+    parsed_args.multicore = false;
+    parsed_args.enable_rtt = false;
+    parsed_args.enable_rtt_history = false;
+    parsed_args.rtt_hist_offset = DEFAULT_HIST_OFFSET;
+    parsed_args.rtt_hist_len = DEFAULT_HIST_LEN;
+
+    while ((opt = getopt_long(argc, argv, short_options, long_options,
+           &long_index)) != EOF) {
+        switch (opt) {
+          case CMD_OPT_HELP_NUM:
+            return 1;
+          case CMD_OPT_COUNT_NUM:
+            parsed_args.nb_pkts = atoi(optarg);
+            break;
+          case CMD_OPT_CORE_NUM:
+            parsed_args.core_id = atoi(optarg);
+            break;
+          case CMD_OPT_QUEUES_NUM:
+            parsed_args.nb_queues = atoi(optarg);
+            break;
+          case CMD_OPT_RTT_HIST_NUM:
+            parsed_args.enable_rtt_history = true;
+            parsed_args.hist_file = optarg;
+            // fall through
+          case CMD_OPT_RTT_NUM:
+            parsed_args.enable_rtt = true;
+            break;
+          case CMD_OPT_RTT_HIST_OFF_NUM:
+            parsed_args.rtt_hist_offset = atoi(optarg);
+            break;
+          case CMD_OPT_RTT_HIST_LEN_NUM:
+            parsed_args.rtt_hist_len = atoi(optarg);
+            break;
+          default:
+            return -1;
+        }
+    }
+
+    if ((argc - optind) != NB_CLI_ARGS) {
+        return -1;
+    }
+
+    parsed_args.pcap_file = argv[optind++];
+    parsed_args.rate_num = atoi(argv[optind++]);
+    parsed_args.rate_den = atoi(argv[optind++]);
+
+    return 0;
 }
 
 
@@ -118,7 +283,7 @@ static uint64_t virt_to_phys(void* virt) {
         close(fd);
         return 0;
     }
-	
+
     uintptr_t phy = 0;
     if (read(fd, &phy, sizeof(phy)) < 0) {
         close(fd);
@@ -130,15 +295,14 @@ static uint64_t virt_to_phys(void* virt) {
         return 0;
 	}
 	// bits 0-54 are the page number
-	return (uint64_t) ((phy & 0x7fffffffffffffULL) * pagesize 
+	return (uint64_t) ((phy & 0x7fffffffffffffULL) * pagesize
                        + ((uintptr_t) virt) % pagesize);
 }
 
 
 struct PktBuffer {
     PktBuffer(uint8_t* buf, uint32_t length, uint32_t nb_pkts)
-        : buf(buf), length(length), nb_pkts(nb_pkts)
-    {
+            : buf(buf), length(length), nb_pkts(nb_pkts) {
         phys_addr = virt_to_phys(buf);
     }
     uint8_t* buf;
@@ -155,12 +319,48 @@ struct PcapHandlerContext {
 };
 
 struct RxStats {
-    RxStats() : pkts(0), bytes(0), rtt_sum(0) {}
+    explicit RxStats(uint32_t rtt_hist_len=0, uint32_t rtt_hist_offset=0)
+            : pkts(0), bytes(0), rtt_sum(0), nb_batches(0),
+              rtt_hist_len(rtt_hist_len), rtt_hist_offset(rtt_hist_offset) {
+        if (rtt_hist_len > 0) {
+            rtt_hist = new uint64_t[rtt_hist_len]();
+        }
+    }
+    ~RxStats() {
+        if (rtt_hist_len > 0) {
+        delete [] rtt_hist;
+        }
+    }
+
+    RxStats(const RxStats& other) = delete;
+    RxStats(RxStats&& other) = default;
+    RxStats& operator=(const RxStats& other) = delete;
+    RxStats& operator=(RxStats&& other) = default;
+
+    inline void add_rtt_to_hist(const uint32_t rtt) {
+        // Insert RTTs into the rtt_hist array if they are in its range,
+        // otherwise use the backup_rtt_hist.
+        if (unlikely((rtt >= (rtt_hist_len-rtt_hist_offset))
+                     || (rtt < rtt_hist_offset))) {
+            backup_rtt_hist[rtt]++;
+        } else {
+            rtt_hist[rtt-rtt_hist_offset]++;
+        }
+    };
+
     uint64_t pkts;
     uint64_t bytes;
     uint64_t rtt_sum;
     uint64_t nb_batches;
-    std::unordered_map<uint32_t, uint64_t> rtt_hist;
+    const uint32_t rtt_hist_len;
+    const uint32_t rtt_hist_offset;
+    uint64_t* rtt_hist;
+    std::unordered_map<uint32_t, uint64_t> backup_rtt_hist;
+};
+
+struct RxArgs {
+    bool enable_rtt;
+    bool enable_rtt_history;
 };
 
 struct TxStats {
@@ -172,11 +372,10 @@ struct TxStats {
 struct TxArgs {
     TxArgs(std::vector<PktBuffer>& pkt_buffers, uint64_t total_bytes_to_send,
            uint64_t pkts_in_last_buffer, int socket_fd)
-        : ignored_reclaims(0), total_remaining_bytes(total_bytes_to_send),
-          transmissions_pending(0), cur_bytes_sent(0),
-          pkts_in_last_buffer(pkts_in_last_buffer), pkt_buffers(pkt_buffers),
-          current_pkt_buf(pkt_buffers.begin()), socket_fd(socket_fd)
-    {}
+            : ignored_reclaims(0), total_remaining_bytes(total_bytes_to_send),
+            transmissions_pending(0), cur_bytes_sent(0),
+            pkts_in_last_buffer(pkts_in_last_buffer), pkt_buffers(pkt_buffers),
+            current_pkt_buf(pkt_buffers.begin()), socket_fd(socket_fd) {}
     uint64_t ignored_reclaims;
     uint64_t total_remaining_bytes;
     uint32_t transmissions_pending;
@@ -186,6 +385,7 @@ struct TxArgs {
     std::vector<PktBuffer>::iterator current_pkt_buf;
     int socket_fd;
 };
+
 
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
                       const u_char *pkt_bytes)
@@ -215,7 +415,9 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
     context->free_flits -= nb_flits;
 }
 
-inline uint64_t receive_pkts(struct RxStats& rx_stats)
+
+inline uint64_t receive_pkts(const struct RxArgs& rx_args,
+                             struct RxStats& rx_stats)
 {
     uint64_t nb_pkts = 0;
 #ifdef IGNORE_RX
@@ -226,7 +428,7 @@ inline uint64_t receive_pkts(struct RxStats& rx_stats)
     uint8_t* recv_buf;
     int socket_fd;
     int recv_len = recv_select(0, &socket_fd, (void**) &recv_buf, BUF_LEN, 0);
-    
+
     if (unlikely(recv_len < 0)) {
         std::cerr << "Error receiving" << std::endl;
         exit(4);
@@ -240,10 +442,15 @@ inline uint64_t receive_pkts(struct RxStats& rx_stats)
             uint16_t pkt_len = get_pkt_len(pkt);
             uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
             uint16_t pkt_aligned_len = nb_flits * 64;
-            uint32_t rtt = get_pkt_rtt(pkt);
 
-            rx_stats.rtt_sum += rtt;
-            // rtt_hist[rtt]++;
+            if (rx_args.enable_rtt) {
+                uint32_t rtt = get_pkt_rtt(pkt);
+                rx_stats.rtt_sum += rtt;
+
+                if (rx_args.enable_rtt_history) {
+                    rx_stats.add_rtt_to_hist(rtt);
+                }
+            }
 
             pkt += pkt_aligned_len;
             processed_bytes += pkt_aligned_len;
@@ -258,6 +465,7 @@ inline uint64_t receive_pkts(struct RxStats& rx_stats)
 #endif  // IGNORE_RX
     return nb_pkts;
 }
+
 
 inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
 {
@@ -282,8 +490,9 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
         if (unlikely(tx_args.total_remaining_bytes == 0)) {
             tx_stats.pkts += tx_args.pkts_in_last_buffer;
             keep_running = 0;
+            return;
         }
-        
+
         // Move to next packet buffer.
         if (tx_args.cur_bytes_sent == tx_args.current_pkt_buf->length) {
             tx_stats.pkts += tx_args.current_pkt_buf->nb_pkts;
@@ -308,25 +517,21 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
 }
 
 
-int main(int argc, const char* argv[])
+int main(int argc, char** argv)
 {
-    if (argc != 7) {
-        std::cerr << "Usage: " << argv[0]
-                  << " pcap_file core_id rate_num rate_den nb_queues nb_pkts"
-                  << std::endl;
+    struct parsed_args_t parsed_args;
+    int ret = parse_args(argc, argv, parsed_args);
+    if (ret) {
+        print_usage(argv[0]);
+        if (ret == 1) {
+            return 0;
+        }
         return 1;
     }
 
-    const char* pcap_file = argv[1];
-    int core_id = atoi(argv[2]);
-    const uint16_t rate_num = atoi(argv[3]);
-    const uint16_t rate_den = atoi(argv[4]);
-    const int nb_queues = atoi(argv[5]);
-    const uint64_t nb_pkts = atoll(argv[6]);
-
     char errbuf[PCAP_ERRBUF_SIZE];
 
-    pcap_t* pcap = pcap_open_offline(pcap_file, errbuf);
+    pcap_t* pcap = pcap_open_offline(parsed_args.pcap_file.c_str(), errbuf);
     if (pcap == NULL) {
         std::cerr << "Error loading pcap file (" << errbuf << ")" << std::endl;
         return 2;
@@ -364,7 +569,7 @@ int main(int argc, const char* argv[])
     // we need to compute the total number of bytes that we have to send.
     uint64_t total_bytes_to_send;
     uint64_t pkts_in_last_buffer = 0;
-    if (nb_pkts > 0) {
+    if (parsed_args.nb_pkts > 0) {
         uint64_t total_pkts_in_buffers = 0;
         uint64_t total_bytes_in_buffers = 0;
         for (auto buffer : pkt_buffers) {
@@ -372,9 +577,10 @@ int main(int argc, const char* argv[])
             total_bytes_in_buffers += buffer.length;
         }
 
-        uint64_t nb_pkts_remaining = nb_pkts % total_pkts_in_buffers;
-        uint64_t nb_full_iters = nb_pkts / total_pkts_in_buffers;
-        
+        uint64_t nb_pkts_remaining =
+            parsed_args.nb_pkts % total_pkts_in_buffers;
+        uint64_t nb_full_iters = parsed_args.nb_pkts / total_pkts_in_buffers;
+
         total_bytes_to_send = nb_full_iters * total_bytes_in_buffers;
 
         for (auto buffer : pkt_buffers) {
@@ -402,7 +608,15 @@ int main(int argc, const char* argv[])
         total_bytes_to_send = 0xffffffffffffffff;
     }
 
-    RxStats rx_stats;
+    uint32_t rtt_hist_len = 0;
+    uint32_t rtt_hist_offset = 0;
+
+    if (parsed_args.enable_rtt_history) {
+        rtt_hist_len = parsed_args.rtt_hist_len;
+        rtt_hist_offset = parsed_args.rtt_hist_offset;
+    }
+
+    RxStats rx_stats(rtt_hist_len, rtt_hist_offset);
     TxStats tx_stats;
 
     std::atomic<bool> rx_done(false);
@@ -410,173 +624,217 @@ int main(int argc, const char* argv[])
 
     signal(SIGINT, int_handler);
 
-#ifdef MULTICORE
-    std::thread rx_thread = std::thread([
-        nb_queues, rate_num, rate_den, &rx_stats, &rx_done, &rx_ready
-    ]{
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::vector<std::thread> threads;
 
-        for (int i = 0; i < nb_queues; ++i) {
-            std::cout << "Creating queue " << i << std::endl;
-            int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
+    // When using multicore we launch separate threads for RX and TX.
+    if (parsed_args.multicore) {
+        std::thread rx_thread = std::thread([
+            &parsed_args, &rx_stats, &rx_done, &rx_ready
+        ]{
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
+                int socket_fd = socket(AF_INET, SOCK_DGRAM,
+                                       parsed_args.nb_queues);
+
+                if (socket_fd == -1) {
+                    std::cerr << "Problem creating socket (" << errno << "): "
+                                << strerror(errno) << std::endl;
+                    exit(2);
+                }
+            }
+
+            enable_device_rate_limit(parsed_args.rate_num,
+                                     parsed_args.rate_den);
+
+            if (parsed_args.enable_rtt) {
+                enable_device_timestamp();
+            } else {
+                disable_device_timestamp();
+            }
+
+            RxArgs rx_args;
+            rx_args.enable_rtt = parsed_args.enable_rtt;
+            rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
+
+            std::cout << "Running RX on core " << sched_getcpu() << std::endl;
+
+            rx_ready = true;
+
+            while (keep_running) {
+                receive_pkts(rx_args, rx_stats);
+            }
+
+            uint64_t nb_iters_no_pkt = 0;
+
+            // Receive packets until packets stop arriving or user force stops.
+            while (!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
+                uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
+                if (unlikely(nb_pkts == 0)) {
+                    ++nb_iters_no_pkt;
+                } else {
+                    nb_iters_no_pkt = 0;
+                }
+            }
+
+            rx_done = true;
+
+            disable_device_rate_limit();
+
+            if (parsed_args.enable_rtt) {
+                disable_device_timestamp();
+            }
+
+            for (uint32_t socket_fd = 0; socket_fd < parsed_args.nb_queues;
+                 ++socket_fd)
+            {
+                // print_sock_stats(socket_fd);
+                shutdown(socket_fd, SHUT_RDWR);
+            }
+        });
+
+        std::thread tx_thread = std::thread([
+            total_bytes_to_send, pkts_in_last_buffer, &parsed_args,
+            &pkt_buffers, &tx_stats, &rx_ready
+        ]{
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            int socket_fd = socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
 
             if (socket_fd == -1) {
                 std::cerr << "Problem creating socket (" << errno << "): "
                             << strerror(errno) << std::endl;
                 exit(2);
             }
-        }
 
-        enable_device_rate_limit(rate_num, rate_den);
-        enable_device_timestamp();
+            std::cout << "Running TX on core " << sched_getcpu() << std::endl;
 
-        std::cout << "Running RX on core " << sched_getcpu() << std::endl;
+            TxArgs tx_args(pkt_buffers, total_bytes_to_send,
+                           pkts_in_last_buffer, socket_fd);
 
-        rx_ready = true;
-
-        while (keep_running) {
-            receive_pkts(rx_stats);
-        }
-
-        uint64_t nb_iters_no_pkt = 0;
-
-        // Receive packets until packets stop arriving or user force stops.
-        while(!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
-            uint64_t nb_pkts = receive_pkts(rx_stats);
-            if (unlikely(nb_pkts == 0)) {
-                ++nb_iters_no_pkt;
-            } else {
-                nb_iters_no_pkt = 0;
+            while (keep_running) {
+                transmit_pkts(tx_args, tx_stats);
             }
-        }
-        
-        rx_done = true;
+        });
 
-        disable_device_rate_limit();
-        disable_device_timestamp();
-
-        for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-            // print_sock_stats(socket_fd);
-            shutdown(socket_fd, SHUT_RDWR);
-        }
-    });
-    
-    std::thread tx_thread = std::thread([
-        nb_pkts, total_bytes_to_send, pkts_in_last_buffer, nb_queues,
-        &pkt_buffers, &tx_stats, &rx_ready
-    ]{
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
-
-        if (socket_fd == -1) {
-            std::cerr << "Problem creating socket (" << errno << "): "
-                        << strerror(errno) << std::endl;
-            exit(2);
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(parsed_args.core_id, &cpuset);
+        int result = pthread_setaffinity_np(rx_thread.native_handle(),
+                                            sizeof(cpuset), &cpuset);
+        if (result < 0) {
+            std::cerr << "Error setting CPU affinity for RX thread."
+                      << std::endl;
+            return 6;
         }
 
-        TxArgs tx_args(pkt_buffers, total_bytes_to_send, pkts_in_last_buffer,
-                       socket_fd);
-
-        while (keep_running) {
-            transmit_pkts(tx_args, tx_stats);
-        }
-    });
-
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(core_id, &cpuset);
-    int result = pthread_setaffinity_np(rx_thread.native_handle(),
+        CPU_ZERO(&cpuset);
+        CPU_SET(parsed_args.core_id + 1, &cpuset);
+        result = pthread_setaffinity_np(tx_thread.native_handle(),
                                         sizeof(cpuset), &cpuset);
-    if (result < 0) {
-        std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
-        return 6;
-    }
+        if (result < 0) {
+            std::cerr << "Error setting CPU affinity for TX thread."
+                      << std::endl;
+            return 7;
+        }
 
-    CPU_ZERO(&cpuset);
-    CPU_SET(core_id + 1, &cpuset);
-    result = pthread_setaffinity_np(tx_thread.native_handle(),
-                                    sizeof(cpuset), &cpuset);
-    if (result < 0) {
-        std::cerr << "Error setting CPU affinity for TX thread." << std::endl;
-        return 7;
-    }
+        threads.push_back(std::move(rx_thread));
+        threads.push_back(std::move(tx_thread));
 
-#else  // MULTICORE
-     std::thread rx_tx_thread = std::thread([
-        nb_queues, rate_num, rate_den, &rx_stats, &rx_done, &rx_ready,
-        nb_pkts, total_bytes_to_send, pkts_in_last_buffer, &pkt_buffers,
-        &tx_stats
-    ]{
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    } else {
+        // Send and receive packets within the same thread.
+        std::thread rx_tx_thread = std::thread([
+            &parsed_args, &rx_stats, &rx_done, &rx_ready, total_bytes_to_send,
+            pkts_in_last_buffer, &pkt_buffers,
+            &tx_stats
+        ]{
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        for (int i = 0; i < nb_queues; ++i) {
-            std::cout << "Creating queue " << i << std::endl;
-            int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
+            for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
+                int socket_fd = socket(AF_INET, SOCK_DGRAM,
+                                       parsed_args.nb_queues);
 
-            if (socket_fd == -1) {
-                std::cerr << "Problem creating socket (" << errno << "): "
-                            << strerror(errno) << std::endl;
-                exit(2);
+                if (socket_fd == -1) {
+                    std::cerr << "Problem creating socket (" << errno << "): "
+                                << strerror(errno) << std::endl;
+                    exit(2);
+                }
             }
-        }
 
-        enable_device_rate_limit(rate_num, rate_den);
-        enable_device_timestamp();
+            enable_device_rate_limit(parsed_args.rate_num,
+                                     parsed_args.rate_den);
 
-        std::cout << "Running RX on core " << sched_getcpu() << std::endl;
-
-        rx_ready = true;
-
-        int socket_fd = 0;  // Using first socket to transmit.
-        TxArgs tx_args(pkt_buffers, total_bytes_to_send, pkts_in_last_buffer,
-                       socket_fd);
-
-        while (keep_running) {
-            receive_pkts(rx_stats);
-            transmit_pkts(tx_args, tx_stats);
-        }
-
-        uint64_t nb_iters_no_pkt = 0;
-
-        // Receive packets until packets stop arriving or user force stops.
-        while(!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
-            uint64_t nb_pkts = receive_pkts(rx_stats);
-            if (unlikely(nb_pkts == 0)) {
-                ++nb_iters_no_pkt;
-            } else {
-                nb_iters_no_pkt = 0;
+            if (parsed_args.enable_rtt) {
+                enable_device_timestamp();
             }
+
+            std::cout << "Running RX and TX on core " << sched_getcpu()
+                      << std::endl;
+
+            rx_ready = true;
+
+            RxArgs rx_args;
+            rx_args.enable_rtt = parsed_args.enable_rtt;
+            rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
+
+            int socket_fd = 0;  // Using first socket to transmit.
+            TxArgs tx_args(pkt_buffers, total_bytes_to_send,
+                           pkts_in_last_buffer, socket_fd);
+
+            while (keep_running) {
+                receive_pkts(rx_args, rx_stats);
+                transmit_pkts(tx_args, tx_stats);
+            }
+
+            uint64_t nb_iters_no_pkt = 0;
+
+            // Receive packets until packets stop arriving or user force stops.
+            while(!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
+                uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
+                if (unlikely(nb_pkts == 0)) {
+                    ++nb_iters_no_pkt;
+                } else {
+                    nb_iters_no_pkt = 0;
+                }
+            }
+
+            rx_done = true;
+
+            disable_device_rate_limit();
+
+            if (parsed_args.enable_rtt) {
+                disable_device_timestamp();
+            }
+
+            for (uint32_t socket_fd = 0; socket_fd < parsed_args.nb_queues;
+                 ++socket_fd)
+            {
+                shutdown(socket_fd, SHUT_RDWR);
+            }
+        });
+
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(parsed_args.core_id, &cpuset);
+        int result = pthread_setaffinity_np(rx_tx_thread.native_handle(),
+                                            sizeof(cpuset), &cpuset);
+        if (result < 0) {
+            std::cerr << "Error setting CPU affinity for RX thread."
+                      << std::endl;
+            return 6;
         }
-        
-        rx_done = true;
 
-        disable_device_rate_limit();
-        disable_device_timestamp();
-
-        for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-            // print_sock_stats(socket_fd);
-            shutdown(socket_fd, SHUT_RDWR);
-        }
-    });
-
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(core_id, &cpuset);
-    int result = pthread_setaffinity_np(rx_tx_thread.native_handle(),
-                                        sizeof(cpuset), &cpuset);
-    if (result < 0) {
-        std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
-        return 6;
+        threads.push_back(std::move(rx_tx_thread));
     }
-#endif  // MULTICORE
 
+    // Continuously print statistics.
     while (!rx_done) {
         uint64_t last_rx_bytes = rx_stats.bytes;
         uint64_t last_rx_pkts = rx_stats.pkts;
         uint64_t last_rx_batches = rx_stats.nb_batches;
         uint64_t last_tx_bytes = tx_stats.bytes;
         uint64_t last_tx_pkts = tx_stats.pkts;
-        uint64_t last_aggregated_rtt = rx_stats.rtt_sum;
+        uint64_t last_aggregated_rtt_ns =
+            rx_stats.rtt_sum * NS_PER_TIMESTAMP_CYCLE;
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -587,10 +845,11 @@ int main(int argc, const char* argv[])
         uint64_t tx_goodput_mbps = (tx_stats.bytes - last_tx_bytes) * 8. / 1e6;
         uint64_t tx_pkt_rate = tx_stats.pkts - last_tx_pkts;
         uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
+        uint64_t rtt_sum_ns = rx_stats.rtt_sum * NS_PER_TIMESTAMP_CYCLE;
         uint64_t rtt_ns;
         uint64_t mean_pkt_per_batch;
         if (rx_pkt_rate != 0) {
-            rtt_ns = (rx_stats.rtt_sum - last_aggregated_rtt) / rx_pkt_rate;
+            rtt_ns = (rtt_sum_ns - last_aggregated_rtt_ns) / rx_pkt_rate;
             mean_pkt_per_batch = rx_pkt_rate / rx_nb_batches;
         } else {
             rtt_ns = 0;
@@ -601,32 +860,61 @@ int main(int argc, const char* argv[])
         // two samples.
 
         std::cout << std::dec
-                  << "RX:"
-                  << "  Goodput: " << rx_goodput_mbps << " Mbps"
+                  << "      RX: Goodput: " << rx_goodput_mbps << " Mbps"
                   << "  Rate: " << rx_pkt_rate_kpps << " kpps"
                   << std::endl
-                  << "     #bytes: " << rx_stats.bytes
+                  << "          #bytes: " << rx_stats.bytes
                   << "  #packets: " << rx_stats.pkts
-                  << std::endl
-                  << "     Mean #packets/batch: " << mean_pkt_per_batch
-                  << std::endl
-                  << "TX:"
-                  << "  Goodput: " << tx_goodput_mbps << " Mbps"
+                  << std::endl;
+#ifdef SHOW_BATCH
+        std::cout << "          Mean #packets/batch: " << mean_pkt_per_batch
+                  << std::endl;
+#endif
+        std::cout << "      TX: Goodput: " << tx_goodput_mbps << " Mbps"
                   << "  Rate: " << tx_pkt_rate_kpps << " kpps"
                   << std::endl
-                  << "     #bytes: " << tx_stats.bytes
+                  << "          #bytes: " << tx_stats.bytes
                   << "  #packets: " << tx_stats.pkts
-                  << std::endl
-                  << "RTT: " << rtt_ns << " ns  "
-                  << std::endl << std::endl;
+                  << std::endl;
+
+        if (parsed_args.enable_rtt) {
+            std::cout << "Mean RTT: " << rtt_ns << " ns  " << std::endl;
+        }
+
+        std::cout << std::endl;
     }
 
-#ifdef MULTICORE
-    tx_thread.join();
-    rx_thread.join();
-#else  // MULTICORE
-    rx_tx_thread.join();
-#endif  // MULTICORE
+    if (parsed_args.enable_rtt_history) {
+        std::ofstream hist_file;
+        hist_file.open(parsed_args.hist_file);
+
+        for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
+            if (rx_stats.rtt_hist[rtt] != 0) {
+                uint32_t corrected_rtt = (rtt + parsed_args.rtt_hist_offset)
+                                         * NS_PER_TIMESTAMP_CYCLE;
+                hist_file << corrected_rtt << ","
+                          << rx_stats.rtt_hist[rtt] << std::endl;
+            }
+        }
+
+        if (rx_stats.backup_rtt_hist.size() != 0) {
+            std::cout << "Warning: " <<  rx_stats.backup_rtt_hist.size()
+                      << " rtt hist entries in backup" << std::endl;
+
+            for (auto const& i : rx_stats.backup_rtt_hist) {
+                hist_file << i.first * NS_PER_TIMESTAMP_CYCLE << "," << i.second
+                          << std::endl;
+            }
+        }
+
+        hist_file.close();
+        std::cout << "Saved RTT histogram to " << parsed_args.hist_file
+                  << std::endl;
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
 
     return 0;
 }
