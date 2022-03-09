@@ -73,10 +73,12 @@ void int_handler(int signal __attribute__((unused)))
 
 static void print_usage(const char* program_name) {
     printf(
-        "%s PCAP_FILE RATE_NUM RATE_DEN [--help] |\n"
+        "%s PCAP_FILE RATE_NUM RATE_DEN\n"
+        " [--help]\n"
         " [--count NB_PKTS]\n"
         " [--core CORE_ID]\n"
         " [--queues NB_QUEUES]\n"
+        " [--save SAVE_FILE]\n"
         " [--multicore]\n"
         " [--rtt]\n"
         " [--rtt-hist HIST_FILE]\n"
@@ -91,6 +93,7 @@ static void print_usage(const char* program_name) {
         "  --count: Specify number of packets to transmit.\n"
         "  --core: Specify CORE_ID to run on (default: %d).\n"
         "  --queues: Specify number of RX queues (default: %d).\n"
+        "  --save: Save RX and TX stats to SAVE_FILE.\n"
         "  --multicore: Use separate cores for receiving and transmitting.\n"
         "  --rtt: Enable packet timestamping and report average RTT.\n"
         "  --rtt-hist: Save RTT histogram to HIST_FILE (implies --rtt).\n"
@@ -110,6 +113,7 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_COUNT "count"
 #define CMD_OPT_CORE "core"
 #define CMD_OPT_QUEUES "queues"
+#define CMD_OPT_SAVE "save"
 #define CMD_OPT_MULTICORE "multicore"
 #define CMD_OPT_RTT "rtt"
 #define CMD_OPT_RTT_HIST "rtt-hist"
@@ -122,6 +126,7 @@ enum {
     CMD_OPT_COUNT_NUM,
     CMD_OPT_CORE_NUM,
     CMD_OPT_QUEUES_NUM,
+    CMD_OPT_SAVE_NUM,
     CMD_OPT_MULTICORE_NUM,
     CMD_OPT_RTT_NUM,
     CMD_OPT_RTT_HIST_NUM,
@@ -137,6 +142,7 @@ static const struct option long_options[] = {
     {CMD_OPT_COUNT, required_argument, NULL, CMD_OPT_COUNT_NUM},
     {CMD_OPT_CORE, required_argument, NULL, CMD_OPT_CORE_NUM},
     {CMD_OPT_QUEUES, required_argument, NULL, CMD_OPT_QUEUES_NUM},
+    {CMD_OPT_SAVE, required_argument, NULL, CMD_OPT_SAVE_NUM},
     {CMD_OPT_MULTICORE, no_argument, NULL, CMD_OPT_MULTICORE_NUM},
     {CMD_OPT_RTT, no_argument, NULL, CMD_OPT_RTT_NUM},
     {CMD_OPT_RTT_HIST, required_argument, NULL, CMD_OPT_RTT_HIST_NUM},
@@ -149,11 +155,13 @@ static const struct option long_options[] = {
 struct parsed_args_t {
     int core_id;
     uint32_t nb_queues;
+    bool save;
     bool multicore;
     bool enable_rtt;
     bool enable_rtt_history;
     std::string hist_file;
     std::string pcap_file;
+    std::string save_file;
     uint16_t rate_num;
     uint16_t rate_den;
     uint64_t nb_pkts;
@@ -170,6 +178,7 @@ static int parse_args(int argc, char** argv, struct parsed_args_t& parsed_args)
     parsed_args.nb_pkts = 0;
     parsed_args.core_id = DEFAULT_CORE_ID;
     parsed_args.nb_queues = DEFAULT_NB_QUEUES;
+    parsed_args.save = false;
     parsed_args.multicore = false;
     parsed_args.enable_rtt = false;
     parsed_args.enable_rtt_history = false;
@@ -189,6 +198,10 @@ static int parse_args(int argc, char** argv, struct parsed_args_t& parsed_args)
             break;
           case CMD_OPT_QUEUES_NUM:
             parsed_args.nb_queues = atoi(optarg);
+            break;
+          case CMD_OPT_SAVE_NUM:
+            parsed_args.save = true;
+            parsed_args.save_file = optarg;
             break;
           case CMD_OPT_MULTICORE_NUM:
             parsed_args.multicore = true;
@@ -575,7 +588,7 @@ int main(int argc, char** argv)
     if (parsed_args.nb_pkts > 0) {
         uint64_t total_pkts_in_buffers = 0;
         uint64_t total_bytes_in_buffers = 0;
-        for (auto buffer : pkt_buffers) {
+        for (auto& buffer : pkt_buffers) {
             total_pkts_in_buffers += buffer.nb_pkts;
             total_bytes_in_buffers += buffer.length;
         }
@@ -586,7 +599,7 @@ int main(int argc, char** argv)
 
         total_bytes_to_send = nb_full_iters * total_bytes_in_buffers;
 
-        for (auto buffer : pkt_buffers) {
+        for (auto& buffer : pkt_buffers) {
             if (nb_pkts_remaining < buffer.nb_pkts) {
                 pkts_in_last_buffer = nb_pkts_remaining;
 
@@ -829,34 +842,50 @@ int main(int argc, char** argv)
         threads.push_back(std::move(rx_tx_thread));
     }
 
+    // Write header to save file.
+    if (parsed_args.save) {
+        std::ofstream save_file;
+        save_file.open(parsed_args.save_file);
+        save_file << "rx_goodput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
+                     "tx_goodput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
+        if (parsed_args.enable_rtt) {
+            save_file << ",mean_rtt_ns";
+        }
+        save_file << std::endl;
+        save_file.close();
+    }
+
     // Continuously print statistics.
     while (!rx_done) {
         uint64_t last_rx_bytes = rx_stats.bytes;
         uint64_t last_rx_pkts = rx_stats.pkts;
-        uint64_t last_rx_batches = rx_stats.nb_batches;
         uint64_t last_tx_bytes = tx_stats.bytes;
         uint64_t last_tx_pkts = tx_stats.pkts;
         uint64_t last_aggregated_rtt_ns =
             rx_stats.rtt_sum * NS_PER_TIMESTAMP_CYCLE;
 
+#ifdef SHOW_BATCH
+        uint64_t last_rx_batches = rx_stats.nb_batches;
+#endif  // SHOW_BATCH
+
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        uint64_t rx_goodput_mbps = (rx_stats.bytes - last_rx_bytes) * 8. / 1e6;
-        uint64_t rx_pkt_rate = rx_stats.pkts - last_rx_pkts;
-        uint64_t rx_nb_batches = rx_stats.nb_batches - last_rx_batches;
+        uint64_t rx_bytes = rx_stats.bytes;
+        uint64_t rx_pkts = rx_stats.pkts;
+        uint64_t tx_bytes = tx_stats.bytes;
+        uint64_t tx_pkts = tx_stats.pkts;
+        uint64_t rx_goodput_mbps = (rx_bytes - last_rx_bytes) * 8. / 1e6;
+        uint64_t rx_pkt_rate = rx_pkts - last_rx_pkts;
         uint64_t rx_pkt_rate_kpps = rx_pkt_rate / 1e3;
-        uint64_t tx_goodput_mbps = (tx_stats.bytes - last_tx_bytes) * 8. / 1e6;
-        uint64_t tx_pkt_rate = tx_stats.pkts - last_tx_pkts;
+        uint64_t tx_goodput_mbps = (tx_bytes - last_tx_bytes) * 8. / 1e6;
+        uint64_t tx_pkt_rate = tx_pkts - last_tx_pkts;
         uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
         uint64_t rtt_sum_ns = rx_stats.rtt_sum * NS_PER_TIMESTAMP_CYCLE;
         uint64_t rtt_ns;
-        uint64_t mean_pkt_per_batch;
         if (rx_pkt_rate != 0) {
             rtt_ns = (rtt_sum_ns - last_aggregated_rtt_ns) / rx_pkt_rate;
-            mean_pkt_per_batch = rx_pkt_rate / rx_nb_batches;
         } else {
             rtt_ns = 0;
-            mean_pkt_per_batch = 0;
         }
 
         // TODO(sadok): don't print metrics that are unreliable before the first
@@ -864,27 +893,57 @@ int main(int argc, char** argv)
 
         std::cout << std::dec
                   << "      RX: Goodput: " << rx_goodput_mbps << " Mbps"
-                  << "  Rate: " << rx_pkt_rate_kpps << " kpps"
-                  << std::endl
-                  << "          #bytes: " << rx_stats.bytes
-                  << "  #packets: " << rx_stats.pkts
-                  << std::endl;
+                  << "  Rate: " << rx_pkt_rate_kpps << " kpps" << std::endl
+
+                  << "          #bytes: " << rx_bytes << "  #packets: "
+                  << rx_pkts << std::endl;
+
 #ifdef SHOW_BATCH
+        uint64_t rx_nb_batches = rx_stats.nb_batches - last_rx_batches;
+        uint64_t mean_pkt_per_batch;
+        if (rx_nb_batches) {
+            mean_pkt_per_batch = rx_pkt_rate / rx_nb_batches;
+        } else {
+            mean_pkt_per_batch = 0;
+        }
         std::cout << "          Mean #packets/batch: " << mean_pkt_per_batch
                   << std::endl;
-#endif
+#endif  // SHOW_BATCH
+
         std::cout << "      TX: Goodput: " << tx_goodput_mbps << " Mbps"
-                  << "  Rate: " << tx_pkt_rate_kpps << " kpps"
-                  << std::endl
-                  << "          #bytes: " << tx_stats.bytes
-                  << "  #packets: " << tx_stats.pkts
-                  << std::endl;
+                  << "  Rate: " << tx_pkt_rate_kpps << " kpps" << std::endl
+                  
+                  << "          #bytes: " << tx_bytes << "  #packets: "
+                  << tx_pkts << std::endl;
 
         if (parsed_args.enable_rtt) {
             std::cout << "Mean RTT: " << rtt_ns << " ns  " << std::endl;
         }
 
+        if (parsed_args.save) {
+            std::ofstream save_file;
+            save_file.open(parsed_args.save_file, std::ios_base::app);
+            save_file << rx_goodput_mbps << ","
+                      << rx_pkt_rate_kpps << ","
+                      << rx_bytes << ","
+                      << rx_pkts << ","
+                      << tx_goodput_mbps << ","
+                      << tx_pkt_rate_kpps << ","
+                      << tx_bytes << ","
+                      << tx_pkts;
+            if (parsed_args.enable_rtt) {
+                save_file << "," << rtt_ns;
+            }
+            save_file << std::endl;
+            save_file.close();
+        }
+
         std::cout << std::endl;
+    }
+
+    if (parsed_args.save) {
+        std::cout << "Saved statistics to \"" << parsed_args.save_file << "\""
+                  << std::endl;
     }
 
     if (parsed_args.enable_rtt_history) {
@@ -911,12 +970,16 @@ int main(int argc, char** argv)
         }
 
         hist_file.close();
-        std::cout << "Saved RTT histogram to " << parsed_args.hist_file
-                  << std::endl;
+        std::cout << "Saved RTT histogram to \"" << parsed_args.hist_file
+                  << "\"" << std::endl;
     }
 
     for (auto& thread : threads) {
         thread.join();
+    }
+
+    for (auto& buffer : pkt_buffers) {
+        munmap(buffer.buf, HUGEPAGE_SIZE);
     }
 
     return 0;
