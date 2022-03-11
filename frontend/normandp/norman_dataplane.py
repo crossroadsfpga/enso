@@ -43,7 +43,8 @@ class NormanDataplane(RemoteIntelFpga):
         if load_bitstream and verbose:
             print('Loading bitstream, it might take a couple of seconds.')
 
-        super().__init__(host, fpga_id, remote_norman_path, load_bitstream)
+        super().__init__(host, fpga_id, remote_norman_path, load_bitstream,
+                         verbose=verbose)
 
         self.remote_norman_path = remote_norman_path
 
@@ -83,7 +84,8 @@ class NormanDataplane(RemoteIntelFpga):
             f'{self.remote_norman_path}/{SETUP_SW_CMD} {self.dsc_buf_size} '
             f'{self.pkt_buf_size} {self.sw_batch_size}', pty=True
         )
-        watch_command(sw_setup, keyboard_int=lambda: sw_setup.send('\x03'))
+        watch_command(sw_setup, keyboard_int=lambda: sw_setup.send('\x03'),
+                      stdout=self.verbose, stderr=self.verbose)
         status = sw_setup.recv_exit_status()
         if status != 0:
             raise RuntimeError('Error occurred while setting up software')

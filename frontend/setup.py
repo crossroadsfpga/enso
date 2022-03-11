@@ -43,7 +43,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'click>=8.0',
-        'netexp>=0.1.4'
+        'netexp>=0.1.5'
     ],
     setup_requires=[
         'pytest-runner'
