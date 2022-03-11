@@ -160,7 +160,21 @@ class NormanPktgen(Pktgen):
             local_stats = f'{tmp}/stats.csv'
             download_file(self.dataplane.host, self.stats_file, local_stats)
             parsed_stats = NormanPktgenStats(local_stats)
-            self.stats_summary = parsed_stats.get_summary()
+            stats_summary = parsed_stats.get_summary()
+
+        self.mean_rx_goodput = stats_summary.get('rx_mean_goodput_mbps', 0)
+        self.mean_tx_goodput = stats_summary.get('tx_mean_goodput_mbps', 0)
+
+        self.mean_rx_rate = stats_summary.get('rx_mean_rate_kpps', 0)
+        self.mean_tx_rate = stats_summary.get('tx_mean_rate_kpps', 0)
+
+        self.nb_rx_pkts += stats_summary.get('rx_packets', 0)
+        self.nb_tx_pkts += stats_summary.get('tx_packets', 0)
+
+        self.nb_rx_bytes += stats_summary.get('rx_bytes', 0)
+        self.nb_tx_bytes += stats_summary.get('tx_bytes', 0)
+
+        self.mean_rtt = stats_summary.get('mean_rtt_ns', 0)
 
         self.pktgen_cmd = None
 
@@ -172,23 +186,33 @@ class NormanPktgen(Pktgen):
     def pcap_path(self, pcap_path):
         # Get average packet size in the pcap.
         capinfos_cmd = remote_command(
-            self.dataplane.ssh_client,
-            f'capinfos -z {pcap_path}'
+            self.dataplane.ssh_client, f'capinfos -z {pcap_path}', pty=True
         )
         output = watch_command(capinfos_cmd,
                                keyboard_int=lambda: capinfos_cmd.send('\x03'))
         status = capinfos_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError('Error processing remote pcap')
-        output = output.split('Average packet size: ')[1]
-        output = output.split(' bytes')[0]
-        self.mean_pcap_pkt_size = float(output)
+
+        try:
+            parsed_output = output.split(' ')[-2]
+            self.mean_pcap_pkt_size = float(parsed_output)
+        except IndexError:
+            raise RuntimeError(
+                f'Error processing remote pcap (capinfos output: "{output}"')
 
         self._pcap_path = pcap_path
 
     def clean_stats(self):
         self.nb_rx_pkts = 0
+        self.nb_rx_bytes = 0
+        self.mean_rx_goodput = 0
+        self.mean_rx_rate = 0
         self.nb_tx_pkts = 0
+        self.mean_tx_goodput = 0
+        self.mean_tx_rate = 0
+        self.nb_tx_bytes = 0
+        self.mean_rtt = 0
 
     def close(self):
         pass
