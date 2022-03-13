@@ -2,9 +2,9 @@ set STATS_BASE  0x20000000
 set LATENCY_BASE  0x28000000
 set TX_TRACKER_BASE  0x30000000
 set TOP_REG_BASE  0x22000000
-set PCIE_BASE    0x2A000000 
+set PCIE_BASE    0x2A000000
 
-# These **must be kept in sync** with the variables with the same name on 
+# These **must be kept in sync** with the variables with the same name on
 # `hardware/src/constants.sv` and `software/norman/pcie.h`.
 set MAX_NB_APPS 256
 # set MAX_NB_FLOWS 65536
@@ -119,7 +119,7 @@ proc set_up {} {
     #load_meta
     set_rx_warmup_pkt 1000
     set_tx_warmup_pkt 1000
-    set_rx_max_pkt 90000 
+    set_rx_max_pkt 90000
     set_tx_max_pkt 90000
 }
 
@@ -136,7 +136,7 @@ proc set_clear {} {
     global rdata
     global wdata
 
-    #hist states return to write. 
+    #hist states return to write.
     set rdata [reg_read $STATS_BASE $TX_LATENCY]
     set rdata [expr $rdata & 0x0]
     reg_write $STATS_BASE $TX_LATENCY $rdata
@@ -488,24 +488,24 @@ proc read_tracker {first_n} {
 
 ################## TOP ##################
 proc get_top_stats {} {
-    global IN_PKT            
-    global OUT_PKT           
-    global OUT_IN_COMP_PKT    
-    global OUT_PARSER_PKT    
-    global MAX_PARSER_FIFO   
-    global FD_IN_PKT         
-    global FD_OUT_PKT        
-    global MAX_FD_OUT_FIFO   
-    global IN_DATAMOVER_PKT  
-    global IN_EMPTYLIST_PKT  
-    global OUT_EMPTYLIST_PKT 
-    global PKT_ETH           
-    global PKT_DROP          
-    global PKT_PCIE          
-    global MAX_DM2PCIE_FIFO  
+    global IN_PKT
+    global OUT_PKT
+    global OUT_IN_COMP_PKT
+    global OUT_PARSER_PKT
+    global MAX_PARSER_FIFO
+    global FD_IN_PKT
+    global FD_OUT_PKT
+    global MAX_FD_OUT_FIFO
+    global IN_DATAMOVER_PKT
+    global IN_EMPTYLIST_PKT
+    global OUT_EMPTYLIST_PKT
+    global PKT_ETH
+    global PKT_DROP
+    global PKT_PCIE
+    global MAX_DM2PCIE_FIFO
     global MAX_DM2PCIE_META_FIFO
-    global PCIE_PKT          
-    global PCIE_META         
+    global PCIE_PKT
+    global PCIE_META
     global DM_PCIE_PKT
     global DM_PCIE_META
     global DM_ETH_PKT
@@ -621,31 +621,31 @@ proc read_top_reg {reg_name reg_index fp} {
 
 proc sanity_check {} {
     global TOP_REG_BASE
-    global IN_PKT              
-    global OUT_IN_COMP_PKT      
-    global OUT_PARSER_PKT      
-    global IN_FT_PKT           
-    global OUT_FT_PKT          
-    global IN_DATAMOVER_PKT    
-    global OUT_PKT             
-    global OUT_DATAMOVER_PKT             
-    global IN_EMPTYLIST_PKT             
-    global OUT_EMPTYLIST_PKT             
-    global PKT_FORWARD             
-    global PKT_DROP             
-    global PKT_CHECK             
-    global PKT_OOO             
-    global PKT_FORWARD_OOO             
-    global PKT_DONE    
+    global IN_PKT
+    global OUT_IN_COMP_PKT
+    global OUT_PARSER_PKT
+    global IN_FT_PKT
+    global OUT_FT_PKT
+    global IN_DATAMOVER_PKT
+    global OUT_PKT
+    global OUT_DATAMOVER_PKT
+    global IN_EMPTYLIST_PKT
+    global OUT_EMPTYLIST_PKT
+    global PKT_FORWARD
+    global PKT_DROP
+    global PKT_CHECK
+    global PKT_OOO
+    global PKT_FORWARD_OOO
+    global PKT_DONE
 
     global FT_REG_BASE
-    global FT_FLOW_INSERT  
-    global FT_FLOW_DEQ     
-    global FT_LOOKUP_PKT   
-    global FT_CONC_FLOW   
-    global FT_CURRENT_FLOW   
-    global PKT_CNT_FIN 
-    global PKT_CNT_ACK 
+    global FT_FLOW_INSERT
+    global FT_FLOW_DEQ
+    global FT_LOOKUP_PKT
+    global FT_CONC_FLOW
+    global FT_CURRENT_FLOW
+    global PKT_CNT_FIN
+    global PKT_CNT_ACK
     global PKT_INSERT_OOO
     global rdata
     global wdata
