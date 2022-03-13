@@ -1126,7 +1126,7 @@ logic [31:0] rddm_write_dsc_cnt;
 initial rddm_write_pkt_cnt = 0;
 initial rddm_write_dsc_cnt = 0;
 
-// Check TX packets
+// Check TX packets.
 always @(posedge clk_pcie) begin
   if (pcie_rddm_write) begin
     automatic logic [31:0] cur_queue;

@@ -198,8 +198,8 @@ always @(posedge clk) begin
         out_queue_in_valid <= 1;
 
         // If queue is empty, next packet should have a descriptor.
-        // Moreover, if `desc_per_pkt` is enabled, we always set the status
-        // queue status to 0.
+        // Moreover, if `desc_per_pkt` is enabled, we always set the queue
+        // status to 0.
         set_queue_status(delayed_queue[0], !queue_empty & !desc_per_pkt);
 
         last_queues[0] <= delayed_queue[0];
