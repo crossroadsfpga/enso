@@ -43,7 +43,8 @@ setup(
     include_package_data=True,
     install_requires=[
         'click>=8.0',
-        'netexp>=0.1.5'
+        'netexp>=0.1.7',
+        'tqdm'
     ],
     setup_requires=[
         'pytest-runner'
