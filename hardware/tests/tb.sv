@@ -202,11 +202,19 @@ logic         pcie_readdatavalid_0;
 logic [511:0] pcie_readdata_0;
 logic [511:0] pcie_writedata_0;
 logic [63:0]  pcie_byteenable_0;
+
 logic [63:0]  pcie_rddm_address;
 logic         pcie_rddm_write;
 logic [511:0] pcie_rddm_writedata;
 logic [63:0]  pcie_rddm_byteenable;
 logic         pcie_rddm_waitrequest;
+
+logic [63:0]  top_pcie_rddm_address;
+logic         top_pcie_rddm_write;
+logic [511:0] top_pcie_rddm_writedata;
+logic [63:0]  top_pcie_rddm_byteenable;
+logic         top_pcie_rddm_waitrequest;
+
 logic         error_termination;
 logic         error_termination_r;
 logic         stop;
@@ -1196,6 +1204,43 @@ rddm_prio_queue (
   .out_ready     (rddm_prio_queue_ready)
 );
 
+logic pcie_rddm_queue_out_valid;
+
+// Queue that holds TX packets. To test the TX path with ratelimiting without
+// backpressuring RX, we size it so that it can fit all the packets.
+fifo_wrapper_infill_mlab #(
+  .SYMBOLS_PER_BEAT(1),
+  .BITS_PER_SYMBOL($bits(pcie_rddm_writedata) + $bits(pcie_rddm_byteenable)
+                   + $bits(pcie_rddm_address)),
+  .FIFO_DEPTH(`PKT_FILE_NB_LINES)
+)
+pcie_rddm_queue (
+  .clk           (clk_pcie),
+  .reset         (rst),
+  .csr_address   (2'b0),
+  .csr_read      (1'b0),
+  .csr_write     (1'b0),
+  .csr_readdata  (),
+  .csr_writedata (32'b0),
+  .in_data       ({
+    pcie_rddm_writedata,
+    pcie_rddm_byteenable,
+    pcie_rddm_address
+  }),
+  .in_valid      (pcie_rddm_write),
+  .in_ready      (),
+  .out_data      ({
+    top_pcie_rddm_writedata, 
+    top_pcie_rddm_byteenable,
+    top_pcie_rddm_address
+  }),
+  .out_valid     (pcie_rddm_queue_out_valid),
+  .out_ready     (!top_pcie_rddm_waitrequest)
+);
+
+assign top_pcie_rddm_write = 
+  pcie_rddm_queue_out_valid && !top_pcie_rddm_waitrequest;
+
 assign pcie_rddm_prio_ready = rddm_prio_queue_occup < (16 - 3);
 
 logic [31:0] last_tail;
@@ -1998,11 +2043,11 @@ top top_inst (
   .pcie_readdata_0              (pcie_readdata_0),
   .pcie_writedata_0             (pcie_writedata_0),
   .pcie_byteenable_0            (pcie_byteenable_0),
-  .pcie_rddm_address            (pcie_rddm_address),
-  .pcie_rddm_write              (pcie_rddm_write),
-  .pcie_rddm_writedata          (pcie_rddm_writedata),
-  .pcie_rddm_byteenable         (pcie_rddm_byteenable),
-  .pcie_rddm_waitrequest        (pcie_rddm_waitrequest),
+  .pcie_rddm_address            (top_pcie_rddm_address),
+  .pcie_rddm_write              (top_pcie_rddm_write),
+  .pcie_rddm_writedata          (top_pcie_rddm_writedata),
+  .pcie_rddm_byteenable         (top_pcie_rddm_byteenable),
+  .pcie_rddm_waitrequest        (top_pcie_rddm_waitrequest),
   //eSRAM
   .reg_esram_pkt_buf_wren       (esram_pkt_buf_wren),
   .reg_esram_pkt_buf_wraddress  (esram_pkt_buf_wraddress),
