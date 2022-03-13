@@ -90,6 +90,18 @@ class NormanDataplane(RemoteIntelFpga):
         if status != 0:
             raise RuntimeError('Error occurred while setting up software')
 
+    def get_stats(self):
+        output = self.run_jtag_commands('s')
+        start_index = output.find('IN_PKT: ')
+        output = output[start_index:]
+        stats = {}
+        for row in output.split('\r\n'):
+            if row.startswith('% '):
+                break
+            key, value = row.split(': ')
+            stats[key] = int(value)
+        return stats
+
     @property
     def dsc_buf_size(self):
         return self._dsc_buf_size
