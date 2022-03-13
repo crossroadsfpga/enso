@@ -1204,21 +1204,25 @@ rddm_prio_queue (
   .out_ready     (rddm_prio_queue_ready)
 );
 
+logic pcie_rddm_queue_in_ready;
 logic pcie_rddm_queue_out_valid;
 
 // Queue that holds TX packets. To test the TX path with ratelimiting without
 // backpressuring RX, we size it so that it can fit all the packets.
-fifo_wrapper_infill_mlab #(
+fifo_wrapper_infill #(
   .SYMBOLS_PER_BEAT(1),
-  .BITS_PER_SYMBOL($bits(pcie_rddm_writedata) + $bits(pcie_rddm_byteenable)
-                   + $bits(pcie_rddm_address)),
-  .FIFO_DEPTH(`PKT_FILE_NB_LINES)
+  .BITS_PER_SYMBOL(
+    $bits(pcie_rddm_writedata) +
+    $bits(pcie_rddm_byteenable) +
+    $bits(pcie_rddm_address)
+  ),
+  .FIFO_DEPTH(4 * `PKT_FILE_NB_LINES)
 )
 pcie_rddm_queue (
   .clk           (clk_pcie),
   .reset         (rst),
   .csr_address   (2'b0),
-  .csr_read      (1'b0),
+  .csr_read      (1'b1),
   .csr_write     (1'b0),
   .csr_readdata  (),
   .csr_writedata (32'b0),
@@ -1228,7 +1232,7 @@ pcie_rddm_queue (
     pcie_rddm_address
   }),
   .in_valid      (pcie_rddm_write),
-  .in_ready      (),
+  .in_ready      (pcie_rddm_queue_in_ready),
   .out_data      ({
     top_pcie_rddm_writedata, 
     top_pcie_rddm_byteenable,
@@ -1240,6 +1244,21 @@ pcie_rddm_queue (
 
 assign top_pcie_rddm_write = 
   pcie_rddm_queue_out_valid && !top_pcie_rddm_waitrequest;
+
+`ASSERT_KNOWN(PcieRddmWriteKnown, pcie_rddm_write, clk_pcie, rst)
+`ASSERT_KNOWN(TopPcieRddmWaitRequestKnown, top_pcie_rddm_waitrequest, clk_pcie,
+              rst)
+`ASSERT_KNOWN(PcieRddmQueueInReadyKnown, pcie_rddm_queue_in_ready, clk_pcie,
+              rst)
+`ASSERT(PcieRddmWriteWhenReady,
+        pcie_rddm_write |-> (pcie_rddm_queue_in_ready == 1), clk_pcie, rst)
+`ASSERT_KNOWN(TopPcieRddmWriteKnown, top_pcie_rddm_write, clk_pcie, rst)
+`ASSERT_KNOWN_IF(TopPcieWritedataKnown, top_pcie_rddm_writedata,
+                 pcie_rddm_queue_out_valid, clk_pcie, rst)
+`ASSERT_KNOWN_IF(TopPcieRddmByteenableKnown, top_pcie_rddm_byteenable,
+                 pcie_rddm_queue_out_valid, clk_pcie, rst)
+`ASSERT_KNOWN_IF(TopPcieRddmAddressKnown, top_pcie_rddm_address,
+                 pcie_rddm_queue_out_valid, clk_pcie, rst)
 
 assign pcie_rddm_prio_ready = rddm_prio_queue_occup < (16 - 3);
 
