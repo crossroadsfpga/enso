@@ -93,7 +93,7 @@ class NormanPktgen(Pktgen):
                  queues: int = 4, multicore: bool = False, rtt: bool = False,
                  rtt_hist: bool = False, rtt_hist_offset: int = None,
                  rtt_hist_len: int = None, stats_file: str = None,
-                 hist_file: str = None) -> None:
+                 hist_file: str = None, verbose: bool = False) -> None:
         super().__init__()
 
         self.dataplane = dataplane
@@ -112,6 +112,8 @@ class NormanPktgen(Pktgen):
 
         self.stats_file = stats_file or 'stats.csv'
         self.hist_file = hist_file or 'hist.csv'
+
+        self.verbose = verbose
 
         self.pktgen_cmd = None
 
@@ -161,7 +163,7 @@ class NormanPktgen(Pktgen):
             command += ' --rtt-hist-len'
 
         self.pktgen_cmd = remote_command(
-            self.dataplane.ssh_client, command
+            self.dataplane.ssh_client, command, print_command=self.verbose
         )
 
     def wait_transmission_done(self):
