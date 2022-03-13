@@ -102,7 +102,7 @@ logic [63:0] nb_cycles;
 logic [data_width -1:0] arr[lo:hi];
 logic setup_finished;
 
-//Ethner signals
+// Ethernet signals.
 logic  [511:0]  l8_rx_data;
 logic  [5:0]    l8_rx_empty;
 logic           l8_rx_valid;
@@ -406,7 +406,7 @@ begin
     tx_cnt <= tx_cnt + 1'b1;
   end else begin
     tx_cnt <= 0;
-    l8_tx_ready <= ~ l8_tx_ready;
+    l8_tx_ready <= ~l8_tx_ready;
   end
 end
 
@@ -1091,6 +1091,22 @@ always @(posedge clk_pcie) begin
   end
 end
 
+logic [31:0] nb_rx_flits;
+logic [31:0] nb_tx_flits;
+
+initial nb_rx_flits = 0;
+initial nb_tx_flits = 0;
+
+// Track all RX and TX Ethernet packets.
+always @(posedge clk_rxmac) begin
+  if (l8_rx_valid) begin
+    nb_rx_flits <= nb_rx_flits + 1;
+  end
+  if (l8_tx_valid && l8_tx_ready) begin
+    nb_tx_flits <= nb_tx_flits + 1;
+  end
+end
+
 // Queue that holds incoming RDDM descriptors with regular prioity (desc).
 fifo_wrapper_infill_mlab #(
   .SYMBOLS_PER_BEAT(1),
@@ -1336,6 +1352,7 @@ always @(posedge clk_status) begin
 
           // End of simulation assertions.
           assert(reg_top_eth_port_nb == ETH_PORT_NB);
+          assert(nb_rx_flits == nb_tx_flits);
         end
       end
       OUT_PKT: begin
