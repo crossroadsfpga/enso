@@ -1,5 +1,6 @@
 
 import math
+from pathlib import Path
 import tempfile
 
 from collections import defaultdict
@@ -9,7 +10,8 @@ from fractions import Fraction
 from netexp.helpers import remote_command, watch_command, download_file
 from netexp.pktgen import Pktgen
 
-from normandp.consts import FPGA_RATELIMIT_CLOCK, NORMAN_PKTGEN_CMD
+from normandp.consts import FPGA_RATELIMIT_CLOCK, NORMAN_PKTGEN_CMD, \
+    PCAP_GEN_CMD, PCAPS_DIR
 from normandp.norman_dataplane import NormanDataplane
 
 
@@ -89,7 +91,7 @@ def mean_pkt_size_remote_pcap(ssh_client, pcap_path) -> float:
 class NormanPktgen(Pktgen):
     """Python wrapper for Norman pktgen.
     """
-    def __init__(self, dataplane: NormanDataplane, pcap_path, core_id: int = 0,
+    def __init__(self, dataplane: NormanDataplane, core_id: int = 0,
                  queues: int = 4, multicore: bool = False, rtt: bool = False,
                  rtt_hist: bool = False, rtt_hist_offset: int = None,
                  rtt_hist_len: int = None, stats_file: str = None,
@@ -100,10 +102,9 @@ class NormanPktgen(Pktgen):
         self.dataplane.enable_rr()
         self.dataplane.fallback_queues = queues
 
-        self.pcap_path = pcap_path
+        self._pcap_path = None
 
         self.core_id = core_id
-        self.queues = queues
         self.multicore = multicore
         self.rtt = rtt
         self.rtt_hist = rtt_hist
@@ -118,6 +119,27 @@ class NormanPktgen(Pktgen):
         self.pktgen_cmd = None
 
         self.clean_stats()
+
+    def set_params(self, pkt_size, nb_src, nb_dst):
+        nb_pkts = nb_src * nb_dst
+
+        pcap_name = f'{nb_pkts}_{pkt_size}_{nb_src}_{nb_dst}.pcap'
+
+        remote_dir_path = Path(self.dataplane.remote_norman_path)
+        pcap_dst = remote_dir_path / Path(PCAPS_DIR) / Path(pcap_name)
+        pcap_gen_cmd = remote_dir_path / Path(PCAP_GEN_CMD)
+        pcap_gen_cmd = \
+            f'{pcap_gen_cmd} {nb_pkts} {pkt_size} {nb_src} {nb_dst} {pcap_dst}'
+
+        pcap_gen_cmd = remote_command(self.dataplane.ssh_client, pcap_gen_cmd,
+                                      print_command=self.verbose)
+        watch_command(pcap_gen_cmd,
+                      keyboard_int=lambda: pcap_gen_cmd.send('\x03'))
+        status = pcap_gen_cmd.recv_exit_status()
+        if status != 0:
+            raise RuntimeError('Error generating pcap')
+
+        self.pcap_path = pcap_dst
 
     def start(self, throughput: float, nb_pkts: int):
         """Start packet generation.
