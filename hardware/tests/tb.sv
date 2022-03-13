@@ -1426,6 +1426,10 @@ always @(posedge clk_status) begin
         conf_state <= IN_PKT;
         s_read <= 1;
         s_addr <= 30'h2200_0000;
+
+        // End of simulation assertions.
+        assert(reg_top_eth_port_nb == ETH_PORT_NB);
+        assert(nb_rx_flits == nb_tx_flits);
       end
       IN_PKT: begin
         s_read <= 0;
@@ -1436,10 +1440,6 @@ always @(posedge clk_status) begin
           conf_state <= OUT_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;
-
-          // End of simulation assertions.
-          assert(reg_top_eth_port_nb == ETH_PORT_NB);
-          assert(nb_rx_flits == nb_tx_flits);
         end
       end
       OUT_PKT: begin
