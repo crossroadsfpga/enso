@@ -57,6 +57,12 @@ localparam ETH_PORT_NB = 1;
 // Maximum number of flits that can be sent in a single TX transfer.
 localparam MAX_FLITS_TX_TRANSFER = 16384;
 
+// Rate limit configuration. Toggle `RATE_LIMIT_ENABLE` to enable/disable rate
+// limiting in the TX path.
+localparam RATE_LIMIT_ENABLE = 0;
+localparam RATE_LIMIT_NUMERATOR = 70;
+localparam RATE_LIMIT_DENOMINATOR = 100;
+
 generate
   // We assume this during the test, it does not necessarily hold in general.
   if (((`NB_PKT_QUEUES / `NB_DSC_QUEUES) * `NB_DSC_QUEUES) != `NB_PKT_QUEUES)
@@ -485,7 +491,8 @@ typedef enum{
   PCIE_READ_F2C_DSC_QUEUE,
   PCIE_READ_F2C_DSC_QUEUE_WAIT,
   PCIE_RULE_INSERT,
-  PCIE_RULE_UPDATE,
+  ENABLE_RATE_LIMIT,
+  LAST_CONFIG_DELAY,
   PCIE_WAIT_DESC
 } pcie_state_t;
 
@@ -763,7 +770,8 @@ always @(posedge clk_pcie) begin
         if (cnt >= cnt_delay) begin
           automatic flow_table_config_t flow_table_config = 0;
           automatic logic [31:0] new_dsc_tail;
-          automatic logic [31:0] dsc_q = nb_config_queues[31:0] / pkt_per_dsc_queue;
+          automatic logic [31:0] dsc_q = 
+            nb_config_queues[31:0] / pkt_per_dsc_queue;
           automatic logic [31:0] tx_dsc_q_addr;
 
           flow_table_config.pkt_queue_id = nb_config_queues;
@@ -773,7 +781,7 @@ always @(posedge clk_pcie) begin
               32'hc0a80000 + nb_config_queues[31:0],
               32'h00000050
           };
-          flow_table_config.config_id = 1;
+          flow_table_config.config_id = FLOW_TABLE_CONFIG_ID;
           flow_table_config.signal = 2;
 
           new_dsc_tail = (tx_dsc_tails[0] + 1) % DSC_BUF_SIZE;
@@ -796,11 +804,45 @@ always @(posedge clk_pcie) begin
           nb_config_queues <= nb_config_queues + 1;
 
           if (nb_config_queues + 1 == nb_pkt_queues) begin
-            pcie_state <= PCIE_RULE_UPDATE;
+            pcie_state <= ENABLE_RATE_LIMIT;
           end
         end
       end
-      PCIE_RULE_UPDATE: begin
+      ENABLE_RATE_LIMIT: begin
+        if (cnt >= cnt_delay) begin
+          automatic rate_limit_config_t rate_limit_config = 0;
+          automatic logic [31:0] new_dsc_tail;
+          automatic logic [31:0] dsc_q = 
+            nb_config_queues[31:0] / pkt_per_dsc_queue;
+          automatic logic [31:0] tx_dsc_q_addr;
+
+          rate_limit_config.enable = RATE_LIMIT_ENABLE;
+          rate_limit_config.numerator = RATE_LIMIT_NUMERATOR;
+          rate_limit_config.denominator = RATE_LIMIT_DENOMINATOR;
+          rate_limit_config.config_id = RATE_LIMIT_CONFIG_ID;
+          rate_limit_config.signal = 2;
+
+          new_dsc_tail = (tx_dsc_tails[0] + 1) % DSC_BUF_SIZE;
+
+          tx_dsc_tails[0] <= new_dsc_tail;
+
+          // Use TX dsc queue 0.
+          tx_dsc_q_addr = nb_pkt_queues + nb_dsc_queues + 0;
+          ram[tx_dsc_q_addr][tx_dsc_tails[0]] <= rate_limit_config;
+
+          next_pcie_write_0 = 1;
+          pcie_address_0 <= (MAX_NB_FLOWS) << 12;  // Use TX dsc queue 0.
+          pcie_writedata_0 <= 0;
+          pcie_byteenable_0 <= 0;
+
+          pcie_writedata_0[128 +: 32] <= new_dsc_tail;
+          pcie_byteenable_0[16 +: 4] <= 4'hf;
+
+          pcie_state <= LAST_CONFIG_DELAY;
+          cnt_delay <= cnt + 10;
+        end
+      end
+      LAST_CONFIG_DELAY: begin
         if (cnt >= cnt_delay) begin
           pcie_state <= PCIE_WAIT_DESC;
           setup_finished <= 1;
