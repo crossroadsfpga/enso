@@ -1,9 +1,10 @@
-#! /usr/bin/env python3.8
+#! /usr/bin/env python3
 
 import binascii
 import ipaddress
 import os
 import sys
+import warnings
 
 from itertools import cycle
 
@@ -68,10 +69,9 @@ def main():
     else:
         batch_size = 1
 
-    try:
-        os.remove(out_pcap)
-    except OSError:
-        pass
+    if os.path.exists(out_pcap):
+        warnings.warn('Pcap with the same name already exists. Skipping.')
+        sys.exit(0)
 
     generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest, batch_size)
 
