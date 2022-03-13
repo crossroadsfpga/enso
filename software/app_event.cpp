@@ -19,7 +19,6 @@
 // #include <netinet/in.h>
 // #include <arpa/inet.h> 
 
-#define ZERO_COPY
 #define SEND_BACK
 
 #include "app.h"
