@@ -281,7 +281,7 @@ typedef enum{
   IDLE,
   IN_PKT,
   OUT_PKT,
-  INCOMP_OUT_PKT,
+  IN_COMP_OUT_PKT,
   PARSER_OUT_PKT,
   MAX_PARSER_FIFO,
   FD_IN_PKT,
@@ -1348,15 +1348,15 @@ always @(posedge clk_status) begin
             $display("OUT_PKT:\t\t%d <----", top_readdata);
             $error;
           end
-          conf_state <= INCOMP_OUT_PKT;
+          conf_state <= IN_COMP_OUT_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;
         end
       end
-      INCOMP_OUT_PKT: begin
+      IN_COMP_OUT_PKT: begin
         s_read <= 0;
         if(top_readdata_valid)begin
-          $display("INCOMP_OUT_PKT:\t%d", top_readdata);
+          $display("IN_COMP_OUT_PKT:\t%d", top_readdata);
           conf_state <= PARSER_OUT_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;

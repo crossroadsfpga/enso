@@ -91,7 +91,7 @@ module top (
 //counters
 logic [31:0] in_pkt_cnt_status;
 logic [31:0] out_pkt_cnt_status;
-logic [31:0] out_pkt_cnt_incomp_status;
+logic [31:0] out_pkt_cnt_in_comp_status;
 logic [31:0] out_pkt_cnt_parser_status;
 logic [31:0] max_parser_fifo_status;
 logic [31:0] fd_in_pkt_cnt_status;
@@ -343,9 +343,9 @@ logic [31:0] in_pkt_cnt_r2;
 logic [31:0] out_pkt_cnt;
 logic [31:0] out_pkt_cnt_r1;
 logic [31:0] out_pkt_cnt_r2;
-logic [31:0] out_pkt_cnt_incomp;
-logic [31:0] out_pkt_cnt_incomp_r1;
-logic [31:0] out_pkt_cnt_incomp_r2;
+logic [31:0] out_pkt_cnt_in_comp;
+logic [31:0] out_pkt_cnt_in_comp_r1;
+logic [31:0] out_pkt_cnt_in_comp_r2;
 logic [31:0] out_pkt_cnt_parser;
 logic [31:0] out_pkt_cnt_parser_r1;
 logic [31:0] out_pkt_cnt_parser_r2;
@@ -557,7 +557,7 @@ always @(posedge clk_datamover) begin
 
     if (rst_datamover | sw_reset_dm_r2) begin
         in_pkt_cnt <= 0;
-        out_pkt_cnt_incomp <= 0;
+        out_pkt_cnt_in_comp <= 0;
         out_pkt_cnt_parser <= 0;
         max_parser_fifo <= 0;
         in_pkt_cnt_emptylist <= 0;
@@ -577,7 +577,7 @@ always @(posedge clk_datamover) begin
         end
 
         if(input_comp_metadata_valid & input_comp_metadata_ready)begin
-            out_pkt_cnt_incomp <= out_pkt_cnt_incomp + 1;
+            out_pkt_cnt_in_comp <= out_pkt_cnt_in_comp + 1;
         end
 
         if(parser_out_meta_valid & parser_out_meta_ready)begin
@@ -678,9 +678,9 @@ always @(posedge clk_status) begin
     out_pkt_cnt_r1                   <= out_pkt_cnt;
     out_pkt_cnt_r2                   <= out_pkt_cnt_r1;
     out_pkt_cnt_status               <= out_pkt_cnt_r2;
-    out_pkt_cnt_incomp_r1            <= out_pkt_cnt_incomp;
-    out_pkt_cnt_incomp_r2            <= out_pkt_cnt_incomp_r1;
-    out_pkt_cnt_incomp_status        <= out_pkt_cnt_incomp_r2;
+    out_pkt_cnt_in_comp_r1           <= out_pkt_cnt_in_comp;
+    out_pkt_cnt_in_comp_r2           <= out_pkt_cnt_in_comp_r1;
+    out_pkt_cnt_in_comp_status       <= out_pkt_cnt_in_comp_r2;
     out_pkt_cnt_parser_r1            <= out_pkt_cnt_parser;
     out_pkt_cnt_parser_r2            <= out_pkt_cnt_parser_r1;
     out_pkt_cnt_parser_status        <= out_pkt_cnt_parser_r2;
@@ -858,7 +858,7 @@ always @(posedge clk_status) begin
             case (status_addr_r)
                 8'd0  : status_readdata_top <= in_pkt_cnt_status;
                 8'd1  : status_readdata_top <= out_pkt_cnt_status;
-                8'd2  : status_readdata_top <= out_pkt_cnt_incomp_status;
+                8'd2  : status_readdata_top <= out_pkt_cnt_in_comp_status;
                 8'd3  : status_readdata_top <= out_pkt_cnt_parser_status;
                 8'd4  : status_readdata_top <= max_parser_fifo_status;
                 8'd5  : status_readdata_top <= fd_in_pkt_cnt_status;

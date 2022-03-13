@@ -4,7 +4,7 @@
 | -------------------------- | ----------- |
 | `IN_PKT`                   | Number of packets that arrived at the Ethernet port. |
 | `OUT_PKT`                  | Number of packets that left the Ethernet port. |
-| `OUT_INCOMP_PKT`           | |
+| `OUT_IN_COMP_PKT`          | |
 | `OUT_PARSER_PKT`           | |
 | `MAX_PARSER_FIFO`          | |
 | `FD_IN_PKT`                | |

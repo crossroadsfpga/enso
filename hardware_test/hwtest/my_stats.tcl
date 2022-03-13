@@ -53,7 +53,7 @@ set TX_WARMUP_PKT  30
 #TOP reg
 set IN_PKT                    0
 set OUT_PKT                   1
-set OUT_INCOMP_PKT            2
+set OUT_IN_COMP_PKT           2
 set OUT_PARSER_PKT            3
 set MAX_PARSER_FIFO           4
 set FD_IN_PKT                 5
@@ -490,7 +490,7 @@ proc read_tracker {first_n} {
 proc get_top_stats {} {
     global IN_PKT            
     global OUT_PKT           
-    global OUT_INCOMP_PKT    
+    global OUT_IN_COMP_PKT    
     global OUT_PARSER_PKT    
     global MAX_PARSER_FIFO   
     global FD_IN_PKT         
@@ -548,7 +548,7 @@ proc get_top_stats {} {
     set fp [open "top_stats.txt" w+]
     read_top_reg IN_PKT                    $IN_PKT                    $fp
     read_top_reg OUT_PKT                   $OUT_PKT                   $fp
-    read_top_reg OUT_INCOMP_PKT            $OUT_INCOMP_PKT            $fp
+    read_top_reg OUT_IN_COMP_PKT           $OUT_IN_COMP_PKT           $fp
     read_top_reg OUT_PARSER_PKT            $OUT_PARSER_PKT            $fp
     read_top_reg MAX_PARSER_FIFO           $MAX_PARSER_FIFO           $fp
     read_top_reg FD_IN_PKT                 $FD_IN_PKT                 $fp
@@ -622,7 +622,7 @@ proc read_top_reg {reg_name reg_index fp} {
 proc sanity_check {} {
     global TOP_REG_BASE
     global IN_PKT              
-    global OUT_INCOMP_PKT      
+    global OUT_IN_COMP_PKT      
     global OUT_PARSER_PKT      
     global IN_FT_PKT           
     global OUT_FT_PKT          
