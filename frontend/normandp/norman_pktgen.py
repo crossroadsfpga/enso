@@ -211,14 +211,13 @@ class NormanPktgen(Pktgen):
 
         self._pcap_path = pcap_path
 
-        try:
-            parsed_output = output.split(' ')[-2]
-            self.mean_pcap_pkt_size = float(parsed_output)
-        except IndexError:
-            raise RuntimeError(
-                f'Error processing remote pcap (capinfos output: "{output}"')
+    @property
+    def queues(self):
+        return self.dataplane.fallback_queues
 
-        self._pcap_path = pcap_path
+    @queues.setter
+    def queues(self, queues):
+        self.dataplane.fallback_queues = queues
 
     def clean_stats(self):
         self.nb_rx_pkts = 0
