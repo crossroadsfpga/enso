@@ -31,7 +31,7 @@ class NormanDataplane(RemoteIntelFpga):
     """
     def __init__(self, fpga_id: str, host: str, remote_norman_path: str,
                  load_bitstream: bool = True, ensure_clean: bool = True,
-                 setup_sw: bool = True,
+                 setup_sw: bool = True, sw_reset: bool = False,
                  dsc_buf_size: int = DEFAULT_DSC_BUF_SIZE,
                  pkt_buf_size: int = DEFAULT_PKT_BUF_SIZE,
                  tx_credits: int = DEFAULT_NB_TX_CREDITS,
@@ -56,6 +56,9 @@ class NormanDataplane(RemoteIntelFpga):
                 if int(reg_value, 16) != 0:
                     print(reg_value)
                     raise RuntimeError('FPGA registers are not zeroed')
+
+        if sw_reset:
+            self.sw_reset()
 
         self.dsc_buf_size = dsc_buf_size
         self.pkt_buf_size = pkt_buf_size
@@ -158,6 +161,9 @@ class NormanDataplane(RemoteIntelFpga):
 
     def disable_rr(self):
         self.run_jtag_commands('disable_rr')
+
+    def sw_reset(self):
+        self.run_jtag_commands('sw_rst')
 
     def __del__(self):
         return super().__del__()
