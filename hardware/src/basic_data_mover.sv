@@ -16,7 +16,7 @@ module basic_data_mover (
     output logic                  emptylist_in_valid,
     input  logic                  emptylist_in_ready,
     
-    // When set routes all incoming packets back to Ethernet.
+    // When set, routes all incoming packets back to Ethernet.
     input  logic disable_pcie,
 
     // RX packet data to PCIe.
@@ -83,10 +83,11 @@ typedef enum
 
 state_t state;
 
-// TODO(sadok): Investigate meta_ready. This seems to be holding back sometimes.
-assign meta_ready = ((state == IDLE) | first_ready | middle_ready) & !almost_full;
-assign first_ready = (state == FIRST) & ((pkt_flags == PKT_DROP)|(flits==1));
-assign middle_ready = (state == MIDDLE) & (flits_cnt == flits-1);
+assign meta_ready =
+    ((state == IDLE) || first_ready || middle_ready) && !almost_full;
+assign first_ready =
+    (state == FIRST) && ((pkt_flags == PKT_DROP) || (flits == 1));
+assign middle_ready = (state == MIDDLE) && (flits_cnt == (flits - 1));
 assign almost_full = pcie_rx_pkt_almost_full | pcie_rx_meta_almost_full;
 
 // Quick and Dirty tweak for PDU flag.
@@ -114,7 +115,7 @@ always @(posedge clk) begin
         if (meta_valid & meta_ready) begin
             pktID <= meta_data.pktID;
             flits <= meta_data.flits;
-            if (disable_pcie & meta_data.pkt_flags != PKT_DROP) begin
+            if (disable_pcie && (meta_data.pkt_flags != PKT_DROP)) begin
                 pkt_flags <= PKT_ETH;
             end else begin
                 pkt_flags <= meta_data.pkt_flags;
@@ -254,7 +255,7 @@ always @(posedge clk) begin
 
         if (pkt_buffer_readvalid) begin
             // Send check_pkt to data_fifo.
-            if(pkt_flags_r == PKT_PCIE) begin
+            if (pkt_flags_r == PKT_PCIE) begin
                 pcie_rx_pkt_sop <= pkt_buffer_readdata.sop;
                 pcie_rx_pkt_eop <= pkt_buffer_readdata.eop;
                 pcie_rx_pkt_valid <= 1;
