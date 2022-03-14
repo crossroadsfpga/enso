@@ -75,10 +75,12 @@ always @(posedge clk) begin
     out_meta_queue_valid <= 0;
 
     if (rst) begin
-        pdu_flit = 0;
         needs_meta <= 1;
     end else begin
         automatic metadata_t meta;
+        automatic logic [15:0] next_pdu_size = pdu_size;
+        automatic logic [15:0] next_pdu_flit = pdu_flit;
+
         if (in_meta_ready & in_meta_valid) begin
             in_meta_data_r <= in_meta_data;
             needs_meta <= 0;
@@ -98,27 +100,33 @@ always @(posedge clk) begin
 
             if (in_sop) begin
                 out_pkt_queue_data.sop <= 1;
-                pdu_size = 0;
-                pdu_flit = 0;
+                next_pdu_size = 0;
+                next_pdu_flit = 0;
             end
 
-            pdu_size = pdu_size + 16'd64;
-            pdu_flit = pdu_flit + 1'b1;
+            assert(!$isunknown(next_pdu_size));
+            assert(!$isunknown(next_pdu_flit));
+
+            next_pdu_size = next_pdu_size + 16'd64;
+            next_pdu_flit = next_pdu_flit + 1'b1;
 
             if (in_eop) begin
                 pdu_size = pdu_size - in_empty;
                 out_pkt_queue_data.eop <= 1;
 
-                // write descriptor
+                // Write descriptor.
                 out_meta_queue_data.pkt_queue_id <=
                     meta.pkt_queue_id[FLOW_IDX_WIDTH-1:0];
 
-                // TODO(sadok) specify size in bytes instead of flits
-                out_meta_queue_data.size <= pdu_flit;
+                // TODO(sadok): Specify size in bytes instead of flits.
+                out_meta_queue_data.size <= next_pdu_flit;
                 out_meta_queue_valid <= 1;
 
                 needs_meta <= 1;
             end
+
+            pdu_size <= next_pdu_size;
+            pdu_flit <= next_pdu_flit;
         end
     end
 end
