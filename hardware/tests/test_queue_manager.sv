@@ -105,6 +105,10 @@ always @(posedge clk) begin
         q_table_h_addrs_user.addr <= cur_queue;
         q_table_h_addrs_user.wr_data <= cur_queue;
         q_table_h_addrs_user.wr_en <= 1;
+
+        // Avoid using 0 address.
+        q_table_h_addrs_user.wr_data[31] <= 1'b1;
+
         cur_queue <= cur_queue + 1;
         
         if (cur_queue + 1 == NB_QUEUES) begin
@@ -132,6 +136,7 @@ always @(posedge clk) begin
         if (out_meta_valid) begin
             automatic logic [63:0] expected_addr =
                 ((queue_id << 32) | (queue_id << 16));
+            expected_addr[63] = 1'b1;
 
             pkt_rx_cnt <= pkt_rx_cnt + 1;
 
@@ -175,6 +180,7 @@ always @(posedge clk) begin
         if (out_meta_valid) begin
             automatic logic [63:0] expected_addr =
                 ((queue_id << 32) | (queue_id << 16));
+            expected_addr[63] = 1'b1;
 
             pkt_rx_cnt <= pkt_rx_cnt + 1;
             assert(out_q_state.head == 0) else $fatal;
@@ -237,6 +243,7 @@ always @(posedge clk) begin
                 queue_seq[pkt_rx_cnt];
             automatic logic [63:0] expected_addr =
                 ((queue_id << 32) | (queue_id << 16));
+            expected_addr[63] = 1'b1;
 
             pkt_rx_cnt <= pkt_rx_cnt + 1;
 
