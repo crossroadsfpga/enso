@@ -533,6 +533,13 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
 }
 
 
+inline void reclaim_all_buffers(struct TxArgs& tx_args) {
+    while (tx_args.transmissions_pending) {
+        tx_args.transmissions_pending -= get_completions(tx_args.socket_fd);
+    }
+}
+
+
 int main(int argc, char** argv)
 {
     struct parsed_args_t parsed_args;
@@ -711,7 +718,7 @@ int main(int argc, char** argv)
 
         std::thread tx_thread = std::thread([
             total_bytes_to_send, pkts_in_last_buffer, &parsed_args,
-            &pkt_buffers, &tx_stats, &rx_ready
+            &pkt_buffers, &tx_stats, &rx_ready, &rx_done
         ]{
             std::this_thread::sleep_for(std::chrono::seconds(1));
             int socket_fd = socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
@@ -730,6 +737,10 @@ int main(int argc, char** argv)
             while (keep_running) {
                 transmit_pkts(tx_args, tx_stats);
             }
+
+            while(!rx_done) continue;
+
+            reclaim_all_buffers(tx_args);
         });
 
         cpu_set_t cpuset;
@@ -814,6 +825,8 @@ int main(int argc, char** argv)
             }
 
             rx_done = true;
+
+            reclaim_all_buffers(tx_args);
 
             disable_device_rate_limit();
 
