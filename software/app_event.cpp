@@ -178,11 +178,21 @@ int main(int argc, const char* argv[])
 
     while (keep_running) {
         uint64_t recv_bytes_before = recv_bytes;
+        uint64_t nb_batches_before = nb_batches;
+        
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        std::cout << std::dec << "Goodput: " << 
-            ((double) recv_bytes - recv_bytes_before) * 8. /1e6
-            << " Mbps  #bytes: " << recv_bytes << "  #batches: " << nb_batches
-            << std::endl;
+
+        uint64_t delta_bytes = recv_bytes - recv_bytes_before;
+        uint64_t delta_batches = nb_batches - nb_batches_before;
+        std::cout << std::dec
+                  <<  delta_bytes * 8. / 1e6 << " Mbps  "
+                  << recv_bytes << " bytes  "
+                  << nb_batches << " batches";
+        
+        if (delta_batches > 0) {
+            std::cout << "  " << delta_bytes / delta_batches  << " bytes/batch";
+        }
+        std::cout << std::endl;
     }
 
     socket_thread.join();
