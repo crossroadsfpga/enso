@@ -6,6 +6,7 @@ import tempfile
 from collections import defaultdict
 from csv import DictReader
 from fractions import Fraction
+from typing import Optional
 
 from netexp.helpers import remote_command, watch_command, download_file
 from netexp.pcap import mean_pkt_size_remote_pcap
@@ -14,6 +15,9 @@ from netexp.pktgen import Pktgen
 from normandp.consts import FPGA_RATELIMIT_CLOCK, NORMAN_PKTGEN_CMD, \
     PCAP_GEN_CMD, PCAPS_DIR
 from normandp.norman_dataplane import NormanDataplane
+
+
+ETHERNET_OVERHEAD = 20 + 4  # Includes CRC.
 
 
 class NormanPktgenStats:
@@ -74,9 +78,11 @@ class NormanPktgen(Pktgen):
     """
     def __init__(self, dataplane: NormanDataplane, core_id: int = 0,
                  queues: int = 4, multicore: bool = False, rtt: bool = False,
-                 rtt_hist: bool = False, rtt_hist_offset: int = None,
-                 rtt_hist_len: int = None, stats_file: str = None,
-                 hist_file: str = None, verbose: bool = False) -> None:
+                 rtt_hist: bool = False, rtt_hist_offset: Optional[int] = None,
+                 rtt_hist_len: Optional[int] = None,
+                 stats_file: Optional[str] = None,
+                 hist_file: Optional[str] = None,
+                 verbose: bool = False) -> None:
         super().__init__()
 
         self.dataplane = dataplane
@@ -101,7 +107,7 @@ class NormanPktgen(Pktgen):
 
         self.clean_stats()
 
-    def set_params(self, pkt_size, nb_src, nb_dst):
+    def set_params(self, pkt_size: int, nb_src: int, nb_dst: int) -> None:
         nb_pkts = nb_src * nb_dst
 
         pcap_name = f'{nb_pkts}_{pkt_size}_{nb_src}_{nb_dst}.pcap'
@@ -122,7 +128,7 @@ class NormanPktgen(Pktgen):
 
         self.pcap_path = pcap_dst
 
-    def start(self, throughput: float, nb_pkts: int):
+    def start(self, throughput: float, nb_pkts: int) -> None:
         """Start packet generation.
 
         Args:
@@ -132,8 +138,7 @@ class NormanPktgen(Pktgen):
         if self.pcap_path is None:
             raise RuntimeError('No pcap was configured')
 
-        eth_overhead = 20 + 4
-        bits_per_pkt = (self.mean_pcap_pkt_size + eth_overhead) * 8
+        bits_per_pkt = (self.mean_pcap_pkt_size + ETHERNET_OVERHEAD) * 8
         pkts_per_sec = throughput / bits_per_pkt
         flits_per_pkt = math.ceil(self.mean_pcap_pkt_size / 64)
 
@@ -169,7 +174,7 @@ class NormanPktgen(Pktgen):
             self.dataplane.ssh_client, command, print_command=self.verbose
         )
 
-    def wait_transmission_done(self):
+    def wait_transmission_done(self) -> None:
         if self.pktgen_cmd is None:
             # Pktgen is not running.
             return
@@ -204,25 +209,37 @@ class NormanPktgen(Pktgen):
         self.pktgen_cmd = None
 
     @property
-    def pcap_path(self):
+    def pcap_path(self) -> None:
         return self._pcap_path
 
     @pcap_path.setter
-    def pcap_path(self, pcap_path):
+    def pcap_path(self, pcap_path) -> None:
         self.mean_pcap_pkt_size = mean_pkt_size_remote_pcap(
             self.dataplane.ssh_client, pcap_path)
 
         self._pcap_path = pcap_path
 
     @property
-    def queues(self):
+    def queues(self) -> int:
         return self.dataplane.fallback_queues
 
     @queues.setter
-    def queues(self, queues):
+    def queues(self, queues) -> None:
         self.dataplane.fallback_queues = queues
 
-    def clean_stats(self):
+    def get_nb_rx_pkts(self) -> int:
+        return self.nb_rx_pkts
+
+    def get_nb_tx_pkts(self) -> int:
+        return self.nb_tx_pkts
+
+    def get_rx_throughput(self) -> int:
+        return self.mean_rx_goodput + self.mean_rx_rate * ETHERNET_OVERHEAD * 8
+
+    def get_tx_throughput(self) -> int:
+        return self.mean_tx_goodput + self.mean_tx_rate * ETHERNET_OVERHEAD * 8
+
+    def clean_stats(self) -> None:
         self.nb_rx_pkts = 0
         self.nb_rx_bytes = 0
         self.mean_rx_goodput = 0
@@ -233,5 +250,6 @@ class NormanPktgen(Pktgen):
         self.nb_tx_bytes = 0
         self.mean_rtt = 0
 
-    def close(self):
+    def close(self) -> None:
+        # No need to close here.
         pass
