@@ -116,6 +116,7 @@ wire        i_eth_reconfig_write;
 wire        o_eth_reconfig_readdata_valid;
 
 wire [31:0] i_eth_reconfig_writedata;
+logic o_eth_reconfig_waitrequest;
 wire [4*32-1:0] i_xcvr_reconfig_writedata;
 
 wire        i_reconfig_clk = clk100;
@@ -326,14 +327,16 @@ wire [19:0] status_addr;
 wire status_readdata_valid, status_waitrequest;
 wire select_waitrequest;
 
+logic status_read;
+logic status_write;
+
 always @(posedge i_reconfig_clk) begin
     if (arst) begin
         status_read_r <= 0;
         status_write_r <= 0;
         status_writedata_r <= 32'b0;
         status_addr_r <= 20'b0;
-    end
-else if( !select_waitrequest || status_read || status_write ) begin
+    end else if( !select_waitrequest || status_read || status_write ) begin
         status_read_r <= status_read;
         status_write_r <= status_write;
         status_writedata_r <= status_writedata;
