@@ -36,16 +36,16 @@ module tb;
                               // every pkt queue at the end of the simulation.
 
 // Number of cycles to delay PCIe signals.
-localparam PCIE_DELAY = 1000;
+localparam PCIE_DELAY = 125;
 
 // Number of cycles to wait before stopping the simulation.
-localparam STOP_DELAY = 100000 + PCIE_DELAY;
+localparam STOP_DELAY = 2000000 + PCIE_DELAY;
 
 // Set number of in-flight descriptor reads that are allowed in the TX path.
 localparam NB_TX_CREDITS = 500;
 
 // Number of cycles to wait before updating the head pointer for the pkt queue.
-localparam UPDATE_HEAD_DELAY = 1000;
+localparam UPDATE_HEAD_DELAY = 125;
 
 // Size of the host buffer used by each queue (in flits).
 localparam DSC_BUF_SIZE = 8192;
@@ -1597,7 +1597,7 @@ always @(posedge clk_status) begin
       MAX_DM2PCIE_META_FIFO: begin
         s_read <= 0;
         if(top_readdata_valid)begin
-          $display("MAX_DM2PCIE_MET_FIFO:%d", top_readdata);
+          $display("MAX_DM2PCIE_MET_FIFO:\t%d", top_readdata);
           conf_state <= PCIE_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;
