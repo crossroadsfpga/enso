@@ -183,15 +183,17 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
         dsc_queue_regs->rx_mem_high = 0;
         _norman_compiler_memory_barrier();
         while (dsc_queue_regs->rx_mem_low != 0
-                || dsc_queue_regs->rx_mem_high != 0)
-            continue;
+                || dsc_queue_regs->rx_mem_high != 0) continue;
 
         // Make sure head and tail start at zero.
-        dsc_queue_regs->rx_head = 0;
         dsc_queue_regs->rx_tail = 0;
         _norman_compiler_memory_barrier();
-        while (dsc_queue_regs->rx_head != 0 || dsc_queue_regs->rx_tail != 0)
-            continue;
+        while (dsc_queue_regs->rx_tail != 0) continue;
+
+        dsc_queue_regs->rx_head = 0;
+        _norman_compiler_memory_barrier();
+        while (dsc_queue_regs->rx_head != 0) continue;
+
 
         dsc_queue->regs = dsc_queue_regs;
         dsc_queue->rx_buf = (pcie_rx_dsc_t*) get_huge_page(
@@ -200,26 +202,22 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
             std::cerr << "Could not get huge page" << std::endl;
             return -1;
         }
+
+        // Use first half of the huge page for RX and second half for TX.
         dsc_queue->tx_buf = (pcie_tx_dsc_t*) (
             (uint64_t) dsc_queue->rx_buf + ALIGNED_DSC_BUF_PAIR_SIZE / 2);
 
         uint64_t phys_addr = virt_to_phys(dsc_queue->rx_buf);
 
-        // Use first half of the huge page for RX and second half for TX.
-        dsc_queue_regs->rx_mem_low = (uint32_t) phys_addr;
-        dsc_queue_regs->rx_mem_high = (uint32_t) (phys_addr >> 32);
-
-        phys_addr += ALIGNED_DSC_BUF_PAIR_SIZE / 2;
-        dsc_queue_regs->tx_mem_low = (uint32_t) phys_addr;
-        dsc_queue_regs->tx_mem_high = (uint32_t) (phys_addr >> 32);
-
         dsc_queue->rx_head_ptr = &dsc_queue_regs->rx_head;
         dsc_queue->tx_tail_ptr = &dsc_queue_regs->tx_tail;
         dsc_queue->rx_head = dsc_queue_regs->rx_head;
         
-        // Preserve TX DSC tail and make head match the same value.
+        // Preserve TX DSC tail and make head have the same value.
         dsc_queue->tx_tail = dsc_queue_regs->tx_tail;
         dsc_queue->tx_head = dsc_queue->tx_tail;
+
+        _norman_compiler_memory_barrier();
         dsc_queue_regs->tx_head = dsc_queue->tx_head;
 
         // HACK(sadok) assuming that we know the number of queues beforehand
@@ -253,6 +251,15 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
         // HACK(sadok): This only works because pkt queues for the same app are
         // currently placed back to back.
         dsc_queue->pkt_queue_id_offset = pkt_queue_id;
+
+        // Setting the address enables the queue. Do this last.
+        // Use first half of the huge page for RX and second half for TX.
+        _norman_compiler_memory_barrier();
+        dsc_queue_regs->rx_mem_low = (uint32_t) phys_addr;
+        dsc_queue_regs->rx_mem_high = (uint32_t) (phys_addr >> 32);
+        phys_addr += ALIGNED_DSC_BUF_PAIR_SIZE / 2;
+        dsc_queue_regs->tx_mem_low = (uint32_t) phys_addr;
+        dsc_queue_regs->tx_mem_high = (uint32_t) (phys_addr >> 32);
     }
 
     ++(dsc_queue->ref_cnt);
