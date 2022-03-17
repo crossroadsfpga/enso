@@ -703,20 +703,6 @@ void print_queue_regs(queue_regs* regs)
 }
 
 
-void print_buffer(uint8_t* buf, uint32_t nb_flits)
-{
-    for (uint32_t i = 0; i < nb_flits; ++i) {
-        for (uint32_t j = 0; j < 8; ++j) {
-            for (uint32_t k = 0; k < 8; ++k) {
-                printf("%02x ", (buf)[i*64 + j*8 + k] );
-            }
-            printf("\n");
-        }
-        printf("\n");
-    }
-}
-
-
 void print_stats(socket_internal* socket_entry, bool print_global)
 {
     dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
