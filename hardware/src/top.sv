@@ -88,6 +88,10 @@ module top (
     output  logic          status_readdata_valid
 );
 
+// Make sure output Ethernet signals comply with Eth core spec, which requires
+// that all flits from the same packet be sent without gaps.
+`ASSERT(EthOutContiguousPkt, (out_valid && !out_eop) |=> out_valid, clk, rst)
+
 //counters
 logic [31:0] in_pkt_cnt_status;
 logic [31:0] out_pkt_cnt_status;
@@ -953,57 +957,12 @@ always @(posedge clk_datamover) begin
     dm_disable_pcie <= dm_disable_pcie_r1;
 end
 
-logic [511:0] timestamp_inst_rx_out_pkt_data;
-logic         timestamp_inst_rx_out_pkt_valid;
-logic         timestamp_inst_rx_out_pkt_sop;
-logic         timestamp_inst_rx_out_pkt_eop;
-logic [5:0]   timestamp_inst_rx_out_pkt_empty;
-
-logic [511:0] timestamp_inst_tx_out_pkt_data;
-logic         timestamp_inst_tx_out_pkt_valid;
-logic         timestamp_inst_tx_out_pkt_ready;
-logic         timestamp_inst_tx_out_pkt_sop;
-logic         timestamp_inst_tx_out_pkt_eop;
-logic [5:0]   timestamp_inst_tx_out_pkt_empty;
-
 logic [511:0] rate_limiter_inst_out_pkt_data;
 logic         rate_limiter_inst_out_pkt_valid;
 logic         rate_limiter_inst_out_pkt_ready;
 logic         rate_limiter_inst_out_pkt_sop;
 logic         rate_limiter_inst_out_pkt_eop;
 logic [5:0]   rate_limiter_inst_out_pkt_empty;
-
-timestamp timestamp_inst (
-    .clk              (clk_datamover),
-    .rst              (rst_datamover),
-    .rx_in_pkt_data   (in_data),
-    .rx_in_pkt_valid  (in_valid),
-    .rx_in_pkt_ready  (),
-    .rx_in_pkt_sop    (in_sop),
-    .rx_in_pkt_eop    (in_eop),
-    .rx_in_pkt_empty  (in_empty),
-    .rx_out_pkt_data  (timestamp_inst_rx_out_pkt_data),
-    .rx_out_pkt_valid (timestamp_inst_rx_out_pkt_valid),
-    .rx_out_pkt_ready (1'b1),
-    .rx_out_pkt_sop   (timestamp_inst_rx_out_pkt_sop),
-    .rx_out_pkt_eop   (timestamp_inst_rx_out_pkt_eop),
-    .rx_out_pkt_empty (timestamp_inst_rx_out_pkt_empty),
-    .tx_in_pkt_data   (rate_limiter_inst_out_pkt_data),
-    .tx_in_pkt_valid  (rate_limiter_inst_out_pkt_valid),
-    .tx_in_pkt_ready  (rate_limiter_inst_out_pkt_ready),
-    .tx_in_pkt_sop    (rate_limiter_inst_out_pkt_sop),
-    .tx_in_pkt_eop    (rate_limiter_inst_out_pkt_eop),
-    .tx_in_pkt_empty  (rate_limiter_inst_out_pkt_empty),
-    .tx_out_pkt_data  (timestamp_inst_tx_out_pkt_data),
-    .tx_out_pkt_valid (timestamp_inst_tx_out_pkt_valid),
-    .tx_out_pkt_ready (timestamp_inst_tx_out_pkt_ready),
-    .tx_out_pkt_sop   (timestamp_inst_tx_out_pkt_sop),
-    .tx_out_pkt_eop   (timestamp_inst_tx_out_pkt_eop),
-    .tx_out_pkt_empty (timestamp_inst_tx_out_pkt_empty),
-    .conf_ts_data     (conf_ts_data),
-    .conf_ts_valid    (conf_ts_valid),
-    .conf_ts_ready    (conf_ts_ready)
-);
 
 rate_limiter rate_limiter_inst (
     .clk           (clk_datamover),
@@ -1023,6 +982,85 @@ rate_limiter rate_limiter_inst (
     .conf_rl_data  (conf_rl_data),
     .conf_rl_valid (conf_rl_valid),
     .conf_rl_ready (conf_rl_ready)
+);
+
+logic [511:0] timestamp_inst_rx_out_pkt_data;
+logic         timestamp_inst_rx_out_pkt_valid;
+logic         timestamp_inst_rx_out_pkt_sop;
+logic         timestamp_inst_rx_out_pkt_eop;
+logic [5:0]   timestamp_inst_rx_out_pkt_empty;
+
+logic [511:0] timestamp_inst_tx_in_pkt_data;
+logic         timestamp_inst_tx_in_pkt_valid;
+logic         timestamp_inst_tx_in_pkt_ready;
+logic         timestamp_inst_tx_in_pkt_sop;
+logic         timestamp_inst_tx_in_pkt_eop;
+logic [5:0]   timestamp_inst_tx_in_pkt_empty;
+
+logic [511:0] timestamp_inst_tx_out_pkt_data;
+logic         timestamp_inst_tx_out_pkt_valid;
+logic         timestamp_inst_tx_out_pkt_ready;
+logic         timestamp_inst_tx_out_pkt_sop;
+logic         timestamp_inst_tx_out_pkt_eop;
+logic [5:0]   timestamp_inst_tx_out_pkt_empty;
+
+// FIFO to store and forward packets before they reach the Ethernet core.
+// This is essential to remove any "gaps" in between flits (cycles between
+// `startofpacket` and `endofpacket` where `valid` is not asserted).
+// Placing `fifo_pkt_wrapper` before `timestamp_inst` also prevents inflated
+// RTT measurements when sending multi-flit packets at a very low rate. As
+// `fifo_pkt_wrapper` may need to wait many cycles before the remaining flits
+// for the packet arrive.
+fifo_pkt_wrapper #(
+    .FIFO_DEPTH(64),
+    .USE_STORE_FORWARD(1)  // Must use store and forward here.
+) out_eth_store_forward_fifo (
+    .clk               (clk_datamover),
+    .reset             (rst_datamover),
+    .in_data           (rate_limiter_inst_out_pkt_data),
+    .in_valid          (rate_limiter_inst_out_pkt_valid),
+    .in_ready          (rate_limiter_inst_out_pkt_ready),
+    .in_startofpacket  (rate_limiter_inst_out_pkt_sop),
+    .in_endofpacket    (rate_limiter_inst_out_pkt_eop),
+    .in_empty          (rate_limiter_inst_out_pkt_empty),
+    .out_data          (timestamp_inst_tx_in_pkt_data),
+    .out_valid         (timestamp_inst_tx_in_pkt_valid),
+    .out_ready         (timestamp_inst_tx_in_pkt_ready),
+    .out_startofpacket (timestamp_inst_tx_in_pkt_sop),
+    .out_endofpacket   (timestamp_inst_tx_in_pkt_eop),
+    .out_empty         (timestamp_inst_tx_in_pkt_empty)
+);
+
+timestamp timestamp_inst (
+    .clk              (clk_datamover),
+    .rst              (rst_datamover),
+    .rx_in_pkt_data   (in_data),
+    .rx_in_pkt_valid  (in_valid),
+    .rx_in_pkt_ready  (),
+    .rx_in_pkt_sop    (in_sop),
+    .rx_in_pkt_eop    (in_eop),
+    .rx_in_pkt_empty  (in_empty),
+    .rx_out_pkt_data  (timestamp_inst_rx_out_pkt_data),
+    .rx_out_pkt_valid (timestamp_inst_rx_out_pkt_valid),
+    .rx_out_pkt_ready (1'b1),
+    .rx_out_pkt_sop   (timestamp_inst_rx_out_pkt_sop),
+    .rx_out_pkt_eop   (timestamp_inst_rx_out_pkt_eop),
+    .rx_out_pkt_empty (timestamp_inst_rx_out_pkt_empty),
+    .tx_in_pkt_data   (timestamp_inst_tx_in_pkt_data),
+    .tx_in_pkt_valid  (timestamp_inst_tx_in_pkt_valid),
+    .tx_in_pkt_ready  (timestamp_inst_tx_in_pkt_ready),
+    .tx_in_pkt_sop    (timestamp_inst_tx_in_pkt_sop),
+    .tx_in_pkt_eop    (timestamp_inst_tx_in_pkt_eop),
+    .tx_in_pkt_empty  (timestamp_inst_tx_in_pkt_empty),
+    .tx_out_pkt_data  (timestamp_inst_tx_out_pkt_data),
+    .tx_out_pkt_valid (timestamp_inst_tx_out_pkt_valid),
+    .tx_out_pkt_ready (timestamp_inst_tx_out_pkt_ready),
+    .tx_out_pkt_sop   (timestamp_inst_tx_out_pkt_sop),
+    .tx_out_pkt_eop   (timestamp_inst_tx_out_pkt_eop),
+    .tx_out_pkt_empty (timestamp_inst_tx_out_pkt_empty),
+    .conf_ts_data     (conf_ts_data),
+    .conf_ts_valid    (conf_ts_valid),
+    .conf_ts_ready    (conf_ts_ready)
 );
 
 hyper_pipe_root reg_io_inst (

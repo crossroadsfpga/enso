@@ -491,6 +491,51 @@ ex_100G av_top (
     .i_tx_pll_locked               (tx_pll_locked)
 );
 
+logic [511:0] out_eth_store_forward_fifo_in_data;
+logic         out_eth_store_forward_fifo_in_valid;
+logic         out_eth_store_forward_fifo_in_ready;
+logic         out_eth_store_forward_fifo_in_sop;
+logic         out_eth_store_forward_fifo_in_eop;
+logic [5:0]   out_eth_store_forward_fifo_in_empty;
+
+logic [511:0] out_eth_store_forward_fifo_out_data;
+logic         out_eth_store_forward_fifo_out_valid;
+logic         out_eth_store_forward_fifo_out_ready;
+logic         out_eth_store_forward_fifo_out_sop;
+logic         out_eth_store_forward_fifo_out_eop;
+logic [5:0]   out_eth_store_forward_fifo_out_empty;
+
+// FIFO to store and forward packets before they reach the Ethernet core.
+// This is essential to remove any "gaps" in between flits (cycles between
+// `startofpacket` and `endofpacket` where `valid` is not asserted).
+fifo_pkt_wrapper #(
+    .FIFO_DEPTH(64),
+    .USE_STORE_FORWARD(1)  // Must use store and forward here.
+) out_eth_store_forward_fifo (
+    .clk               (clk_din),
+    .reset             (arst),
+    .in_data           (out_eth_store_forward_fifo_in_data),
+    .in_valid          (out_eth_store_forward_fifo_in_valid),
+    .in_ready          (out_eth_store_forward_fifo_in_ready),
+    .in_startofpacket  (out_eth_store_forward_fifo_in_sop),
+    .in_endofpacket    (out_eth_store_forward_fifo_in_eop),
+    .in_empty          (out_eth_store_forward_fifo_in_empty),
+    .out_data          (out_eth_store_forward_fifo_out_data),
+    .out_valid         (out_eth_store_forward_fifo_out_valid),
+    .out_ready         (out_eth_store_forward_fifo_out_ready),
+    .out_startofpacket (out_eth_store_forward_fifo_out_sop),
+    .out_endofpacket   (out_eth_store_forward_fifo_out_eop),
+    .out_empty         (out_eth_store_forward_fifo_out_empty)
+);
+
+assign i_tx_data = out_eth_store_forward_fifo_out_data;
+assign i_tx_valid = out_eth_store_forward_fifo_out_valid;
+assign out_eth_store_forward_fifo_out_ready = o_tx_ready;
+assign i_tx_startofpacket = out_eth_store_forward_fifo_out_sop;
+assign i_tx_endofpacket = out_eth_store_forward_fifo_out_eop;
+assign i_tx_empty = out_eth_store_forward_fifo_out_empty;
+
+
 alt_aeuex_avalon_mm_read_combine #(
     .TIMEOUT             (11), // for long ehip response
     .NUM_CLIENTS         (3)
