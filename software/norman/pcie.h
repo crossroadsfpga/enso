@@ -381,7 +381,7 @@ void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
 
 void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs);
 
-void print_buffer(uint8_t* buf, uint32_t nb_flits);
+void print_buf(void* buf, const uint32_t nb_cache_lines);
 
 void print_stats(socket_internal* socket_entry, bool print_global);
 
