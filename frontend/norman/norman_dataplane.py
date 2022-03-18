@@ -1,7 +1,7 @@
 
 from netexp.helpers import RemoteIntelFpga, remote_command, watch_command
 
-from normandp.consts import DEFAULT_BATCH_SIZE, DEFAULT_DSC_BUF_SIZE, \
+from norman.consts import DEFAULT_BATCH_SIZE, DEFAULT_DSC_BUF_SIZE, \
     DEFAULT_ETH_PORT, DEFAULT_NB_FALLBACK_QUEUES, DEFAULT_NB_TX_CREDITS, \
     DEFAULT_PKT_BUF_SIZE, SETUP_SW_CMD
 

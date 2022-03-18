@@ -12,9 +12,9 @@ from netexp.helpers import remote_command, watch_command, download_file
 from netexp.pcap import mean_pkt_size_remote_pcap
 from netexp.pktgen import Pktgen
 
-from normandp.consts import FPGA_RATELIMIT_CLOCK, NORMAN_PKTGEN_CMD, \
+from norman.consts import FPGA_RATELIMIT_CLOCK, NORMAN_PKTGEN_CMD, \
     PCAP_GEN_CMD, PCAPS_DIR
-from normandp.norman_dataplane import NormanDataplane
+from norman.norman_dataplane import NormanDataplane
 
 
 ETHERNET_OVERHEAD = 20 + 4  # Includes CRC.

@@ -1,10 +1,10 @@
 
 import click
 
-from normandp.consts import DEFAULT_BATCH_SIZE, DEFAULT_DSC_BUF_SIZE, \
+from norman.consts import DEFAULT_BATCH_SIZE, DEFAULT_DSC_BUF_SIZE, \
     DEFAULT_ETH_PORT, DEFAULT_FPGA, DEFAULT_NB_FALLBACK_QUEUES, \
     DEFAULT_NB_TX_CREDITS, DEFAULT_PKT_BUF_SIZE
-from normandp.norman_dataplane import NormanDataplane
+from norman.norman_dataplane import NormanDataplane
 
 @click.command()
 @click.argument('host')

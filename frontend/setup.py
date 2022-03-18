@@ -6,7 +6,8 @@ from setuptools import setup, find_packages
 with open("README.md", "r", encoding="utf-8") as readme_file:
     long_description = readme_file.read()
 
-name = 'normandp'
+package_name = 'norman-dp'
+name = 'norman'
 
 
 # Hack to avoid having to define metadata twice. Instead define it in the
@@ -21,14 +22,13 @@ def find_meta(meta_name):
 
 
 setup(
-    name=name,
+    name=package_name,
     version=find_meta('__version__'),
     description='Python frontend for the Norman dataplane.',
-    py_modules='normandp',
     long_description=long_description,
     long_description_content_type='text/markdown',
     packages=find_packages(),
-    url='https://github.com/hsadok/norman/frontend',
+    url='https://github.com/hsadok/norman',
     download_url='https://github.com/hsadok/norman',
     license='BSD',
     author=find_meta('__author__'),
@@ -37,13 +37,13 @@ setup(
     python_requires='>=3.6',
     entry_points={
         'console_scripts': [
-            'norman=normandp.__main__:main'
+            'norman=norman.__main__:main'
         ]
     },
     include_package_data=True,
     install_requires=[
         'click>=8.0',
-        'netexp==0.1.7',
+        'netexp==0.1.8',
         'tqdm'
     ],
     setup_requires=[
