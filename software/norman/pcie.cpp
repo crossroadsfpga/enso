@@ -173,7 +173,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
         // Register associated with the descriptor queue. Descriptor queue
         // registers come after the packet queue ones, that's why we use 
         // MAX_NB_FLOWS as an offset.
-        queue_regs_t *dsc_queue_regs = (queue_regs_t *) (
+        volatile queue_regs_t *dsc_queue_regs = (queue_regs_t *) (
             (uint8_t*) uio_mmap_bar2_addr + 
             (dsc_queue_id + MAX_NB_FLOWS) * MEMORY_SPACE_PER_QUEUE
         );
@@ -194,8 +194,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
         _norman_compiler_memory_barrier();
         while (dsc_queue_regs->rx_head != 0) continue;
 
-
-        dsc_queue->regs = dsc_queue_regs;
+        dsc_queue->regs = (queue_regs_t*) dsc_queue_regs;
         dsc_queue->rx_buf = (pcie_rx_dsc_t*) get_huge_page(
             dsc_queue_id + MAX_NB_FLOWS, ALIGNED_DSC_BUF_PAIR_SIZE);
         if (dsc_queue->rx_buf == NULL) {
@@ -209,8 +208,8 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
 
         uint64_t phys_addr = virt_to_phys(dsc_queue->rx_buf);
 
-        dsc_queue->rx_head_ptr = &dsc_queue_regs->rx_head;
-        dsc_queue->tx_tail_ptr = &dsc_queue_regs->tx_tail;
+        dsc_queue->rx_head_ptr = (uint32_t*) &dsc_queue_regs->rx_head;
+        dsc_queue->tx_tail_ptr = (uint32_t*) &dsc_queue_regs->tx_tail;
         dsc_queue->rx_head = dsc_queue_regs->rx_head;
         
         // Preserve TX DSC tail and make head have the same value.
@@ -265,10 +264,10 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
     ++(dsc_queue->ref_cnt);
 
     // register associated with the packet queue
-    queue_regs_t *pkt_queue_regs = (queue_regs_t *) (
+    volatile queue_regs_t *pkt_queue_regs = (queue_regs_t *) (
         (uint8_t*) uio_mmap_bar2_addr + pkt_queue_id * MEMORY_SPACE_PER_QUEUE
     );
-    socket_entry->pkt_queue.regs = pkt_queue_regs;
+    socket_entry->pkt_queue.regs = (queue_regs_t*) pkt_queue_regs;
 
     // Make sure the queue is disabled.
     pkt_queue_regs->rx_mem_low = 0;
@@ -278,11 +277,13 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
         continue;
     
     // Make sure head and tail start at zero.
-    pkt_queue_regs->rx_head = 0;
     pkt_queue_regs->rx_tail = 0;
     _norman_compiler_memory_barrier();
-    while (pkt_queue_regs->rx_head != 0 || pkt_queue_regs->rx_tail != 0)
-        continue;
+    while (pkt_queue_regs->rx_tail != 0) continue;
+
+    pkt_queue_regs->rx_head = 0;
+    _norman_compiler_memory_barrier();
+    while (pkt_queue_regs->rx_head != 0) continue;
 
     socket_entry->pkt_queue.buf = 
         (uint32_t*) get_huge_page(pkt_queue_id, BUF_PAGE_SIZE);
@@ -297,7 +298,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
         phys_addr - (uint64_t) (socket_entry->pkt_queue.buf);
 
     socket_entry->queue_id = pkt_queue_id - dsc_queue->pkt_queue_id_offset;
-    socket_entry->pkt_queue.buf_head_ptr = &pkt_queue_regs->rx_head;
+    socket_entry->pkt_queue.buf_head_ptr = (uint32_t*) &pkt_queue_regs->rx_head;
     socket_entry->pkt_queue.rx_head = 0;
     socket_entry->pkt_queue.rx_tail = 0;
 
