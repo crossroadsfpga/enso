@@ -85,7 +85,7 @@ localparam PCIE_TX_PKT_FIFO_ALM_FULL_THRESH =
 // `hardware_test/hwtest/my_stats.tcl` and `software/norman/pcie.h`.
 // TODO(sadok): expose these values from JTAG so that software and the tcl
 // script can adapt to the bitstream that is loaded at a given moment.
-localparam MAX_NB_APPS = 256;
+localparam MAX_NB_APPS = 1024;
 // localparam MAX_NB_FLOWS = 65536;
 localparam MAX_NB_FLOWS = 8192;
 

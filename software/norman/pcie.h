@@ -19,7 +19,7 @@
 // macros also exist in hardware and **must be kept in sync**. Update the
 // variables with the same name on `hardware/src/constants.sv` and 
 // `hardware_test/hwtest/my_stats.tcl`.
-#define MAX_NB_APPS 256
+#define MAX_NB_APPS 1024
 #define MAX_NB_FLOWS 8192
 
 #if MAX_NB_FLOWS < 65536
