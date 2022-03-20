@@ -250,6 +250,18 @@ class NormanPktgen(Pktgen):
         self.nb_tx_bytes = 0
         self.mean_rtt = 0
 
+    def stop(self) -> None:
+        if self.pktgen_cmd is None:
+            # Pktgen is not running.
+            return
+
+        self.pktgen_cmd.send('\x03')
+
+        watch_command(self.pktgen_cmd)
+        status = self.pktgen_cmd.recv_exit_status()
+        if status != 0:
+            raise RuntimeError('Error stopping Norman Pktgen')
+
     def close(self) -> None:
         # No need to close here.
         pass
