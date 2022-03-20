@@ -52,13 +52,16 @@ class NormanPktgenStats:
             # For TX, we need to ignore all the datapoints after it's done
             # transmitting. For lower rates, it might take a while before
             # pktgen receives all the packets back.
-            last_tx_sample = self.stats['tx_goodput_mbps'].find(0) - 1
-
-            if last_tx_sample < 3:
-                raise RuntimeError('Not enough samples to calculate TX mean')
+            try:
+                last_tx_sample = self.stats['tx_goodput_mbps'].index(0) - 1
+            except ValueError:
+                last_tx_sample = -2
 
             tx_goodput = self.stats['tx_goodput_mbps'][1:last_tx_sample]
             tx_pkt_rate = self.stats['tx_pkt_rate_kpps'][1:last_tx_sample]
+
+            if len(tx_goodput) < 1:
+                raise RuntimeError('Not enough samples to calculate TX mean')
 
             summary['tx_mean_goodput_mbps'] = sum(tx_goodput) / len(tx_goodput)
             summary['tx_mean_rate_kpps'] = sum(tx_pkt_rate) / len(tx_pkt_rate)
@@ -82,7 +85,7 @@ class NormanPktgen(Pktgen):
                  rtt_hist_len: Optional[int] = None,
                  stats_file: Optional[str] = None,
                  hist_file: Optional[str] = None,
-                 verbose: bool = False) -> None:
+                 verbose: bool = False, check_tx_rate=False) -> None:
         super().__init__()
 
         self.dataplane = dataplane
@@ -102,6 +105,7 @@ class NormanPktgen(Pktgen):
         self.hist_file = hist_file or 'hist.csv'
 
         self.verbose = verbose
+        self.check_tx_rate = check_tx_rate
 
         self.pktgen_cmd = None
 
@@ -146,6 +150,11 @@ class NormanPktgen(Pktgen):
 
         rate_frac = Fraction(hardware_rate).limit_denominator(1000)
 
+        self.current_throughput = throughput
+        self.current_goodput = pkts_per_sec * flits_per_pkt * 512
+        self.current_pps = pkts_per_sec
+        self.expected_tx_duration = nb_pkts / pkts_per_sec
+
         command = (
             f'sudo {self.dataplane.remote_norman_path}/{NORMAN_PKTGEN_CMD}'
             f' {self.pcap_path} {rate_frac.numerator} {rate_frac.denominator}'
@@ -185,12 +194,31 @@ class NormanPktgen(Pktgen):
         if status != 0:
             raise RuntimeError('Error running Norman Pktgen')
 
+        # Make sure transmission rate matches specification for sufficiently
+        # high rates (i.e., >50Gbps).
+        calculate_tx_mean = \
+            self.check_tx_rate and (self.current_throughput > 50e9) and \
+            (self.expected_tx_duration > 4)
+
         # Retrieve the latest stats.
         with tempfile.TemporaryDirectory() as tmp:
             local_stats = f'{tmp}/stats.csv'
             download_file(self.dataplane.host, self.stats_file, local_stats)
             parsed_stats = NormanPktgenStats(local_stats)
-            stats_summary = parsed_stats.get_summary()
+
+            stats_summary = parsed_stats.get_summary(calculate_tx_mean)
+
+        # Check TX rate.
+        if calculate_tx_mean:
+            tx_goodput_mbps = stats_summary['tx_mean_goodput_mbps']
+            tx_goodput_gbps = tx_goodput_mbps / 1e3
+            expected_goodput_gbps = self.current_goodput / 1e9
+
+            if abs(tx_goodput_gbps - expected_goodput_gbps) > 1.0:
+                raise RuntimeError(
+                    f'TX goodput ({tx_goodput_gbps} Gbps) does not match '
+                    f'specification ({expected_goodput_gbps} Gbps)'
+                )
 
         self.mean_rx_goodput = stats_summary.get('rx_mean_goodput_mbps', 0)
         self.mean_tx_goodput = stats_summary.get('tx_mean_goodput_mbps', 0)
