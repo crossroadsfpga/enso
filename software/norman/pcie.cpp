@@ -376,6 +376,10 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
     uint32_t flit_aligned_size = 
         ((pkt_buf_tail - pkt_buf_head) % PKT_BUF_SIZE) * 64;
 
+    // FIXME(sadok): The following may split the transfer in the middle of a
+    // packet. We should probably have a separate function that is packet-aware
+    // and that can enforce a transfer limit.
+
     // Reached the buffer limit.
     if (unlikely(flit_aligned_size > len)) {
         flit_aligned_size = len & 0xffffffc0;  // Align len to 64 bytes.
