@@ -24,9 +24,10 @@
 
 #include "app.h"
 
-#define BUF_LEN 10000000
+#define RECV_BUF_LEN 10000000
 #define HUGEPAGE_SIZE (1UL << 21)
-#define NB_TRANSFERS_PER_BUFFER 4
+#define NB_BUFFERS_PER_HUGEPAGE 4
+#define BUFFER_SIZE (HUGEPAGE_SIZE / NB_BUFFERS_PER_HUGEPAGE)
 
 // Number of loop iterations to wait before probing the TX dsc queue again when
 // reclaiming buffer space.
@@ -42,7 +43,7 @@
 // packets. The following defines the maximum number of times that we can try to
 // receive packets in a row while getting no packet back. Once this happens we
 // assume that we are no longer receiving packets and can stop trying.
-#define ITER_NO_PKT_THRESH (1 << 20)
+#define ITER_NO_PKT_THRESH (1 << 28)
 
 // Default core ID to run.
 #define DEFAULT_CORE_ID 0
@@ -54,13 +55,19 @@
 #define DEFAULT_HIST_OFFSET 400
 
 // Default histogram array length.
-#define DEFAULT_HIST_LEN 100000
+#define DEFAULT_HIST_LEN 1000000
+
+// Default delay between displayed stats (in milliseconds).
+#define DEFAULT_STATS_DELAY 1000
 
 // Number of CLI arguments.
 #define NB_CLI_ARGS 3
 
 static volatile int keep_running = 1;
 static volatile int force_stop = 0;
+static volatile int rx_ready = 0;
+static volatile int rx_done = 0;
+static volatile int tx_done = 0;
 
 void int_handler(int signal __attribute__((unused)))
 {
@@ -102,9 +109,11 @@ static void print_usage(const char* program_name) {
         "  --rtt-hist-len: Size of the histogram array (default: %d).\n"
         "                  If an RTT is outside the RTT hist array range, it\n"
         "                  will still be saved, but there will be a\n"
-        "                  performance penalty.\n",
+        "                  performance penalty.\n"
+        "  --stats-delay: Delay between displayed stats in milliseconds\n"
+        "                 (default: %d).\n",
         program_name, DEFAULT_CORE_ID, DEFAULT_NB_QUEUES, DEFAULT_HIST_OFFSET,
-        DEFAULT_HIST_LEN
+        DEFAULT_HIST_LEN, DEFAULT_STATS_DELAY
     );
 }
 
@@ -119,6 +128,7 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_RTT_HIST "rtt-hist"
 #define CMD_OPT_RTT_HIST_OFF "rtt-hist-offset"
 #define CMD_OPT_RTT_HIST_LEN "rtt-hist-len"
+#define CMD_OPT_STATS_DELAY "stats-delay"
 
 // Map long options to short options.
 enum {
@@ -131,7 +141,8 @@ enum {
     CMD_OPT_RTT_NUM,
     CMD_OPT_RTT_HIST_NUM,
     CMD_OPT_RTT_HIST_OFF_NUM,
-    CMD_OPT_RTT_HIST_LEN_NUM
+    CMD_OPT_RTT_HIST_LEN_NUM,
+    CMD_OPT_STATS_DELAY_NUM
 };
 
 
@@ -148,6 +159,7 @@ static const struct option long_options[] = {
     {CMD_OPT_RTT_HIST, required_argument, NULL, CMD_OPT_RTT_HIST_NUM},
     {CMD_OPT_RTT_HIST_OFF, required_argument, NULL, CMD_OPT_RTT_HIST_OFF_NUM},
     {CMD_OPT_RTT_HIST_LEN, required_argument, NULL, CMD_OPT_RTT_HIST_LEN_NUM},
+    {CMD_OPT_STATS_DELAY, required_argument, NULL, CMD_OPT_STATS_DELAY_NUM},
     {0, 0, 0, 0}
 };
 
@@ -167,6 +179,7 @@ struct parsed_args_t {
     uint64_t nb_pkts;
     uint32_t rtt_hist_offset;
     uint32_t rtt_hist_len;
+    uint32_t stats_delay;
 };
 
 
@@ -184,6 +197,7 @@ static int parse_args(int argc, char** argv, struct parsed_args_t& parsed_args)
     parsed_args.enable_rtt_history = false;
     parsed_args.rtt_hist_offset = DEFAULT_HIST_OFFSET;
     parsed_args.rtt_hist_len = DEFAULT_HIST_LEN;
+    parsed_args.stats_delay = DEFAULT_STATS_DELAY;
 
     while ((opt = getopt_long(argc, argv, short_options, long_options,
            &long_index)) != EOF) {
@@ -218,6 +232,9 @@ static int parse_args(int argc, char** argv, struct parsed_args_t& parsed_args)
             break;
           case CMD_OPT_RTT_HIST_LEN_NUM:
             parsed_args.rtt_hist_len = atoi(optarg);
+            break;
+          case CMD_OPT_STATS_DELAY_NUM:
+            parsed_args.stats_delay = atoi(optarg);
             break;
           default:
             return -1;
@@ -331,6 +348,7 @@ struct PktBuffer {
 struct PcapHandlerContext {
     std::vector<struct PktBuffer> pkt_buffers;
     uint32_t free_flits;
+    uint32_t hugepage_offset;
     pcap_t* pcap;
 };
 
@@ -389,13 +407,12 @@ struct TxArgs {
     TxArgs(std::vector<PktBuffer>& pkt_buffers, uint64_t total_bytes_to_send,
            uint64_t pkts_in_last_buffer, int socket_fd)
             : ignored_reclaims(0), total_remaining_bytes(total_bytes_to_send),
-            transmissions_pending(0), cur_bytes_sent(0),
-            pkts_in_last_buffer(pkts_in_last_buffer), pkt_buffers(pkt_buffers),
-            current_pkt_buf(pkt_buffers.begin()), socket_fd(socket_fd) {}
+            transmissions_pending(0), pkts_in_last_buffer(pkts_in_last_buffer),
+            pkt_buffers(pkt_buffers), current_pkt_buf(pkt_buffers.begin()),
+            socket_fd(socket_fd) {}
     uint64_t ignored_reclaims;
     uint64_t total_remaining_bytes;
     uint32_t transmissions_pending;
-    uint32_t cur_bytes_sent;
     uint64_t pkts_in_last_buffer;
     std::vector<PktBuffer>& pkt_buffers;
     std::vector<PktBuffer>::iterator current_pkt_buf;
@@ -410,15 +427,23 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
     uint32_t len = pkt_hdr->len;
     uint32_t nb_flits = (len - 1) / 64 + 1;
 
-    // Need to allocate another huge page.
     if (nb_flits > context->free_flits) {
-        uint8_t* buf = (uint8_t*) get_huge_page(HUGEPAGE_SIZE);
-        if (buf == NULL) {
-            pcap_breakloop(context->pcap);
-            return;
+        uint8_t* buf;
+        if ((context->hugepage_offset + BUFFER_SIZE) > HUGEPAGE_SIZE) {
+            // Need to allocate another huge page.
+            buf = (uint8_t*) get_huge_page(HUGEPAGE_SIZE);
+            if (buf == NULL) {
+                pcap_breakloop(context->pcap);
+                return;
+            }
+            context->hugepage_offset = 0;
+        } else {
+            struct PktBuffer& pkt_buffer = context->pkt_buffers.back();
+            buf = pkt_buffer.buf + BUFFER_SIZE;
+            context->hugepage_offset += BUFFER_SIZE;
         }
         context->pkt_buffers.emplace_back(buf, 0, 0);
-        context->free_flits = HUGEPAGE_SIZE / 64;
+        context->free_flits = BUFFER_SIZE / 64;
     }
 
     struct PktBuffer& pkt_buffer = context->pkt_buffers.back();
@@ -437,13 +462,13 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 {
     uint64_t nb_pkts = 0;
 #ifdef IGNORE_RX
-    (void) rtt_sum;
-    (void) rx_pkts;
-    (void) rx_bytes;
+    (void) rx_args;
+    (void) rx_stats;
 #else  // IGNORE_RX
     uint8_t* recv_buf;
     int socket_fd;
-    int recv_len = recv_select(0, &socket_fd, (void**) &recv_buf, BUF_LEN, 0);
+    int recv_len =
+        recv_select(0, &socket_fd, (void**) &recv_buf, RECV_BUF_LEN, 0);
 
     if (unlikely(recv_len < 0)) {
         std::cerr << "Error receiving" << std::endl;
@@ -487,20 +512,17 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
 {
     if (likely(tx_args.transmissions_pending < (DSC_BUF_SIZE - 1))) {
         uint32_t transmission_length = (uint32_t) std::min(
-            (uint64_t) (HUGEPAGE_SIZE / NB_TRANSFERS_PER_BUFFER),
-            tx_args.total_remaining_bytes
+            (uint64_t) (BUFFER_SIZE), tx_args.total_remaining_bytes
         );
         transmission_length = std::min(transmission_length,
-            tx_args.current_pkt_buf->length - tx_args.cur_bytes_sent);
+            tx_args.current_pkt_buf->length);
 
-        void* phys_addr = (void*) (tx_args.current_pkt_buf->phys_addr
-                                   + tx_args.cur_bytes_sent);
+        void* phys_addr = (void*) tx_args.current_pkt_buf->phys_addr;
 
         send(tx_args.socket_fd, phys_addr, transmission_length, 0);
         tx_stats.bytes += transmission_length;
         ++tx_args.transmissions_pending;
 
-        tx_args.cur_bytes_sent += transmission_length;
         tx_args.total_remaining_bytes -= transmission_length;
 
         if (unlikely(tx_args.total_remaining_bytes == 0)) {
@@ -510,14 +532,10 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
         }
 
         // Move to next packet buffer.
-        if (tx_args.cur_bytes_sent == tx_args.current_pkt_buf->length) {
-            tx_stats.pkts += tx_args.current_pkt_buf->nb_pkts;
-            tx_args.current_pkt_buf = std::next(tx_args.current_pkt_buf);
-            if (tx_args.current_pkt_buf == tx_args.pkt_buffers.end()) {
-                tx_args.current_pkt_buf = tx_args.pkt_buffers.begin();
-            }
-
-            tx_args.cur_bytes_sent = 0;
+        tx_stats.pkts += tx_args.current_pkt_buf->nb_pkts;
+        tx_args.current_pkt_buf = std::next(tx_args.current_pkt_buf);
+        if (tx_args.current_pkt_buf == tx_args.pkt_buffers.end()) {
+            tx_args.current_pkt_buf = tx_args.pkt_buffers.begin();
         }
     }
 
@@ -562,6 +580,7 @@ int main(int argc, char** argv)
 
     struct PcapHandlerContext context;
     context.free_flits = 0;
+    context.hugepage_offset = HUGEPAGE_SIZE;
     context.pcap = pcap;
     std::vector<PktBuffer>& pkt_buffers = context.pkt_buffers;
 
@@ -575,11 +594,11 @@ int main(int argc, char** argv)
     // For small pcaps we copy the same packets over the remaining of the
     // buffer. This reduces the number of transfers that we need to issue.
     if ((pkt_buffers.size() == 1)
-            && (pkt_buffers.front().length < HUGEPAGE_SIZE / 2)) {
+            && (pkt_buffers.front().length < BUFFER_SIZE / 2)) {
         PktBuffer& buffer = pkt_buffers.front();
         uint32_t original_buf_length = buffer.length;
         uint32_t original_nb_pkts = buffer.nb_pkts;
-        while ((buffer.length + original_buf_length) <= HUGEPAGE_SIZE) {
+        while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
             memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
             buffer.length += original_buf_length;
             buffer.nb_pkts += original_nb_pkts;
@@ -642,18 +661,13 @@ int main(int argc, char** argv)
     RxStats rx_stats(rtt_hist_len, rtt_hist_offset);
     TxStats tx_stats;
 
-    std::atomic<bool> rx_done(false);
-    std::atomic<bool> rx_ready(false);
-
     signal(SIGINT, int_handler);
 
     std::vector<std::thread> threads;
 
     // When using multicore we launch separate threads for RX and TX.
     if (parsed_args.multicore) {
-        std::thread rx_thread = std::thread([
-            &parsed_args, &rx_stats, &rx_done, &rx_ready
-        ]{
+        std::thread rx_thread = std::thread([&parsed_args, &rx_stats]{
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
             for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
@@ -682,7 +696,7 @@ int main(int argc, char** argv)
 
             std::cout << "Running RX on core " << sched_getcpu() << std::endl;
 
-            rx_ready = true;
+            rx_ready = 1;
 
             while (keep_running) {
                 receive_pkts(rx_args, rx_stats);
@@ -718,9 +732,10 @@ int main(int argc, char** argv)
 
         std::thread tx_thread = std::thread([
             total_bytes_to_send, pkts_in_last_buffer, &parsed_args,
-            &pkt_buffers, &tx_stats, &rx_ready, &rx_done
+            &pkt_buffers, &tx_stats
         ]{
             std::this_thread::sleep_for(std::chrono::seconds(1));
+
             int socket_fd = socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
 
             if (socket_fd == -1) {
@@ -728,6 +743,8 @@ int main(int argc, char** argv)
                             << strerror(errno) << std::endl;
                 exit(2);
             }
+
+            while(!rx_ready) continue;
 
             std::cout << "Running TX on core " << sched_getcpu() << std::endl;
 
@@ -737,6 +754,8 @@ int main(int argc, char** argv)
             while (keep_running) {
                 transmit_pkts(tx_args, tx_stats);
             }
+
+            tx_done = 1;
 
             while(!rx_done) continue;
 
@@ -770,9 +789,8 @@ int main(int argc, char** argv)
     } else {
         // Send and receive packets within the same thread.
         std::thread rx_tx_thread = std::thread([
-            &parsed_args, &rx_stats, &rx_done, &rx_ready, total_bytes_to_send,
-            pkts_in_last_buffer, &pkt_buffers,
-            &tx_stats
+            &parsed_args, &rx_stats, total_bytes_to_send, pkts_in_last_buffer,
+            &pkt_buffers, &tx_stats
         ]{
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
@@ -797,8 +815,6 @@ int main(int argc, char** argv)
             std::cout << "Running RX and TX on core " << sched_getcpu()
                       << std::endl;
 
-            rx_ready = true;
-
             RxArgs rx_args;
             rx_args.enable_rtt = parsed_args.enable_rtt;
             rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
@@ -807,10 +823,14 @@ int main(int argc, char** argv)
             TxArgs tx_args(pkt_buffers, total_bytes_to_send,
                            pkts_in_last_buffer, socket_fd);
 
+            rx_ready = 1;
+
             while (keep_running) {
                 receive_pkts(rx_args, rx_stats);
                 transmit_pkts(tx_args, tx_stats);
             }
+
+            tx_done = 1;
 
             uint64_t nb_iters_no_pkt = 0;
 
@@ -868,6 +888,10 @@ int main(int argc, char** argv)
         save_file.close();
     }
 
+    while (!rx_ready) continue;
+
+    std::cout << "Starting..." << std::endl;
+
     // Continuously print statistics.
     while (!rx_done) {
         uint64_t last_rx_bytes = rx_stats.bytes;
@@ -881,17 +905,23 @@ int main(int argc, char** argv)
         uint64_t last_rx_batches = rx_stats.nb_batches;
 #endif  // SHOW_BATCH
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(parsed_args.stats_delay)
+        );
+
+        double interval_s = parsed_args.stats_delay / 1000.;
 
         uint64_t rx_bytes = rx_stats.bytes;
         uint64_t rx_pkts = rx_stats.pkts;
         uint64_t tx_bytes = tx_stats.bytes;
         uint64_t tx_pkts = tx_stats.pkts;
-        uint64_t rx_goodput_mbps = (rx_bytes - last_rx_bytes) * 8. / 1e6;
-        uint64_t rx_pkt_rate = rx_pkts - last_rx_pkts;
+        uint64_t rx_goodput_mbps =
+            (rx_bytes - last_rx_bytes) * 8. / 1e6 / interval_s;
+        uint64_t rx_pkt_rate = (rx_pkts - last_rx_pkts) / interval_s;
         uint64_t rx_pkt_rate_kpps = rx_pkt_rate / 1e3;
-        uint64_t tx_goodput_mbps = (tx_bytes - last_tx_bytes) * 8. / 1e6;
-        uint64_t tx_pkt_rate = tx_pkts - last_tx_pkts;
+        uint64_t tx_goodput_mbps =
+            (tx_bytes - last_tx_bytes) * 8. / 1e6 / interval_s;
+        uint64_t tx_pkt_rate = (tx_pkts - last_tx_pkts) / interval_s;
         uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
         uint64_t rtt_sum_ns = rx_stats.rtt_sum * NS_PER_TIMESTAMP_CYCLE;
         uint64_t rtt_ns;
@@ -959,6 +989,7 @@ int main(int argc, char** argv)
                   << std::endl;
     }
 
+    ret = 0;
     if (parsed_args.enable_rtt_history) {
         std::ofstream hist_file;
         hist_file.open(parsed_args.hist_file);
@@ -975,7 +1006,6 @@ int main(int argc, char** argv)
         if (rx_stats.backup_rtt_hist.size() != 0) {
             std::cout << "Warning: " <<  rx_stats.backup_rtt_hist.size()
                       << " rtt hist entries in backup" << std::endl;
-
             for (auto const& i : rx_stats.backup_rtt_hist) {
                 hist_file << i.first * NS_PER_TIMESTAMP_CYCLE << "," << i.second
                           << std::endl;
@@ -985,6 +1015,11 @@ int main(int argc, char** argv)
         hist_file.close();
         std::cout << "Saved RTT histogram to \"" << parsed_args.hist_file
                   << "\"" << std::endl;
+
+        if (rx_stats.pkts != tx_stats.pkts) {
+            std::cout << "Warning: did not get all packets back." << std::endl;
+            ret = 1;
+        }
     }
 
     for (auto& thread : threads) {
@@ -992,8 +1027,11 @@ int main(int argc, char** argv)
     }
 
     for (auto& buffer : pkt_buffers) {
-        munmap(buffer.buf, HUGEPAGE_SIZE);
+        // Only free hugepage-aligned buffers.
+        if ((buffer.phys_addr & (HUGEPAGE_SIZE-1)) == 0) {
+            munmap(buffer.buf, HUGEPAGE_SIZE);
+        }
     }
 
-    return 0;
+    return ret;
 }
