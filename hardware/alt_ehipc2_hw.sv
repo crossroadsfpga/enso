@@ -803,12 +803,12 @@ dc_fifo_wrapper_infill output_fifo (
     .in_startofpacket  (reg_top_out_startofpacket),
     .in_endofpacket    (reg_top_out_endofpacket),
     .in_empty          (reg_top_out_empty),
-    .out_data          (i_tx_data),
-    .out_valid         (i_tx_valid),
-    .out_ready         (o_tx_ready),
-    .out_startofpacket (i_tx_startofpacket),
-    .out_endofpacket   (i_tx_endofpacket),
-    .out_empty         (i_tx_empty)
+    .out_data          (out_eth_store_forward_fifo_in_data),
+    .out_valid         (out_eth_store_forward_fifo_in_valid),
+    .out_ready         (out_eth_store_forward_fifo_in_ready),
+    .out_startofpacket (out_eth_store_forward_fifo_in_sop),
+    .out_endofpacket   (out_eth_store_forward_fifo_in_eop),
+    .out_empty         (out_eth_store_forward_fifo_in_empty)
 );
 
 dc_back_pressure #(
