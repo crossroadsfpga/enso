@@ -926,7 +926,8 @@ int main(int argc, char** argv)
         uint64_t rtt_sum_ns = rx_stats.rtt_sum * NS_PER_TIMESTAMP_CYCLE;
         uint64_t rtt_ns;
         if (rx_pkt_rate != 0) {
-            rtt_ns = (rtt_sum_ns - last_aggregated_rtt_ns) / rx_pkt_rate;
+            rtt_ns = (rtt_sum_ns - last_aggregated_rtt_ns) /
+                (rx_pkts - last_rx_pkts);
         } else {
             rtt_ns = 0;
         }
