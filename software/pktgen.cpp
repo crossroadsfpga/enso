@@ -916,11 +916,11 @@ int main(int argc, char** argv)
         uint64_t tx_bytes = tx_stats.bytes;
         uint64_t tx_pkts = tx_stats.pkts;
         uint64_t rx_goodput_mbps =
-            (rx_bytes - last_rx_bytes) * 8. / 1e6 / interval_s;
+            (rx_bytes - last_rx_bytes) * 8. / (1e6 * interval_s);
         uint64_t rx_pkt_rate = (rx_pkts - last_rx_pkts) / interval_s;
         uint64_t rx_pkt_rate_kpps = rx_pkt_rate / 1e3;
         uint64_t tx_goodput_mbps =
-            (tx_bytes - last_tx_bytes) * 8. / 1e6 / interval_s;
+            (tx_bytes - last_tx_bytes) * 8. / (1e6 * interval_s);
         uint64_t tx_pkt_rate = (tx_pkts - last_tx_pkts) / interval_s;
         uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
         uint64_t rtt_sum_ns = rx_stats.rtt_sum * NS_PER_TIMESTAMP_CYCLE;
