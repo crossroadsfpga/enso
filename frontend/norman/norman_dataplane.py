@@ -27,6 +27,7 @@ class NormanDataplane(RemoteIntelFpga):
         desc_per_pkt:
         enable_rr:
         sw_batch_size:
+        skip_config:
         verbose:
     """
     def __init__(self, fpga_id: str, host: str, remote_norman_path: str,
@@ -39,7 +40,7 @@ class NormanDataplane(RemoteIntelFpga):
                  fallback_queues: int = DEFAULT_NB_FALLBACK_QUEUES,
                  desc_per_pkt: bool = False, enable_rr: bool = False,
                  sw_batch_size: int = DEFAULT_BATCH_SIZE,
-                 verbose=False):
+                 skip_config: bool = False, verbose: bool = False):
         if load_bitstream and verbose:
             print('Loading bitstream, it might take a couple of seconds.')
 
@@ -60,21 +61,28 @@ class NormanDataplane(RemoteIntelFpga):
         if sw_reset:
             self.sw_reset()
 
-        self.dsc_buf_size = dsc_buf_size
-        self.pkt_buf_size = pkt_buf_size
-        self.tx_credits = tx_credits
-        self.ethernet_port = ethernet_port
-        self.fallback_queues = fallback_queues
-
-        if desc_per_pkt:
-            self.enable_desc_per_pkt()
+        if skip_config:
+            self._dsc_buf_size = dsc_buf_size
+            self._pkt_buf_size = pkt_buf_size
+            self._tx_credits = tx_credits
+            self._ethernet_port = ethernet_port
+            self._fallback_queues = fallback_queues
         else:
-            self.disable_desc_per_pkt()
+            self.dsc_buf_size = dsc_buf_size
+            self.pkt_buf_size = pkt_buf_size
+            self.tx_credits = tx_credits
+            self.ethernet_port = ethernet_port
+            self.fallback_queues = fallback_queues
 
-        if enable_rr:
-            self.enable_rr()
-        else:
-            self.disable_rr()
+            if desc_per_pkt:
+                self.enable_desc_per_pkt()
+            else:
+                self.disable_desc_per_pkt()
+
+            if enable_rr:
+                self.enable_rr()
+            else:
+                self.disable_rr()
 
         self.sw_batch_size = sw_batch_size
 
