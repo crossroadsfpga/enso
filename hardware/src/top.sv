@@ -1339,11 +1339,13 @@ basic_data_mover data_mover_0 (
     .eth_pkt_almost_full      (dm_eth_pkt_almost_full)
 );
 
+localparam DM2PCIE_FIFO_DEPTH = 512;
+
 //////////////////// Datamover To PCIe FIFO //////////////////////////////////
 dc_fifo_wrapper_infill  #(
     .SYMBOLS_PER_BEAT(64),
     .BITS_PER_SYMBOL(8),
-    .FIFO_DEPTH(512),
+    .FIFO_DEPTH(DM2PCIE_FIFO_DEPTH),
     .USE_PACKETS(1)
 )
 dm2pcie_fifo (
@@ -1371,7 +1373,7 @@ dm2pcie_fifo (
 );
 
 dc_back_pressure #(
-    .FULL_LEVEL(490)
+    .FULL_LEVEL(DM2PCIE_FIFO_DEPTH - (2 * MAX_PKT_SIZE))
 )
 bp_dm2pcie_fifo (
     .clk            (clk_datamover),
@@ -1415,7 +1417,7 @@ dm2pcie_meta_fifo (
 );
 
 dc_back_pressure #(
-    .FULL_LEVEL(PKT_NUM - 20)
+    .FULL_LEVEL(PKT_NUM - (2 * MAX_PKT_SIZE))
 )
 bp_dm2pcie_meta_fifo (
     .clk            (clk_datamover),
@@ -1481,8 +1483,12 @@ pdu_gen pdu_gen_inst(
     .out_meta_queue_occup (out_meta_queue_occup)
 );
 
+localparam ETH_OUT_PKT_FIFO_DEPTH = 512;
+
 //////////////////// To OUTPUT FIFO //////////////////////////////////
-dc_fifo_wrapper_infill eth_out_pkt_fifo (
+dc_fifo_wrapper_infill #(
+    .FIFO_DEPTH(ETH_OUT_PKT_FIFO_DEPTH)
+) eth_out_pkt_fifo (
     .in_clk            (clk_datamover),
     .in_reset_n        (!rst_datamover),
     .out_clk           (clk),
@@ -1507,7 +1513,7 @@ dc_fifo_wrapper_infill eth_out_pkt_fifo (
 );
 
 dc_back_pressure #(
-    .FULL_LEVEL(480)
+    .FULL_LEVEL(ETH_OUT_PKT_FIFO_DEPTH - (2 * MAX_PKT_SIZE))
 )
 dc_bp_output_pkt_fifo (
     .clk            (clk_datamover),
