@@ -77,6 +77,4 @@ module fifo_pkt_wrapper #(
 		.out_channel       ()                                      // (terminated),                         
 	);
 
-	`ASSERT(FifoPktWrapperEnqueueWhenFull, !in_ready |-> !in_valid, clk, reset)
-
 endmodule

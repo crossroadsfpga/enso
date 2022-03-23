@@ -82,7 +82,4 @@ module dc_fifo_wrapper #(
 		.space_avail_data  ()                                      // (terminated),                             
 	);
 
-	`ASSERT(DcFifoWrapperEnqueueWhenFull, !in_ready |-> !in_valid, in_clk,
-	        !in_reset_n)
-
 endmodule

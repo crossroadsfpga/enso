@@ -71,6 +71,4 @@ module fifo_wrapper_mlab #(
 		.out_channel       ()                                      // (terminated),                         
 	);
 
-	`ASSERT(FifoWrapperMlabEnqueueWhenFull, !in_ready |-> !in_valid, clk, reset)
-
 endmodule

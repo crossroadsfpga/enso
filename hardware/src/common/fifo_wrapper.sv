@@ -71,7 +71,4 @@ module fifo_wrapper #(
 		.out_channel       ()                                      // (terminated),                         
 	);
 
-	`ASSERT(FifoWrapperInfillEnqueueWhenFull, !in_ready |-> !in_valid, clk,
-	        reset)
-
 endmodule
