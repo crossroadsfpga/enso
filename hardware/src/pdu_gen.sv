@@ -111,7 +111,7 @@ always @(posedge clk) begin
             next_pdu_flit = next_pdu_flit + 1'b1;
 
             if (in_eop) begin
-                pdu_size = pdu_size - in_empty;
+                next_pdu_size = next_pdu_size - in_empty;
                 out_pkt_queue_data.eop <= 1;
 
                 // Write descriptor.
