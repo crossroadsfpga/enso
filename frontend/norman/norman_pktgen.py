@@ -127,7 +127,7 @@ class NormanPktgen(Pktgen):
 
         pcap_gen_cmd = remote_command(self.dataplane.ssh_client, pcap_gen_cmd,
                                       print_command=self.verbose)
-        watch_command(pcap_gen_cmd,
+        watch_command(pcap_gen_cmd, stdout=self.verbose, stderr=self.verbose,
                       keyboard_int=lambda: pcap_gen_cmd.send('\x03'))
         status = pcap_gen_cmd.recv_exit_status()
         if status != 0:
@@ -194,7 +194,7 @@ class NormanPktgen(Pktgen):
             # Pktgen is not running.
             return
 
-        watch_command(self.pktgen_cmd,
+        watch_command(self.pktgen_cmd, stdout=self.verbose, stderr=self.verbose,
                       keyboard_int=lambda: self.pktgen_cmd.send('\x03'))
         status = self.pktgen_cmd.recv_exit_status()
         if status != 0:
@@ -293,7 +293,7 @@ class NormanPktgen(Pktgen):
 
         self.pktgen_cmd.send('\x03')
 
-        watch_command(self.pktgen_cmd)
+        watch_command(self.pktgen_cmd, stdout=self.verbose, stderr=self.verbose)
         status = self.pktgen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError('Error stopping Norman Pktgen')
