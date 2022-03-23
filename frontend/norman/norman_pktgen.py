@@ -22,7 +22,6 @@ ETHERNET_OVERHEAD = 20 + 4  # Includes CRC.
 
 class NormanPktgenStats:
     def __init__(self, file_name: str) -> None:
-
         self.stats = defaultdict(list)
         self.nb_samples = 0
         with open(file_name, newline='') as f:
@@ -38,9 +37,15 @@ class NormanPktgenStats:
 
         summary = {}
 
+        rx_goodput = self.stats['rx_goodput_mbps']
+        rx_pkt_rate = self.stats['rx_pkt_rate_kpps']
+
         # Ignore first and last datapoints for RX.
-        rx_goodput = self.stats['rx_goodput_mbps'][1:-1]
-        rx_pkt_rate = self.stats['rx_pkt_rate_kpps'][1:-1]
+        rx_goodput = [g for g in rx_goodput if g != 0][1:-1]
+        rx_pkt_rate = [r for r in rx_pkt_rate if r != 0][1:-1]
+
+        print('rx_goodput:', rx_goodput)
+        print('rx_pkt_rate:', rx_pkt_rate)
 
         summary['rx_mean_goodput_mbps'] = sum(rx_goodput) / len(rx_goodput)
         summary['rx_mean_rate_kpps'] = sum(rx_pkt_rate) / len(rx_pkt_rate)
@@ -49,16 +54,12 @@ class NormanPktgenStats:
         summary['rx_packets'] = self.stats['rx_packets'][-1]
 
         if calculate_tx_mean:
-            # For TX, we need to ignore all the datapoints after it's done
-            # transmitting. For lower rates, it might take a while before
-            # pktgen receives all the packets back.
-            try:
-                last_tx_sample = self.stats['tx_goodput_mbps'].index(0) - 1
-            except ValueError:
-                last_tx_sample = -2
+            tx_goodput = self.stats['tx_goodput_mbps']
+            tx_pkt_rate = self.stats['tx_pkt_rate_kpps']
 
-            tx_goodput = self.stats['tx_goodput_mbps'][1:last_tx_sample]
-            tx_pkt_rate = self.stats['tx_pkt_rate_kpps'][1:last_tx_sample]
+            # Ignore first two and last datapoints for TX.
+            tx_goodput = [g for g in tx_goodput if g != 0][2:-1]
+            tx_pkt_rate = [r for r in tx_pkt_rate if r != 0][2:-1]
 
             if len(tx_goodput) < 1:
                 raise RuntimeError('Not enough samples to calculate TX mean')
@@ -85,6 +86,7 @@ class NormanPktgen(Pktgen):
                  rtt_hist_len: Optional[int] = None,
                  stats_file: Optional[str] = None,
                  hist_file: Optional[str] = None,
+                 stats_delay: Optional[int] = None,
                  verbose: bool = False, check_tx_rate=False) -> None:
         super().__init__()
 
@@ -100,6 +102,7 @@ class NormanPktgen(Pktgen):
         self.rtt_hist = rtt_hist
         self.rtt_hist_offset = rtt_hist_offset
         self.rtt_hist_len = rtt_hist_len
+        self.stats_delay = stats_delay
 
         self.stats_file = stats_file or 'stats.csv'
         self.hist_file = hist_file or 'hist.csv'
@@ -170,14 +173,17 @@ class NormanPktgen(Pktgen):
         if self.rtt:
             command += ' --rtt'
 
-        if self.rtt_hist:
+        if self.rtt_hist is not None:
             command += f' --rtt-hist {self.hist_file}'
 
         if self.rtt_hist_offset is not None:
-            command += ' --rtt-hist-offset'
+            command += f' --rtt-hist-offset {self.rtt_hist_offset}'
 
         if self.rtt_hist_len is not None:
-            command += ' --rtt-hist-len'
+            command += f' --rtt-hist-len {self.rtt_hist_len}'
+
+        if self.stats_delay is not None:
+            command += f' --stats-delay {self.stats_delay}'
 
         self.pktgen_cmd = remote_command(
             self.dataplane.ssh_client, command, print_command=self.verbose
@@ -221,10 +227,12 @@ class NormanPktgen(Pktgen):
                 )
 
         self.mean_rx_goodput = stats_summary.get('rx_mean_goodput_mbps', 0)
+        self.mean_rx_goodput *= 1_000_000
         self.mean_tx_goodput = stats_summary.get('tx_mean_goodput_mbps', 0)
+        self.mean_tx_goodput *= 1_000_000
 
-        self.mean_rx_rate = stats_summary.get('rx_mean_rate_kpps', 0)
-        self.mean_tx_rate = stats_summary.get('tx_mean_rate_kpps', 0)
+        self.mean_rx_rate = stats_summary.get('rx_mean_rate_kpps', 0) * 1000
+        self.mean_tx_rate = stats_summary.get('tx_mean_rate_kpps', 0) * 1000
 
         self.nb_rx_pkts += stats_summary.get('rx_packets', 0)
         self.nb_tx_pkts += stats_summary.get('tx_packets', 0)
