@@ -256,6 +256,15 @@ function logic [511:0] swap_flit_endianness(logic [511:0] flit);
     return swapped_flit;
 endfunction
 
+// Make sure a packet stream is behaving correctly, i.e., that sop cannot be
+// asserted twice before eop is asserted.
+`define ASSERT_CORRECT_PKT_STREAM(__name, __sop, __eop, __valid, __ready, __clk = `ASSERT_DEFAULT_CLK, __rst = `ASSERT_DEFAULT_RST) \
+    `ASSERT(__name,                                                            \
+        ((__sop) && (__valid) && (__ready) && !(__eop)) |=>                                \
+            if ((__valid) && (__ready))                                        \
+                !(__sop) throughout ((__eop) && (__valid) && (__ready))[->1],  \
+    __clk, __rst)
+
 `ifdef SIM
 `define hdisplay(A) if (!tb.error_termination_r) $display("%s", $sformatf A )
 // `define hdisplay(A);

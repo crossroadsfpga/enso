@@ -29,6 +29,9 @@ module pdu_gen #(
     output logic [31:0] out_meta_queue_occup
 );
 
+`ASSERT_CORRECT_PKT_STREAM(PduGenInPktStream, in_sop, in_eop, in_valid,
+                           in_ready, clk, rst)
+
 logic [511:0] pdu_data;
 logic [511:0] pdu_data_swap;
 

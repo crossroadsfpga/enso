@@ -288,4 +288,14 @@ hyper_pipe #(
     .dout(pkt_flags_r)
 );
 
+`ASSERT_CORRECT_PKT_STREAM(BasicDataMoverInRxPktStream, pkt_buffer_readdata.sop,
+    pkt_buffer_readdata.eop, pkt_buffer_readvalid, pkt_buffer_readvalid, clk,
+    rst)
+
+`ASSERT_CORRECT_PKT_STREAM(BasicDataMoverOutRxPktStream, pcie_rx_pkt_sop,
+    pcie_rx_pkt_eop, pcie_rx_pkt_valid, pcie_rx_pkt_ready, clk, rst)
+
+`ASSERT_CORRECT_PKT_STREAM(BasicDataMoverInTxPktStream, pcie_tx_pkt_sop,
+    pcie_tx_pkt_eop, pcie_tx_pkt_valid, pcie_tx_pkt_ready, clk, rst)
+
 endmodule
