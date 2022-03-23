@@ -6,6 +6,7 @@ from norman.consts import DEFAULT_BATCH_SIZE, DEFAULT_DSC_BUF_SIZE, \
     DEFAULT_NB_TX_CREDITS, DEFAULT_PKT_BUF_SIZE
 from norman.norman_dataplane import NormanDataplane
 
+
 @click.command()
 @click.argument('host')
 @click.argument('remote_norman_path')
