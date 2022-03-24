@@ -455,6 +455,10 @@ begin
 `endif
         addr <= addr + 1;
         l8_rx_valid <= 1;
+
+        if (((addr+1) % 10000) == 0) begin
+          $display("Progress: %d%%", (addr * 100) / hi);
+        end
       end else if (!stop && stop_cnt == 0) begin
         l8_rx_valid <= 0;
         stop_cnt <= STOP_DELAY;
