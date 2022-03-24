@@ -88,9 +88,11 @@ module top (
     output  logic          status_readdata_valid
 );
 
+// TODO(sadok): Reenable the following assertion once we move the logic outside
+// the top module inside.
 // Make sure output Ethernet signals comply with Eth core spec, which requires
 // that all flits from the same packet be sent without gaps.
-`ASSERT(EthOutContiguousPkt, (out_valid && !out_eop) |=> out_valid, clk, rst)
+// `ASSERT(EthOutContiguousPkt, (out_valid && !out_eop) |=> out_valid, clk, rst)
 
 //counters
 logic [31:0] in_pkt_cnt_status;
