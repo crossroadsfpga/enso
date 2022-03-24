@@ -39,7 +39,7 @@ module tb;
 localparam PCIE_DELAY = 125;
 
 // Number of cycles to wait before stopping the simulation.
-localparam STOP_DELAY = 2000000 + PCIE_DELAY;
+localparam STOP_DELAY = 200000 + PCIE_DELAY;
 
 // Set number of in-flight descriptor reads that are allowed in the TX path.
 localparam NB_TX_CREDITS = 500;
@@ -48,8 +48,8 @@ localparam NB_TX_CREDITS = 500;
 localparam UPDATE_HEAD_DELAY = 125;
 
 // Size of the host buffer used by each queue (in flits).
-localparam DSC_BUF_SIZE = 8192;
-localparam PKT_BUF_SIZE = 8192;
+localparam DSC_BUF_SIZE = 32768;
+localparam PKT_BUF_SIZE = 32768;
 
 // Ethernet port to use.
 localparam ETH_PORT_NB = 1;
@@ -961,7 +961,7 @@ always @(posedge clk_pcie) begin
       pkt_q_consume_delay_cnt--;
     end
 
-    // if not trying to write anything, we can try to advance one of the
+    // If not trying to write anything, we can try to advance one of the
     // pointers.
     if (next_pcie_write_0 == 0) begin
       automatic integer i;
@@ -1116,9 +1116,10 @@ always @(posedge clk_pcie) begin
     end
 
     // Emulate PCIe BAS wait
-    if (cnt[8]) begin
-        pcie_bas_waitrequest <= !pcie_bas_waitrequest;
-    end
+    // if (cnt[8]) begin
+    //     pcie_bas_waitrequest <= !pcie_bas_waitrequest;
+    // end
+    pcie_bas_waitrequest <= 0;
 
     pcie_write_0 <= next_pcie_write_0;
   end
