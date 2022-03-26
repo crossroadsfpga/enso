@@ -635,10 +635,12 @@ int main(int argc, char** argv)
 
         total_bytes_to_send = nb_full_iters * total_bytes_in_buffers;
 
+        if (nb_pkts_remaining == 0) {
+            pkts_in_last_buffer = pkt_buffers.back().nb_pkts;
+        }
+
         for (auto& buffer : pkt_buffers) {
             if (nb_pkts_remaining < buffer.nb_pkts) {
-                pkts_in_last_buffer = nb_pkts_remaining;
-
                 uint8_t* pkt = buffer.buf;
                 while (nb_pkts_remaining > 0) {
                     uint16_t pkt_len = get_pkt_len(pkt);
@@ -646,6 +648,7 @@ int main(int argc, char** argv)
 
                     total_bytes_to_send += nb_flits * 64;
                     --nb_pkts_remaining;
+                    ++pkts_in_last_buffer;
 
                     pkt = get_next_pkt(pkt);
                 }
