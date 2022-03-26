@@ -385,10 +385,14 @@ void print_buf(void* buf, const uint32_t nb_cache_lines);
 
 void print_stats(socket_internal* socket_entry, bool print_global);
 
+inline uint16_t be_to_le_16(uint16_t le) {
+    return ((le & (uint16_t) 0x00ff) << 8) | ((le & (uint16_t) 0xff00) >> 8);
+}
+
 static inline uint16_t get_pkt_len(uint8_t *addr) {
     struct ether_header* l2_hdr = (struct ether_header*) addr;
     struct iphdr* l3_hdr = (struct iphdr*) (l2_hdr + 1);
-    uint16_t total_len = be16toh(l3_hdr->tot_len) + sizeof(*l2_hdr);
+    uint16_t total_len = be_to_le_16(l3_hdr->tot_len) + sizeof(*l2_hdr);
 
     return total_len;
 }
