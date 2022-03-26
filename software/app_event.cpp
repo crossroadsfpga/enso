@@ -20,6 +20,7 @@
 #include "app.h"
 
 static volatile int keep_running = 1;
+static volatile int setup_done = 0;
 
 void int_handler(int signal __attribute__((unused)))
 {
@@ -31,6 +32,7 @@ int main(int argc, const char* argv[])
     int result;
     uint64_t recv_bytes = 0;
     uint64_t nb_batches = 0;
+    uint64_t nb_pkts = 0;
 
     if (argc != 5) {
         std::cerr << "Usage: " << argv[0] << " core port nb_queues nb_cycles"
@@ -48,7 +50,7 @@ int main(int argc, const char* argv[])
     signal(SIGINT, int_handler);
     
     std::thread socket_thread = std::thread([&recv_bytes, port, addr_offset, 
-        nb_queues, &nb_batches, &nb_cycles]
+        nb_queues, &nb_batches, &nb_pkts, &nb_cycles]
     {
         uint32_t tx_pr_head = 0;
         uint32_t tx_pr_tail = 0;
@@ -61,7 +63,7 @@ int main(int argc, const char* argv[])
 
         for (int i = 0; i < nb_queues; ++i) {
             // TODO(sadok) can we make this a valid file descriptor?
-            std::cout << "creating queue " << i << std::endl;
+            std::cout << "Creating queue " << i << std::endl;
             int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
 
             if (socket_fd == -1) {
@@ -85,7 +87,11 @@ int main(int argc, const char* argv[])
                           << strerror(errno) <<  std::endl;
                 exit(3);
             }
+
+            std::cout << "Done creating queue " << i << std::endl;
         }
+
+        setup_done = 1;
 
         unsigned char* buf;
 
@@ -99,28 +105,27 @@ int main(int argc, const char* argv[])
                 exit(4);
             }
 
-            if (likely(recv_len != 0)) {
-                // Modify every cache line.
-                for (uint32_t i = 0; i < ((uint32_t) recv_len) / 256; i += 4) {
-                    ++buf[(i+0)*64 + 63];
-                    ++buf[(i+1)*64 + 63];
-                    ++buf[(i+2)*64 + 63];
-                    ++buf[(i+3)*64 + 63];
+            if (likely(recv_len > 0)) {
+                int processed_bytes = 0;
+                uint8_t* pkt = buf;
 
-                    // Flush cache lines to avoid contention with PCIe read.
-                    _mm_clflushopt(&buf[(i+0)*64]);
-                    _mm_clflushopt(&buf[(i+1)*64]);
-                    _mm_clflushopt(&buf[(i+2)*64]);
-                    _mm_clflushopt(&buf[(i+3)*64]);
+                while (processed_bytes < recv_len) {
+                    uint16_t pkt_len = get_pkt_len(pkt);
+                    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+                    uint16_t pkt_aligned_len = nb_flits * 64;
+
+                    ++pkt[63];  // Increment payload.
+
+                    // for (uint32_t i = 0; i < nb_cycles; ++i) {
+                    //     asm("nop");
+                    // }
+
+                    pkt += pkt_aligned_len;
+
+                    processed_bytes += pkt_aligned_len;
+                    ++nb_pkts;
                 }
-                for (uint32_t i = 0; i < (((uint32_t) recv_len) % 256)/64; ++i)
-                {
-                    ++buf[i*64 + 63];
-                    _mm_clflushopt(&buf[i*64]);
-                }
-                for (uint32_t i = 0; i < nb_cycles; ++i) {
-                    asm("nop");
-                }
+
                 ++nb_batches;
                 recv_bytes += recv_len;
 
@@ -128,6 +133,7 @@ int main(int argc, const char* argv[])
                 uint64_t phys_addr = convert_buf_addr_to_phys(socket_fd, buf);
                 send(socket_fd, (void*) phys_addr, recv_len, 0);
 
+                // TODO(sadok): This should be transparent to the app.
                 // Save transmission request so that we can free the buffer once
                 // it's complete.
                 tx_pending_requests[tx_pr_tail].socket_fd = socket_fd;
@@ -170,6 +176,10 @@ int main(int argc, const char* argv[])
         return 6;
     }
 
+    while (!setup_done) continue;
+
+    std::cout << "Starting..." << std::endl;
+
     while (keep_running) {
         uint64_t recv_bytes_before = recv_bytes;
         uint64_t nb_batches_before = nb_batches;
@@ -181,13 +191,16 @@ int main(int argc, const char* argv[])
         std::cout << std::dec
                   <<  delta_bytes * 8. / 1e6 << " Mbps  "
                   << recv_bytes << " bytes  "
-                  << nb_batches << " batches";
+                  << nb_batches << " batches  "
+                  << nb_pkts << " packets";
         
         if (delta_batches > 0) {
             std::cout << "  " << delta_bytes / delta_batches  << " bytes/batch";
         }
         std::cout << std::endl;
     }
+
+    std::cout << "Waiting for threads" << std::endl;
 
     socket_thread.join();
 
