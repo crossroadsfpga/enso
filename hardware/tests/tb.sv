@@ -346,7 +346,7 @@ typedef enum{
   PCIE_TX_BATCH_CNT,
   PCIE_TX_MAX_INFLIGHT_DSCS,
   PCIE_TX_MAX_NB_REQ_DSCS,
-  TX_DMA_PKT,
+  PCIE_TX_DMA_PKT,
   PCIE_FULL_SIGNALS_1,
   PCIE_FULL_SIGNALS_2
 } c_state_t;
@@ -1942,15 +1942,15 @@ always @(posedge clk_status) begin
         s_read <= 0;
         if(top_readdata_valid)begin
           $display("PCIE_TX_MAX_NB_DSCS:\t%d", top_readdata);
-          conf_state <= TX_DMA_PKT;
+          conf_state <= PCIE_TX_DMA_PKT;
           s_read <= 1;
           s_addr <= s_addr + 1;
         end
       end
-      TX_DMA_PKT: begin
+      PCIE_TX_DMA_PKT: begin
         s_read <= 0;
         if(top_readdata_valid)begin
-          $display("TX_DMA_PKT:\t\t%d", top_readdata);
+          $display("PCIE_TX_DMA_PKT:\t%d", top_readdata);
           conf_state <= PCIE_FULL_SIGNALS_1;
           s_read <= 1;
           s_addr <= s_addr + 1;

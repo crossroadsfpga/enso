@@ -104,7 +104,7 @@ set PCIE_TX_PKT_READ_CNT      49
 set PCIE_TX_BATCH_CNT         50
 set PCIE_TX_MAX_INFLIGHT_DSCS 51
 set PCIE_TX_MAX_NB_REQ_DSCS   52
-set TX_DMA_PKT                53
+set PCIE_TX_DMA_PKT           53
 set PCIE_TOP_FULL_SIGNALS_1   54
 set PCIE_TOP_FULL_SIGNALS_2   55
 
@@ -541,7 +541,7 @@ proc get_top_stats {} {
     global PCIE_TX_BATCH_CNT
     global PCIE_TX_MAX_INFLIGHT_DSCS
     global PCIE_TX_MAX_NB_REQ_DSCS
-    global TX_DMA_PKT
+    global PCIE_TX_DMA_PKT
     global PCIE_TOP_FULL_SIGNALS_1
     global PCIE_TOP_FULL_SIGNALS_2
 
@@ -599,6 +599,7 @@ proc get_top_stats {} {
     read_top_reg PCIE_TX_BATCH_CNT         $PCIE_TX_BATCH_CNT         $fp
     read_top_reg PCIE_TX_MAX_INFLIGHT_DSCS $PCIE_TX_MAX_INFLIGHT_DSCS $fp
     read_top_reg PCIE_TX_MAX_NB_REQ_DSCS   $PCIE_TX_MAX_NB_REQ_DSCS   $fp
+    read_top_reg PCIE_TX_DMA_PKT           $PCIE_TX_DMA_PKT           $fp
     read_top_reg PCIE_TOP_FULL_SIGNALS_1   $PCIE_TOP_FULL_SIGNALS_1   $fp
     read_top_reg PCIE_TOP_FULL_SIGNALS_2   $PCIE_TOP_FULL_SIGNALS_2   $fp
     close $fp
