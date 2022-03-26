@@ -47,8 +47,9 @@ class NormanPktgenStats:
         print('rx_goodput:', rx_goodput)
         print('rx_pkt_rate:', rx_pkt_rate)
 
-        summary['rx_mean_goodput_mbps'] = sum(rx_goodput) / len(rx_goodput)
-        summary['rx_mean_rate_kpps'] = sum(rx_pkt_rate) / len(rx_pkt_rate)
+        if len(rx_goodput) > 0:
+            summary['rx_mean_goodput_mbps'] = sum(rx_goodput) / len(rx_goodput)
+            summary['rx_mean_rate_kpps'] = sum(rx_pkt_rate) / len(rx_pkt_rate)
 
         summary['rx_bytes'] = self.stats['rx_bytes'][-1]
         summary['rx_packets'] = self.stats['rx_packets'][-1]
@@ -173,7 +174,7 @@ class NormanPktgen(Pktgen):
         if self.rtt:
             command += ' --rtt'
 
-        if self.rtt_hist is not None:
+        if self.rtt_hist:
             command += f' --rtt-hist {self.hist_file}'
 
         if self.rtt_hist_offset is not None:
