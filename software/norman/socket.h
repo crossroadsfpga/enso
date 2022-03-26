@@ -1,6 +1,6 @@
 
-#ifndef FD_H
-#define FD_H
+#ifndef SOCKET_H
+#define SOCKET_H
 
 #include <linux/types.h>
 
@@ -87,4 +87,4 @@ int shutdown(int sockfd, int how) noexcept;
 
 void print_sock_stats(int sockfd);
 
-#endif // FD_H
+#endif // SOCKET_H
