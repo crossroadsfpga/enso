@@ -1,8 +1,8 @@
 CXX = g++-9
 LD = g++-9
-CXXFLAGS = -Wall -ansi -Wextra -O2 -g -std=c++11 \
+CXXFLAGS = -Wall -ansi -Wextra -O3 -g -std=c++11 \
 	-I norman/api/linux -m64 -march=native -mavx
-LDFLAGS = -O2 -g -Lnorman -lnorman -pthread -m64 -march=native
+LDFLAGS = -O3 -g -Lnorman -lnorman -pthread -m64 -march=native
 
 ifdef DSC_BUF_SIZE
 CXXFLAGS += -D DSC_BUF_SIZE=$(DSC_BUF_SIZE)

@@ -1,7 +1,7 @@
 CXX = g++-9
 LD = g++-9
 
-CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O2 -g -fPIC -m64 -march=native
+CXXFLAGS = -Wall -ansi -Wextra -std=c++11 -O3 -g -fPIC -m64 -march=native -mavx
 
 ifdef DSC_BUF_SIZE
 CXXFLAGS += -D DSC_BUF_SIZE=$(DSC_BUF_SIZE)
@@ -15,7 +15,7 @@ ifdef BATCH_SIZE
 CXXFLAGS += -D BATCH_SIZE=$(BATCH_SIZE)
 endif
 
-LDFLAGS = -g -O2 -m64 -march=native
+LDFLAGS = -g -O3 -m64 -march=native
 
 SRCS = socket.cpp pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
