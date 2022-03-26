@@ -28,7 +28,7 @@ typedef uint16_t pkt_q_id_t;
 typedef uint32_t pkt_q_id_t;
 #endif
 
-#define MAX_TRANSFER_LEN 1048576
+#define MAX_TRANSFER_LEN 131072
 
 #define MAX_PENDING_TX_REQUESTS (DSC_BUF_SIZE-1)
 

@@ -13,17 +13,11 @@
 #include <sched.h>
 #include <pthread.h>
 
-// pick one of the two below
 #include "norman/socket.h"
-// #include <sys/socket.h>
-// #include <netinet/in.h>
-// #include <arpa/inet.h> 
 
 #define SEND_BACK
 
 #include "app.h"
-
-#define BUF_LEN 100000
 
 static volatile int keep_running = 1;
 

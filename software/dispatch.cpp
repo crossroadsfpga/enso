@@ -21,7 +21,6 @@
 
 #include "app.h"
 
-#define BUF_LEN (1024*128)
 #define CACHE_LINE_SIZE 64
 
 static volatile int keep_running = 1;

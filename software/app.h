@@ -9,4 +9,7 @@ typedef struct {
     size_t length;
 } tx_pending_request_t;
 
+#define BUF_LEN 10000000
+// #define BUF_LEN 100000
+
 #endif // APP_H

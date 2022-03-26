@@ -363,6 +363,7 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
     uint32_t pkt_buf_head = socket_entry->pkt_queue.rx_tail;
     dsc_queue_t* dsc_queue = socket_entry->dsc_queue;
     int queue_id = socket_entry->queue_id;
+    (void) len; // Ignoring it for now.
 
     *buf = &pkt_buf[pkt_buf_head * 16];
 
@@ -382,9 +383,9 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
     // and that can enforce a transfer limit.
 
     // Reached the buffer limit.
-    if (unlikely(flit_aligned_size > len)) {
-        flit_aligned_size = len & 0xffffffc0;  // Align len to 64 bytes.
-    }
+    // if (unlikely(flit_aligned_size > len)) {
+    //     flit_aligned_size = len & 0xffffffc0;  // Align len to 64 bytes.
+    // }
 
     pkt_buf_head = (pkt_buf_head + flit_aligned_size / 64) % PKT_BUF_SIZE;
 
@@ -465,16 +466,14 @@ int send_to_queue(dsc_queue_t* dsc_queue, void* phys_addr, size_t len)
         pcie_tx_dsc_t* tx_dsc = tx_buf + tx_tail;
         uint64_t req_length = std::min(missing_bytes,
                                        (uint64_t) MAX_TRANSFER_LEN);
-
-        // If transmission wraps around hugepage, we need to send two requests
-        // and set a bit in the wrap tracker.
         uint64_t missing_bytes_in_page = hugepage_boundary - transf_addr;
-
-        uint8_t wrap_tracker_mask =
-            (req_length > missing_bytes_in_page) << (tx_tail & 0x7);
-        dsc_queue->wrap_tracker[tx_tail / 8] |= wrap_tracker_mask;
-
         req_length = std::min(req_length, missing_bytes_in_page);
+
+        // If the transmission needs to be split among multiple requests, we
+        // need to set a bit in the wrap tracker.
+        uint8_t wrap_tracker_mask =
+            (missing_bytes > req_length) << (tx_tail & 0x7);
+        dsc_queue->wrap_tracker[tx_tail / 8] |= wrap_tracker_mask;
 
         tx_dsc->length = req_length;
         tx_dsc->signal = 1;
@@ -623,6 +622,10 @@ void update_tx_head(dsc_queue_t* dsc_queue)
     pcie_tx_dsc_t* tx_buf = dsc_queue->tx_buf;
     uint32_t head = dsc_queue->tx_head;
     uint32_t tail = dsc_queue->tx_tail;
+
+    if (head == tail) {
+        return;
+    }
 
     // Advance pointer for pkt queues that were already sent.
     for (uint16_t i = 0; i < BATCH_SIZE; ++i) {

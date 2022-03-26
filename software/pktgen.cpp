@@ -24,11 +24,6 @@
 
 #include "app.h"
 
-#define RECV_BUF_LEN 10000000
-#define HUGEPAGE_SIZE (1UL << 21)
-#define NB_BUFFERS_PER_HUGEPAGE 4
-#define BUFFER_SIZE (HUGEPAGE_SIZE / NB_BUFFERS_PER_HUGEPAGE)
-
 // Number of loop iterations to wait before probing the TX dsc queue again when
 // reclaiming buffer space.
 #define TX_RECLAIM_DELAY 1024
@@ -62,6 +57,18 @@
 
 // Number of CLI arguments.
 #define NB_CLI_ARGS 3
+
+// Maximum number of bytes that we can receive at once.
+#define RECV_BUF_LEN 10000000
+
+// Huge page size that we are using (in bytes).
+#define HUGEPAGE_SIZE (2UL << 20)
+
+// Size of the buffer that we keep packets in.
+#define BUFFER_SIZE MAX_TRANSFER_LEN
+
+// Number of transfers required to send a buffer full of packets.
+#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE-1) / MAX_TRANSFER_LEN) + 1)
 
 static volatile int keep_running = 1;
 static volatile int force_stop = 0;
@@ -510,7 +517,10 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 
 inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
 {
-    if (likely(tx_args.transmissions_pending < (DSC_BUF_SIZE - 1))) {
+    // Avoid transmitting new data when the TX buffer is full.
+    const uint32_t buf_fill_thresh = DSC_BUF_SIZE - TRANSFERS_PER_BUFFER - 1;
+
+    if (likely(tx_args.transmissions_pending < buf_fill_thresh)) {
         uint32_t transmission_length = (uint32_t) std::min(
             (uint64_t) (BUFFER_SIZE), tx_args.total_remaining_bytes
         );
