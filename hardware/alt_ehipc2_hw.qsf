@@ -334,6 +334,7 @@ set_global_assignment -name VERILOG_FILE src/common/dsp.v
 set_global_assignment -name SYSTEMVERILOG_FILE src/common/dc_fifo_wrapper_mlab.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/common/dc_fifo_wrapper_infill_mlab.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/common/dc_fifo_wrapper_infill.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/common/dc_fifo_wrapper_outfill.sv
 set_global_assignment -name SYSTEMVERILOG_FILE src/common/dc_fifo_wrapper.sv
 set_global_assignment -name VERILOG_FILE src/common/dc_fifo_reg_core.v
 set_global_assignment -name VERILOG_FILE src/common/dc_fifo_core_mlab.v

@@ -1,0 +1,85 @@
+
+`timescale 1 ps / 1 ps
+
+module dc_fifo_wrapper_outfill #(
+  parameter SYMBOLS_PER_BEAT   = 64,
+  parameter BITS_PER_SYMBOL    = 8,
+  parameter FIFO_DEPTH         = 512,
+  parameter CHANNEL_WIDTH      = 0,
+  parameter ERROR_WIDTH        = 0,
+  parameter USE_PACKETS        = 1,
+  parameter USE_IN_FILL_LEVEL  = 0,
+  parameter USE_OUT_FILL_LEVEL = 1,
+  parameter WR_SYNC_DEPTH      = 3,
+  parameter RD_SYNC_DEPTH      = 3
+)(
+  input  wire                                        in_clk,
+  input  wire                                        in_reset_n,
+  input  wire                                        out_clk,
+  input  wire                                        out_reset_n,
+  input  wire                                        out_csr_address,
+  input  wire                                        out_csr_read,
+  input  wire                                        out_csr_write,
+  output wire [31:0]                                 out_csr_readdata,
+  input  wire [31:0]                                 out_csr_writedata,
+  input  wire [SYMBOLS_PER_BEAT*BITS_PER_SYMBOL-1:0] in_data,
+  input  wire                                        in_valid,
+  output wire                                        in_ready,
+  input  wire                                        in_startofpacket,
+  input  wire                                        in_endofpacket,
+  input  wire [5:0]                                  in_empty,
+  output wire [SYMBOLS_PER_BEAT*BITS_PER_SYMBOL-1:0] out_data,
+  output wire                                        out_valid,
+  input  wire                                        out_ready,
+  output wire                                        out_startofpacket,
+  output wire                                        out_endofpacket,
+  output wire [5:0]                                  out_empty
+);
+
+dc_fifo_core #(
+  .SYMBOLS_PER_BEAT   (SYMBOLS_PER_BEAT),
+  .BITS_PER_SYMBOL    (BITS_PER_SYMBOL),
+  .FIFO_DEPTH         (FIFO_DEPTH),
+  .CHANNEL_WIDTH      (CHANNEL_WIDTH),
+  .ERROR_WIDTH        (ERROR_WIDTH),
+  .USE_PACKETS        (USE_PACKETS),
+  .USE_IN_FILL_LEVEL  (USE_IN_FILL_LEVEL),
+  .USE_OUT_FILL_LEVEL (USE_OUT_FILL_LEVEL),
+  .WR_SYNC_DEPTH      (WR_SYNC_DEPTH),
+  .RD_SYNC_DEPTH      (RD_SYNC_DEPTH),
+  .SYNC_RESET         (0)
+) dc_fifo_1 (
+  .in_clk            (in_clk),
+  .in_reset_n        (in_reset_n),
+  .out_clk           (out_clk),
+  .out_reset_n       (out_reset_n),
+  .in_csr_address    (1'b0),
+  .in_csr_read       (1'b0),
+  .in_csr_write      (1'b0),
+  .in_csr_readdata   (),
+  .in_csr_writedata  (32'h0),
+  .in_data           (in_data),
+  .in_valid          (in_valid),
+  .in_ready          (in_ready),
+  .in_startofpacket  (in_startofpacket),
+  .in_endofpacket    (in_endofpacket),
+  .in_empty          (in_empty),
+  .out_data          (out_data),
+  .out_valid         (out_valid),
+  .out_ready         (out_ready),
+  .out_startofpacket (out_startofpacket),
+  .out_endofpacket   (out_endofpacket),
+  .out_empty         (out_empty),
+  .out_csr_address   (out_csr_address),
+  .out_csr_read      (out_csr_read),
+  .out_csr_write     (out_csr_write),
+  .out_csr_readdata  (out_csr_readdata),
+  .out_csr_writedata (out_csr_writedata),
+  .in_error          (1'b0),
+  .out_error         (),
+  .in_channel        (1'b0),
+  .out_channel       (),
+  .space_avail_data  ()
+);
+
+endmodule
