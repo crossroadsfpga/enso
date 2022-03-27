@@ -1164,7 +1164,7 @@ parser parser_0 (
     .out_meta_ready (parser_out_meta_ready)
 );
 
-//fifo big enough
+// FIFO big enough to hold a metadata for every packet in the packet buffer.
 dc_fifo_wrapper_infill  #(
     .SYMBOLS_PER_BEAT(1),
     .BITS_PER_SYMBOL(META_WIDTH),
