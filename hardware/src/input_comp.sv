@@ -38,10 +38,9 @@ logic [PKTBUF_AWIDTH-1:0]   pkt_buffer_address_r;
 logic         pkt_buffer_write_r;
 flit_t        pkt_buffer_writedata_r;
 
-logic [PKT_AWIDTH-1:0] next_empty;
-logic [PKT_AWIDTH-1:0] current_empty;
+logic [PKT_AWIDTH-1:0] pkt_id;
 metadata_t empty_meta;
-logic [4:0] flits = 5'b00001;
+logic [4:0] flits;
 logic [511:0] eth_data_r;
 
 assign pkt_empty = 0;
@@ -58,71 +57,70 @@ always @(posedge clk) begin
 end
 
 assign emptylist_out_ready = eth_valid & eth_sop;
-always@ (posedge clk) begin
-    if (rst) begin
-        pkt_buffer_write_r <= 1'b0;
-    end else begin
-        pkt_buffer_write_r <= 1'b0;
-        if (eth_valid & emptylist_out_valid) begin
-            pkt_buffer_write_r <= 1'b1;
-            pkt_buffer_writedata_r <= {eth_sop,eth_eop,eth_empty,eth_data};
-            if (eth_sop) begin
-                pkt_buffer_address_r <= (emptylist_out_data << 5);
-                current_empty <= emptylist_out_data;
-            end else begin
-                pkt_buffer_address_r <= pkt_buffer_address_r + 1'b1;
-            end
-        end
 
-        assert(emptylist_out_valid | !emptylist_out_ready) else begin
-            hterminate("Request from empty PKT_empty list");
+logic drop_pkt;
+
+always@ (posedge clk) begin
+    pkt_buffer_write_r <= 1'b0;
+    pkt_buffer_writedata_r <= {eth_sop, eth_eop, eth_empty, eth_data};
+
+    pkt_valid <= 0;
+    meta_valid <= 0;
+
+    meta_data <= empty_meta;
+    meta_valid <= 0;
+
+    pkt_sop <= 0;
+    pkt_eop <= 0;
+
+    if (rst) begin
+        drop_pkt <= 0;
+        flits <= 0;
+    end else begin
+        if (eth_valid) begin
+            automatic logic [PKT_AWIDTH-1:0] current_pkt_id = pkt_id;
+            automatic logic drop_current_flit = drop_pkt;
+            automatic logic [4:0] current_nb_flits = flits;
+
+            if (!eth_sop) begin  // Receiving the rest of the packet.
+                pkt_buffer_address_r <= pkt_buffer_address_r + 1'b1;
+                pkt_buffer_write_r <= !drop_current_flit;
+
+                current_nb_flits = current_nb_flits + 1'b1;
+            end else if (emptylist_out_valid) begin
+                // We can only grab the next packet if there is a packet buffer
+                // available.
+                pkt_buffer_address_r <= (emptylist_out_data << 5);
+                pkt_buffer_write_r <= 1'b1;
+
+                current_pkt_id = emptylist_out_data;
+                drop_current_flit = 0;
+                current_nb_flits = 1;
+            end else begin
+                drop_current_flit = 1;
+                $error("Ran out of buffer space, dropping packet.");
+            end
+
+            if (eth_eop & !drop_current_flit) begin
+                // Pass the header to parser.
+                pkt_sop <= 1;
+                pkt_eop <= 1;
+                pkt_valid <= 1;
+
+                // Pass the metadata to parser.
+                meta_data.pktID <= current_pkt_id;
+                meta_data.flits <= current_nb_flits;
+                meta_valid <= 1;
+            end
+
+            pkt_id <= current_pkt_id;
+            drop_pkt <= drop_current_flit;
+            flits <= current_nb_flits;
         end
     end
 end
 
 always @(posedge clk) begin
-    if (rst) begin
-        pkt_valid <= 0;
-        meta_valid <= 0;
-        flits <= 1;
-    end else begin
-        meta_data <= empty_meta;
-        meta_valid <= 0;
-        if (eth_valid & emptylist_out_valid) begin
-            //TODO: only assume the first flit contains header.
-            //if (eth_sop) begin
-            //    //latch the data
-            //    pkt_data <= eth_data;
-            //end
-            if (eth_eop) begin
-                // Pass the header to parser.
-                pkt_sop <= 1;
-                pkt_eop <= 1;
-                pkt_valid <= 1;
-                // Pass the metadata to parser.
-                meta_valid <= 1;
-                if(eth_sop) begin
-                    // meta_data.pktID <= next_empty;
-                    meta_data.pktID <= emptylist_out_data;
-                end else begin
-                    meta_data.pktID <= current_empty;
-                end
-                meta_data.flits <= flits;
-                flits <= 1;
-
-            end else begin
-                flits <= flits + 1'b1;
-                pkt_valid <= 0;
-                pkt_sop <= 0;
-                pkt_eop <= 0;
-            end
-        end else begin
-            pkt_valid <= 0;
-            pkt_sop <= 0;
-            pkt_eop <= 0;
-        end
-    end
-
     if (eth_valid & eth_sop) begin
         pkt_data <= eth_data;
     end
