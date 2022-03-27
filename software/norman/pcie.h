@@ -39,14 +39,14 @@ typedef uint32_t pkt_q_id_t;
 
 #ifndef DSC_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this
-// value when compiling. It is defined in number of flits (64 bytes)
-#define DSC_BUF_SIZE 256
+// value when compiling. It is defined in number of flits (64 bytes).
+#define DSC_BUF_SIZE 16384
 #endif
 
 #ifndef PKT_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this
-// value when compiling. It is defined in number of flits (64 bytes)
-#define PKT_BUF_SIZE 1024
+// value when compiling. It is defined in number of flits (64 bytes).
+#define PKT_BUF_SIZE 32768
 #endif
 
 #define BUF_PAGE_SIZE (1UL << 21) // using 2MB huge pages (size in bytes)
