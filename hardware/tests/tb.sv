@@ -35,6 +35,8 @@ module tb;
 `define CHECK_QUEUE_HEAD_TAIL // Set it to check head and tail pointers for 
                               // every pkt queue at the end of the simulation.
 
+// `define TAG_FLITS  // Set it to include a flit counter in all sent flits.
+
 // Number of cycles to delay PCIe signals.
 localparam PCIE_DELAY = 125;
 
@@ -394,7 +396,12 @@ initial
 assign l8_rx_startofpacket = arr[addr][524];
 assign l8_rx_endofpacket = arr[addr][520];
 assign l8_rx_empty = arr[addr][519:512];
+`ifdef TAG_FLITS
+assign l8_rx_data[511:32] = arr[addr][511:32];
+assign l8_rx_data[31:0] = addr;
+`else
 assign l8_rx_data = arr[addr][511:0];
+`endif
 assign rst_datamover = rst | !esram_pll_lock;
 assign clk_datamover = clk_esram;
 
