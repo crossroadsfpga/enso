@@ -542,8 +542,9 @@ always @ (posedge clk) begin
         if (max_fd_out_fifo <= fdw_out_meta_csr_readdata) begin
             max_fd_out_fifo <= fdw_out_meta_csr_readdata;
         end
-        if (eth_out_pkt_fifo_out_valid & !reg_out_almost_full
-                & eth_out_pkt_fifo_out_eop) begin
+        // if (eth_out_pkt_fifo_out_valid & !reg_out_almost_full
+        //         & eth_out_pkt_fifo_out_eop) begin
+        if (eth_out_pkt_fifo_out_valid & !reg_out_almost_full) begin
             out_pkt_cnt <= out_pkt_cnt + 1;
         end
         if (conf_ft_valid & conf_ft_ready) begin
@@ -578,30 +579,30 @@ always @(posedge clk_datamover) begin
         dm_pcie_rx_meta_cnt <= 0;
         dm_eth_pkt_cnt <= 0;
     end else begin
-        if(input_comp_eth_valid & input_comp_eth_eop)begin
+        if (input_comp_eth_valid & input_comp_eth_eop) begin
             in_pkt_cnt <= in_pkt_cnt + 1;
         end
 
-        if(input_comp_metadata_valid & input_comp_metadata_ready)begin
+        if (input_comp_metadata_valid & input_comp_metadata_ready) begin
             out_pkt_cnt_in_comp <= out_pkt_cnt_in_comp + 1;
         end
 
-        if(parser_out_meta_valid & parser_out_meta_ready)begin
+        if (parser_out_meta_valid & parser_out_meta_ready) begin
             out_pkt_cnt_parser <= out_pkt_cnt_parser + 1;
         end
 
-        if(max_parser_fifo < parser_out_meta_csr_readdata) begin
+        if (max_parser_fifo < parser_out_meta_csr_readdata) begin
             max_parser_fifo <= parser_out_meta_csr_readdata;
         end
 
-        if(emptylist_in_valid & emptylist_in_ready)begin
+        if (emptylist_in_valid & emptylist_in_ready) begin
             in_pkt_cnt_emptylist <= in_pkt_cnt_emptylist + 1;
         end
-        if(emptylist_out_valid & emptylist_out_ready)begin
+        if (emptylist_out_valid & emptylist_out_ready) begin
             out_pkt_cnt_emptylist <= out_pkt_cnt_emptylist + 1;
         end
 
-        if(dm_in_meta_ready & dm_in_meta_valid)begin
+        if (dm_in_meta_ready & dm_in_meta_valid) begin
             in_pkt_cnt_datamover <= in_pkt_cnt_datamover + 1;
             case (dm_in_meta_data.pkt_flags)
                 PKT_ETH: pkt_eth <= pkt_eth + 1;
@@ -610,23 +611,24 @@ always @(posedge clk_datamover) begin
             endcase
         end
 
-        if(max_dm2pcie_fifo < dm_pcie_rx_pkt_in_csr_readdata)begin
+        if (max_dm2pcie_fifo < dm_pcie_rx_pkt_in_csr_readdata) begin
             max_dm2pcie_fifo <= dm_pcie_rx_pkt_in_csr_readdata;
         end
 
-        if(max_dm2pcie_meta_fifo < dm_pcie_rx_meta_in_csr_readdata)begin
+        if (max_dm2pcie_meta_fifo < dm_pcie_rx_meta_in_csr_readdata) begin
             max_dm2pcie_meta_fifo <= dm_pcie_rx_meta_in_csr_readdata;
         end
 
-        if(dm_pcie_rx_pkt_valid & dm_pcie_rx_pkt_ready & dm_pcie_rx_pkt_eop)begin
+        if (dm_pcie_rx_pkt_valid & dm_pcie_rx_pkt_ready & dm_pcie_rx_pkt_eop)
+        begin
             dm_pcie_rx_pkt_cnt <= dm_pcie_rx_pkt_cnt + 1;
         end
 
-        if(dm_pcie_rx_meta_valid & dm_pcie_rx_meta_ready)begin
+        if (dm_pcie_rx_meta_valid & dm_pcie_rx_meta_ready) begin
             dm_pcie_rx_meta_cnt <= dm_pcie_rx_meta_cnt + 1;
         end
 
-        if(dm_eth_pkt_valid & dm_eth_pkt_ready & dm_eth_pkt_eop)begin
+        if (dm_eth_pkt_valid & dm_eth_pkt_ready & dm_eth_pkt_eop) begin
             dm_eth_pkt_cnt <= dm_eth_pkt_cnt + 1;
         end
     end
@@ -924,19 +926,18 @@ always @(posedge clk_status) begin
     end
 end
 
-//Top has higher priority.
+// Top has higher priority.
 always @(posedge clk_status) begin
-    if(status_readdata_valid_top)begin
+    if (status_readdata_valid_top) begin
         status_readdata_valid <= 1'b1;
         status_readdata <= status_readdata_top;
-    end else if(status_readdata_valid_pcie)begin
+    end else if (status_readdata_valid_pcie) begin
         status_readdata_valid <= 1'b1;
         status_readdata <= status_readdata_pcie;
     end else begin
         status_readdata_valid <= 1'b0;
     end
 end
-//Stats End
 
 
 assign input_comp_eth_data  = reg_in_data;
@@ -1564,6 +1565,7 @@ pktbuf_emptylist (
     .out_endofpacket        (),
     .out_empty              ()
 );
+
 //////////////////PCIe logic ////////////////
 pcie_top pcie (
     .pcie_clk                 (clk_pcie),
