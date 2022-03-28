@@ -44,9 +44,6 @@ class NormanPktgenStats:
         rx_goodput = [g for g in rx_goodput if g != 0][1:-1]
         rx_pkt_rate = [r for r in rx_pkt_rate if r != 0][1:-1]
 
-        print('rx_goodput:', rx_goodput)
-        print('rx_pkt_rate:', rx_pkt_rate)
-
         if len(rx_goodput) > 0:
             summary['rx_mean_goodput_mbps'] = sum(rx_goodput) / len(rx_goodput)
             summary['rx_mean_rate_kpps'] = sum(rx_pkt_rate) / len(rx_pkt_rate)
