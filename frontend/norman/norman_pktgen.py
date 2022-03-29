@@ -124,9 +124,9 @@ class NormanPktgen(Pktgen):
             f'{pcap_gen_cmd} {nb_pkts} {pkt_size} {nb_src} {nb_dst} {pcap_dst}'
 
         pcap_gen_cmd = remote_command(self.dataplane.ssh_client, pcap_gen_cmd,
-                                      print_command=self.verbose)
+                                      print_command=self.verbose, pty=True)
         watch_command(pcap_gen_cmd, stdout=self.verbose, stderr=self.verbose,
-                      keyboard_int=lambda: pcap_gen_cmd.send('\x03'))
+                      keyboard_int=lambda: pcap_gen_cmd.send(b'\x03'))
         status = pcap_gen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError('Error generating pcap')
@@ -184,7 +184,8 @@ class NormanPktgen(Pktgen):
             command += f' --stats-delay {self.stats_delay}'
 
         self.pktgen_cmd = remote_command(
-            self.dataplane.ssh_client, command, print_command=self.verbose
+            self.dataplane.ssh_client, command, print_command=self.verbose,
+            pty=True
         )
 
     def wait_transmission_done(self) -> None:
@@ -193,11 +194,16 @@ class NormanPktgen(Pktgen):
             return
 
         watch_command(self.pktgen_cmd, stdout=self.verbose, stderr=self.verbose,
-                      keyboard_int=lambda: self.pktgen_cmd.send('\x03'))
+                      keyboard_int=lambda: self.pktgen_cmd.send(b'\x03'))
         status = self.pktgen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError('Error running Norman Pktgen')
 
+        self.update_stats()
+
+        self.pktgen_cmd = None
+
+    def update_stats(self) -> None:
         # Make sure transmission rate matches specification for sufficiently
         # high rates (i.e., >50Gbps).
         calculate_tx_mean = \
@@ -239,8 +245,6 @@ class NormanPktgen(Pktgen):
         self.nb_tx_bytes += stats_summary.get('tx_bytes', 0)
 
         self.mean_rtt = stats_summary.get('mean_rtt_ns', 0)
-
-        self.pktgen_cmd = None
 
     @property
     def pcap_path(self) -> None:
@@ -289,12 +293,14 @@ class NormanPktgen(Pktgen):
             # Pktgen is not running.
             return
 
-        self.pktgen_cmd.send('\x03')
+        self.pktgen_cmd.send(b'\x03')
 
         watch_command(self.pktgen_cmd, stdout=self.verbose, stderr=self.verbose)
         status = self.pktgen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError('Error stopping Norman Pktgen')
+
+        self.update_stats()
 
     def close(self) -> None:
         # No need to close here.
