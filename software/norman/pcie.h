@@ -78,8 +78,13 @@ typedef uint32_t pkt_q_id_t;
 
 #define MEMORY_SPACE_PER_QUEUE (1<<12)
 
+#ifndef likely
 #define likely(x)       __builtin_expect((x),1)
+#endif
+
+#ifndef unlikely
 #define unlikely(x)     __builtin_expect((x),0)
+#endif
 
 // Assumes that the FPGA `clk_datamover` runs at 200MHz. If we change the clock,
 // we must also change this value.
