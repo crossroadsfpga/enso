@@ -9,6 +9,8 @@
 // TODO(sadok): Do not expose pcie.h here.
 #include "pcie.h"
 
+namespace norman {
+
 typedef unsigned short sa_family_t;
 typedef unsigned int socklen_t;
 
@@ -86,5 +88,7 @@ void free_pkt_buf(int sockfd, size_t len);
 int shutdown(int sockfd, int how) noexcept;
 
 void print_sock_stats(int sockfd);
+
+}  // namespace norman
 
 #endif // SOCKET_H

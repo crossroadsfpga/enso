@@ -6,6 +6,7 @@
 #include "pcie.h"
 #include "api/intel_fpga_pcie_api.hpp"
 
+namespace norman {
 
 static dsc_queue_t dsc_queue [MAX_NB_CORES];
 
@@ -208,3 +209,5 @@ void print_sock_stats(int sockfd) {
     socket_internal* socket = &open_sockets[sockfd];
     print_stats(socket, socket->queue_id == 0);
 }
+
+}  // namespace norman

@@ -17,12 +17,13 @@
 #include "norman/socket.h"
 // #include <sys/socket.h>
 // #include <netinet/in.h>
-// #include <arpa/inet.h> 
+// #include <arpa/inet.h>
+
+#include "app.h"
 
 #define ZERO_COPY
 #define SEND_BACK
 
-#include "app.h"
 
 static volatile int keep_running = 1;
 
@@ -67,7 +68,7 @@ int main(int argc, const char* argv[])
         for (int i = 0; i < nb_queues; ++i) {
             // TODO(sadok) can we make this a valid file descriptor?
             std::cout << "creating queue " << i << std::endl;
-            int socket_fd = socket(AF_INET, SOCK_DGRAM, nb_queues);
+            int socket_fd = norman::socket(AF_INET, SOCK_DGRAM, nb_queues);
 
             if (socket_fd == -1) {
                 std::cerr << "Problem creating socket (" << errno << "): "
@@ -85,7 +86,7 @@ int main(int argc, const char* argv[])
             addr.sin_addr.s_addr = htonl(ip_address);
             addr.sin_port = htons(port);
 
-            if (bind(socket_fd, (struct sockaddr*) &addr, sizeof(addr))) {
+            if (norman::bind(socket_fd, (struct sockaddr*) &addr, sizeof(addr))) {
                 std::cerr << "Problem binding socket (" << errno << "): "
                           << strerror(errno) <<  std::endl;
                 exit(3);
@@ -97,7 +98,7 @@ int main(int argc, const char* argv[])
         while (keep_running) {
             int socket_fd;
             int recv_len =
-                recv_select(0, &socket_fd, (void**) &buf, BUF_LEN, 0);
+                norman::recv_select(0, &socket_fd, (void**) &buf, BUF_LEN, 0);
 
             if (unlikely(recv_len < 0)) {
                 std::cerr << "Error receiving" << std::endl;
@@ -131,9 +132,10 @@ int main(int argc, const char* argv[])
 
 #ifdef SEND_BACK
                 uint16_t pkt_len = 64; // HACK(sadok): Hardcoded packet size!
-                uint64_t phys_addr = convert_buf_addr_to_phys(socket_fd, buf);
+                uint64_t phys_addr =
+                    norman::convert_buf_addr_to_phys(socket_fd, buf);
                 for (int i = 0; i < recv_len/pkt_len; ++i) {
-                    send(socket_fd, (void*) phys_addr, pkt_len, 0);
+                    norman::send(socket_fd, (void*) phys_addr, pkt_len, 0);
                     phys_addr = (phys_addr + pkt_len);
                     // Save transmission request so that we can free the buffer once
                     // it's complete.
@@ -142,17 +144,17 @@ int main(int argc, const char* argv[])
                     tx_pr_tail = (tx_pr_tail + 1) % (MAX_PENDING_TX_REQUESTS + 1);
                 }
 #else
-                free_pkt_buf(socket_fd, recv_len);
+                norman::free_pkt_buf(socket_fd, recv_len);
 #endif
             }
 
 #ifdef SEND_BACK
-            int nb_tx_completions = get_completions(0);
+            int nb_tx_completions = norman::get_completions(0);
 
             // Free data that was already sent.
             for (int i = 0; i < nb_tx_completions; ++i) {
                 tx_pending_request_t tx_req = tx_pending_requests[tx_pr_head];
-                free_pkt_buf(tx_req.socket_fd, tx_req.length);
+                norman::free_pkt_buf(tx_req.socket_fd, tx_req.length);
                 tx_pr_head = (tx_pr_head + 1) % (MAX_PENDING_TX_REQUESTS + 1);
             }
 #endif
@@ -161,8 +163,8 @@ int main(int argc, const char* argv[])
         // TODO(sadok): it is also common to use the close() syscall to close a
         // UDP socket.
         for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-            print_sock_stats(socket_fd);
-            shutdown(socket_fd, SHUT_RDWR);
+            norman::print_sock_stats(socket_fd);
+            norman::shutdown(socket_fd, SHUT_RDWR);
         }
 
         delete[] tx_pending_requests;

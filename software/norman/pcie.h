@@ -9,6 +9,8 @@
 
 #include "api/intel_fpga_pcie_api.hpp"
 
+namespace norman {
+
 #define RULE_ID_LINE_LEN 64 // bytes
 #define RULE_ID_SIZE 2 // bytes
 #define NB_RULES_IN_LINE (RULE_ID_LINE_LEN/RULE_ID_SIZE)
@@ -402,5 +404,7 @@ static inline uint8_t* get_next_pkt(uint8_t *pkt) {
     uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
     return pkt + nb_flits * 64;
 }
+
+}  // namespace norman
 
 #endif // PCIE_H

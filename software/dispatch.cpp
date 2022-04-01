@@ -17,9 +17,10 @@
 // #include <netinet/in.h>
 // #include <arpa/inet.h> 
 
-#define ZERO_COPY
-
 #include "app.h"
+
+
+#define ZERO_COPY
 
 #define CACHE_LINE_SIZE 64
 
@@ -77,7 +78,7 @@ int main(int argc, const char* argv[])
                       << std::endl;
 
             // TODO(sadok) can we make this a valid file descriptor?
-            int socket_fd = socket(AF_INET, SOCK_DGRAM, 1);
+            int socket_fd = norman::socket(AF_INET, SOCK_DGRAM, 1);
 
             if (socket_fd == -1) {
                 std::cerr << "Problem creating socket (" << errno << "): "
@@ -92,7 +93,8 @@ int main(int argc, const char* argv[])
             addr.sin_addr.s_addr = inet_addr("192.168.0.0");
             addr.sin_port = htons(port);
 
-            if (bind(socket_fd, (struct sockaddr*) &addr, sizeof(addr))) {
+            if (norman::bind(socket_fd, (struct sockaddr*) &addr,
+                    sizeof(addr))) {
                 std::cerr << "Problem binding socket (" << errno << "): "
                           << strerror(errno) <<  std::endl;
                 exit(3);
@@ -106,10 +108,10 @@ int main(int argc, const char* argv[])
 
             while (keep_running) {
                 #ifdef ZERO_COPY
-                    int recv_len = recv_zc(socket_fd, (void**) &buf, BUF_LEN,
-                                           0);
+                    int recv_len = norman::recv_zc(socket_fd, (void**) &buf,
+                                                   BUF_LEN, 0);
                 #else
-                    int recv_len = recv(socket_fd, buf, BUF_LEN, 0);
+                    int recv_len = norman::recv(socket_fd, buf, BUF_LEN, 0);
                 #endif
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
@@ -141,7 +143,7 @@ int main(int argc, const char* argv[])
                         rb_states[buf_idx].head = (my_head + recv_len) % BUF_LEN;
                     }
                     #ifdef ZERO_COPY
-                        free_pkt_buf(socket_fd, recv_len);
+                        norman::free_pkt_buf(socket_fd, recv_len);
                     #endif
                 }
                 recv_bytes += recv_len;
@@ -149,7 +151,7 @@ int main(int argc, const char* argv[])
 
         // TODO(sadok) it is also common to use the close() syscall to close a
         // UDP socket
-        shutdown(socket_fd, SHUT_RDWR);
+        norman::shutdown(socket_fd, SHUT_RDWR);
 
         // free buffers
         for (uint32_t i = 0; i < nb_cores; ++i) {

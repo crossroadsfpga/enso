@@ -24,6 +24,7 @@
 // #include "intel_fpga_pcie_link_test.hpp"
 #include "pcie.h"
 
+namespace norman {
 
 void print_buf(void* buf, const uint32_t nb_cache_lines)
 {
@@ -733,3 +734,5 @@ void print_stats(socket_internal* socket_entry, bool print_global)
     printf("Pkt RX tail: %d\n", socket_entry->pkt_queue.rx_tail);
     printf("Pkt RX head: %d\n", socket_entry->pkt_queue.rx_head);
 }
+
+}  // namespace norman

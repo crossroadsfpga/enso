@@ -475,7 +475,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
     uint8_t* recv_buf;
     int socket_fd;
     int recv_len =
-        recv_select(0, &socket_fd, (void**) &recv_buf, RECV_BUF_LEN, 0);
+        norman::recv_select(0, &socket_fd, (void**) &recv_buf, RECV_BUF_LEN, 0);
 
     if (unlikely(recv_len < 0)) {
         std::cerr << "Error receiving" << std::endl;
@@ -487,12 +487,12 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
         uint8_t* pkt = recv_buf;
 
         while (processed_bytes < recv_len) {
-            uint16_t pkt_len = get_pkt_len(pkt);
+            uint16_t pkt_len = norman::get_pkt_len(pkt);
             uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
             uint16_t pkt_aligned_len = nb_flits * 64;
 
             if (rx_args.enable_rtt) {
-                uint32_t rtt = get_pkt_rtt(pkt);
+                uint32_t rtt = norman::get_pkt_rtt(pkt);
                 rx_stats.rtt_sum += rtt;
 
                 if (rx_args.enable_rtt_history) {
@@ -508,7 +508,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
         rx_stats.pkts += nb_pkts;
         ++(rx_stats.nb_batches);
         rx_stats.bytes += recv_len;
-        free_pkt_buf(socket_fd, recv_len);
+        norman::free_pkt_buf(socket_fd, recv_len);
     }
 #endif  // IGNORE_RX
     return nb_pkts;
@@ -529,7 +529,7 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
 
         void* phys_addr = (void*) tx_args.current_pkt_buf->phys_addr;
 
-        send(tx_args.socket_fd, phys_addr, transmission_length, 0);
+        norman::send(tx_args.socket_fd, phys_addr, transmission_length, 0);
         tx_stats.bytes += transmission_length;
         ++tx_args.transmissions_pending;
 
@@ -553,7 +553,8 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
     if ((tx_args.transmissions_pending > (DSC_BUF_SIZE / 4))) {
         if (tx_args.ignored_reclaims > TX_RECLAIM_DELAY) {
             tx_args.ignored_reclaims = 0;
-            tx_args.transmissions_pending -= get_completions(tx_args.socket_fd);
+            tx_args.transmissions_pending -=
+                norman::get_completions(tx_args.socket_fd);
         } else {
             ++tx_args.ignored_reclaims;
         }
@@ -563,7 +564,8 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats)
 
 inline void reclaim_all_buffers(struct TxArgs& tx_args) {
     while (tx_args.transmissions_pending) {
-        tx_args.transmissions_pending -= get_completions(tx_args.socket_fd);
+        tx_args.transmissions_pending -=
+            norman::get_completions(tx_args.socket_fd);
     }
 }
 
@@ -643,14 +645,14 @@ int main(int argc, char** argv)
             if (nb_pkts_remaining < buffer.nb_pkts) {
                 uint8_t* pkt = buffer.buf;
                 while (nb_pkts_remaining > 0) {
-                    uint16_t pkt_len = get_pkt_len(pkt);
+                    uint16_t pkt_len = norman::get_pkt_len(pkt);
                     uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
 
                     total_bytes_to_send += nb_flits * 64;
                     --nb_pkts_remaining;
                     ++pkts_in_last_buffer;
 
-                    pkt = get_next_pkt(pkt);
+                    pkt = norman::get_next_pkt(pkt);
                 }
                 break;
             }
@@ -684,8 +686,8 @@ int main(int argc, char** argv)
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
             for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-                int socket_fd = socket(AF_INET, SOCK_DGRAM,
-                                       parsed_args.nb_queues);
+                int socket_fd = norman::socket(AF_INET, SOCK_DGRAM,
+                                               parsed_args.nb_queues);
 
                 if (socket_fd == -1) {
                     std::cerr << "Problem creating socket (" << errno << "): "
@@ -694,13 +696,13 @@ int main(int argc, char** argv)
                 }
             }
 
-            enable_device_rate_limit(parsed_args.rate_num,
-                                     parsed_args.rate_den);
+            norman::enable_device_rate_limit(parsed_args.rate_num,
+                                             parsed_args.rate_den);
 
             if (parsed_args.enable_rtt) {
-                enable_device_timestamp();
+                norman::enable_device_timestamp();
             } else {
-                disable_device_timestamp();
+                norman::disable_device_timestamp();
             }
 
             RxArgs rx_args;
@@ -729,17 +731,17 @@ int main(int argc, char** argv)
 
             rx_done = true;
 
-            disable_device_rate_limit();
+            norman::disable_device_rate_limit();
 
             if (parsed_args.enable_rtt) {
-                disable_device_timestamp();
+                norman::disable_device_timestamp();
             }
 
             for (uint32_t socket_fd = 0; socket_fd < parsed_args.nb_queues;
                  ++socket_fd)
             {
-                // print_sock_stats(socket_fd);
-                shutdown(socket_fd, SHUT_RDWR);
+                //norman::print_sock_stats(socket_fd);
+                norman::shutdown(socket_fd, SHUT_RDWR);
             }
         });
 
@@ -749,7 +751,8 @@ int main(int argc, char** argv)
         ]{
             std::this_thread::sleep_for(std::chrono::seconds(1));
 
-            int socket_fd = socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
+            int socket_fd = norman::socket(AF_INET, SOCK_DGRAM,
+                                           parsed_args.nb_queues);
 
             if (socket_fd == -1) {
                 std::cerr << "Problem creating socket (" << errno << "): "
@@ -808,8 +811,8 @@ int main(int argc, char** argv)
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
             for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-                int socket_fd = socket(AF_INET, SOCK_DGRAM,
-                                       parsed_args.nb_queues);
+                int socket_fd = norman::socket(AF_INET, SOCK_DGRAM,
+                                               parsed_args.nb_queues);
 
                 if (socket_fd == -1) {
                     std::cerr << "Problem creating socket (" << errno << "): "
@@ -818,11 +821,11 @@ int main(int argc, char** argv)
                 }
             }
 
-            enable_device_rate_limit(parsed_args.rate_num,
-                                     parsed_args.rate_den);
+            norman::enable_device_rate_limit(parsed_args.rate_num,
+                                             parsed_args.rate_den);
 
             if (parsed_args.enable_rtt) {
-                enable_device_timestamp();
+                norman::enable_device_timestamp();
             }
 
             std::cout << "Running RX and TX on core " << sched_getcpu()
@@ -861,16 +864,16 @@ int main(int argc, char** argv)
 
             reclaim_all_buffers(tx_args);
 
-            disable_device_rate_limit();
+            norman::disable_device_rate_limit();
 
             if (parsed_args.enable_rtt) {
-                disable_device_timestamp();
+                norman::disable_device_timestamp();
             }
 
             for (uint32_t socket_fd = 0; socket_fd < parsed_args.nb_queues;
                  ++socket_fd)
             {
-                shutdown(socket_fd, SHUT_RDWR);
+                norman::shutdown(socket_fd, SHUT_RDWR);
             }
         });
 
