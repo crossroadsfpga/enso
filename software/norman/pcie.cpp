@@ -42,6 +42,25 @@ void print_buf(void* buf, const uint32_t nb_cache_lines)
     }
 }
 
+void print_ip(uint32_t ip) {
+    std::cout << ((ip >> 0)  & 0xff) << "." << ((ip >> 8)  & 0xff) << "."
+              << ((ip >> 16) & 0xff) << "." << ((ip >> 24) & 0xff);
+}
+
+
+void print_pkt_ips(uint8_t* pkt) {
+    struct ether_header* l2_hdr = (struct ether_header*) pkt;
+    struct iphdr* l3_hdr = (struct iphdr*) (l2_hdr + 1);
+
+    std::cout << "src: ";
+    print_ip(l3_hdr->saddr);
+
+    std::cout << "  dst: ";
+    print_ip(l3_hdr->daddr);
+
+    std::cout << std::endl;
+}
+
 
 // Adapted from ixy.
 static uint64_t virt_to_phys(void* virt) {
