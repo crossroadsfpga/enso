@@ -443,7 +443,7 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr *pkt_hdr,
                 pcap_breakloop(context->pcap);
                 return;
             }
-            context->hugepage_offset = 0;
+            context->hugepage_offset = BUFFER_SIZE;
         } else {
             struct PktBuffer& pkt_buffer = context->pkt_buffers.back();
             buf = pkt_buffer.buf + BUFFER_SIZE;
