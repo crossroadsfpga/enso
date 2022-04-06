@@ -17,7 +17,7 @@ endif
 
 LDFLAGS = -g -O3 -m64 -march=native
 
-SRCS = socket.cpp pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp
+SRCS = socket.cpp pcie.cpp userlib.cpp api/linux/intel_fpga_pcie_api_linux.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
 LIB_STATIC = libnorman.a
 LIB_SHARED = libnorman.so
