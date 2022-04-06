@@ -56,6 +56,18 @@ static uint64_t virt_to_phys(void* virt) {
 }
 
 /**
+ * PacketBufferGroup implementation.
+ */
+size_t PacketBufferGroup::append(PacketBuffer* buffer) {
+    assert(!is_full()); // Sanity check
+
+    size_t eth_size = round_to_cache_line_size(buffer->get_length());
+    buffers_[num_valid_++] = buffer;
+    total_bytes_ += eth_size;
+    return eth_size;
+}
+
+/**
  * SpeculativeRingBufferMemoryAllocator implementation.
  */
 void SpeculativeRingBufferMemoryAllocator::initialize(
@@ -145,11 +157,11 @@ void RXPacketQueueManager::initialize(
 }
 
 uint16_t RXPacketQueueManager::consume_packetized(PacketBufferGroup& group) {
-    uint16_t num_buffers = 0; // Number of valid buffers
-    assert(last_consume_bytes_ == 0); // Sanity check
+    assert(group.is_empty()); // Sanity check
+    assert(last_consume_bytes_ == 0);
 
     // Satisfy as much of the request as possible using previously-read bytes
-    while ((num_buffers < group.num_total_buffers) && read_bytes_left_ > 0) {
+    while (!group.is_full() && read_bytes_left_ > 0) {
         auto pb = static_cast<PacketBuffer*>(
             pb_allocator_.allocate(sizeof(PacketBuffer)));
 
@@ -161,26 +173,21 @@ uint16_t RXPacketQueueManager::consume_packetized(PacketBufferGroup& group) {
             rte_be_to_cpu_16(hdr->total_length) +
             static_cast<uint16_t>(sizeof(rte_ether_hdr)));
 
-        group.buffers[num_buffers++] = new (pb) PacketBuffer(eth_size, read_addr_);
-        eth_size = round_to_cache_line_size(eth_size);
-        group.total_buffer_size_bytes += eth_size;
-
+        eth_size = group.append(new (pb) PacketBuffer(eth_size, read_addr_));
         assert(read_bytes_left_ >= eth_size);
         last_consume_bytes_ += eth_size;
         read_bytes_left_ -= eth_size;
         read_addr_ += eth_size;
     }
-    // Update the group (reference) and return
-    group.num_valid_buffers = num_buffers;
-    return num_buffers;
+    // Return the number of packets parsed
+    return group.get_num_valid_buffers();
 }
 
-void RXPacketQueueManager::release(PacketBufferGroup& group) {
-    pb_allocator_.deallocate(group.num_valid_buffers *
+void RXPacketQueueManager::release(const PacketBufferGroup& group) {
+    pb_allocator_.deallocate(group.get_num_valid_buffers() *
                              sizeof(PacketBuffer));
 
-    assert(group.total_buffer_size_bytes ==
-           last_consume_bytes_); // Sanity check
+    assert(group.get_byte_count() == last_consume_bytes_);
     last_consume_bytes_ = 0;
 }
 
@@ -268,23 +275,22 @@ bool Socket::bind(const struct sockaddr *addr, socklen_t addrlen) {
     return norman::bind(socket_fd_, addr, addrlen);
 }
 
-void Socket::send_zc(PacketBufferGroup& group,
+void Socket::send_zc(const PacketBufferGroup& group,
     TxCompletionQueueManager& txcq_manager) {
-    auto& txpd_allocator = tx_manager_.pd_allocator_;
+    if (unlikely(group.is_empty())) { return; }
 
-    // Fetch the physical address corresponding to this group
-    if (unlikely(group.num_valid_buffers == 0)) { return; }
+    // Fetch the paddr corresponding to this group
+    auto& txpd_allocator = tx_manager_.pd_allocator_;
     uint64_t start_paddr = (txpd_allocator.to_phys_addr(
-        group.buffers[0]->get_data()));
+        group.get_buffers()[0]->get_data()));
 
     norman::send(socket_fd_, (void*) start_paddr,
-                 group.total_buffer_size_bytes, 0);
+                 group.get_byte_count(), 0);
 
     // Enque an event into the TXCQ
     txcq_manager.enque_event(
-        TxCompletionEvent(sg_idx_, group.total_buffer_size_bytes,
-                          group.num_valid_buffers)
-    );
+        TxCompletionEvent(sg_idx_, group.get_byte_count(),
+                          group.get_num_valid_buffers()));
 }
 
 uint16_t Socket::recv_zc(PacketBufferGroup& group) {
@@ -301,10 +307,10 @@ uint16_t Socket::recv_zc(PacketBufferGroup& group) {
     return rx_manager_.consume_packetized(group);
 }
 
-void Socket::done_recv(PacketBufferGroup& group) {
+void Socket::done_recv(const PacketBufferGroup& group) {
     rx_manager_.release(group); // Release packet buffers
-    if (likely(group.total_buffer_size_bytes != 0)) { // Advance tail
-        norman::free_pkt_buf(socket_fd_, group.total_buffer_size_bytes);
+    if (likely(!group.is_empty())) { // Advance tail pointer
+        norman::free_pkt_buf(socket_fd_, group.get_byte_count());
     }
 }
 
@@ -336,12 +342,16 @@ uint8_t SocketGroup::add_socket(
         assert(false);
     }
     uint8_t sg_idx = num_active_sockets_++;
-    sockets_[sg_idx].initialize(hp_prefix, num_queues, sg_idx);
+    int fd = sockets_[sg_idx].initialize(hp_prefix, num_queues, sg_idx);
+    if (fd == -1) {
+        std::cerr << "Error creating socket" << std::endl;
+        assert(false);
+    }
 
     return sg_idx;
 }
 
-void SocketGroup::send_zc(uint8_t sg_idx, PacketBufferGroup& group) {
+void SocketGroup::send_zc(uint8_t sg_idx, const PacketBufferGroup& group) {
     assert(sg_idx < num_active_sockets_); // Sanity check
     sockets_[sg_idx].send_zc(group, txcq_manager_);
 
@@ -359,7 +369,7 @@ void SocketGroup::send_zc(uint8_t sg_idx, PacketBufferGroup& group) {
     }
 }
 
-void SocketGroup::done_recv(uint8_t sg_idx, PacketBufferGroup& group) {
+void SocketGroup::done_recv(uint8_t sg_idx, const PacketBufferGroup& group) {
     assert(sg_idx < num_active_sockets_); // Sanity check
     return sockets_[sg_idx].done_recv(group);
 }
@@ -367,6 +377,11 @@ void SocketGroup::done_recv(uint8_t sg_idx, PacketBufferGroup& group) {
 uint16_t SocketGroup::recv_zc(uint8_t sg_idx, PacketBufferGroup& group) {
     assert(sg_idx < num_active_sockets_); // Sanity check
     return sockets_[sg_idx].recv_zc(group);
+}
+
+Socket& SocketGroup::get_socket(const uint8_t sg_idx) {
+    assert(sg_idx < num_active_sockets_); // Sanity check
+    return sockets_[sg_idx];
 }
 
 } // namespace norman

@@ -75,11 +75,29 @@ static_assert(sizeof(PacketBuffer) == 16,
  * are: (a) in-order, (b) contiguous, and (c) allocated by
  * either the NIC or the same MemoryAllocator instance.
  */
-struct PacketBufferGroup final {
-    size_t num_valid_buffers = 0;       // Valid buffer count
-    size_t num_total_buffers = 0;       // Maximum buffer count
-    PacketBuffer** buffers = nullptr;   // Array of packet buffers
-    size_t total_buffer_size_bytes = 0; // Cumulative size of the group
+class PacketBufferGroup final {
+private:
+    uint16_t num_valid_ = 0;            // Valid buffer count
+    size_t total_bytes_ = 0;            // Cumulative byte count
+    PacketBuffer** const buffers_;      // Array of packet buffers
+    const uint16_t max_num_buffers_;    // The maximum buffer count
+
+public:
+    DISALLOW_COPY_AND_ASSIGN(PacketBufferGroup);
+    PacketBufferGroup(PacketBuffer** const bufs, const uint16_t num_bufs) :
+                      buffers_(bufs), max_num_buffers_(num_bufs) {}
+
+    // Accessors
+    inline bool is_empty() const { return (num_valid_ == 0); }
+    inline size_t get_byte_count() const { return total_bytes_; }
+    inline PacketBuffer** get_buffers() const { return buffers_; }
+    inline uint16_t get_num_valid_buffers() const { return num_valid_; }
+    inline uint16_t get_max_num_buffers() const { return max_num_buffers_; }
+    inline bool is_full() const { return (num_valid_ == max_num_buffers_); }
+
+    // Mutators
+    inline size_t append(PacketBuffer* buffer);
+    inline void clear() { num_valid_ = 0; total_bytes_ = 0; }
 };
 
 /**
@@ -189,8 +207,8 @@ private:
      * ionally limiting the abstraction to prevent the programmer from
      * inadvertently shooting themselves in the foot.
      */
-    void release(PacketBufferGroup& group);
-    void release(PacketBuffer** buffer); // TODO(natre): Impl.
+    void release(const PacketBufferGroup& group);
+    void release(const PacketBuffer** buffer); // TODO(natre): Impl.
 
     /**
      * Updates the packet queue state on receiving new RX data
@@ -244,6 +262,7 @@ public:
  */
 class Socket final {
 private:
+    // TODO(natre): Don't hardcode this
     static constexpr size_t kRecvSize = 10000000;
 
     uint8_t sg_idx_ = 0; // SocketGroup idx
@@ -254,11 +273,11 @@ private:
     /**
      * Network interface.
      */
-    void send_zc(PacketBufferGroup& group,
+    void send_zc(const PacketBufferGroup& group,
                  TxCompletionQueueManager& txcq_manager);
 
     uint16_t recv_zc(PacketBufferGroup& group);
-    void done_recv(PacketBufferGroup& group);
+    void done_recv(const PacketBufferGroup& group);
 
 public:
     DEFAULT_CTOR_AND_DTOR(Socket);
@@ -370,13 +389,13 @@ public:
     /**
      * Network interface.
      */
-    void send_zc(uint8_t sg_idx, PacketBufferGroup& group);
-    void done_recv(uint8_t sg_idx, PacketBufferGroup& group);
     uint16_t recv_zc(uint8_t sg_idx, PacketBufferGroup& group);
+    void send_zc(uint8_t sg_idx, const PacketBufferGroup& group);
+    void done_recv(uint8_t sg_idx, const PacketBufferGroup& group);
 
     // Accessors
-    uint8_t get_num_active_sockets() const;
     Socket& get_socket(const uint8_t sg_idx);
+    uint8_t get_num_active_sockets() const { return num_active_sockets_; }
 };
 
 #undef DISALLOW_COPY_AND_ASSIGN
