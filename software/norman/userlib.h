@@ -96,7 +96,7 @@ public:
     inline bool is_full() const { return (num_valid_ == max_num_buffers_); }
 
     // Mutators
-    inline size_t append(PacketBuffer* buffer);
+    size_t append(PacketBuffer* buffer);
     inline void clear() { num_valid_ = 0; total_bytes_ = 0; }
 };
 
@@ -247,6 +247,7 @@ public:
     PacketBuffer* alloc(const uint64_t size);
     void alloc_shrink(PacketBuffer* buffer,
                       const uint64_t to_size);
+    void alloc_squash();
 
     /**
      * Updates the packet queue state on TX events.
@@ -312,6 +313,7 @@ private:
     size_t num_bytes_ = 0; // Length (in bytes) of the packet data
     size_t num_pktbufs_ = 0; // Number of pktbufs in this event
     uint8_t sg_idx_ = 0; // Socket's index in its SocketGroup
+    uint8_t pad[15]{}; // Padding for alignment
 
 public:
     TxCompletionEvent() = default;
@@ -328,7 +330,7 @@ public:
     inline void set_num_bytes(size_t num_bytes) { num_bytes_ = num_bytes; }
     inline void set_num_pktbufs(size_t num_pktbufs) { num_pktbufs_ = num_pktbufs; }
 };
-static_assert(sizeof(TxCompletionEvent) == 17,
+static_assert(sizeof(TxCompletionEvent) == 32,
               "Error: TxCompletionEvent layout is incorrect");
 
 /**
@@ -373,19 +375,20 @@ private:
     static constexpr uint8_t kMaxNumSockets = 255;
 
     // Housekeeping
+    const std::string hp_prefix_;
     uint8_t num_active_sockets_ = 0;
     Socket sockets_[kMaxNumSockets]{};
     TxCompletionQueueManager txcq_manager_{};
 
 public:
-    DEFAULT_CTOR_AND_DTOR(SocketGroup);
     DISALLOW_COPY_AND_ASSIGN(SocketGroup);
-
+    explicit SocketGroup(const std::string hp_prefix) :
+                         hp_prefix_(hp_prefix) {}
     /**
      * Adds a new socket to this group.
      */
-    uint8_t add_socket(const std::string hp_prefix,
-                       const int num_queues);
+    uint8_t add_socket(const int num_queues);
+
     /**
      * Network interface.
      */

@@ -227,7 +227,12 @@ PacketBuffer* TXPacketQueueManager::alloc(const uint64_t size) {
 void TXPacketQueueManager::alloc_shrink(
     PacketBuffer* buffer, const uint64_t to_size) {
     pd_allocator_.allocate_shrink(to_size);
-    buffer->set_length(to_size);
+    // buffer->set_length(to_size);
+}
+
+void TXPacketQueueManager::alloc_squash() {
+    pb_allocator_.allocate_shrink(0);
+    pd_allocator_.allocate_shrink(0);
 }
 
 void TXPacketQueueManager::dealloc(const uint64_t num_pktbufs,
@@ -335,14 +340,13 @@ void TxCompletionQueueManager::enque_event(TxCompletionEvent event) {
 /**
  * SocketGroup implementation.
  */
-uint8_t SocketGroup::add_socket(
-    const std::string hp_prefix, const int num_queues) {
+uint8_t SocketGroup::add_socket(const int num_queues) {
     if (num_active_sockets_ == kMaxNumSockets) { // Sanity check
         std::cerr << "Max socket count exceeded" << std::endl;
         assert(false);
     }
     uint8_t sg_idx = num_active_sockets_++;
-    int fd = sockets_[sg_idx].initialize(hp_prefix, num_queues, sg_idx);
+    int fd = sockets_[sg_idx].initialize(hp_prefix_, num_queues, sg_idx);
     if (fd == -1) {
         std::cerr << "Error creating socket" << std::endl;
         assert(false);
