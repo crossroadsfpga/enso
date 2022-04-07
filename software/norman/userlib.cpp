@@ -256,8 +256,8 @@ int Socket::initialize(std::string hp_prefix, const int num_queues,
     const auto txpb_hp_path = hp_prefix + "_txpb";
     const auto txpd_hp_path = hp_prefix + "_txpd";
 
-    const size_t rxpb_size = sizeof(PacketBuffer) * 8192;
-    const size_t txpb_size = sizeof(PacketBuffer) * 8192;
+    const size_t rxpb_size = kHugePageSize;
+    const size_t txpb_size = kHugePageSize;
     const size_t txpd_size = (1 << 24);
 
     int rxpb_fd = get_hugepage_fd(rxpb_hp_path, rxpb_size);

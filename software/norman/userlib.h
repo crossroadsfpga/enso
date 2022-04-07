@@ -32,6 +32,7 @@ class SocketGroup;
 
 // TODO(natre): Don't hardcode these parameters
 static constexpr uint16_t kLogCacheLineSize = 6;
+static constexpr size_t kHugePageSize = (2048 * 1024);
 static constexpr uint16_t kCacheLineAlignmentMask = (
     ((0xffff) >> kLogCacheLineSize) << kLogCacheLineSize);
 static constexpr uint16_t kCacheLineSize = (1 << kLogCacheLineSize);
