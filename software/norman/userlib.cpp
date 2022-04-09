@@ -144,11 +144,12 @@ void SpeculativeRingBufferMemoryAllocator::deallocate(const uint64_t size) {
         free_capacity_ = kMaxBufferSize;
         dealloc_offset_ = alloc_offset_;
         spec_alloc_size_ = 0;
-        return;
     }
-    free_capacity_ += size;
-    assert(free_capacity_ <= kMaxBufferSize); // Sanity check
-    dealloc_offset_ = (dealloc_offset_ + size) % kMaxBufferSize;
+    else {
+        free_capacity_ += size;
+        assert(free_capacity_ <= kMaxBufferSize); // Sanity check
+        dealloc_offset_ = (dealloc_offset_ + size) % kMaxBufferSize;
+    }
 }
 
 uint64_t SpeculativeRingBufferMemoryAllocator::to_phys_addr(void* vaddr) const {
@@ -227,7 +228,7 @@ PacketBuffer* TXPacketQueueManager::alloc(const uint64_t size) {
 
     auto data = pd_allocator_.allocate(size);
     if (unlikely(data == nullptr)) { // OOM on data alloc
-        pb_allocator_.deallocate(sizeof(PacketBuffer));
+        pb_allocator_.allocate_shrink(0);
         return nullptr;
     }
     pb->set_length(size);
