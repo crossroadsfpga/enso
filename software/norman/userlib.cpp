@@ -10,7 +10,7 @@ namespace norman {
 
 // From pcie.cpp. TODO(natre): De-duplicate.
 static int get_hugepage_fd(const std::string path, size_t size) {
-    int fd = open(path.c_str(), O_RDWR, S_IRWXU);
+    int fd = open(path.c_str(), O_CREAT | O_RDWR, S_IRWXU);
     if (fd == -1) {
         std::cerr << "(" << errno
                   << ") Problem opening huge page file descriptor" << std::endl;
@@ -133,8 +133,19 @@ allocate_shrink(const uint64_t shrink_to) {
 }
 
 void SpeculativeRingBufferMemoryAllocator::deallocate(const uint64_t size) {
-    commit_alloc(); // Commit the outstanding alloc (if any)
-
+    // If dealloc causes the free capacity to exceed the max buffer size, then
+    // it must be the case that the last speculative alloc was never committed.
+    // A special case arises when then the memory to be deallocated is exactly
+    // equal to the total allocated memory (including speculation). Here, we
+    // also need to quash the speculative alloc since it musn't be committed.
+    const size_t spec_capacity = (free_capacity_ + size - spec_alloc_size_);
+    if (unlikely(spec_capacity >= kMaxBufferSize)) {
+        assert(spec_capacity == kMaxBufferSize);
+        free_capacity_ = kMaxBufferSize;
+        dealloc_offset_ = alloc_offset_;
+        spec_alloc_size_ = 0;
+        return;
+    }
     free_capacity_ += size;
     assert(free_capacity_ <= kMaxBufferSize); // Sanity check
     dealloc_offset_ = (dealloc_offset_ + size) % kMaxBufferSize;
@@ -258,7 +269,7 @@ int Socket::initialize(std::string hp_prefix, const int num_queues,
 
     const size_t rxpb_size = kHugePageSize;
     const size_t txpb_size = kHugePageSize;
-    const size_t txpd_size = (1 << 24);
+    const size_t txpd_size = kHugePageSize;
 
     int rxpb_fd = get_hugepage_fd(rxpb_hp_path, rxpb_size);
     int txpb_fd = get_hugepage_fd(txpb_hp_path, txpb_size);
@@ -327,12 +338,19 @@ TxCompletionEvent TxCompletionQueueManager::deque_event() {
     num_outstanding_--;
     free_capacity_++;
 
-    return events_[dealloc_idx_++];
+    TxCompletionEvent event = events_[dealloc_idx_++];
+    if (dealloc_idx_ == kMaxNumEvents) {
+        dealloc_idx_ = 0;
+    }
+    return event;
 }
 
 void TxCompletionQueueManager::enque_event(TxCompletionEvent event) {
     assert(free_capacity_ > 0); // Sanity check
     events_[alloc_idx_++] = event;
+    if (alloc_idx_ == kMaxNumEvents) {
+        alloc_idx_ = 0;
+    }
     num_outstanding_++;
     free_capacity_--;
 }
