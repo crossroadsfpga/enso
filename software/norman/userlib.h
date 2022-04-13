@@ -21,9 +21,7 @@ namespace norman {
 
 // Forward declarations
 class PacketBuffer;
-class PacketBufferGroup;
 class SpeculativeRingBufferMemoryAllocator;
-class RXPacketQueueManager;
 class TXPacketQueueManager;
 class Socket;
 class TxCompletionEvent;
@@ -54,52 +52,28 @@ private:
     size_t len_ = 0; // Length (in bytes) of packet data
     void* data_ = nullptr; // Virtual address of packet data
 
+    // Housekeeping
+    uint16_t num_pkts_ = 0; // Number of packets
+    uint8_t pad[6]{}; // Padding
+
 public:
-    DISALLOW_COPY_AND_ASSIGN(PacketBuffer);
+    DEFAULT_CTOR_AND_DTOR(PacketBuffer);
     explicit PacketBuffer(const size_t len, void* data) :
                           len_(len), data_(data) {}
     // Mutators
-    inline void set_data(void* const data) { data_ = data; }
-    inline void set_length(const size_t len) { len_ = len; }
+    inline void set_length(size_t len) { len_ = len; }
+    inline void clear() { num_pkts_ = 0; len_ = 0; data_ = nullptr; }
+    inline void append(const size_t len) { num_pkts_ += 1; len_ += len; }
+    inline void set(void* data, const size_t len) { num_pkts_ = 1; data_ = data; len_ = len; }
 
     // Accessors
     inline size_t get_length() const { return len_; }
+    inline uint16_t get_num_packets() const { return num_pkts_; }
     inline char* get_data() { return static_cast<char*>(data_); }
     inline const char* get_data() const { return static_cast<const char*>(data_); }
 };
-static_assert(sizeof(PacketBuffer) == 16,
+static_assert(sizeof(PacketBuffer) == 24,
               "Error: PacketBuffer layout is incorrect");
-
-/**
- * Represents a collection of packet buffers. As per Norman
- * semantics, buffers must only be bundled this way if they
- * are: (a) in-order, (b) contiguous, and (c) allocated by
- * either the NIC or the same MemoryAllocator instance.
- */
-class PacketBufferGroup final {
-private:
-    uint16_t num_valid_ = 0;            // Valid buffer count
-    size_t total_bytes_ = 0;            // Cumulative byte count
-    PacketBuffer** const buffers_;      // Array of packet buffers
-    const uint16_t max_num_buffers_;    // The maximum buffer count
-
-public:
-    DISALLOW_COPY_AND_ASSIGN(PacketBufferGroup);
-    PacketBufferGroup(PacketBuffer** const bufs, const uint16_t num_bufs) :
-                      buffers_(bufs), max_num_buffers_(num_bufs) {}
-
-    // Accessors
-    inline bool is_empty() const { return (num_valid_ == 0); }
-    inline size_t get_byte_count() const { return total_bytes_; }
-    inline PacketBuffer** get_buffers() const { return buffers_; }
-    inline uint16_t get_num_valid_buffers() const { return num_valid_; }
-    inline uint16_t get_max_num_buffers() const { return max_num_buffers_; }
-    inline bool is_full() const { return (num_valid_ == max_num_buffers_); }
-
-    // Mutators
-    size_t append(PacketBuffer* buffer);
-    inline void clear() { num_valid_ = 0; total_bytes_ = 0; }
-};
 
 /**
  * Implementation of a speculative memory allocator that uses a fixed-
@@ -153,75 +127,7 @@ public:
      * Given a virtual address in the allocator's addrspace, returns
      * the corresponding physical address.
      */
-    uint64_t to_phys_addr(void* vaddr) const;
-};
-
-/**
- * Helper class to manage a socket's RX queue.
- */
-class RXPacketQueueManager final {
-private:
-    // PacketBuffer* memory allocator
-    SpeculativeRingBufferMemoryAllocator pb_allocator_{};
-
-    // Housekeeping
-    char* read_addr_ = nullptr;     // Current address of the read pointer. This
-                                    // is the position at which the application
-                                    // left off consuming data.
-    size_t read_bytes_left_ = 0;    // Number of bytes that can be read from the
-                                    // RX buffer without polling the NIC again.
-    size_t last_consume_bytes_ = 0; // Number of bytes read by the application
-                                    // on the previous invocation of consume()
-                                    // (incl padding for cache-line alignment).
-
-    DEFAULT_CTOR_AND_DTOR(RXPacketQueueManager);
-    DISALLOW_COPY_AND_ASSIGN(RXPacketQueueManager);
-
-    /**
-     * Initialize the RX packet queue.
-     */
-    void initialize(const int pb_ring_fd, const uint64_t pb_ring_size);
-
-    /**
-     * Parses one or more Ethernet frames from the previously-
-     * read bytes, and populates the parametrized buffer group
-     * with packet data. Returns the number of frames parsed.
-     */
-    uint16_t consume_packetized(PacketBufferGroup& group);
-
-    /**
-     * Constructs and populates a packet buffer from the previously-
-     * read bytes. Returns true if the buffer is valid (i.e., filled
-     * at least one byte), else false.
-     */
-    bool consume(PacketBuffer** buffer); // TODO(natre): Impl.
-
-    /**
-     * Releases resources associated with the parameterized packet-
-     * buffer or group. Every consume() invocation must be followed
-     * (immediately) by a release().
-     *
-     * TODO(natre): This condition (atomic consume+release) is stronger
-     * than what the interface requires. For instance, it is sufficient
-     * to have multiple consecutive consumes as long as releases happen
-     * in-order. However, in this version of the library, we're intent-
-     * ionally limiting the abstraction to prevent the programmer from
-     * inadvertently shooting themselves in the foot.
-     */
-    void release(const PacketBufferGroup& group);
-    void release(const PacketBuffer** buffer); // TODO(natre): Impl.
-
-    /**
-     * Updates the packet queue state on receiving new RX data
-     * from the NIC. Should be invoked whenever recv is called
-     * on the corresponding socket.
-     */
-    void on_recv(char* read_addr, size_t read_bytes);
-
-    // Accessors
-    inline size_t get_bytes_left() const { return read_bytes_left_; }
-
-    friend Socket;
+    uint64_t to_phys_addr(const void* vaddr) const;
 };
 
 /**
@@ -229,15 +135,13 @@ private:
  */
 class TXPacketQueueManager final {
 private:
-    SpeculativeRingBufferMemoryAllocator pb_allocator_{}; // PacketBuffer* allocator
-    SpeculativeRingBufferMemoryAllocator pd_allocator_{}; // PacketBuffer data allocator
+    SpeculativeRingBufferMemoryAllocator pd_allocator_{};
 
     /**
      * Initialize the TX packet queue.
      */
-    void initialize(const int pb_ring_fd, const uint64_t pb_ring_size,
-                    const int pd_ring_fd, const uint64_t pd_ring_size);
-
+    void initialize(const int pd_ring_fd,
+                    const uint64_t pd_ring_size);
 public:
     DEFAULT_CTOR_AND_DTOR(TXPacketQueueManager);
     DISALLOW_COPY_AND_ASSIGN(TXPacketQueueManager);
@@ -245,16 +149,14 @@ public:
     /**
      * Construct a PacketBuffer with the given size.
      */
-    PacketBuffer* alloc(const uint64_t size);
-    void alloc_shrink(PacketBuffer* buffer,
-                      const uint64_t to_size);
-    void alloc_squash();
+    void* alloc(const uint64_t size);
+    void alloc_shrink(const uint64_t to_size);
+    inline void alloc_squash() { return alloc_shrink(0); }
 
     /**
      * Updates the packet queue state on TX events.
      */
-    void dealloc(const uint64_t num_pktbufs,
-                 const uint64_t num_bytes);
+    void dealloc(const uint64_t num_bytes);
 
     friend Socket;
 };
@@ -269,17 +171,16 @@ private:
 
     uint8_t sg_idx_ = 0; // SocketGroup idx
     int socket_fd_ = -1; // This socket's FD
-    RXPacketQueueManager rx_manager_{}; // RX queue manager
     TXPacketQueueManager tx_manager_{}; // TX queue manager
 
     /**
      * Network interface.
      */
-    void send_zc(const PacketBufferGroup& group,
+    void send_zc(const PacketBuffer* buffer,
                  TxCompletionQueueManager& txcq_manager);
 
-    uint16_t recv_zc(PacketBufferGroup& group);
-    void done_recv(const PacketBufferGroup& group);
+    size_t recv_zc(PacketBuffer* buffer);
+    void done_recv(const PacketBuffer* buffer);
 
 public:
     DEFAULT_CTOR_AND_DTOR(Socket);
@@ -312,26 +213,22 @@ public:
 class __attribute__ ((__packed__)) TxCompletionEvent final {
 private:
     size_t num_bytes_ = 0; // Length (in bytes) of the packet data
-    size_t num_pktbufs_ = 0; // Number of pktbufs in this event
     uint8_t sg_idx_ = 0; // Socket's index in its SocketGroup
-    uint8_t pad[15]{}; // Padding for alignment
+    uint8_t pad[7]{}; // Padding for alignment
 
 public:
     TxCompletionEvent() = default;
-    explicit TxCompletionEvent(uint8_t sg_idx, size_t num_bytes,
-                               size_t num_pktbufs) : num_bytes_(num_bytes),
-                               num_pktbufs_(num_pktbufs), sg_idx_(sg_idx) {}
+    explicit TxCompletionEvent(uint8_t sg_idx, size_t num_bytes) :
+                               num_bytes_(num_bytes), sg_idx_(sg_idx) {}
     // Accessors
     inline uint8_t get_sg_idx() const { return sg_idx_; }
     inline size_t get_num_bytes() const { return num_bytes_; }
-    inline size_t get_num_pktbufs() const { return num_pktbufs_; }
 
     // Mutators
     inline void set_sg_idx(uint8_t sg_idx) { sg_idx_ = sg_idx; }
     inline void set_num_bytes(size_t num_bytes) { num_bytes_ = num_bytes; }
-    inline void set_num_pktbufs(size_t num_pktbufs) { num_pktbufs_ = num_pktbufs; }
 };
-static_assert(sizeof(TxCompletionEvent) == 32,
+static_assert(sizeof(TxCompletionEvent) == 16,
               "Error: TxCompletionEvent layout is incorrect");
 
 /**
@@ -393,9 +290,9 @@ public:
     /**
      * Network interface.
      */
-    uint16_t recv_zc(uint8_t sg_idx, PacketBufferGroup& group);
-    void send_zc(uint8_t sg_idx, const PacketBufferGroup& group);
-    void done_recv(uint8_t sg_idx, const PacketBufferGroup& group);
+    size_t recv_zc(uint8_t sg_idx, PacketBuffer* buffer);
+    void send_zc(uint8_t sg_idx, const PacketBuffer* buffer);
+    void done_recv(uint8_t sg_idx, const PacketBuffer* buffer);
 
     // Accessors
     Socket& get_socket(const uint8_t sg_idx);
