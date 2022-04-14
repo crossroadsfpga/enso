@@ -54,7 +54,6 @@ private:
 
     // Housekeeping
     uint16_t num_pkts_ = 0; // Number of packets
-    uint8_t pad[6]{}; // Padding
 
 public:
     DEFAULT_CTOR_AND_DTOR(PacketBuffer);
@@ -72,7 +71,7 @@ public:
     inline char* get_data() { return static_cast<char*>(data_); }
     inline const char* get_data() const { return static_cast<const char*>(data_); }
 };
-static_assert(sizeof(PacketBuffer) == 24,
+static_assert(sizeof(PacketBuffer) == 18,
               "Error: PacketBuffer layout is incorrect");
 
 /**
@@ -165,10 +164,11 @@ public:
  * Represents a Norman socket.
  */
 class Socket final {
-private:
+public:
     // TODO(natre): Don't hardcode this
     static constexpr size_t kRecvSize = 10000000;
 
+private:
     uint8_t sg_idx_ = 0; // SocketGroup idx
     int socket_fd_ = -1; // This socket's FD
     TXPacketQueueManager tx_manager_{}; // TX queue manager
@@ -276,6 +276,7 @@ private:
     const std::string hp_prefix_;
     uint8_t num_active_sockets_ = 0;
     Socket sockets_[kMaxNumSockets]{};
+    uint8_t fd_to_sg_idx[MAX_NB_SOCKETS]{};
     TxCompletionQueueManager txcq_manager_{};
 
 public:
@@ -292,6 +293,7 @@ public:
      */
     size_t recv_zc(uint8_t sg_idx, PacketBuffer* buffer);
     void send_zc(uint8_t sg_idx, const PacketBuffer* buffer);
+    size_t recv_select(uint8_t& sg_idx, PacketBuffer* buffer);
     void done_recv(uint8_t sg_idx, const PacketBuffer* buffer);
 
     // Accessors

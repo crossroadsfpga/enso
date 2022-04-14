@@ -214,7 +214,7 @@ void Socket::send_zc(const PacketBuffer* buffer,
 }
 
 size_t Socket::recv_zc(PacketBuffer* buffer) {
-    // Sanit checks
+    // Sanity checks
     assert(likely(buffer->get_length() == 0));
     assert(likely(buffer->get_data() == nullptr));
     assert(likely(buffer->get_num_packets() == 0));
@@ -225,7 +225,7 @@ size_t Socket::recv_zc(PacketBuffer* buffer) {
         socket_fd_, &read_addr, kRecvSize, 0);
 
     // Update the buffer state and return
-    buffer->set(read_addr, read_size);
+    if (read_size > 0) { buffer->set(read_addr, read_size); }
     return read_size;
 }
 
@@ -275,6 +275,8 @@ uint8_t SocketGroup::add_socket(const int num_queues) {
         assert(false);
     }
 
+    std::cout << "FD is: " << fd << std::endl;
+    fd_to_sg_idx[fd] = sg_idx;
     return sg_idx;
 }
 
@@ -293,6 +295,25 @@ void SocketGroup::send_zc(uint8_t sg_idx, const PacketBuffer* buffer) {
         socket.get_tx_manager().dealloc(event.get_num_bytes());
         count++;
     }
+}
+
+size_t SocketGroup::recv_select(uint8_t& sg_idx, PacketBuffer* buffer) {
+    // Sanity checks
+    assert(likely(buffer->get_length() == 0));
+    assert(likely(buffer->get_data() == nullptr));
+    assert(likely(buffer->get_num_packets() == 0));
+
+    int socket_fd;
+    void* read_addr = nullptr;
+    size_t read_size = norman::recv_select(
+        sockets_[0].get_fd(), &socket_fd, &read_addr, Socket::kRecvSize, 0);
+
+    if (likely(read_size > 0)) {
+        // Update return values
+        sg_idx = fd_to_sg_idx[socket_fd];
+        buffer->set(read_addr, read_size);
+    }
+    return read_size;
 }
 
 void SocketGroup::done_recv(uint8_t sg_idx, const PacketBuffer* buffer) {
