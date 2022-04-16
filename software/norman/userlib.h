@@ -22,6 +22,7 @@ namespace norman {
 // Forward declarations
 class PacketBuffer;
 class SpeculativeRingBufferMemoryAllocator;
+class RXPacketQueueManager;
 class TXPacketQueueManager;
 class Socket;
 class TxCompletionEvent;
@@ -130,6 +131,42 @@ public:
 };
 
 /**
+ * Helper class to manage a socket's RX queue.
+ */
+class RXPacketQueueManager final {
+private:
+    // Housekeeping
+    char* read_addr_ = nullptr;     // Current address of the read pointer. This
+                                    // is the position at which the application
+                                    // left off consuming data.
+    size_t read_bytes_left_ = 0;    // Number of bytes that can be read from the
+                                    // RX buffer without polling the NIC again.
+    size_t advanced_bytes_ = 0;     // Number of bytes advanced since the last
+                                    // invocation of done().
+public:
+    DEFAULT_CTOR_AND_DTOR(RXPacketQueueManager);
+    DISALLOW_COPY_AND_ASSIGN(RXPacketQueueManager);
+
+    /**
+     * Returns a packet buffer containing a single Ethernet frame.
+     */
+    size_t done();
+    PacketBuffer next();
+    void prefetch_next() const;
+
+    /**
+     * Updates the packet queue state on receiving new RX data
+     * from the NIC. Should be invoked whenever recv is called
+     * on the corresponding socket.
+     */
+    void on_recv(char* read_addr, size_t read_bytes);
+
+    // Accessors
+    inline char* get_read_addr() const { return read_addr_; }
+    inline size_t get_bytes_left() const { return read_bytes_left_; }
+};
+
+/**
  * Helper class to manage a socket's TX queue.
  */
 class TXPacketQueueManager final {
@@ -171,6 +208,7 @@ public:
 private:
     uint8_t sg_idx_ = 0; // SocketGroup idx
     int socket_fd_ = -1; // This socket's FD
+    RXPacketQueueManager rx_manager_{}; // RX queue manager
     TXPacketQueueManager tx_manager_{}; // TX queue manager
 
     /**
@@ -179,8 +217,8 @@ private:
     void send_zc(const PacketBuffer* buffer,
                  TxCompletionQueueManager& txcq_manager);
 
-    size_t recv_zc(PacketBuffer* buffer);
-    void done_recv(const PacketBuffer* buffer);
+    size_t read();
+    void done_read();
 
 public:
     DEFAULT_CTOR_AND_DTOR(Socket);
@@ -201,6 +239,7 @@ public:
     // Accessors
     inline int get_fd() const { return socket_fd_; }
     inline uint8_t get_sg_idx() const { return sg_idx_; }
+    inline RXPacketQueueManager& get_rx_manager() { return rx_manager_; }
     inline TXPacketQueueManager& get_tx_manager() { return tx_manager_; }
 
     friend SocketGroup;
@@ -276,7 +315,6 @@ private:
     const std::string hp_prefix_;
     uint8_t num_active_sockets_ = 0;
     Socket sockets_[kMaxNumSockets]{};
-    uint8_t fd_to_sg_idx[MAX_NB_SOCKETS]{};
     TxCompletionQueueManager txcq_manager_{};
 
 public:
@@ -291,10 +329,9 @@ public:
     /**
      * Network interface.
      */
-    size_t recv_zc(uint8_t sg_idx, PacketBuffer* buffer);
+    size_t read(uint8_t sg_idx);
+    void done_read(uint8_t sg_idx);
     void send_zc(uint8_t sg_idx, const PacketBuffer* buffer);
-    size_t recv_select(uint8_t& sg_idx, PacketBuffer* buffer);
-    void done_recv(uint8_t sg_idx, const PacketBuffer* buffer);
 
     // Accessors
     Socket& get_socket(const uint8_t sg_idx);

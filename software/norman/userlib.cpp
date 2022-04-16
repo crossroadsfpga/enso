@@ -99,7 +99,7 @@ void SpeculativeRingBufferMemoryAllocator::initialize(
 
 void SpeculativeRingBufferMemoryAllocator::commit_alloc() {
     if (likely(spec_alloc_size_ != 0)) {
-        assert(free_capacity_ >= spec_alloc_size_);
+        assert(likely(free_capacity_ >= spec_alloc_size_));
         free_capacity_ -= spec_alloc_size_; // Update capacity
         alloc_offset_ = (alloc_offset_ + spec_alloc_size_) % kMaxBufferSize;
         spec_alloc_size_ = 0;
@@ -116,7 +116,7 @@ void* SpeculativeRingBufferMemoryAllocator::allocate(const uint64_t size) {
 
 void SpeculativeRingBufferMemoryAllocator::
 allocate_shrink(const uint64_t shrink_to) {
-    assert(shrink_to <= spec_alloc_size_);
+    assert(likely(shrink_to <= spec_alloc_size_));
     spec_alloc_size_ = shrink_to;
 }
 
@@ -128,7 +128,7 @@ void SpeculativeRingBufferMemoryAllocator::deallocate(const uint64_t size) {
     // also need to quash the speculative alloc since it musn't be committed.
     const size_t spec_capacity = (free_capacity_ + size - spec_alloc_size_);
     if (unlikely(spec_capacity >= kMaxBufferSize)) {
-        assert(spec_capacity == kMaxBufferSize);
+        assert(likely(spec_capacity == kMaxBufferSize));
         free_capacity_ = kMaxBufferSize;
         dealloc_offset_ = alloc_offset_;
         spec_alloc_size_ = 0;
@@ -146,6 +146,47 @@ uint64_t SpeculativeRingBufferMemoryAllocator::to_phys_addr(const void* vaddr) c
                         static_cast<const char*>(buffer_vaddr_)) % kMaxBufferSize);
 
     return buffer_paddr_ + offset;
+}
+
+/**
+ * RXPacketQueueManager implementation.
+ */
+PacketBuffer RXPacketQueueManager::next() {
+    assert(likely(read_bytes_left_ != 0));
+    char* data = read_addr_; // Fetch the header and compute packet size
+    const rte_ipv4_hdr* hdr = (reinterpret_cast<const rte_ipv4_hdr*>(
+                               data + sizeof(rte_ether_hdr)));
+
+    uint16_t eth_size = static_cast<uint16_t>(
+      rte_be_to_cpu_16(hdr->total_length) +
+      static_cast<uint16_t>(sizeof(rte_ether_hdr)));
+
+    PacketBuffer buffer(eth_size, data); // Single Ethernet packet
+    eth_size = norman::round_to_cache_line_size(eth_size);
+    assert(likely(read_bytes_left_ >= eth_size));
+    read_bytes_left_ -= eth_size;
+    advanced_bytes_ += eth_size;
+    read_addr_ += eth_size;
+
+    return buffer;
+}
+
+void RXPacketQueueManager::prefetch_next() const {
+    __builtin_prefetch((char*) read_addr_, 1, 0);
+    __builtin_prefetch((char*) read_addr_ + 64, 1, 0);
+}
+
+size_t RXPacketQueueManager::done() {
+    size_t size = advanced_bytes_;
+    advanced_bytes_ = 0;
+    return size;
+}
+
+void RXPacketQueueManager::on_recv(char* read_addr, size_t read_bytes) {
+    assert(likely(read_bytes_left_ == 0)); // Sanity check
+    assert(likely(advanced_bytes_ == 0));
+    read_bytes_left_ = read_bytes;
+    read_addr_ = read_addr;
 }
 
 /**
@@ -213,47 +254,45 @@ void Socket::send_zc(const PacketBuffer* buffer,
         TxCompletionEvent(sg_idx_, buffer->get_length()));
 }
 
-size_t Socket::recv_zc(PacketBuffer* buffer) {
-    // Sanity checks
-    assert(likely(buffer->get_length() == 0));
-    assert(likely(buffer->get_data() == nullptr));
-    assert(likely(buffer->get_num_packets() == 0));
+size_t Socket::read() {
+    // If the request cannot be satisfied by existing
+    // bytes in the socket's RX buffer, poll the NIC.
+    size_t read_size = rx_manager_.get_bytes_left();
+    if (unlikely(read_size == 0)) {
+        // Read data from the NIC
+        void* read_addr = nullptr;
+        read_size = norman::recv_zc(
+            socket_fd_, &read_addr, kRecvSize, 0);
 
-    // Read data from the NIC
-    void* read_addr = nullptr;
-    size_t read_size = norman::recv_zc(
-        socket_fd_, &read_addr, kRecvSize, 0);
-
-    // Update the buffer state and return
-    if (read_size > 0) { buffer->set(read_addr, read_size); }
+        // Update the RX manager
+        rx_manager_.on_recv(static_cast<char*>(read_addr), read_size);
+    }
     return read_size;
 }
 
-void Socket::done_recv(const PacketBuffer* buffer) {
-    if (likely(buffer->get_length() != 0)) { // Advance tail pointer
-        norman::free_pkt_buf(socket_fd_, buffer->get_length());
-    }
+void Socket::done_read() {
+    norman::free_pkt_buf(socket_fd_, rx_manager_.done());
 }
 
 /**
  * TxCompletionQueueManager implementation.
  */
 TxCompletionEvent TxCompletionQueueManager::deque_event() {
-    assert(num_outstanding_ > 0); // Sanity check
+    assert(likely(num_outstanding_ > 0)); // Sanity check
     num_outstanding_--;
     free_capacity_++;
 
     TxCompletionEvent event = events_[dealloc_idx_++];
-    if (dealloc_idx_ == kMaxNumEvents) {
+    if (unlikely(dealloc_idx_ == kMaxNumEvents)) {
         dealloc_idx_ = 0;
     }
     return event;
 }
 
 void TxCompletionQueueManager::enque_event(TxCompletionEvent event) {
-    assert(free_capacity_ > 0); // Sanity check
+    assert(likely(free_capacity_ > 0)); // Sanity check
     events_[alloc_idx_++] = event;
-    if (alloc_idx_ == kMaxNumEvents) {
+    if (unlikely(alloc_idx_ == kMaxNumEvents)) {
         alloc_idx_ = 0;
     }
     num_outstanding_++;
@@ -276,12 +315,11 @@ uint8_t SocketGroup::add_socket(const int num_queues) {
     }
 
     std::cout << "FD is: " << fd << std::endl;
-    fd_to_sg_idx[fd] = sg_idx;
     return sg_idx;
 }
 
 void SocketGroup::send_zc(uint8_t sg_idx, const PacketBuffer* buffer) {
-    assert(sg_idx < num_active_sockets_); // Sanity check
+    assert(likely(sg_idx < num_active_sockets_)); // Sanity check
     sockets_[sg_idx].send_zc(buffer, txcq_manager_);
 
     // Fetch TX completions
@@ -297,37 +335,18 @@ void SocketGroup::send_zc(uint8_t sg_idx, const PacketBuffer* buffer) {
     }
 }
 
-size_t SocketGroup::recv_select(uint8_t& sg_idx, PacketBuffer* buffer) {
-    // Sanity checks
-    assert(likely(buffer->get_length() == 0));
-    assert(likely(buffer->get_data() == nullptr));
-    assert(likely(buffer->get_num_packets() == 0));
-
-    int socket_fd;
-    void* read_addr = nullptr;
-    size_t read_size = norman::recv_select(
-        sockets_[0].get_fd(), &socket_fd, &read_addr, Socket::kRecvSize, 0);
-
-    if (likely(read_size > 0)) {
-        // Update return values
-        sg_idx = fd_to_sg_idx[socket_fd];
-        buffer->set(read_addr, read_size);
-    }
-    return read_size;
+void SocketGroup::done_read(uint8_t sg_idx) {
+    assert(likely(sg_idx < num_active_sockets_)); // Sanity check
+    return sockets_[sg_idx].done_read();
 }
 
-void SocketGroup::done_recv(uint8_t sg_idx, const PacketBuffer* buffer) {
-    assert(sg_idx < num_active_sockets_); // Sanity check
-    return sockets_[sg_idx].done_recv(buffer);
-}
-
-size_t SocketGroup::recv_zc(uint8_t sg_idx, PacketBuffer* buffer) {
-    assert(sg_idx < num_active_sockets_); // Sanity check
-    return sockets_[sg_idx].recv_zc(buffer);
+size_t SocketGroup::read(uint8_t sg_idx) {
+    assert(likely(sg_idx < num_active_sockets_)); // Sanity check
+    return sockets_[sg_idx].read();
 }
 
 Socket& SocketGroup::get_socket(const uint8_t sg_idx) {
-    assert(sg_idx < num_active_sockets_); // Sanity check
+    assert(likely(sg_idx < num_active_sockets_)); // Sanity check
     return sockets_[sg_idx];
 }
 
