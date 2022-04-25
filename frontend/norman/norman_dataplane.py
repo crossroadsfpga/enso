@@ -40,6 +40,7 @@ class NormanDataplane(RemoteIntelFpga):
                  fallback_queues: int = DEFAULT_NB_FALLBACK_QUEUES,
                  desc_per_pkt: bool = False, enable_rr: bool = False,
                  sw_batch_size: int = DEFAULT_BATCH_SIZE,
+                 latency_opt: int = False,
                  skip_config: bool = False, verbose: bool = False):
         if load_bitstream and verbose:
             print('Loading bitstream, it might take a couple of seconds.')
@@ -85,6 +86,7 @@ class NormanDataplane(RemoteIntelFpga):
                 self.disable_rr()
 
         self.sw_batch_size = sw_batch_size
+        self.latency_opt = latency_opt
 
         if setup_sw:
             self.setup_sw()
@@ -93,7 +95,8 @@ class NormanDataplane(RemoteIntelFpga):
         sw_setup = remote_command(
             self.ssh_client,
             f'{self.remote_norman_path}/{SETUP_SW_CMD} {self.dsc_buf_size} '
-            f'{self.pkt_buf_size} {self.sw_batch_size}', pty=True
+            f'{self.pkt_buf_size} {self.sw_batch_size} {int(self.latency_opt)}',
+            pty=True
         )
         watch_command(sw_setup, keyboard_int=lambda: sw_setup.send('\x03'),
                       stdout=self.verbose, stderr=self.verbose)

@@ -31,12 +31,14 @@ from norman.norman_dataplane import NormanDataplane
               help='Enable/Disable packet round robin to fallback queues.')
 @click.option('--batch-size', default=DEFAULT_BATCH_SIZE, show_default=True,
               type=int, help='Number of packets in a batch.')
+@click.option('--latency-opt/--throughput-opt', default=False,
+              show_default=True, help='Optimize for throughput/latency.')
 @click.option('--load-bitstream/--no-load-bitstream', default=True,
               show_default=True,
               help='Enable/Disable packet FPGA bitstream reload.')
 def main(host, remote_norman_path, fpga, dsc_buf_size, pkt_buf_size,
          tx_credits, eth_port, fallback_queues, desc_per_pkt, enable_rr,
-         batch_size, load_bitstream):
+         batch_size, latency_opt, load_bitstream):
 
     norman_dp = NormanDataplane(
         fpga, host, remote_norman_path, load_bitstream=load_bitstream,
@@ -44,7 +46,7 @@ def main(host, remote_norman_path, fpga, dsc_buf_size, pkt_buf_size,
         pkt_buf_size=pkt_buf_size, tx_credits=tx_credits,
         ethernet_port=eth_port, fallback_queues=fallback_queues,
         desc_per_pkt=desc_per_pkt, enable_rr=enable_rr,
-        sw_batch_size=batch_size, verbose=True
+        sw_batch_size=batch_size, latency_opt=latency_opt, verbose=True
     )
 
     norman_dp.interactive_shell()

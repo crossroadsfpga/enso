@@ -34,6 +34,10 @@ typedef uint32_t pkt_q_id_t;
 
 #define MAX_PENDING_TX_REQUESTS (DSC_BUF_SIZE-1)
 
+#ifndef LATENCY_OPT
+#define LATENCY_OPT 0
+#endif
+
 #ifndef BATCH_SIZE
 // Maximum number of packets to process in call to get_next_batch_from_queue
 #define BATCH_SIZE 64

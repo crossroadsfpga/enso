@@ -16,6 +16,10 @@ ifdef BATCH_SIZE
 CXXFLAGS += -D BATCH_SIZE=$(BATCH_SIZE)
 endif
 
+ifdef LATENCY_OPT
+CXXFLAGS += -D LATENCY_OPT=$(LATENCY_OPT)
+endif
+
 SRCS = app.cpp
 OBJS = $(subst .cpp,.o,$(SRCS))
 EXEC = app

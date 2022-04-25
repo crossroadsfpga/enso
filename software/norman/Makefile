@@ -15,6 +15,10 @@ ifdef BATCH_SIZE
 CXXFLAGS += -D BATCH_SIZE=$(BATCH_SIZE)
 endif
 
+ifdef LATENCY_OPT
+CXXFLAGS += -D LATENCY_OPT=$(LATENCY_OPT)
+endif
+
 LDFLAGS = -g -O3 -m64 -march=native
 
 SRCS = socket.cpp pcie.cpp api/linux/intel_fpga_pcie_api_linux.cpp

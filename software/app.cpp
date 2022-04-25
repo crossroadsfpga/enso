@@ -8,13 +8,14 @@
 #include <string>
 #include <thread>
 
+#include <x86intrin.h>
+
 #include <sched.h>
 #include <pthread.h>
 
 #include "norman/socket.h"
 
 #include "app.h"
-
 
 #define ZERO_COPY
 #define SEND_BACK
@@ -48,27 +49,22 @@ int main(int argc, const char* argv[])
     uint32_t addr_offset = core_id * nb_queues;
 
     signal(SIGINT, int_handler);
-
+    
     std::thread socket_thread = std::thread([&recv_bytes, port, addr_offset, 
         nb_queues, &nb_batches, &nb_pkts, &nb_cycles]
     {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        uint32_t tx_pr_head = 0;
+        uint32_t tx_pr_tail = 0;
+        tx_pending_request_t* tx_pending_requests =
+            new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
 
-        uint32_t* tx_pr_heads = new uint32_t[nb_queues];
-        uint32_t* tx_pr_tails = new uint32_t[nb_queues];
-        tx_pending_request_t** tx_pending_requests =
-            new tx_pending_request_t*[nb_queues];
-        
-        for (int i = 0; i < nb_queues; ++i) {
-            tx_pending_requests[i] =
-                new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
-        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
 
         for (int i = 0; i < nb_queues; ++i) {
             // TODO(sadok) can we make this a valid file descriptor?
-            std::cout << "creating queue " << i << std::endl;
+            std::cout << "Creating queue " << i << std::endl;
             int socket_fd = norman::socket(AF_INET, SOCK_DGRAM, nb_queues);
 
             if (socket_fd == -1) {
@@ -87,18 +83,21 @@ int main(int argc, const char* argv[])
             addr.sin_addr.s_addr = htonl(ip_address);
             addr.sin_port = htons(port);
 
-            if (norman::bind(socket_fd, (struct sockaddr*) &addr, sizeof(addr))) {
+            if (norman::bind(socket_fd, (struct sockaddr*) &addr,
+                    sizeof(addr))) {
                 std::cerr << "Problem binding socket (" << errno << "): "
                           << strerror(errno) <<  std::endl;
                 exit(3);
             }
+
+            std::cout << "Done creating queue " << i << std::endl;
         }
 
-        #ifdef ZERO_COPY
-            unsigned char* buf;
-        #else
-            unsigned char buf[BUF_LEN];
-        #endif
+#ifdef ZERO_COPY
+        unsigned char* buf;
+#else
+        unsigned char buf[BUF_LEN];
+#endif
 
         setup_done = 1;
 
@@ -106,17 +105,21 @@ int main(int argc, const char* argv[])
             // HACK(sadok) this only works because socket_fd is incremental, it
             // would not work with an actual file descriptor
             for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-                #ifdef ZERO_COPY
-                    int recv_len =norman::recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
-                #else
-                    int recv_len =norman::recv(socket_fd, buf, BUF_LEN, 0);
-                #endif
+#ifdef ZERO_COPY
+                int recv_len =norman::recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
+#else
+                int recv_len =norman::recv(socket_fd, buf, BUF_LEN, 0);
+#endif
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
                     exit(4);
                 }
 
                 if (likely(recv_len > 0)) {
+#if LATENCY_OPT
+                    // Prefetch next queue.
+                    norman::free_pkt_buf((socket_fd + 1) & (nb_queues - 1), 0);
+#endif
                     int processed_bytes = 0;
                     uint8_t* pkt = buf;
 
@@ -138,54 +141,43 @@ int main(int argc, const char* argv[])
 
                     ++nb_batches;
                     recv_bytes += recv_len;
-                }
 
 #ifdef SEND_BACK
                 uint64_t phys_addr =
                     norman::convert_buf_addr_to_phys(socket_fd, buf);
                 norman::send(socket_fd, (void*) phys_addr, recv_len, 0);
 
+                // TODO(sadok): This should be transparent to the app.
                 // Save transmission request so that we can free the buffer once
                 // it's complete.
-                tx_pending_requests[socket_fd][tx_pr_tails[socket_fd]].socket_fd
-                    = socket_fd;
-                tx_pending_requests[socket_fd][tx_pr_tails[socket_fd]].length
-                    = recv_len;
-                tx_pr_tails[socket_fd] = (tx_pr_tails[socket_fd] + 1)
-                                         % (MAX_PENDING_TX_REQUESTS + 1);
+                tx_pending_requests[tx_pr_tail].socket_fd = socket_fd;
+                tx_pending_requests[tx_pr_tail].length = recv_len;
+                tx_pr_tail = (tx_pr_tail + 1) % (MAX_PENDING_TX_REQUESTS + 1);
 #else
-#ifdef ZERO_COPY
                 norman::free_pkt_buf(socket_fd, recv_len);
-#endif  // ZERO_COPY
-#endif  // SEND_BACK
-        
-#ifdef SEND_BACK
-                uint32_t nb_tx_completions = norman::get_completions(socket_fd);
-
-                // Free data that was already sent.
-                for (uint32_t i = 0; i < nb_tx_completions; ++i) {
-                    tx_pending_request_t tx_req =
-                        tx_pending_requests[socket_fd][tx_pr_heads[socket_fd]];
-                    norman::free_pkt_buf(tx_req.socket_fd, tx_req.length);
-                    tx_pr_heads[socket_fd] = (tx_pr_heads[socket_fd] + 1)
-                                             % (MAX_PENDING_TX_REQUESTS + 1);
-                }
 #endif
+                }
             }
+
+#ifdef SEND_BACK
+            uint32_t nb_tx_completions = norman::get_completions(0);
+
+            // Free data that was already sent.
+            for (uint32_t i = 0; i < nb_tx_completions; ++i) {
+                tx_pending_request_t tx_req = tx_pending_requests[tx_pr_head];
+                norman::free_pkt_buf(tx_req.socket_fd, tx_req.length);
+                tx_pr_head = (tx_pr_head + 1) % (MAX_PENDING_TX_REQUESTS + 1);
+            }
+#endif
         }
 
-        // TODO(sadok) it is also common to use the close() syscall to close a
-        // UDP socket
+        // TODO(sadok): it is also common to use the close() syscall to close a
+        // UDP socket.
         for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
+            norman::print_sock_stats(socket_fd);
             norman::shutdown(socket_fd, SHUT_RDWR);
         }
 
-        delete[] tx_pr_heads;
-        delete[] tx_pr_tails;
-
-        for (int i = 0; i < nb_queues; ++i) {
-            delete[] tx_pending_requests[i];
-        }
         delete[] tx_pending_requests;
     });
 
@@ -201,29 +193,33 @@ int main(int argc, const char* argv[])
 
     while (!setup_done) continue;
 
-    std::cout << "Starting..." << std::endl; 
+    std::cout << "Starting..." << std::endl;
 
     while (keep_running) {
         uint64_t recv_bytes_before = recv_bytes;
         uint64_t nb_batches_before = nb_batches;
+        uint64_t nb_pkts_before = nb_pkts;
         
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         uint64_t delta_bytes = recv_bytes - recv_bytes_before;
+        uint64_t delta_pkts = nb_pkts - nb_pkts_before;
         uint64_t delta_batches = nb_batches - nb_batches_before;
         std::cout << std::dec
                   <<  delta_bytes * 8. / 1e6 << " Mbps  "
-                  << recv_bytes << " bytes  "
+                  << recv_bytes << " B  "
                   << nb_batches << " batches  "
-                  << nb_pkts << " packets";
+                  << nb_pkts << " pkts";
         
         if (delta_batches > 0) {
-            std::cout << "  " << delta_bytes / delta_batches  << " bytes/batch";
+            std::cout << "  " << delta_bytes / delta_batches  << " B/batch";
+            std::cout << "  " << delta_pkts / delta_batches  << " pkt/batch";
         }
         std::cout << std::endl;
     }
 
     std::cout << "Waiting for threads" << std::endl;
+
     socket_thread.join();
 
     return 0;
