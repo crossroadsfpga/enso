@@ -59,6 +59,9 @@ vlog +define+SIM \
      +define+NB_PKT_QUEUES=$NB_PKT_QS \
      ./tests/tb.sv -sv
 
+VSIM_CMD="run -all"
+# VSIM_CMD="set BreakOnAssertion 2; run -all"
+
 if [ "$6" = "--gui" ]; then
     # Use the following to activate the modelsim GUI.
     vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
@@ -67,5 +70,5 @@ if [ "$6" = "--gui" ]; then
 else
     vsim -L $altera_mf_ver -L $altera_lnsim_ver -L $altera_ver -L $lpm_ver \
         -L $sgate_ver -L $fourteennm_ver -L $fourteennm_ct1_ver \
-        -voptargs="+acc" -c -do "run -all" tb | grep --color -e 'Error' -e '^'
+        -voptargs="+acc" -c -do "$VSIM_CMD" tb | grep --color -e 'Error' -e '^'
 fi
