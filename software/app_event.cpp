@@ -123,7 +123,6 @@ int main(int argc, const char* argv[])
                     // }
 
                     pkt += pkt_aligned_len;
-
                     processed_bytes += pkt_aligned_len;
                     ++nb_pkts;
                 }
@@ -186,19 +185,22 @@ int main(int argc, const char* argv[])
     while (keep_running) {
         uint64_t recv_bytes_before = recv_bytes;
         uint64_t nb_batches_before = nb_batches;
+        uint64_t nb_pkts_before = nb_pkts;
         
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         uint64_t delta_bytes = recv_bytes - recv_bytes_before;
+        uint64_t delta_pkts = nb_pkts - nb_pkts_before;
         uint64_t delta_batches = nb_batches - nb_batches_before;
         std::cout << std::dec
                   <<  delta_bytes * 8. / 1e6 << " Mbps  "
-                  << recv_bytes << " bytes  "
+                  << recv_bytes << " B  "
                   << nb_batches << " batches  "
-                  << nb_pkts << " packets";
+                  << nb_pkts << " pkts";
         
         if (delta_batches > 0) {
-            std::cout << "  " << delta_bytes / delta_batches  << " bytes/batch";
+            std::cout << "  " << delta_bytes / delta_batches  << " B/batch";
+            std::cout << "  " << delta_pkts / delta_batches  << " pkt/batch";
         }
         std::cout << std::endl;
     }
