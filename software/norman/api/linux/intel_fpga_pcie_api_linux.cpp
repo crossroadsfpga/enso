@@ -148,13 +148,13 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar)
 
     m_bdf = bdf;
     m_kmem_size = 0;
-};
+}
 
 intel_fpga_pcie_dev::~intel_fpga_pcie_dev(void)
 {
     close(m_dev_handle);
     close(m_uio_dev_handle);
-};
+}
 
 int intel_fpga_pcie_dev::read8(void *addr, uint8_t *data_ptr)
 {
@@ -391,7 +391,7 @@ void *intel_fpga_pcie_dev::kmem_mmap(unsigned int size, unsigned int offset)
     }
 
     return mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, m_dev_handle, offset);
-};
+}
 
 void *intel_fpga_pcie_dev::uio_mmap(size_t size, unsigned int mapping)
 {
@@ -399,7 +399,7 @@ void *intel_fpga_pcie_dev::uio_mmap(size_t size, unsigned int mapping)
 
     return mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, m_uio_dev_handle,
                 offset);
-};
+}
 
 int intel_fpga_pcie_dev::kmem_munmap(void *addr, unsigned int size)
 {
@@ -407,7 +407,7 @@ int intel_fpga_pcie_dev::kmem_munmap(void *addr, unsigned int size)
     result = munmap(addr, size);
 
     return result == 0;
-};
+}
 
 int intel_fpga_pcie_dev::dma_queue_read(uint64_t ep_offset, unsigned int size,
                                         uint64_t kmem_offset)

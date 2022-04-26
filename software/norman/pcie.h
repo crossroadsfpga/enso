@@ -34,10 +34,6 @@ typedef uint32_t pkt_q_id_t;
 
 #define MAX_PENDING_TX_REQUESTS (DSC_BUF_SIZE-1)
 
-#ifndef LATENCY_OPT
-#define LATENCY_OPT 0
-#endif
-
 #ifndef BATCH_SIZE
 // Maximum number of packets to process in call to get_next_batch_from_queue
 #define BATCH_SIZE 64
@@ -391,6 +387,10 @@ void print_queue_regs(queue_regs_t * pb);
 void print_slot(uint32_t *rp_addr, uint32_t start, uint32_t range);
 
 void print_fpga_reg(intel_fpga_pcie_dev *dev, unsigned nb_regs);
+
+void print_ip(uint32_t ip);
+
+void print_pkt_ips(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
 

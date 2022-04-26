@@ -13,9 +13,10 @@ from norman.norman_dataplane import NormanDataplane
 @click.option('--fpga', default=DEFAULT_FPGA, show_default=True,
               help='Choose the FPGA.')
 @click.option('--dsc-buf-size', default=DEFAULT_DSC_BUF_SIZE, show_default=True,
-              type=int, help='Buffer size used by each software queue.')
+              type=int,
+              help='Buffer size used by each software descriptor buffer.')
 @click.option('--pkt-buf-size', default=DEFAULT_PKT_BUF_SIZE, show_default=True,
-              type=int, help='Buffer size used by each software queue.')
+              type=int, help='Buffer size used by each software packet buffer.')
 @click.option('--tx-credits', default=DEFAULT_NB_TX_CREDITS,
               show_default=True, type=click.IntRange(256, 1000),
               help='Set number of in-flight descriptors allowed (credits).')

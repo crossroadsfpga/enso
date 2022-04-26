@@ -376,7 +376,7 @@ struct RxStats {
     RxStats(const RxStats& other) = delete;
     RxStats(RxStats&& other) = default;
     RxStats& operator=(const RxStats& other) = delete;
-    RxStats& operator=(RxStats&& other) = default;
+    RxStats& operator=(RxStats&& other) = delete;
 
     inline void add_rtt_to_hist(const uint32_t rtt) {
         // Insert RTTs into the rtt_hist array if they are in its range,

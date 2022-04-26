@@ -57,6 +57,7 @@ int main(int argc, const char* argv[])
         uint32_t tx_pr_tail = 0;
         tx_pending_request_t* tx_pending_requests =
             new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
+        (void) nb_cycles;
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 

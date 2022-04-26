@@ -57,6 +57,7 @@ int main(int argc, const char* argv[])
         uint32_t tx_pr_tail = 0;
         tx_pending_request_t* tx_pending_requests =
             new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
+        (void) nb_cycles;
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -116,7 +117,7 @@ int main(int argc, const char* argv[])
                 }
 
                 if (likely(recv_len > 0)) {
-#if LATENCY_OPT
+#ifdef LATENCY_OPT
                     // Prefetch next queue.
                     norman::free_pkt_buf((socket_fd + 1) & (nb_queues - 1), 0);
 #endif

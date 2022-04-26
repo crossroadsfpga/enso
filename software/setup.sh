@@ -13,5 +13,16 @@ fi
 cd $SCRIPT_DIR/norman/kernel/linux/
 sudo ./install
 cd $SCRIPT_DIR
-make clean
-make DSC_BUF_SIZE=$1 PKT_BUF_SIZE=$2 BATCH_SIZE=$3 LATENCY_OPT=$4
+
+# Using GCC
+# CC=gcc-9 CXX=g++-9 meson build-gcc
+# ln -sfn build-gcc build
+
+# Using Clang
+CC=clang-8 CXX=clang++-8 meson build-clang
+ln -sfn build-clang build
+
+cd build
+meson configure -Ddsc_buf_size=$1 -Dpkt_buf_size=$2 -Dbatch_size=$3 \
+    -Dlatency_opt=$4
+ninja
