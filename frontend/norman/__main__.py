@@ -24,7 +24,10 @@ from norman.norman_dataplane import NormanDataplane
               type=click.IntRange(0, 1), help='Set Ethernet port to use.')
 @click.option('--fallback-queues', default=DEFAULT_NB_FALLBACK_QUEUES,
               show_default=True,
-              help='Set number of in-flight descriptors allowed (credits).')
+              help='Set number of fallback queues. Fallback queues are used to'
+              ' catch packets that are not directed to any of the regular'
+              ' queues. If the number of fallback queues is set to 0, packets'
+              ' that fail to match any rule are discarded.')
 @click.option('--desc-per-pkt/--reactive-desc', default=False,
               show_default=True, help='Use a descriptor per packet or reactive'
               ' descriptors (default).')
