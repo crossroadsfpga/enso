@@ -124,9 +124,8 @@ class NormanPktgen(Pktgen):
             f'{pcap_gen_cmd} {nb_pkts} {pkt_size} {nb_src} {nb_dst} {pcap_dst}'
 
         pcap_gen_cmd = remote_command(self.dataplane.ssh_client, pcap_gen_cmd,
-                                      print_command=self.verbose, pty=True)
-        watch_command(pcap_gen_cmd, stdout=self.verbose, stderr=self.verbose,
-                      keyboard_int=lambda: pcap_gen_cmd.send(b'\x03'))
+                                      print_command=self.verbose)
+        watch_command(pcap_gen_cmd, stdout=self.verbose, stderr=self.verbose)
         status = pcap_gen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError('Error generating pcap')
@@ -195,9 +194,9 @@ class NormanPktgen(Pktgen):
 
         watch_command(self.pktgen_cmd, stdout=self.verbose, stderr=self.verbose,
                       keyboard_int=lambda: self.pktgen_cmd.send(b'\x03'))
-        status = self.pktgen_cmd.recv_exit_status()
-        if status != 0:
-            raise RuntimeError('Error running Norman Pktgen')
+        # status = self.pktgen_cmd.recv_exit_status()
+        # if status != 0:
+        #     raise RuntimeError('Error running Norman Pktgen')
 
         self.update_stats()
 
@@ -272,10 +271,10 @@ class NormanPktgen(Pktgen):
         return self.nb_tx_pkts
 
     def get_rx_throughput(self) -> int:
-        return self.mean_rx_goodput + self.mean_rx_rate * ETHERNET_OVERHEAD * 8
+        return self.mean_rx_goodput + self.mean_rx_rate * 20 * 8
 
     def get_tx_throughput(self) -> int:
-        return self.mean_tx_goodput + self.mean_tx_rate * ETHERNET_OVERHEAD * 8
+        return self.mean_tx_goodput + self.mean_tx_rate * 20 * 8
 
     def clean_stats(self) -> None:
         self.nb_rx_pkts = 0
