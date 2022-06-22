@@ -58,9 +58,9 @@ Start by cloning the norman repository, if you haven't already:
 git clone https://github.com/hsadok/norman
 ```
 
-Go to the `norman` directory:
+Go to the `norman/software` directory:
 ```bash
-cd norman
+cd norman/software
 ```
 
 Prepare the compilation using meson and compile it with ninja.
