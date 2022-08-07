@@ -6,6 +6,10 @@ from norman.consts import DEFAULT_BATCH_SIZE, DEFAULT_DSC_BUF_SIZE, \
     DEFAULT_PKT_BUF_SIZE, SETUP_SW_CMD
 
 
+LOAD_BITSTREAM_CMD = 'hardware_test/load_bitstream.sh'
+RUN_CONSOLE_CMD = 'hardware_test/run_console.sh'
+
+
 class NormanDataplane(RemoteIntelFpga):
     """Class to control the Norman dataplane.
 
@@ -45,8 +49,11 @@ class NormanDataplane(RemoteIntelFpga):
         if load_bitstream and verbose:
             print('Loading bitstream, it might take a couple of seconds.')
 
-        super().__init__(host, fpga_id, remote_norman_path, load_bitstream,
-                         verbose=verbose)
+        load_bitstream_cmd = f'{remote_norman_path}/{LOAD_BITSTREAM_CMD}'
+        run_console_cmd = f'{remote_norman_path}/{RUN_CONSOLE_CMD}'
+
+        super().__init__(host, fpga_id, run_console_cmd, load_bitstream_cmd,
+                         load_bitstream=load_bitstream, verbose=verbose)
 
         self.remote_norman_path = remote_norman_path
 
