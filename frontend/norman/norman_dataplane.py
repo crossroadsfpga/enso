@@ -1,4 +1,6 @@
 
+import sys
+
 from netexp.helpers import RemoteIntelFpga, remote_command, watch_command
 
 from norman.consts import DEFAULT_BATCH_SIZE, DEFAULT_DSC_BUF_SIZE, \
@@ -52,8 +54,13 @@ class NormanDataplane(RemoteIntelFpga):
         load_bitstream_cmd = f'{remote_norman_path}/{LOAD_BITSTREAM_CMD}'
         run_console_cmd = f'{remote_norman_path}/{RUN_CONSOLE_CMD}'
 
+        if verbose:
+            self.log_file = sys.stdout
+        else:
+            self.log_file = False
+
         super().__init__(host, fpga_id, run_console_cmd, load_bitstream_cmd,
-                         load_bitstream=load_bitstream, verbose=verbose)
+                         load_bitstream=load_bitstream, log_file=self.log_file)
 
         self.remote_norman_path = remote_norman_path
 
@@ -106,7 +113,7 @@ class NormanDataplane(RemoteIntelFpga):
             pty=True
         )
         watch_command(sw_setup, keyboard_int=lambda: sw_setup.send('\x03'),
-                      stdout=self.verbose, stderr=self.verbose)
+                      stdout=self.log_file, stderr=self.log_file)
         status = sw_setup.recv_exit_status()
         if status != 0:
             raise RuntimeError('Error occurred while setting up software')
