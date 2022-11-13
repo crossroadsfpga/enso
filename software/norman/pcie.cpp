@@ -62,6 +62,45 @@ void print_pkt_ips(uint8_t* pkt) {
 }
 
 
+void print_pkt_header(uint8_t* pkt) {
+    struct ether_header* l2_hdr = (struct ether_header*) pkt;
+    std::cout << "Eth - dst MAC: "
+              << ether_ntoa((ether_addr*) l2_hdr->ether_dhost)
+              << "  src MAC: " << ether_ntoa((ether_addr*) l2_hdr->ether_shost)
+              << std::endl;
+
+    struct iphdr* l3_hdr = (struct iphdr*) (l2_hdr + 1);
+
+    uint8_t protocol = l3_hdr->protocol;
+    std::cout << "IP  - protocol: " << (uint32_t) protocol << "  checksum: "
+              << ntohs(l3_hdr->check);
+
+    std::cout << "  src IP: ";
+    print_ip(l3_hdr->saddr);
+
+    std::cout << "  dst IP: ";
+    print_ip(l3_hdr->daddr);
+    std::cout << std::endl;
+
+    switch (protocol) {
+        case IPPROTO_TCP: {
+            struct tcphdr* l4_hdr = (struct tcphdr*) (l3_hdr + 1);
+            std::cout << "TCP - src port: " << ntohs(l4_hdr->source)
+                      << "  dst port: " << ntohs(l4_hdr->dest)
+                      << "  seq: " << ntohl(l4_hdr->seq) << std::endl;
+            break;
+        }
+        case IPPROTO_UDP: {
+            struct udphdr* l4_hdr = (struct udphdr*) (l3_hdr + 1);
+            std::cout << "UDP - src port: " << ntohs(l4_hdr->source)
+                      << "  dst port: " << ntohs(l4_hdr->dest) << std::endl;
+            break;
+        }
+        default:
+            break;
+    }
+}
+
 // Adapted from ixy.
 static uint64_t virt_to_phys(void* virt) {
 	long pagesize = sysconf(_SC_PAGESIZE);

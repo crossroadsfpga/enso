@@ -392,6 +392,8 @@ void print_ip(uint32_t ip);
 
 void print_pkt_ips(uint8_t* pkt);
 
+void print_pkt_header(uint8_t* pkt);
+
 void print_buf(void* buf, const uint32_t nb_cache_lines);
 
 void print_stats(socket_internal* socket_entry, bool print_global);
