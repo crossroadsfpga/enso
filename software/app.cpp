@@ -107,9 +107,10 @@ int main(int argc, const char* argv[])
             // would not work with an actual file descriptor
             for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
 #ifdef ZERO_COPY
-                int recv_len =norman::recv_zc(socket_fd, (void**) &buf, BUF_LEN, 0);
+                int recv_len = norman::recv_zc(socket_fd, (void**) &buf,
+                                               BUF_LEN, 0);
 #else
-                int recv_len =norman::recv(socket_fd, buf, BUF_LEN, 0);
+                int recv_len = norman::recv(socket_fd, buf, BUF_LEN, 0);
 #endif
                 if (unlikely(recv_len < 0)) {
                     std::cerr << "Error receiving" << std::endl;
