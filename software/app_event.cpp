@@ -53,8 +53,10 @@ int main(int argc, const char* argv[])
     std::thread socket_thread = std::thread([&recv_bytes, port, addr_offset, 
         nb_queues, &nb_batches, &nb_pkts, &nb_cycles]
     {
+#ifdef SEND_BACK
         uint32_t tx_pr_head = 0;
         uint32_t tx_pr_tail = 0;
+#endif  // SEND_BACK
         tx_pending_request_t* tx_pending_requests =
             new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
         (void) nb_cycles;
