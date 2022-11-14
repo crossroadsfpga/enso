@@ -24,17 +24,12 @@ if latency_opt
     add_global_arguments('-D LATENCY_OPT', language: ['c', 'cpp'])
 endif
 
-subdir('norman')
-inc = include_directories('norman')
+inc = include_directories('include')
 
-thread_dep = dependency('threads')
-pcap_dep = dependency('pcap', version : '>=1.0')
+subdir('include')
+subdir('src')
 
-executable('app', 'app.cpp', dependencies: thread_dep, link_with: norman_lib,
-           include_directories: inc)
-executable('app_event', 'app_event.cpp', dependencies: thread_dep,
-           link_with: norman_lib)
-executable('pktgen', 'pktgen.cpp', dependencies: [thread_dep, pcap_dep],
-           link_with: norman_lib)
-executable('capture', 'capture.cpp', dependencies: [thread_dep, pcap_dep],
-           link_with: norman_lib)
+norman_lib = library('norman', project_sources, install: true,
+                     include_directories: inc)
+
+subdir('examples')
