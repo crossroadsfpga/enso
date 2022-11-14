@@ -64,18 +64,18 @@ module fifo_wrapper_infill #(
 		.out_data          (out_data),      //  output,   width = 8,       out.data
 		.out_valid         (out_valid),     //  output,   width = 1,          .valid
 		.out_ready         (out_ready),     //   input,   width = 1,          .ready
-		.almost_full_data  (),              // (terminated),                        
-		.almost_empty_data (),              // (terminated),                        
-		.in_startofpacket  (1'b0),          // (terminated),                        
-		.in_endofpacket    (1'b0),          // (terminated),                        
-		.out_startofpacket (),              // (terminated),                        
-		.out_endofpacket   (),              // (terminated),                        
-		.in_empty          (1'b0),          // (terminated),                        
-		.out_empty         (),              // (terminated),                        
-		.in_error          (1'b0),          // (terminated),                        
-		.out_error         (),              // (terminated),                        
-		.in_channel        (1'b0),          // (terminated),                        
-		.out_channel       ()               // (terminated),                        
+		.almost_full_data  (),              // (terminated),
+		.almost_empty_data (),              // (terminated),
+		.in_startofpacket  (1'b0),          // (terminated),
+		.in_endofpacket    (1'b0),          // (terminated),
+		.out_startofpacket (),              // (terminated),
+		.out_endofpacket   (),              // (terminated),
+		.in_empty          (1'b0),          // (terminated),
+		.out_empty         (),              // (terminated),
+		.in_error          (1'b0),          // (terminated),
+		.out_error         (),              // (terminated),
+		.in_channel        (1'b0),          // (terminated),
+		.out_channel       ()               // (terminated),
 	);
 
 	`ASSERT(FifoWrapperInfillEnqueueWhenFull, !in_ready |-> !in_valid, clk,

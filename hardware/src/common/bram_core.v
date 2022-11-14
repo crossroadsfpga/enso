@@ -14,9 +14,9 @@
 `timescale 1ns / 1ps
 // synthesis translate_on
 
-// turn off superfluous verilog processor warnings 
-// altera message_level Level1 
-// altera message_off 10034 10035 10036 10037 10230 10240 10030 13469 16735 16788 
+// turn off superfluous verilog processor warnings
+// altera message_level Level1
+// altera message_off 10034 10035 10036 10037 10230 10240 10030 13469 16735 16788
 
 module bram_core (
 // inputs:
@@ -35,7 +35,7 @@ module bram_core (
     write2,
     writedata,
     writedata2,
-    
+
     // outputs:
     readdata,
     readdata2
@@ -130,4 +130,3 @@ wire             wren2;
   //s2, which is an e_avalon_slave
 
 endmodule
-

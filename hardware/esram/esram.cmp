@@ -61,4 +61,3 @@
 			refclk          : in  std_logic                     := 'X'              -- clock
 		);
 	end component esram;
-

@@ -1,13 +1,13 @@
 // (C) 2001-2019 Intel Corporation. All rights reserved.
-// Your use of Intel Corporation's design tools, logic functions and other 
-// software and tools, and its AMPP partner logic functions, and any output 
-// files from any of the foregoing (including device programming or simulation 
-// files), and any associated documentation or information are expressly subject 
-// to the terms and conditions of the Intel Program License Subscription 
-// Agreement, Intel FPGA IP License Agreement, or other applicable 
-// license agreement, including, without limitation, that your use is for the 
-// sole purpose of programming logic devices manufactured by Intel and sold by 
-// Intel or its authorized distributors.  Please refer to the applicable 
+// Your use of Intel Corporation's design tools, logic functions and other
+// software and tools, and its AMPP partner logic functions, and any output
+// files from any of the foregoing (including device programming or simulation
+// files), and any associated documentation or information are expressly subject
+// to the terms and conditions of the Intel Program License Subscription
+// Agreement, Intel FPGA IP License Agreement, or other applicable
+// license agreement, including, without limitation, that your use is for the
+// sole purpose of programming logic devices manufactured by Intel and sold by
+// Intel or its authorized distributors.  Please refer to the applicable
 // agreement for further details.
 
 
@@ -26,7 +26,7 @@ module esram_esram_1913_a3ainji
         parameter       c0_ecc_byp_enable   = "FALSE",              //FALSE - ECC bypass is disabled for Channel 0; TRUE - ECC bypass is enabled for channel 0
         parameter       c0_wr_fwd_enable    = "FALSE",              //FALSE - Write Forwarding is disabled for Channel 0; TRUE - Write Forwarding is enabled for channel 0
         parameter       c0_lpmode_enable    = "FALSE",              //FALSE - Low Power Mode is disabled for Channel 0; TRUE - Low Power Mode is enabled for channel 0
-        parameter       c0_data_width       = 72,                   //1 to 72 - The width for both data and output. 
+        parameter       c0_data_width       = 72,                   //1 to 72 - The width for both data and output.
         parameter       c0_address_width    = 17,                   //11 to 17 - The address width for both write and read, calculated from number of words.
 
         //==========================//
@@ -38,7 +38,7 @@ module esram_esram_1913_a3ainji
         parameter       c1_ecc_byp_enable   = "FALSE",              //FALSE - ECC bypass is disabled for Channel 1; TRUE - ECC bypass is enabled for channel 1
         parameter       c1_wr_fwd_enable    = "FALSE",              //FALSE - Write Forwarding is disabled for Channel 1; TRUE - Write Forwarding is enabled for channel 1
         parameter       c1_lpmode_enable    = "FALSE",              //FALSE - Low Power Mode is disabled for Channel 1; TRUE - Low Power Mode is enabled for channel 1
-        parameter       c1_data_width       = 72,                   //1 to 72 - The width for both data and output. 
+        parameter       c1_data_width       = 72,                   //1 to 72 - The width for both data and output.
         parameter       c1_address_width    = 17,                   //11 to 17 - The address width for both write and read, calculated from number of words.
 
         //==========================//
@@ -50,7 +50,7 @@ module esram_esram_1913_a3ainji
         parameter       c2_ecc_byp_enable   = "FALSE",              //FALSE - ECC bypass is disabled for Channel 2; TRUE - ECC bypass is enabled for channel 2
         parameter       c2_wr_fwd_enable    = "FALSE",              //FALSE - Write Forwarding is disabled for Channel 2; TRUE - Write Forwarding is enabled for channel 2
         parameter       c2_lpmode_enable    = "FALSE",              //FALSE - Low Power Mode is disabled for Channel 2; TRUE - Low Power Mode is enabled for channel 2
-        parameter       c2_data_width       = 72,                   //1 to 72 - The width for both data and output. 
+        parameter       c2_data_width       = 72,                   //1 to 72 - The width for both data and output.
         parameter       c2_address_width    = 17,                   //11 to 17 - The address width for both write and read, calculated from number of words.
 
         //==========================//
@@ -62,7 +62,7 @@ module esram_esram_1913_a3ainji
         parameter       c3_ecc_byp_enable   = "FALSE",              //FALSE - ECC bypass is disabled for Channel 3; TRUE - ECC bypass is enabled for channel 3
         parameter       c3_wr_fwd_enable    = "FALSE",              //FALSE - Write Forwarding is disabled for Channel 3; TRUE - Write Forwarding is enabled for channel 3
         parameter       c3_lpmode_enable    = "FALSE",              //FALSE - Low Power Mode is disabled for Channel 3; TRUE - Low Power Mode is enabled for channel 3
-        parameter       c3_data_width       = 72,                   //1 to 72 - The width for both data and output. 
+        parameter       c3_data_width       = 72,                   //1 to 72 - The width for both data and output.
         parameter       c3_address_width    = 17,                   //11 to 17 - The address width for both write and read, calculated from number of words.
 
         //==========================//
@@ -74,7 +74,7 @@ module esram_esram_1913_a3ainji
         parameter       c4_ecc_byp_enable   = "FALSE",              //FALSE - ECC bypass is disabled for Channel 4; TRUE - ECC bypass is enabled for channel 4
         parameter       c4_wr_fwd_enable    = "FALSE",              //FALSE - Write Forwarding is disabled for Channel 4; TRUE - Write Forwarding is enabled for channel 4
         parameter       c4_lpmode_enable    = "FALSE",              //FALSE - Low Power Mode is disabled for Channel 4; TRUE - Low Power Mode is enabled for channel 4
-        parameter       c4_data_width       = 72,                   //1 to 72 - The width for both data and output. 
+        parameter       c4_data_width       = 72,                   //1 to 72 - The width for both data and output.
         parameter       c4_address_width    = 17,                   //11 to 17 - The address width for both write and read, calculated from number of words.
 
         //==========================//
@@ -86,7 +86,7 @@ module esram_esram_1913_a3ainji
         parameter       c5_ecc_byp_enable   = "FALSE",              //FALSE - ECC bypass is disabled for Channel 5; TRUE - ECC bypass is enabled for channel 5
         parameter       c5_wr_fwd_enable    = "FALSE",              //FALSE - Write Forwarding is disabled for Channel 5; TRUE - Write Forwarding is enabled for channel 5
         parameter       c5_lpmode_enable    = "FALSE",              //FALSE - Low Power Mode is disabled for Channel 5; TRUE - Low Power Mode is enabled for channel 5
-        parameter       c5_data_width       = 72,                   //1 to 72 - The width for both data and output. 
+        parameter       c5_data_width       = 72,                   //1 to 72 - The width for both data and output.
         parameter       c5_address_width    = 17,                   //11 to 17 - The address width for both write and read, calculated from number of words.
 
         //==========================//
@@ -98,7 +98,7 @@ module esram_esram_1913_a3ainji
         parameter       c6_ecc_byp_enable   = "FALSE",              //FALSE - ECC bypass is disabled for Channel 6; TRUE - ECC bypass is enabled for channel 6
         parameter       c6_wr_fwd_enable    = "FALSE",              //FALSE - Write Forwarding is disabled for Channel 6; TRUE - Write Forwarding is enabled for channel 6
         parameter       c6_lpmode_enable    = "FALSE",              //FALSE - Low Power Mode is disabled for Channel 6; TRUE - Low Power Mode is enabled for channel 6
-        parameter       c6_data_width       = 72,                   //1 to 72 - The width for both data and output. 
+        parameter       c6_data_width       = 72,                   //1 to 72 - The width for both data and output.
         parameter       c6_address_width    = 17,                   //11 to 17 - The address width for both write and read, calculated from number of words.
 
         //==========================//
@@ -110,19 +110,19 @@ module esram_esram_1913_a3ainji
         parameter       c7_ecc_byp_enable   = "FALSE",              //FALSE - ECC bypass is disabled for Channel 7; TRUE - ECC bypass is enabled for channel 7
         parameter       c7_wr_fwd_enable    = "FALSE",              //FALSE - Write Forwarding is disabled for Channel 7; TRUE - Write Forwarding is enabled for channel 7
         parameter       c7_lpmode_enable    = "FALSE",              //FALSE - Low Power Mode is disabled for Channel 7; TRUE - Low Power Mode is enabled for channel 7
-        parameter       c7_data_width       = 72,                   //1 to 72 - The width for both data and output. 
+        parameter       c7_data_width       = 72,                   //1 to 72 - The width for both data and output.
         parameter       c7_address_width    = 17,                   //11 to 17 - The address width for both write and read, calculated from number of words.
-       
+
         //==========================//
         // eSRAM General Parameters //
         //==========================//
         parameter   clock_rate              = "FULLRATE",
 
         //=======================================================//
-        // Please DO NOT change the value of each Parameter here,// 
+        // Please DO NOT change the value of each Parameter here,//
         // THEY are auto set according to clock_rate             //
         //=======================================================//
-        
+
         parameter   c2p_ptr_dly     = "C2P_ONE_CYCLE_DLY",
         parameter   p2c_ptr_dly     = "P2C_ONE_CYCLE_DLY",
         parameter   xs0_dcm_ufimux32to1_dolsgn_rc_dolsgn_0_a_sel_11_0 = "C2PCLK0_D0",
@@ -200,8 +200,8 @@ module esram_esram_1913_a3ainji
     output                          iopll_lock2core,
     output                          esram2f_clk
     );
-    
-    // start of reg and wire 
+
+    // start of reg and wire
 
     wire [1:0]  esram2f_clk_w;
     wire        iopll_lock2core_ufi;
@@ -411,7 +411,7 @@ module esram_esram_1913_a3ainji
     (* altera_attribute = "-name FORCE_HYPER_REGISTER_FOR_PERIPHERY_CORE_TRANSFER ON"*)  logic  c7_error_correct_0_reg/* synthesis dont_merge */;
     wire                          c7_error_detect_0_w;
     (* altera_attribute = "-name FORCE_HYPER_REGISTER_FOR_PERIPHERY_CORE_TRANSFER ON"*)  logic  c7_error_detect_0_reg/* synthesis dont_merge */;
-    
+
     always @(posedge esram2f_clk_w[0])
     begin
         //Full rate
@@ -597,7 +597,7 @@ module esram_esram_1913_a3ainji
     assign  esram2f_clk     = esram2f_clk_w[0];
     assign  iopll_lock2core = iopll_lock2core_reg;
     //end if reg and wire
-    
+
     wire [1:0] esram__esram2f_clk;
     wire [1:0] esram__f2esram_clk;
     wire [16:0] esram__s2c0_adra_ua0;
@@ -958,7 +958,7 @@ module esram_esram_1913_a3ainji
     wire [27:0] esram__scan_out;
     wire [3:0]  esram__cjtag_id_in_l;
     wire [3:0]  esram__cjtag_id_in_r;
-    
+
     //iopll
     wire            locked_iopll;
     wire            refclk_out;
@@ -968,7 +968,7 @@ module esram_esram_1913_a3ainji
     wire    [8:0]   pllcout_sig;
     wire    [3:0]   test_debug_in;
     assign          low_sig  = 1'b0;
-    assign          vccl_sig = 1'b1; 
+    assign          vccl_sig = 1'b1;
     assign          test_debug_in = {1'b0, 1'b0, extclk1, extclk0};
 
     //cpa
@@ -1007,9 +1007,9 @@ module esram_esram_1913_a3ainji
     wire            ptr_rst_n_wire;
     wire            esram_clk_fb;
     wire    [1:0]  esram2f_clk_ufi;
-    
+
     assign esram2f_clk_w = esram2f_clk_ufi;
-    
+
     // Esram
     fourteennm_esram  fourteennm_esram_component (
         .cfg_ufi_ptren(locked_iopll),
@@ -1017,7 +1017,7 @@ module esram_esram_1913_a3ainji
         .iopll_lock2iohmc(iopll_lock2core_ufi),                 //output iopll lock signal to ufi
         .f2esram_clk(f2esram_clk_wire),                         //esram input from ufi
         .f2esram_clk_to_cip(f2esram_clk_to_cip),                //esram output to cpa
-        .esram2f_clk(esram2f_clk_wire), 
+        .esram2f_clk(esram2f_clk_wire),
         .esram2f_clk_from_cip(esram2f_clk_from_cip),            //esram input from cpa
         .pllcout_sig(pllcout_sig),
         .esram_clk(esram_clk_fb),
@@ -1468,7 +1468,7 @@ module esram_esram_1913_a3ainji
         c7_wraddr_tie_off_reg <= 6'b000000;
         c7_rdaddr_tie_off_reg <= 6'b000000;
     end
-    
+
     //Ufi connection
     fourteennm_ufi_esram fourteennm_ufi_esram_component (
         .f2esram_clk_cpa(esram2f_clk_ufi),                  //ufi input 32 bits
@@ -1565,10 +1565,10 @@ module esram_esram_1913_a3ainji
         .s2c7_err_correct_0(c7_error_correct_0_w),
         .s2c7_err_detect_0(c7_error_detect_0_w),
         .s2c7_qb_0(c7_q_0_w),
-        .s2c0_adra_ua0     (esram__s2c0_adra_ua0),     
-        .s2c0_adrb_ua0     (esram__s2c0_adrb_ua0),     
-        .s2c0_da_ua0     (esram__s2c0_da_ua0),     
-        .s2c0_qb_ua0     (esram__s2c0_qb_ua0),     
+        .s2c0_adra_ua0     (esram__s2c0_adra_ua0),
+        .s2c0_adrb_ua0     (esram__s2c0_adrb_ua0),
+        .s2c0_da_ua0     (esram__s2c0_da_ua0),
+        .s2c0_qb_ua0     (esram__s2c0_qb_ua0),
         .s2c0_ecca_byp_ua0     (esram__s2c0_ecca_byp_ua0),
         .s2c0_eccb_byp_ua0     (esram__s2c0_eccb_byp_ua0),
         .s2c0_err_correct_ua0     (esram__s2c0_err_correct_ua0),
@@ -1576,10 +1576,10 @@ module esram_esram_1913_a3ainji
         .s2c0_mea_n_ua0     (esram__s2c0_mea_n_ua0),
         .s2c0_meb_n_ua0     (esram__s2c0_meb_n_ua0),
         .s2c0_sd_n_ua0     (esram__s2c0_sd_n_ua0),
-        .s2c0_adra_ua1     (esram__s2c0_adra_ua1),     
-        .s2c0_adrb_ua1     (esram__s2c0_adrb_ua1),     
-        .s2c0_da_ua1     (esram__s2c0_da_ua1),     
-        .s2c0_qb_ua1     (esram__s2c0_qb_ua1),     
+        .s2c0_adra_ua1     (esram__s2c0_adra_ua1),
+        .s2c0_adrb_ua1     (esram__s2c0_adrb_ua1),
+        .s2c0_da_ua1     (esram__s2c0_da_ua1),
+        .s2c0_qb_ua1     (esram__s2c0_qb_ua1),
         .s2c0_ecca_byp_ua1     (esram__s2c0_ecca_byp_ua1),
         .s2c0_eccb_byp_ua1     (esram__s2c0_eccb_byp_ua1),
         .s2c0_err_correct_ua1     (esram__s2c0_err_correct_ua1),
@@ -1587,10 +1587,10 @@ module esram_esram_1913_a3ainji
         .s2c0_mea_n_ua1     (esram__s2c0_mea_n_ua1),
         .s2c0_meb_n_ua1     (esram__s2c0_meb_n_ua1),
         .s2c0_sd_n_ua1     (esram__s2c0_sd_n_ua1),
-        .s2c0_adra_ua2     (esram__s2c0_adra_ua2),     
-        .s2c0_adrb_ua2     (esram__s2c0_adrb_ua2),     
-        .s2c0_da_ua2     (esram__s2c0_da_ua2),     
-        .s2c0_qb_ua2     (esram__s2c0_qb_ua2),     
+        .s2c0_adra_ua2     (esram__s2c0_adra_ua2),
+        .s2c0_adrb_ua2     (esram__s2c0_adrb_ua2),
+        .s2c0_da_ua2     (esram__s2c0_da_ua2),
+        .s2c0_qb_ua2     (esram__s2c0_qb_ua2),
         .s2c0_ecca_byp_ua2     (esram__s2c0_ecca_byp_ua2),
         .s2c0_eccb_byp_ua2     (esram__s2c0_eccb_byp_ua2),
         .s2c0_err_correct_ua2     (esram__s2c0_err_correct_ua2),
@@ -1598,10 +1598,10 @@ module esram_esram_1913_a3ainji
         .s2c0_mea_n_ua2     (esram__s2c0_mea_n_ua2),
         .s2c0_meb_n_ua2     (esram__s2c0_meb_n_ua2),
         .s2c0_sd_n_ua2     (esram__s2c0_sd_n_ua2),
-        .s2c0_adra_ua3     (esram__s2c0_adra_ua3),     
-        .s2c0_adrb_ua3     (esram__s2c0_adrb_ua3),     
-        .s2c0_da_ua3     (esram__s2c0_da_ua3),     
-        .s2c0_qb_ua3     (esram__s2c0_qb_ua3),     
+        .s2c0_adra_ua3     (esram__s2c0_adra_ua3),
+        .s2c0_adrb_ua3     (esram__s2c0_adrb_ua3),
+        .s2c0_da_ua3     (esram__s2c0_da_ua3),
+        .s2c0_qb_ua3     (esram__s2c0_qb_ua3),
         .s2c0_ecca_byp_ua3     (esram__s2c0_ecca_byp_ua3),
         .s2c0_eccb_byp_ua3     (esram__s2c0_eccb_byp_ua3),
         .s2c0_err_correct_ua3     (esram__s2c0_err_correct_ua3),
@@ -1609,10 +1609,10 @@ module esram_esram_1913_a3ainji
         .s2c0_mea_n_ua3     (esram__s2c0_mea_n_ua3),
         .s2c0_meb_n_ua3     (esram__s2c0_meb_n_ua3),
         .s2c0_sd_n_ua3     (esram__s2c0_sd_n_ua3),
-        .s2c1_adra_ua0     (esram__s2c1_adra_ua0),     
-        .s2c1_adrb_ua0     (esram__s2c1_adrb_ua0),     
-        .s2c1_da_ua0     (esram__s2c1_da_ua0),     
-        .s2c1_qb_ua0     (esram__s2c1_qb_ua0),     
+        .s2c1_adra_ua0     (esram__s2c1_adra_ua0),
+        .s2c1_adrb_ua0     (esram__s2c1_adrb_ua0),
+        .s2c1_da_ua0     (esram__s2c1_da_ua0),
+        .s2c1_qb_ua0     (esram__s2c1_qb_ua0),
         .s2c1_ecca_byp_ua0     (esram__s2c1_ecca_byp_ua0),
         .s2c1_eccb_byp_ua0     (esram__s2c1_eccb_byp_ua0),
         .s2c1_err_correct_ua0     (esram__s2c1_err_correct_ua0),
@@ -1620,10 +1620,10 @@ module esram_esram_1913_a3ainji
         .s2c1_mea_n_ua0     (esram__s2c1_mea_n_ua0),
         .s2c1_meb_n_ua0     (esram__s2c1_meb_n_ua0),
         .s2c1_sd_n_ua0     (esram__s2c1_sd_n_ua0),
-        .s2c1_adra_ua1     (esram__s2c1_adra_ua1),     
-        .s2c1_adrb_ua1     (esram__s2c1_adrb_ua1),     
-        .s2c1_da_ua1     (esram__s2c1_da_ua1),     
-        .s2c1_qb_ua1     (esram__s2c1_qb_ua1),     
+        .s2c1_adra_ua1     (esram__s2c1_adra_ua1),
+        .s2c1_adrb_ua1     (esram__s2c1_adrb_ua1),
+        .s2c1_da_ua1     (esram__s2c1_da_ua1),
+        .s2c1_qb_ua1     (esram__s2c1_qb_ua1),
         .s2c1_ecca_byp_ua1     (esram__s2c1_ecca_byp_ua1),
         .s2c1_eccb_byp_ua1     (esram__s2c1_eccb_byp_ua1),
         .s2c1_err_correct_ua1     (esram__s2c1_err_correct_ua1),
@@ -1631,10 +1631,10 @@ module esram_esram_1913_a3ainji
         .s2c1_mea_n_ua1     (esram__s2c1_mea_n_ua1),
         .s2c1_meb_n_ua1     (esram__s2c1_meb_n_ua1),
         .s2c1_sd_n_ua1     (esram__s2c1_sd_n_ua1),
-        .s2c1_adra_ua2     (esram__s2c1_adra_ua2),     
-        .s2c1_adrb_ua2     (esram__s2c1_adrb_ua2),     
-        .s2c1_da_ua2     (esram__s2c1_da_ua2),     
-        .s2c1_qb_ua2     (esram__s2c1_qb_ua2),     
+        .s2c1_adra_ua2     (esram__s2c1_adra_ua2),
+        .s2c1_adrb_ua2     (esram__s2c1_adrb_ua2),
+        .s2c1_da_ua2     (esram__s2c1_da_ua2),
+        .s2c1_qb_ua2     (esram__s2c1_qb_ua2),
         .s2c1_ecca_byp_ua2     (esram__s2c1_ecca_byp_ua2),
         .s2c1_eccb_byp_ua2     (esram__s2c1_eccb_byp_ua2),
         .s2c1_err_correct_ua2     (esram__s2c1_err_correct_ua2),
@@ -1642,10 +1642,10 @@ module esram_esram_1913_a3ainji
         .s2c1_mea_n_ua2     (esram__s2c1_mea_n_ua2),
         .s2c1_meb_n_ua2     (esram__s2c1_meb_n_ua2),
         .s2c1_sd_n_ua2     (esram__s2c1_sd_n_ua2),
-        .s2c1_adra_ua3     (esram__s2c1_adra_ua3),     
-        .s2c1_adrb_ua3     (esram__s2c1_adrb_ua3),     
-        .s2c1_da_ua3     (esram__s2c1_da_ua3),     
-        .s2c1_qb_ua3     (esram__s2c1_qb_ua3),     
+        .s2c1_adra_ua3     (esram__s2c1_adra_ua3),
+        .s2c1_adrb_ua3     (esram__s2c1_adrb_ua3),
+        .s2c1_da_ua3     (esram__s2c1_da_ua3),
+        .s2c1_qb_ua3     (esram__s2c1_qb_ua3),
         .s2c1_ecca_byp_ua3     (esram__s2c1_ecca_byp_ua3),
         .s2c1_eccb_byp_ua3     (esram__s2c1_eccb_byp_ua3),
         .s2c1_err_correct_ua3     (esram__s2c1_err_correct_ua3),
@@ -1653,10 +1653,10 @@ module esram_esram_1913_a3ainji
         .s2c1_mea_n_ua3     (esram__s2c1_mea_n_ua3),
         .s2c1_meb_n_ua3     (esram__s2c1_meb_n_ua3),
         .s2c1_sd_n_ua3     (esram__s2c1_sd_n_ua3),
-        .s2c2_adra_ua0     (esram__s2c2_adra_ua0),     
-        .s2c2_adrb_ua0     (esram__s2c2_adrb_ua0),     
-        .s2c2_da_ua0     (esram__s2c2_da_ua0),     
-        .s2c2_qb_ua0     (esram__s2c2_qb_ua0),     
+        .s2c2_adra_ua0     (esram__s2c2_adra_ua0),
+        .s2c2_adrb_ua0     (esram__s2c2_adrb_ua0),
+        .s2c2_da_ua0     (esram__s2c2_da_ua0),
+        .s2c2_qb_ua0     (esram__s2c2_qb_ua0),
         .s2c2_ecca_byp_ua0     (esram__s2c2_ecca_byp_ua0),
         .s2c2_eccb_byp_ua0     (esram__s2c2_eccb_byp_ua0),
         .s2c2_err_correct_ua0     (esram__s2c2_err_correct_ua0),
@@ -1664,10 +1664,10 @@ module esram_esram_1913_a3ainji
         .s2c2_mea_n_ua0     (esram__s2c2_mea_n_ua0),
         .s2c2_meb_n_ua0     (esram__s2c2_meb_n_ua0),
         .s2c2_sd_n_ua0     (esram__s2c2_sd_n_ua0),
-        .s2c2_adra_ua1     (esram__s2c2_adra_ua1),     
-        .s2c2_adrb_ua1     (esram__s2c2_adrb_ua1),     
-        .s2c2_da_ua1     (esram__s2c2_da_ua1),     
-        .s2c2_qb_ua1     (esram__s2c2_qb_ua1),     
+        .s2c2_adra_ua1     (esram__s2c2_adra_ua1),
+        .s2c2_adrb_ua1     (esram__s2c2_adrb_ua1),
+        .s2c2_da_ua1     (esram__s2c2_da_ua1),
+        .s2c2_qb_ua1     (esram__s2c2_qb_ua1),
         .s2c2_ecca_byp_ua1     (esram__s2c2_ecca_byp_ua1),
         .s2c2_eccb_byp_ua1     (esram__s2c2_eccb_byp_ua1),
         .s2c2_err_correct_ua1     (esram__s2c2_err_correct_ua1),
@@ -1675,10 +1675,10 @@ module esram_esram_1913_a3ainji
         .s2c2_mea_n_ua1     (esram__s2c2_mea_n_ua1),
         .s2c2_meb_n_ua1     (esram__s2c2_meb_n_ua1),
         .s2c2_sd_n_ua1     (esram__s2c2_sd_n_ua1),
-        .s2c2_adra_ua2     (esram__s2c2_adra_ua2),     
-        .s2c2_adrb_ua2     (esram__s2c2_adrb_ua2),     
-        .s2c2_da_ua2     (esram__s2c2_da_ua2),     
-        .s2c2_qb_ua2     (esram__s2c2_qb_ua2),     
+        .s2c2_adra_ua2     (esram__s2c2_adra_ua2),
+        .s2c2_adrb_ua2     (esram__s2c2_adrb_ua2),
+        .s2c2_da_ua2     (esram__s2c2_da_ua2),
+        .s2c2_qb_ua2     (esram__s2c2_qb_ua2),
         .s2c2_ecca_byp_ua2     (esram__s2c2_ecca_byp_ua2),
         .s2c2_eccb_byp_ua2     (esram__s2c2_eccb_byp_ua2),
         .s2c2_err_correct_ua2     (esram__s2c2_err_correct_ua2),
@@ -1686,10 +1686,10 @@ module esram_esram_1913_a3ainji
         .s2c2_mea_n_ua2     (esram__s2c2_mea_n_ua2),
         .s2c2_meb_n_ua2     (esram__s2c2_meb_n_ua2),
         .s2c2_sd_n_ua2     (esram__s2c2_sd_n_ua2),
-        .s2c2_adra_ua3     (esram__s2c2_adra_ua3),     
-        .s2c2_adrb_ua3     (esram__s2c2_adrb_ua3),     
-        .s2c2_da_ua3     (esram__s2c2_da_ua3),     
-        .s2c2_qb_ua3     (esram__s2c2_qb_ua3),     
+        .s2c2_adra_ua3     (esram__s2c2_adra_ua3),
+        .s2c2_adrb_ua3     (esram__s2c2_adrb_ua3),
+        .s2c2_da_ua3     (esram__s2c2_da_ua3),
+        .s2c2_qb_ua3     (esram__s2c2_qb_ua3),
         .s2c2_ecca_byp_ua3     (esram__s2c2_ecca_byp_ua3),
         .s2c2_eccb_byp_ua3     (esram__s2c2_eccb_byp_ua3),
         .s2c2_err_correct_ua3     (esram__s2c2_err_correct_ua3),
@@ -1697,10 +1697,10 @@ module esram_esram_1913_a3ainji
         .s2c2_mea_n_ua3     (esram__s2c2_mea_n_ua3),
         .s2c2_meb_n_ua3     (esram__s2c2_meb_n_ua3),
         .s2c2_sd_n_ua3     (esram__s2c2_sd_n_ua3),
-        .s2c3_adra_ua0     (esram__s2c3_adra_ua0),     
-        .s2c3_adrb_ua0     (esram__s2c3_adrb_ua0),     
-        .s2c3_da_ua0     (esram__s2c3_da_ua0),     
-        .s2c3_qb_ua0     (esram__s2c3_qb_ua0),     
+        .s2c3_adra_ua0     (esram__s2c3_adra_ua0),
+        .s2c3_adrb_ua0     (esram__s2c3_adrb_ua0),
+        .s2c3_da_ua0     (esram__s2c3_da_ua0),
+        .s2c3_qb_ua0     (esram__s2c3_qb_ua0),
         .s2c3_ecca_byp_ua0     (esram__s2c3_ecca_byp_ua0),
         .s2c3_eccb_byp_ua0     (esram__s2c3_eccb_byp_ua0),
         .s2c3_err_correct_ua0     (esram__s2c3_err_correct_ua0),
@@ -1708,10 +1708,10 @@ module esram_esram_1913_a3ainji
         .s2c3_mea_n_ua0     (esram__s2c3_mea_n_ua0),
         .s2c3_meb_n_ua0     (esram__s2c3_meb_n_ua0),
         .s2c3_sd_n_ua0     (esram__s2c3_sd_n_ua0),
-        .s2c3_adra_ua1     (esram__s2c3_adra_ua1),     
-        .s2c3_adrb_ua1     (esram__s2c3_adrb_ua1),     
-        .s2c3_da_ua1     (esram__s2c3_da_ua1),     
-        .s2c3_qb_ua1     (esram__s2c3_qb_ua1),     
+        .s2c3_adra_ua1     (esram__s2c3_adra_ua1),
+        .s2c3_adrb_ua1     (esram__s2c3_adrb_ua1),
+        .s2c3_da_ua1     (esram__s2c3_da_ua1),
+        .s2c3_qb_ua1     (esram__s2c3_qb_ua1),
         .s2c3_ecca_byp_ua1     (esram__s2c3_ecca_byp_ua1),
         .s2c3_eccb_byp_ua1     (esram__s2c3_eccb_byp_ua1),
         .s2c3_err_correct_ua1     (esram__s2c3_err_correct_ua1),
@@ -1719,10 +1719,10 @@ module esram_esram_1913_a3ainji
         .s2c3_mea_n_ua1     (esram__s2c3_mea_n_ua1),
         .s2c3_meb_n_ua1     (esram__s2c3_meb_n_ua1),
         .s2c3_sd_n_ua1     (esram__s2c3_sd_n_ua1),
-        .s2c3_adra_ua2     (esram__s2c3_adra_ua2),     
-        .s2c3_adrb_ua2     (esram__s2c3_adrb_ua2),     
-        .s2c3_da_ua2     (esram__s2c3_da_ua2),     
-        .s2c3_qb_ua2     (esram__s2c3_qb_ua2),     
+        .s2c3_adra_ua2     (esram__s2c3_adra_ua2),
+        .s2c3_adrb_ua2     (esram__s2c3_adrb_ua2),
+        .s2c3_da_ua2     (esram__s2c3_da_ua2),
+        .s2c3_qb_ua2     (esram__s2c3_qb_ua2),
         .s2c3_ecca_byp_ua2     (esram__s2c3_ecca_byp_ua2),
         .s2c3_eccb_byp_ua2     (esram__s2c3_eccb_byp_ua2),
         .s2c3_err_correct_ua2     (esram__s2c3_err_correct_ua2),
@@ -1730,10 +1730,10 @@ module esram_esram_1913_a3ainji
         .s2c3_mea_n_ua2     (esram__s2c3_mea_n_ua2),
         .s2c3_meb_n_ua2     (esram__s2c3_meb_n_ua2),
         .s2c3_sd_n_ua2     (esram__s2c3_sd_n_ua2),
-        .s2c3_adra_ua3     (esram__s2c3_adra_ua3),     
-        .s2c3_adrb_ua3     (esram__s2c3_adrb_ua3),     
-        .s2c3_da_ua3     (esram__s2c3_da_ua3),     
-        .s2c3_qb_ua3     (esram__s2c3_qb_ua3),     
+        .s2c3_adra_ua3     (esram__s2c3_adra_ua3),
+        .s2c3_adrb_ua3     (esram__s2c3_adrb_ua3),
+        .s2c3_da_ua3     (esram__s2c3_da_ua3),
+        .s2c3_qb_ua3     (esram__s2c3_qb_ua3),
         .s2c3_ecca_byp_ua3     (esram__s2c3_ecca_byp_ua3),
         .s2c3_eccb_byp_ua3     (esram__s2c3_eccb_byp_ua3),
         .s2c3_err_correct_ua3     (esram__s2c3_err_correct_ua3),
@@ -1741,10 +1741,10 @@ module esram_esram_1913_a3ainji
         .s2c3_mea_n_ua3     (esram__s2c3_mea_n_ua3),
         .s2c3_meb_n_ua3     (esram__s2c3_meb_n_ua3),
         .s2c3_sd_n_ua3     (esram__s2c3_sd_n_ua3),
-        .s2c4_adra_ua0     (esram__s2c4_adra_ua0),     
-        .s2c4_adrb_ua0     (esram__s2c4_adrb_ua0),     
-        .s2c4_da_ua0     (esram__s2c4_da_ua0),     
-        .s2c4_qb_ua0     (esram__s2c4_qb_ua0),     
+        .s2c4_adra_ua0     (esram__s2c4_adra_ua0),
+        .s2c4_adrb_ua0     (esram__s2c4_adrb_ua0),
+        .s2c4_da_ua0     (esram__s2c4_da_ua0),
+        .s2c4_qb_ua0     (esram__s2c4_qb_ua0),
         .s2c4_ecca_byp_ua0     (esram__s2c4_ecca_byp_ua0),
         .s2c4_eccb_byp_ua0     (esram__s2c4_eccb_byp_ua0),
         .s2c4_err_correct_ua0     (esram__s2c4_err_correct_ua0),
@@ -1752,10 +1752,10 @@ module esram_esram_1913_a3ainji
         .s2c4_mea_n_ua0     (esram__s2c4_mea_n_ua0),
         .s2c4_meb_n_ua0     (esram__s2c4_meb_n_ua0),
         .s2c4_sd_n_ua0     (esram__s2c4_sd_n_ua0),
-        .s2c4_adra_ua1     (esram__s2c4_adra_ua1),     
-        .s2c4_adrb_ua1     (esram__s2c4_adrb_ua1),     
-        .s2c4_da_ua1     (esram__s2c4_da_ua1),     
-        .s2c4_qb_ua1     (esram__s2c4_qb_ua1),     
+        .s2c4_adra_ua1     (esram__s2c4_adra_ua1),
+        .s2c4_adrb_ua1     (esram__s2c4_adrb_ua1),
+        .s2c4_da_ua1     (esram__s2c4_da_ua1),
+        .s2c4_qb_ua1     (esram__s2c4_qb_ua1),
         .s2c4_ecca_byp_ua1     (esram__s2c4_ecca_byp_ua1),
         .s2c4_eccb_byp_ua1     (esram__s2c4_eccb_byp_ua1),
         .s2c4_err_correct_ua1     (esram__s2c4_err_correct_ua1),
@@ -1763,10 +1763,10 @@ module esram_esram_1913_a3ainji
         .s2c4_mea_n_ua1     (esram__s2c4_mea_n_ua1),
         .s2c4_meb_n_ua1     (esram__s2c4_meb_n_ua1),
         .s2c4_sd_n_ua1     (esram__s2c4_sd_n_ua1),
-        .s2c4_adra_ua2     (esram__s2c4_adra_ua2),     
-        .s2c4_adrb_ua2     (esram__s2c4_adrb_ua2),     
-        .s2c4_da_ua2     (esram__s2c4_da_ua2),     
-        .s2c4_qb_ua2     (esram__s2c4_qb_ua2),     
+        .s2c4_adra_ua2     (esram__s2c4_adra_ua2),
+        .s2c4_adrb_ua2     (esram__s2c4_adrb_ua2),
+        .s2c4_da_ua2     (esram__s2c4_da_ua2),
+        .s2c4_qb_ua2     (esram__s2c4_qb_ua2),
         .s2c4_ecca_byp_ua2     (esram__s2c4_ecca_byp_ua2),
         .s2c4_eccb_byp_ua2     (esram__s2c4_eccb_byp_ua2),
         .s2c4_err_correct_ua2     (esram__s2c4_err_correct_ua2),
@@ -1774,10 +1774,10 @@ module esram_esram_1913_a3ainji
         .s2c4_mea_n_ua2     (esram__s2c4_mea_n_ua2),
         .s2c4_meb_n_ua2     (esram__s2c4_meb_n_ua2),
         .s2c4_sd_n_ua2     (esram__s2c4_sd_n_ua2),
-        .s2c4_adra_ua3     (esram__s2c4_adra_ua3),     
-        .s2c4_adrb_ua3     (esram__s2c4_adrb_ua3),     
-        .s2c4_da_ua3     (esram__s2c4_da_ua3),     
-        .s2c4_qb_ua3     (esram__s2c4_qb_ua3),     
+        .s2c4_adra_ua3     (esram__s2c4_adra_ua3),
+        .s2c4_adrb_ua3     (esram__s2c4_adrb_ua3),
+        .s2c4_da_ua3     (esram__s2c4_da_ua3),
+        .s2c4_qb_ua3     (esram__s2c4_qb_ua3),
         .s2c4_ecca_byp_ua3     (esram__s2c4_ecca_byp_ua3),
         .s2c4_eccb_byp_ua3     (esram__s2c4_eccb_byp_ua3),
         .s2c4_err_correct_ua3     (esram__s2c4_err_correct_ua3),
@@ -1785,10 +1785,10 @@ module esram_esram_1913_a3ainji
         .s2c4_mea_n_ua3     (esram__s2c4_mea_n_ua3),
         .s2c4_meb_n_ua3     (esram__s2c4_meb_n_ua3),
         .s2c4_sd_n_ua3     (esram__s2c4_sd_n_ua3),
-        .s2c5_adra_ua0     (esram__s2c5_adra_ua0),     
-        .s2c5_adrb_ua0     (esram__s2c5_adrb_ua0),     
-        .s2c5_da_ua0     (esram__s2c5_da_ua0),     
-        .s2c5_qb_ua0     (esram__s2c5_qb_ua0),     
+        .s2c5_adra_ua0     (esram__s2c5_adra_ua0),
+        .s2c5_adrb_ua0     (esram__s2c5_adrb_ua0),
+        .s2c5_da_ua0     (esram__s2c5_da_ua0),
+        .s2c5_qb_ua0     (esram__s2c5_qb_ua0),
         .s2c5_ecca_byp_ua0     (esram__s2c5_ecca_byp_ua0),
         .s2c5_eccb_byp_ua0     (esram__s2c5_eccb_byp_ua0),
         .s2c5_err_correct_ua0     (esram__s2c5_err_correct_ua0),
@@ -1796,10 +1796,10 @@ module esram_esram_1913_a3ainji
         .s2c5_mea_n_ua0     (esram__s2c5_mea_n_ua0),
         .s2c5_meb_n_ua0     (esram__s2c5_meb_n_ua0),
         .s2c5_sd_n_ua0     (esram__s2c5_sd_n_ua0),
-        .s2c5_adra_ua1     (esram__s2c5_adra_ua1),     
-        .s2c5_adrb_ua1     (esram__s2c5_adrb_ua1),     
-        .s2c5_da_ua1     (esram__s2c5_da_ua1),     
-        .s2c5_qb_ua1     (esram__s2c5_qb_ua1),     
+        .s2c5_adra_ua1     (esram__s2c5_adra_ua1),
+        .s2c5_adrb_ua1     (esram__s2c5_adrb_ua1),
+        .s2c5_da_ua1     (esram__s2c5_da_ua1),
+        .s2c5_qb_ua1     (esram__s2c5_qb_ua1),
         .s2c5_ecca_byp_ua1     (esram__s2c5_ecca_byp_ua1),
         .s2c5_eccb_byp_ua1     (esram__s2c5_eccb_byp_ua1),
         .s2c5_err_correct_ua1     (esram__s2c5_err_correct_ua1),
@@ -1807,10 +1807,10 @@ module esram_esram_1913_a3ainji
         .s2c5_mea_n_ua1     (esram__s2c5_mea_n_ua1),
         .s2c5_meb_n_ua1     (esram__s2c5_meb_n_ua1),
         .s2c5_sd_n_ua1     (esram__s2c5_sd_n_ua1),
-        .s2c5_adra_ua2     (esram__s2c5_adra_ua2),     
-        .s2c5_adrb_ua2     (esram__s2c5_adrb_ua2),     
-        .s2c5_da_ua2     (esram__s2c5_da_ua2),     
-        .s2c5_qb_ua2     (esram__s2c5_qb_ua2),     
+        .s2c5_adra_ua2     (esram__s2c5_adra_ua2),
+        .s2c5_adrb_ua2     (esram__s2c5_adrb_ua2),
+        .s2c5_da_ua2     (esram__s2c5_da_ua2),
+        .s2c5_qb_ua2     (esram__s2c5_qb_ua2),
         .s2c5_ecca_byp_ua2     (esram__s2c5_ecca_byp_ua2),
         .s2c5_eccb_byp_ua2     (esram__s2c5_eccb_byp_ua2),
         .s2c5_err_correct_ua2     (esram__s2c5_err_correct_ua2),
@@ -1818,10 +1818,10 @@ module esram_esram_1913_a3ainji
         .s2c5_mea_n_ua2     (esram__s2c5_mea_n_ua2),
         .s2c5_meb_n_ua2     (esram__s2c5_meb_n_ua2),
         .s2c5_sd_n_ua2     (esram__s2c5_sd_n_ua2),
-        .s2c5_adra_ua3     (esram__s2c5_adra_ua3),     
-        .s2c5_adrb_ua3     (esram__s2c5_adrb_ua3),     
-        .s2c5_da_ua3     (esram__s2c5_da_ua3),     
-        .s2c5_qb_ua3     (esram__s2c5_qb_ua3),     
+        .s2c5_adra_ua3     (esram__s2c5_adra_ua3),
+        .s2c5_adrb_ua3     (esram__s2c5_adrb_ua3),
+        .s2c5_da_ua3     (esram__s2c5_da_ua3),
+        .s2c5_qb_ua3     (esram__s2c5_qb_ua3),
         .s2c5_ecca_byp_ua3     (esram__s2c5_ecca_byp_ua3),
         .s2c5_eccb_byp_ua3     (esram__s2c5_eccb_byp_ua3),
         .s2c5_err_correct_ua3     (esram__s2c5_err_correct_ua3),
@@ -1829,10 +1829,10 @@ module esram_esram_1913_a3ainji
         .s2c5_mea_n_ua3     (esram__s2c5_mea_n_ua3),
         .s2c5_meb_n_ua3     (esram__s2c5_meb_n_ua3),
         .s2c5_sd_n_ua3     (esram__s2c5_sd_n_ua3),
-        .s2c6_adra_ua0     (esram__s2c6_adra_ua0),     
-        .s2c6_adrb_ua0     (esram__s2c6_adrb_ua0),     
-        .s2c6_da_ua0     (esram__s2c6_da_ua0),     
-        .s2c6_qb_ua0     (esram__s2c6_qb_ua0),     
+        .s2c6_adra_ua0     (esram__s2c6_adra_ua0),
+        .s2c6_adrb_ua0     (esram__s2c6_adrb_ua0),
+        .s2c6_da_ua0     (esram__s2c6_da_ua0),
+        .s2c6_qb_ua0     (esram__s2c6_qb_ua0),
         .s2c6_ecca_byp_ua0     (esram__s2c6_ecca_byp_ua0),
         .s2c6_eccb_byp_ua0     (esram__s2c6_eccb_byp_ua0),
         .s2c6_err_correct_ua0     (esram__s2c6_err_correct_ua0),
@@ -1840,10 +1840,10 @@ module esram_esram_1913_a3ainji
         .s2c6_mea_n_ua0     (esram__s2c6_mea_n_ua0),
         .s2c6_meb_n_ua0     (esram__s2c6_meb_n_ua0),
         .s2c6_sd_n_ua0     (esram__s2c6_sd_n_ua0),
-        .s2c6_adra_ua1     (esram__s2c6_adra_ua1),     
-        .s2c6_adrb_ua1     (esram__s2c6_adrb_ua1),     
-        .s2c6_da_ua1     (esram__s2c6_da_ua1),     
-        .s2c6_qb_ua1     (esram__s2c6_qb_ua1),     
+        .s2c6_adra_ua1     (esram__s2c6_adra_ua1),
+        .s2c6_adrb_ua1     (esram__s2c6_adrb_ua1),
+        .s2c6_da_ua1     (esram__s2c6_da_ua1),
+        .s2c6_qb_ua1     (esram__s2c6_qb_ua1),
         .s2c6_ecca_byp_ua1     (esram__s2c6_ecca_byp_ua1),
         .s2c6_eccb_byp_ua1     (esram__s2c6_eccb_byp_ua1),
         .s2c6_err_correct_ua1     (esram__s2c6_err_correct_ua1),
@@ -1851,10 +1851,10 @@ module esram_esram_1913_a3ainji
         .s2c6_mea_n_ua1     (esram__s2c6_mea_n_ua1),
         .s2c6_meb_n_ua1     (esram__s2c6_meb_n_ua1),
         .s2c6_sd_n_ua1     (esram__s2c6_sd_n_ua1),
-        .s2c6_adra_ua2     (esram__s2c6_adra_ua2),     
-        .s2c6_adrb_ua2     (esram__s2c6_adrb_ua2),     
-        .s2c6_da_ua2     (esram__s2c6_da_ua2),     
-        .s2c6_qb_ua2     (esram__s2c6_qb_ua2),     
+        .s2c6_adra_ua2     (esram__s2c6_adra_ua2),
+        .s2c6_adrb_ua2     (esram__s2c6_adrb_ua2),
+        .s2c6_da_ua2     (esram__s2c6_da_ua2),
+        .s2c6_qb_ua2     (esram__s2c6_qb_ua2),
         .s2c6_ecca_byp_ua2     (esram__s2c6_ecca_byp_ua2),
         .s2c6_eccb_byp_ua2     (esram__s2c6_eccb_byp_ua2),
         .s2c6_err_correct_ua2     (esram__s2c6_err_correct_ua2),
@@ -1862,10 +1862,10 @@ module esram_esram_1913_a3ainji
         .s2c6_mea_n_ua2     (esram__s2c6_mea_n_ua2),
         .s2c6_meb_n_ua2     (esram__s2c6_meb_n_ua2),
         .s2c6_sd_n_ua2     (esram__s2c6_sd_n_ua2),
-        .s2c6_adra_ua3     (esram__s2c6_adra_ua3),     
-        .s2c6_adrb_ua3     (esram__s2c6_adrb_ua3),     
-        .s2c6_da_ua3     (esram__s2c6_da_ua3),     
-        .s2c6_qb_ua3     (esram__s2c6_qb_ua3),     
+        .s2c6_adra_ua3     (esram__s2c6_adra_ua3),
+        .s2c6_adrb_ua3     (esram__s2c6_adrb_ua3),
+        .s2c6_da_ua3     (esram__s2c6_da_ua3),
+        .s2c6_qb_ua3     (esram__s2c6_qb_ua3),
         .s2c6_ecca_byp_ua3     (esram__s2c6_ecca_byp_ua3),
         .s2c6_eccb_byp_ua3     (esram__s2c6_eccb_byp_ua3),
         .s2c6_err_correct_ua3     (esram__s2c6_err_correct_ua3),
@@ -1873,10 +1873,10 @@ module esram_esram_1913_a3ainji
         .s2c6_mea_n_ua3     (esram__s2c6_mea_n_ua3),
         .s2c6_meb_n_ua3     (esram__s2c6_meb_n_ua3),
         .s2c6_sd_n_ua3     (esram__s2c6_sd_n_ua3),
-        .s2c7_adra_ua0     (esram__s2c7_adra_ua0),     
-        .s2c7_adrb_ua0     (esram__s2c7_adrb_ua0),     
-        .s2c7_da_ua0     (esram__s2c7_da_ua0),     
-        .s2c7_qb_ua0     (esram__s2c7_qb_ua0),     
+        .s2c7_adra_ua0     (esram__s2c7_adra_ua0),
+        .s2c7_adrb_ua0     (esram__s2c7_adrb_ua0),
+        .s2c7_da_ua0     (esram__s2c7_da_ua0),
+        .s2c7_qb_ua0     (esram__s2c7_qb_ua0),
         .s2c7_ecca_byp_ua0     (esram__s2c7_ecca_byp_ua0),
         .s2c7_eccb_byp_ua0     (esram__s2c7_eccb_byp_ua0),
         .s2c7_err_correct_ua0     (esram__s2c7_err_correct_ua0),
@@ -1884,10 +1884,10 @@ module esram_esram_1913_a3ainji
         .s2c7_mea_n_ua0     (esram__s2c7_mea_n_ua0),
         .s2c7_meb_n_ua0     (esram__s2c7_meb_n_ua0),
         .s2c7_sd_n_ua0     (esram__s2c7_sd_n_ua0),
-        .s2c7_adra_ua1     (esram__s2c7_adra_ua1),     
-        .s2c7_adrb_ua1     (esram__s2c7_adrb_ua1),     
-        .s2c7_da_ua1     (esram__s2c7_da_ua1),     
-        .s2c7_qb_ua1     (esram__s2c7_qb_ua1),     
+        .s2c7_adra_ua1     (esram__s2c7_adra_ua1),
+        .s2c7_adrb_ua1     (esram__s2c7_adrb_ua1),
+        .s2c7_da_ua1     (esram__s2c7_da_ua1),
+        .s2c7_qb_ua1     (esram__s2c7_qb_ua1),
         .s2c7_ecca_byp_ua1     (esram__s2c7_ecca_byp_ua1),
         .s2c7_eccb_byp_ua1     (esram__s2c7_eccb_byp_ua1),
         .s2c7_err_correct_ua1     (esram__s2c7_err_correct_ua1),
@@ -1895,10 +1895,10 @@ module esram_esram_1913_a3ainji
         .s2c7_mea_n_ua1     (esram__s2c7_mea_n_ua1),
         .s2c7_meb_n_ua1     (esram__s2c7_meb_n_ua1),
         .s2c7_sd_n_ua1     (esram__s2c7_sd_n_ua1),
-        .s2c7_adra_ua2     (esram__s2c7_adra_ua2),     
-        .s2c7_adrb_ua2     (esram__s2c7_adrb_ua2),     
-        .s2c7_da_ua2     (esram__s2c7_da_ua2),     
-        .s2c7_qb_ua2     (esram__s2c7_qb_ua2),     
+        .s2c7_adra_ua2     (esram__s2c7_adra_ua2),
+        .s2c7_adrb_ua2     (esram__s2c7_adrb_ua2),
+        .s2c7_da_ua2     (esram__s2c7_da_ua2),
+        .s2c7_qb_ua2     (esram__s2c7_qb_ua2),
         .s2c7_ecca_byp_ua2     (esram__s2c7_ecca_byp_ua2),
         .s2c7_eccb_byp_ua2     (esram__s2c7_eccb_byp_ua2),
         .s2c7_err_correct_ua2     (esram__s2c7_err_correct_ua2),
@@ -1906,10 +1906,10 @@ module esram_esram_1913_a3ainji
         .s2c7_mea_n_ua2     (esram__s2c7_mea_n_ua2),
         .s2c7_meb_n_ua2     (esram__s2c7_meb_n_ua2),
         .s2c7_sd_n_ua2     (esram__s2c7_sd_n_ua2),
-        .s2c7_adra_ua3     (esram__s2c7_adra_ua3),     
-        .s2c7_adrb_ua3     (esram__s2c7_adrb_ua3),     
-        .s2c7_da_ua3     (esram__s2c7_da_ua3),     
-        .s2c7_qb_ua3     (esram__s2c7_qb_ua3),     
+        .s2c7_adra_ua3     (esram__s2c7_adra_ua3),
+        .s2c7_adrb_ua3     (esram__s2c7_adrb_ua3),
+        .s2c7_da_ua3     (esram__s2c7_da_ua3),
+        .s2c7_qb_ua3     (esram__s2c7_qb_ua3),
         .s2c7_ecca_byp_ua3     (esram__s2c7_ecca_byp_ua3),
         .s2c7_eccb_byp_ua3     (esram__s2c7_eccb_byp_ua3),
         .s2c7_err_correct_ua3     (esram__s2c7_err_correct_ua3),
@@ -1921,7 +1921,7 @@ module esram_esram_1913_a3ainji
         .cfg_ptr_rst_n(ptr_rst_n_wire),
         .cfg_ptr_en(ptr_en)
         );
-        
+
         //Define parameter for ufi_esram
         defparam    fourteennm_ufi_esram_component.a_csr_ctrl0 = clock_rate;
         defparam    fourteennm_ufi_esram_component.xs0_dcm_ufimux32to1_dolsgn_rc_dolsgn_0_a_sel_11_0 = xs0_dcm_ufimux32to1_dolsgn_rc_dolsgn_0_a_sel_11_0;
@@ -1930,7 +1930,7 @@ module esram_esram_1913_a3ainji
     wire [1:0] pll_loaden;
     //Define port and params for cpa
     fourteennm_cpa fourteennm_cpa_component (
-        .pa_core_clk_in             (f2esram_clk_to_cip),                       // From CORE f2esram_clk    *input 
+        .pa_core_clk_in             (f2esram_clk_to_cip),                       // From CORE f2esram_clk    *input
         .pa_core_clk_out            (esram2f_clk_from_cip),                     // To CORE esram2f_clk
         .pa_fbclk_in                (esram_clk_fb),
         .pll_vco_in                 (vcoph),
@@ -1959,4 +1959,3 @@ module esram_esram_1913_a3ainji
         .permit_cal         (1'b1)          //tie off
     );
 endmodule
-

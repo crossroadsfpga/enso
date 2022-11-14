@@ -1,29 +1,29 @@
 // (C) 2001-2018 Intel Corporation. All rights reserved.
-// Your use of Intel Corporation's design tools, logic functions and other 
-// software and tools, and its AMPP partner logic functions, and any output 
-// files from any of the foregoing (including device programming or simulation 
-// files), and any associated documentation or information are expressly subject 
-// to the terms and conditions of the Intel Program License Subscription 
-// Agreement, Intel FPGA IP License Agreement, or other applicable 
-// license agreement, including, without limitation, that your use is for the 
-// sole purpose of programming logic devices manufactured by Intel and sold by 
-// Intel or its authorized distributors.  Please refer to the applicable 
+// Your use of Intel Corporation's design tools, logic functions and other
+// software and tools, and its AMPP partner logic functions, and any output
+// files from any of the foregoing (including device programming or simulation
+// files), and any associated documentation or information are expressly subject
+// to the terms and conditions of the Intel Program License Subscription
+// Agreement, Intel FPGA IP License Agreement, or other applicable
+// license agreement, including, without limitation, that your use is for the
+// sole purpose of programming logic devices manufactured by Intel and sold by
+// Intel or its authorized distributors.  Please refer to the applicable
 // agreement for further details.
 
 
 // (C) 2001-2013 Altera Corporation. All rights reserved.
-// Your use of Altera Corporation's design tools, logic functions and other 
-// software and tools, and its AMPP partner logic functions, and any output 
-// files any of the foregoing (including device programming or simulation 
-// files), and any associated documentation or information are expressly subject 
-// to the terms and conditions of the Altera Program License Subscription 
-// Agreement, Altera MegaCore Function License Agreement, or other applicable 
-// license agreement, including, without limitation, that your use is for the 
-// sole purpose of programming logic devices manufactured by Altera and sold by 
-// Altera or its authorized distributors.  Please refer to the applicable 
+// Your use of Altera Corporation's design tools, logic functions and other
+// software and tools, and its AMPP partner logic functions, and any output
+// files any of the foregoing (including device programming or simulation
+// files), and any associated documentation or information are expressly subject
+// to the terms and conditions of the Altera Program License Subscription
+// Agreement, Altera MegaCore Function License Agreement, or other applicable
+// license agreement, including, without limitation, that your use is for the
+// sole purpose of programming logic devices manufactured by Altera and sold by
+// Altera or its authorized distributors.  Please refer to the applicable
 // agreement for further details.
 
- 
+
 // $Id: //acds/rel/13.1/ip/.../avalon-st_data_format_adapter.sv.terp#1 $
 // $Revision: #1 $
 // $Date: 2013/09/21 $
@@ -42,7 +42,7 @@
 //   usePackets:         true
 //   hasInEmpty:         true
 //   inEmptyWidth:       6
-//   hasOutEmpty:        true 
+//   hasOutEmpty:        true
 //   outEmptyWidth:      5
 //   inDataWidth:        512
 //   outDataWidth:       256
@@ -61,7 +61,7 @@
 
 // ------------------------------------------
 
- 
+
 module data_adapter_core (
  // Interface: in
  output reg         in_ready,
@@ -95,77 +95,77 @@ module data_adapter_core (
    reg  [6-1:0]   state;
    reg  [6-1:0]   new_state;
    reg  [6-1:0]   state_d1;
-    
+
    reg            in_ready_d1;
-   reg            mem_readaddr; 
+   reg            mem_readaddr;
    reg            mem_readaddr_d1;
    reg            a_ready;
    reg            a_valid;
    reg            a_channel;
-   reg [8-1:0]    a_data0; 
-   reg [8-1:0]    a_data1; 
-   reg [8-1:0]    a_data2; 
-   reg [8-1:0]    a_data3; 
-   reg [8-1:0]    a_data4; 
-   reg [8-1:0]    a_data5; 
-   reg [8-1:0]    a_data6; 
-   reg [8-1:0]    a_data7; 
-   reg [8-1:0]    a_data8; 
-   reg [8-1:0]    a_data9; 
-   reg [8-1:0]    a_data10; 
-   reg [8-1:0]    a_data11; 
-   reg [8-1:0]    a_data12; 
-   reg [8-1:0]    a_data13; 
-   reg [8-1:0]    a_data14; 
-   reg [8-1:0]    a_data15; 
-   reg [8-1:0]    a_data16; 
-   reg [8-1:0]    a_data17; 
-   reg [8-1:0]    a_data18; 
-   reg [8-1:0]    a_data19; 
-   reg [8-1:0]    a_data20; 
-   reg [8-1:0]    a_data21; 
-   reg [8-1:0]    a_data22; 
-   reg [8-1:0]    a_data23; 
-   reg [8-1:0]    a_data24; 
-   reg [8-1:0]    a_data25; 
-   reg [8-1:0]    a_data26; 
-   reg [8-1:0]    a_data27; 
-   reg [8-1:0]    a_data28; 
-   reg [8-1:0]    a_data29; 
-   reg [8-1:0]    a_data30; 
-   reg [8-1:0]    a_data31; 
-   reg [8-1:0]    a_data32; 
-   reg [8-1:0]    a_data33; 
-   reg [8-1:0]    a_data34; 
-   reg [8-1:0]    a_data35; 
-   reg [8-1:0]    a_data36; 
-   reg [8-1:0]    a_data37; 
-   reg [8-1:0]    a_data38; 
-   reg [8-1:0]    a_data39; 
-   reg [8-1:0]    a_data40; 
-   reg [8-1:0]    a_data41; 
-   reg [8-1:0]    a_data42; 
-   reg [8-1:0]    a_data43; 
-   reg [8-1:0]    a_data44; 
-   reg [8-1:0]    a_data45; 
-   reg [8-1:0]    a_data46; 
-   reg [8-1:0]    a_data47; 
-   reg [8-1:0]    a_data48; 
-   reg [8-1:0]    a_data49; 
-   reg [8-1:0]    a_data50; 
-   reg [8-1:0]    a_data51; 
-   reg [8-1:0]    a_data52; 
-   reg [8-1:0]    a_data53; 
-   reg [8-1:0]    a_data54; 
-   reg [8-1:0]    a_data55; 
-   reg [8-1:0]    a_data56; 
-   reg [8-1:0]    a_data57; 
-   reg [8-1:0]    a_data58; 
-   reg [8-1:0]    a_data59; 
-   reg [8-1:0]    a_data60; 
-   reg [8-1:0]    a_data61; 
-   reg [8-1:0]    a_data62; 
-   reg [8-1:0]    a_data63; 
+   reg [8-1:0]    a_data0;
+   reg [8-1:0]    a_data1;
+   reg [8-1:0]    a_data2;
+   reg [8-1:0]    a_data3;
+   reg [8-1:0]    a_data4;
+   reg [8-1:0]    a_data5;
+   reg [8-1:0]    a_data6;
+   reg [8-1:0]    a_data7;
+   reg [8-1:0]    a_data8;
+   reg [8-1:0]    a_data9;
+   reg [8-1:0]    a_data10;
+   reg [8-1:0]    a_data11;
+   reg [8-1:0]    a_data12;
+   reg [8-1:0]    a_data13;
+   reg [8-1:0]    a_data14;
+   reg [8-1:0]    a_data15;
+   reg [8-1:0]    a_data16;
+   reg [8-1:0]    a_data17;
+   reg [8-1:0]    a_data18;
+   reg [8-1:0]    a_data19;
+   reg [8-1:0]    a_data20;
+   reg [8-1:0]    a_data21;
+   reg [8-1:0]    a_data22;
+   reg [8-1:0]    a_data23;
+   reg [8-1:0]    a_data24;
+   reg [8-1:0]    a_data25;
+   reg [8-1:0]    a_data26;
+   reg [8-1:0]    a_data27;
+   reg [8-1:0]    a_data28;
+   reg [8-1:0]    a_data29;
+   reg [8-1:0]    a_data30;
+   reg [8-1:0]    a_data31;
+   reg [8-1:0]    a_data32;
+   reg [8-1:0]    a_data33;
+   reg [8-1:0]    a_data34;
+   reg [8-1:0]    a_data35;
+   reg [8-1:0]    a_data36;
+   reg [8-1:0]    a_data37;
+   reg [8-1:0]    a_data38;
+   reg [8-1:0]    a_data39;
+   reg [8-1:0]    a_data40;
+   reg [8-1:0]    a_data41;
+   reg [8-1:0]    a_data42;
+   reg [8-1:0]    a_data43;
+   reg [8-1:0]    a_data44;
+   reg [8-1:0]    a_data45;
+   reg [8-1:0]    a_data46;
+   reg [8-1:0]    a_data47;
+   reg [8-1:0]    a_data48;
+   reg [8-1:0]    a_data49;
+   reg [8-1:0]    a_data50;
+   reg [8-1:0]    a_data51;
+   reg [8-1:0]    a_data52;
+   reg [8-1:0]    a_data53;
+   reg [8-1:0]    a_data54;
+   reg [8-1:0]    a_data55;
+   reg [8-1:0]    a_data56;
+   reg [8-1:0]    a_data57;
+   reg [8-1:0]    a_data58;
+   reg [8-1:0]    a_data59;
+   reg [8-1:0]    a_data60;
+   reg [8-1:0]    a_data61;
+   reg [8-1:0]    a_data62;
+   reg [8-1:0]    a_data63;
    reg            a_startofpacket;
    reg            a_endofpacket;
    reg  [6-1:0]   a_empty;
@@ -174,11 +174,11 @@ module data_adapter_core (
    reg            b_valid;
    reg            b_channel;
    reg  [256-1:0]   b_data;
-   reg            b_startofpacket; 
-   wire           b_startofpacket_wire; 
-   reg            b_endofpacket; 
+   reg            b_startofpacket;
+   wire           b_startofpacket_wire;
+   reg            b_endofpacket;
    reg  [5-1:0]   b_empty;
-   reg            b_error; 
+   reg            b_error;
    reg            mem_write0;
    reg  [8-1:0]   mem_writedata0;
    wire [8-1:0]   mem_readdata0;
@@ -496,10 +496,10 @@ module data_adapter_core (
    reg  [8-1:0]   mem62[0:0];
    reg            sop_mem_writeenable;
    reg            sop_mem_writedata;
-   wire           mem_waitrequest_sop; 
+   wire           mem_waitrequest_sop;
 
    wire           state_waitrequest;
-   reg            state_waitrequest_d1; 
+   reg            state_waitrequest_d1;
 
    reg            in_channel = 0;
    reg            out_channel;
@@ -507,11 +507,11 @@ module data_adapter_core (
 
 
    reg in_error = 0;
-   reg out_error; 
+   reg out_error;
 
 
    reg  [6-1:0]   state_register;
-   reg            sop_register; 
+   reg            sop_register;
    reg            error_register;
    reg  [8-1:0]   data0_register;
    reg  [8-1:0]   data1_register;
@@ -650,7 +650,7 @@ module data_adapter_core (
          a_data63   <= 0;
          a_startofpacket <= 0;
          a_endofpacket   <= 0;
-         a_empty <= 0; 
+         a_empty <= 0;
          a_error <= 0;
       end else begin
          if (in_ready) begin
@@ -723,19 +723,19 @@ module data_adapter_core (
             a_data63 <= in_data[7:0];
             a_startofpacket <= in_startofpacket;
             a_endofpacket   <= in_endofpacket;
-            a_empty         <= 0; 
+            a_empty         <= 0;
             if (in_endofpacket)
                a_empty <= in_empty;
          end
-      end 
+      end
    end
 
-   always @* begin 
+   always @* begin
       state_read_addr = a_channel;
       if (in_ready)
          state_read_addr = in_channel;
    end
-   
+
 
    // ---------------------------------------------------------------------
    //| State & Memory Keepers
@@ -753,7 +753,7 @@ module data_adapter_core (
          state_waitrequest_d1 <= state_waitrequest;
       end
    end
-   
+
    always @(posedge clk or negedge reset_n) begin
       if (!reset_n) begin
          state_register <= 0;
@@ -953,7 +953,7 @@ module data_adapter_core (
             data62_register <= mem_writedata62;
          end
       end
-   
+
       assign state_from_memory = state_register;
       assign b_startofpacket_wire = sop_register;
       assign mem_readdata0 = data0_register;
@@ -1019,13 +1019,13 @@ module data_adapter_core (
       assign mem_readdata60 = data60_register;
       assign mem_readdata61 = data61_register;
       assign mem_readdata62 = data62_register;
-   
+
    // ---------------------------------------------------------------------
    //| State Machine
    // ---------------------------------------------------------------------
    always @* begin
 
-      
+
    b_ready = (out_ready || ~out_valid);
 
    a_ready   = 0;
@@ -1033,9 +1033,9 @@ module data_adapter_core (
    b_valid   = 0;
    b_channel = a_channel;
    b_error   = a_error;
-      
+
    state = state_from_memory;
-      
+
    new_state           = state;
    mem_write0          = 0;
    mem_writedata0      = a_data0;
@@ -1166,13 +1166,13 @@ module data_adapter_core (
    sop_mem_writeenable = 0;
 
    b_endofpacket = a_endofpacket;
-      
+
    b_startofpacket = 0;
-      
+
    b_endofpacket = 0;
    b_empty = 0;
-       
-   case (state) 
+
+   case (state)
             0 : begin
             b_data[255:248] = a_data0;
             b_data[247:240] = a_data1;
@@ -4218,11 +4218,11 @@ module data_adapter_core (
 
       in_ready = (a_ready || ~a_valid);
 
-      mem_readaddr = in_channel; 
+      mem_readaddr = in_channel;
       if (~in_ready)
          mem_readaddr = mem_readaddr_d1;
 
-      
+
       sop_mem_writedata = 0;
       if (a_valid)
          sop_mem_writedata = a_startofpacket;
@@ -4248,19 +4248,16 @@ module data_adapter_core (
          if (out_ready || ~out_valid) begin
             out_valid         <= b_valid;
             out_data          <= b_data;
-            out_channel       <= b_channel; 
+            out_channel       <= b_channel;
             out_startofpacket <= b_startofpacket;
             out_endofpacket   <= b_endofpacket;
             out_empty         <= b_empty;
             out_error         <= b_error;
          end
-      end 
+      end
    end
-   
+
 
 
 
 endmodule
-
-   
-

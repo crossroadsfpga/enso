@@ -1,24 +1,24 @@
 # (C) 2001-2019 Intel Corporation. All rights reserved.
-# Your use of Intel Corporation's design tools, logic functions and other 
-# software and tools, and its AMPP partner logic functions, and any output 
-# files from any of the foregoing (including device programming or simulation 
-# files), and any associated documentation or information are expressly subject 
-# to the terms and conditions of the Intel Program License Subscription 
-# Agreement, Intel FPGA IP License Agreement, or other applicable 
-# license agreement, including, without limitation, that your use is for the 
-# sole purpose of programming logic devices manufactured by Intel and sold by 
-# Intel or its authorized distributors.  Please refer to the applicable 
+# Your use of Intel Corporation's design tools, logic functions and other
+# software and tools, and its AMPP partner logic functions, and any output
+# files from any of the foregoing (including device programming or simulation
+# files), and any associated documentation or information are expressly subject
+# to the terms and conditions of the Intel Program License Subscription
+# Agreement, Intel FPGA IP License Agreement, or other applicable
+# license agreement, including, without limitation, that your use is for the
+# sole purpose of programming logic devices manufactured by Intel and sold by
+# Intel or its authorized distributors.  Please refer to the applicable
 # agreement for further details.
 
 
-## ===================================================== 
+## =====================================================
 ##     Top level register map: Base Addresses
-## ===================================================== 
+## =====================================================
 source [file join [file dirname [info script]] "../sval_top/reg_map_inc.tcl"]
 
-## ================================================================== 
+## ==================================================================
 ##     Ethernet registers Tx Stats Counters
-## ================================================================== 
+## ==================================================================
 ##
 set  REG_FRAGMENTS_LO       0x00
 set  REG_FRAGMENTS_HI       0x01
@@ -542,11 +542,11 @@ proc check_stats_log {reg_base} {
     if {$log == "both"} {putl "$msg_hdr_title_log"; puts "$msg_hdr_title_cli\r"} elseif {$log == "log"} {putl "$msg_hdr_title_log"} else {puts "$msg_hdr_title_cli\r"}
     if {$log == "both"} {puts "$msg_hdr_lborder_cli\r"} elseif {$log == "log"} {} else {puts "$msg_hdr_lborder_cli\r"}
     if {$log == "both"} {putl "$msg_Tx_Title_log"; puts "$msg_Tx_Title_cli\r"} elseif {$log == "log"} {putl "$msg_Tx_Title_log"} else {puts "$msg_Tx_Title_cli\r"}
-    
+
     if {$log == "both"} {putl "$msg_Tx_Frame_Starts_log"; puts "$msg_Tx_Frame_Starts_cli\r"} elseif {$log == "log"} {putl "$msg_Tx_Frame_Starts_log"} else {puts "$msg_Tx_Frame_Starts_cli\r"}
     if {$log == "both"} {putl "$msg_8_byte_data_blocks_log"; puts "$msg_8_byte_data_blocks_cli\r"} elseif {$log == "log"} {putl "$msg_8_byte_data_blocks_log"} else {puts "$msg_8_byte_data_blocks_cli\r"}
 
-    
+
     if {$log == "both"} {putl "$msg_64_Byte_Frames_log"; puts "$msg_64_Byte_Frames_cli\r"} elseif {$log == "log"} {putl "$msg_64_Byte_Frames_log"} else {puts "$msg_64_Byte_Frames_cli\r"}
     if {$log == "both"} {putl "$msg_65_127_Byte_Frames_log"; puts "$msg_65_127_Byte_Frames_cli\r"} elseif {$log == "log"} {putl "$msg_65_127_Byte_Frames_log"} else {puts "$msg_65_127_Byte_Frames_cli\r"}
     if {$log == "both"} {putl "$msg_128_255_Byte_Frames_log"; puts "$msg_128_255_Byte_Frames_cli\r"} elseif {$log == "log"} {putl "$msg_128_255_Byte_Frames_log"} else {puts "$msg_128_255_Byte_Frames_cli\r"}
@@ -567,7 +567,7 @@ proc check_stats_log {reg_base} {
     if {$log == "both"} {putl "$msg_Pause_Control_Frames_log"; puts "$msg_Pause_Control_Frames_cli\r"} elseif {$log == "log"} {putl "$msg_Pause_Control_Frames_log"} else {puts "$msg_Pause_Control_Frames_cli\r"}
     if {$log == "both"} {putl "$msg_Fragmented_Frames_log"; puts "$msg_Fragmented_Frames_cli\r"} elseif {$log == "log"} {putl "$msg_Fragmented_Frames_log"} else {puts "$msg_Fragmented_Frames_cli\r"}
     if {$log == "both"} {putl "$msg_Jabbered_Frames_log"; puts "$msg_Jabbered_Frames_cli\r"} elseif {$log == "log"} {putl "$msg_Jabbered_Frames_log"} else {puts "$msg_Jabbered_Frames_cli\r"}
-    if {$log == "both"} {putl "$msg_Right_Size_with_FCS_Err_log\r"; puts "$msg_Right_Size_with_FCS_Err_cli\n"} elseif {$log == "log"} {putl "$msg_Right_Size_with_FCS_Err_log\r"} else {puts "$msg_Right_Size_with_FCS_Err_cli\n"} 
+    if {$log == "both"} {putl "$msg_Right_Size_with_FCS_Err_log\r"; puts "$msg_Right_Size_with_FCS_Err_cli\n"} elseif {$log == "log"} {putl "$msg_Right_Size_with_FCS_Err_log\r"} else {puts "$msg_Right_Size_with_FCS_Err_cli\n"}
     unpause_stats $reg_base
 }
 
@@ -587,7 +587,7 @@ proc chkmac_stats {} {
 }
 
  # ___________________________________________________________________________________
- # For internal debug purpose -- start 
+ # For internal debug purpose -- start
 
 
 proc check_stats_internal {reg_base t} {
@@ -719,5 +719,4 @@ proc chkmac_stats_internal {} {
 }
 
  # ___________________________________________________________________________________
- # For internal debug purpose -- end 
-
+ # For internal debug purpose -- end

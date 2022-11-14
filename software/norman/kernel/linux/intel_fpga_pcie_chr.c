@@ -41,8 +41,9 @@
  * SOFTWARE.
  */
 
-#include "intel_fpga_pcie.h"
 #include "intel_fpga_pcie_chr.h"
+
+#include "intel_fpga_pcie.h"
 #include "intel_fpga_pcie_ioctl.h"
 #include "intel_fpga_pcie_setup.h"
 
@@ -51,8 +52,8 @@
  *****************************************************************************/
 static int chr_open(struct inode *inode, struct file *filp);
 static int chr_release(struct inode *inode, struct file *filp);
-static ssize_t chr_read(struct file *filp, char __user *buf,
-                        size_t count, loff_t *offp);
+static ssize_t chr_read(struct file *filp, char __user *buf, size_t count,
+                        loff_t *offp);
 static ssize_t chr_write(struct file *filp, const char __user *buf,
                          size_t count, loff_t *offp);
 static loff_t chr_llseek(struct file *filp, loff_t off, int whence);
@@ -60,21 +61,20 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma);
 static void chr_vma_close(struct vm_area_struct *vma);
 static ssize_t chr_access(struct file *filp, const char __user *buf,
                           size_t count, loff_t *offp, bool is_read);
-static uintptr_t get_address(struct dev_bookkeep *dev_bk,
-                             unsigned int bar_num,
+static uintptr_t get_address(struct dev_bookkeep *dev_bk, unsigned int bar_num,
                              uint64_t offset, size_t *count);
-static void hprxm_access(uintptr_t addr, uint8_t *data,
-                         uint16_t count, bool is_read);
+static void hprxm_access(uintptr_t addr, uint8_t *data, uint16_t count,
+                         bool is_read);
 static void hprxm_access_left_justified(uintptr_t addr, uint8_t *data,
                                         uint16_t count, bool is_read);
 static void hprxm_access_right_justified(uintptr_t addr, uint8_t *data,
                                          uint16_t count, bool is_read);
-static void hprxm_access_single(uintptr_t addr, uint8_t *data,
-                                uint16_t count, bool is_read);
+static void hprxm_access_single(uintptr_t addr, uint8_t *data, uint16_t count,
+                                bool is_read);
 static void rxm_access(uintptr_t addr, uint8_t *data, uint16_t count,
                        bool is_read, bool is_prefetchable);
-static void rxm_access_single(uintptr_t addr, uint8_t *data,
-                              uint16_t count, bool is_read);
+static void rxm_access_single(uintptr_t addr, uint8_t *data, uint16_t count,
+                              bool is_read);
 static void rxm_prefetchable_single_read(uintptr_t addr, uint8_t *data,
                                          uint16_t count);
 static inline uint16_t round_down_to_po2_mask(uint16_t num);
@@ -86,23 +86,22 @@ static void custom_iowrite128_x86(uint8_t *data, void __iomem *addr);
 static void custom_ioread64(uint8_t *data, void __iomem *addr);
 static void custom_iowrite64(uint8_t *data, void __iomem *addr);
 
-
 /******************************************************************************
  * File operation functions
  *****************************************************************************/
 const struct file_operations intel_fpga_pcie_fops = {
-    .owner          = THIS_MODULE,
-    .open           = chr_open,
-    .release        = chr_release,
-    .read           = chr_read,
-    .write          = chr_write,
-    .llseek         = chr_llseek,
+    .owner = THIS_MODULE,
+    .open = chr_open,
+    .release = chr_release,
+    .read = chr_read,
+    .write = chr_write,
+    .llseek = chr_llseek,
     .unlocked_ioctl = intel_fpga_pcie_unlocked_ioctl,
-    .mmap           = chr_mmap,
+    .mmap = chr_mmap,
 };
 
 const struct vm_operations_struct intel_fpga_vm_ops = {
-    .close  = chr_vma_close,
+    .close = chr_vma_close,
 };
 
 /**
@@ -117,70 +116,69 @@ const struct vm_operations_struct intel_fpga_vm_ops = {
  *
  * Return: 0 if successful, negative error code otherwise.
  */
-static int chr_open(struct inode *inode, struct file *filp)
-{
-    int i;
-    int result = 0;
-    void *a_dev_bk;
-    struct chr_dev_bookkeep *chr_dev_bk;
-    struct dev_bookkeep *dev_bk;
-    unsigned int num_dev_bks;
+static int chr_open(struct inode *inode, struct file *filp) {
+  int i;
+  int result = 0;
+  void *a_dev_bk;
+  struct chr_dev_bookkeep *chr_dev_bk;
+  struct dev_bookkeep *dev_bk;
+  unsigned int num_dev_bks;
 
-    // Look for the device with lowest BDF and select it as default.
-    if (unlikely(mutex_lock_interruptible(&global_bk.lock))) {
-        INTEL_FPGA_PCIE_DEBUG("interrupted while attempting to obtain "
-                              "global lock.");
-        return -ERESTARTSYS;
+  // Look for the device with lowest BDF and select it as default.
+  if (unlikely(mutex_lock_interruptible(&global_bk.lock))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "global lock.");
+    return -ERESTARTSYS;
+  }
+  num_dev_bks = radix_tree_gang_lookup(&global_bk.dev_tree, &a_dev_bk, 0, 1);
+  mutex_unlock(&global_bk.lock);
+
+  if (unlikely(num_dev_bks < 1)) {
+    INTEL_FPGA_PCIE_DEBUG("no Intel FPGA PCIe device has been found.");
+    return -ENXIO;
+  }
+
+  // Create a bookkeeping structure for this particular open file.
+  chr_dev_bk = kzalloc(sizeof(*chr_dev_bk), GFP_KERNEL);
+  if (chr_dev_bk == NULL) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't create character device bookkeeper.");
+    return -ENOMEM;
+  }
+  dev_bk = a_dev_bk;
+  chr_dev_bk->dev_bk = dev_bk;
+  filp->private_data = chr_dev_bk;
+
+  /*
+   * Even if no BARs exist, address checks during the actual
+   * access will flag invalid access and fail gracefully.
+   */
+  chr_dev_bk->use_cmd = false;
+
+  // Set the current BAR number to the lowest valid BAR.
+  chr_dev_bk->cur_bar_num = 0;  // Initial value.
+  for (i = 0; i < 6; ++i) {
+    if (dev_bk->bar[i].base_addr != NULL) {
+      chr_dev_bk->cur_bar_num = i;
+      break;
     }
-    num_dev_bks = radix_tree_gang_lookup(&global_bk.dev_tree, &a_dev_bk,
-                                         0, 1);
-    mutex_unlock(&global_bk.lock);
+  }
 
-    if (unlikely(num_dev_bks < 1)) {
-        INTEL_FPGA_PCIE_DEBUG("no Intel FPGA PCIe device has been found.");
-        return -ENXIO;
-    }
+  // Increase device open count.
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+  ++dev_bk->chr_open_cnt;
+  INTEL_FPGA_PCIE_VERBOSE_DEBUG(
+      "opened new handle to device with BDF %04x. "
+      "Total handle open count is %d.",
+      dev_bk->bdf, dev_bk->chr_open_cnt);
+  up(&dev_bk->sem);
 
-
-    // Create a bookkeeping structure for this particular open file.
-    chr_dev_bk = kzalloc(sizeof(*chr_dev_bk), GFP_KERNEL);
-    if (chr_dev_bk == NULL) {
-        INTEL_FPGA_PCIE_DEBUG("couldn't create character device bookkeeper.");
-        return -ENOMEM;
-    }
-    dev_bk = a_dev_bk;
-    chr_dev_bk->dev_bk = dev_bk;
-    filp->private_data = chr_dev_bk;
-
-    /*
-     * Even if no BARs exist, address checks during the actual
-     * access will flag invalid access and fail gracefully.
-     */
-    chr_dev_bk->use_cmd = false;
-
-    // Set the current BAR number to the lowest valid BAR.
-    chr_dev_bk->cur_bar_num = 0;    // Initial value.
-    for (i=0; i<6; ++i) {
-        if (dev_bk->bar[i].base_addr != NULL) {
-            chr_dev_bk->cur_bar_num = i;
-            break;
-        }
-    }
-
-
-    // Increase device open count.
-    if (unlikely(down_interruptible(&dev_bk->sem))) {
-        INTEL_FPGA_PCIE_DEBUG("interrupted while attempting to obtain "
-                              "device semaphore.");
-        return -ERESTARTSYS;
-    }
-    ++dev_bk->chr_open_cnt;
-    INTEL_FPGA_PCIE_VERBOSE_DEBUG("opened new handle to device with BDF %04x. "
-                                  "Total handle open count is %d.",
-                                  dev_bk->bdf, dev_bk->chr_open_cnt);
-    up(&dev_bk->sem);
-
-    return result;
+  return result;
 }
 
 /**
@@ -191,27 +189,28 @@ static int chr_open(struct inode *inode, struct file *filp)
  *
  * Return: 0 if successful, negative error code otherwise.
  */
-static int chr_release(struct inode *inode, struct file *filp)
-{
-    struct chr_dev_bookkeep *chr_dev_bk;
-    struct dev_bookkeep *dev_bk;
-    chr_dev_bk = filp->private_data;
-    dev_bk = chr_dev_bk->dev_bk;
+static int chr_release(struct inode *inode, struct file *filp) {
+  struct chr_dev_bookkeep *chr_dev_bk;
+  struct dev_bookkeep *dev_bk;
+  chr_dev_bk = filp->private_data;
+  dev_bk = chr_dev_bk->dev_bk;
 
-    if (unlikely(down_interruptible(&dev_bk->sem))) {
-        INTEL_FPGA_PCIE_DEBUG("interrupted while attempting to obtain "
-                              "device semaphore.");
-        return -ERESTARTSYS;
-    }
-    --dev_bk->chr_open_cnt;
-    INTEL_FPGA_PCIE_VERBOSE_DEBUG("closed handle to device with BDF %04x. "
-                                  "Total handle open count is %d.",
-                                  dev_bk->bdf, dev_bk->chr_open_cnt);
-    up(&dev_bk->sem);
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+  --dev_bk->chr_open_cnt;
+  INTEL_FPGA_PCIE_VERBOSE_DEBUG(
+      "closed handle to device with BDF %04x. "
+      "Total handle open count is %d.",
+      dev_bk->bdf, dev_bk->chr_open_cnt);
+  up(&dev_bk->sem);
 
-    kfree(chr_dev_bk);
+  kfree(chr_dev_bk);
 
-    return 0;
+  return 0;
 }
 
 /**
@@ -223,10 +222,9 @@ static int chr_release(struct inode *inode, struct file *filp)
  * Return: Number of bytes read if at least 1 byte accessed. Negative error
  *         code otherwise.
  */
-static ssize_t chr_read(struct file *filp, char __user *buf,
-                        size_t count, loff_t *offp)
-{
-    return chr_access(filp, (const char __user *)buf, count, offp, true);
+static ssize_t chr_read(struct file *filp, char __user *buf, size_t count,
+                        loff_t *offp) {
+  return chr_access(filp, (const char __user *)buf, count, offp, true);
 }
 
 /**
@@ -240,9 +238,8 @@ static ssize_t chr_read(struct file *filp, char __user *buf,
  *         code otherwise.
  */
 static ssize_t chr_write(struct file *filp, const char __user *buf,
-                         size_t count, loff_t *offp)
-{
-    return chr_access(filp, buf, count, offp, false);
+                         size_t count, loff_t *offp) {
+  return chr_access(filp, buf, count, offp, false);
 }
 
 /**
@@ -250,85 +247,82 @@ static ssize_t chr_write(struct file *filp, const char __user *buf,
  *
  * This function modifies or returns the offset within a BAR region.
  */
-static loff_t chr_llseek(struct file *filp, loff_t off, int whence)
-{
-    loff_t newpos;
-    struct chr_dev_bookkeep *chr_dev_bk;
-    struct dev_bookkeep *dev_bk;
+static loff_t chr_llseek(struct file *filp, loff_t off, int whence) {
+  loff_t newpos;
+  struct chr_dev_bookkeep *chr_dev_bk;
+  struct dev_bookkeep *dev_bk;
 
-    switch(whence) {
-    case 0: // SEEK_SET
-        newpos = off;
-        break;
-    case 1: // SEEK_CUR
-        newpos = filp->f_pos + off;
-        break;
-    case 2: // SEEK_END
-        /*
-         * Return the end of this BAR region. This can be useful if the user
-         * wants to know the end of a BAR region. However, any access at
-         * the returned location will _most likely_ be invalid - the only
-         * exception is if a different BAR region is adjacent to the current
-         * BAR region.
-         */
-        chr_dev_bk = filp->private_data;
-        dev_bk = chr_dev_bk->dev_bk;
+  switch (whence) {
+    case 0:  // SEEK_SET
+      newpos = off;
+      break;
+    case 1:  // SEEK_CUR
+      newpos = filp->f_pos + off;
+      break;
+    case 2:  // SEEK_END
+      /*
+       * Return the end of this BAR region. This can be useful if the user
+       * wants to know the end of a BAR region. However, any access at
+       * the returned location will _most likely_ be invalid - the only
+       * exception is if a different BAR region is adjacent to the current
+       * BAR region.
+       */
+      chr_dev_bk = filp->private_data;
+      dev_bk = chr_dev_bk->dev_bk;
 
-        newpos = dev_bk->bar[chr_dev_bk->cur_bar_num].len + off;
-        break;
-    default: // can't happen
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("invalid seek method %d attempted.",
-                                      whence);
-        return -EINVAL;
-    }
+      newpos = dev_bk->bar[chr_dev_bk->cur_bar_num].len + off;
+      break;
+    default:  // can't happen
+      INTEL_FPGA_PCIE_VERBOSE_DEBUG("invalid seek method %d attempted.",
+                                    whence);
+      return -EINVAL;
+  }
 
-    if (newpos < 0) {
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("offset underflow due to "
-                                      "invalid input.");
-        return -EINVAL;
-    }
+  if (newpos < 0) {
+    INTEL_FPGA_PCIE_VERBOSE_DEBUG(
+        "offset underflow due to "
+        "invalid input.");
+    return -EINVAL;
+  }
 
-    filp->f_pos = newpos;
-    return newpos;
+  filp->f_pos = newpos;
+  return newpos;
 }
 
-static int chr_mmap(struct file *filp, struct vm_area_struct *vma)
-{
-    struct chr_dev_bookkeep *chr_dev_bk;
-    struct dev_bookkeep *dev_bk;
-    unsigned long len, pfn;
-    int ret;
-    pgoff_t pgoff;
+static int chr_mmap(struct file *filp, struct vm_area_struct *vma) {
+  struct chr_dev_bookkeep *chr_dev_bk;
+  struct dev_bookkeep *dev_bk;
+  unsigned long len, pfn;
+  int ret;
+  pgoff_t pgoff;
 
-    len = vma->vm_end - vma->vm_start;
-    pgoff = vma->vm_pgoff;
+  len = vma->vm_end - vma->vm_start;
+  pgoff = vma->vm_pgoff;
 
-    chr_dev_bk = filp->private_data;
-    dev_bk = chr_dev_bk->dev_bk;
+  chr_dev_bk = filp->private_data;
+  dev_bk = chr_dev_bk->dev_bk;
 
-    if ((len == 0) || (len+pgoff) > dev_bk->kmem_info.size) {
-        return -EINVAL;
-    }
-    vma->vm_ops = &intel_fpga_vm_ops;
-    vma->vm_flags |= VM_PFNMAP | VM_DONTCOPY | VM_DONTEXPAND;
-    vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
-    vma->vm_private_data = dev_bk;
+  if ((len == 0) || (len + pgoff) > dev_bk->kmem_info.size) {
+    return -EINVAL;
+  }
+  vma->vm_ops = &intel_fpga_vm_ops;
+  vma->vm_flags |= VM_PFNMAP | VM_DONTCOPY | VM_DONTEXPAND;
+  vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+  vma->vm_private_data = dev_bk;
 
-    pfn = __pa(dev_bk->kmem_info.virt_addr + (pgoff<<PAGE_SHIFT))>>PAGE_SHIFT;
-    ret = remap_pfn_range(vma, vma->vm_start, pfn, len, vma->vm_page_prot);
-    if (ret < 0) {
-        INTEL_FPGA_PCIE_WARN("could not remap kernel buffer to user-space.");
-        return -ENXIO;
-    }
+  pfn = __pa(dev_bk->kmem_info.virt_addr + (pgoff << PAGE_SHIFT)) >> PAGE_SHIFT;
+  ret = remap_pfn_range(vma, vma->vm_start, pfn, len, vma->vm_page_prot);
+  if (ret < 0) {
+    INTEL_FPGA_PCIE_WARN("could not remap kernel buffer to user-space.");
+    return -ENXIO;
+  }
 
-    return 0;
+  return 0;
 }
 
-static void chr_vma_close(struct vm_area_struct *vma)
-{
-    // Do nothing.
+static void chr_vma_close(struct vm_area_struct *vma) {
+  // Do nothing.
 }
-
 
 /******************************************************************************
  * Initialization functions
@@ -339,87 +333,86 @@ static void chr_vma_close(struct vm_area_struct *vma)
  *
  * Return: 0 if successful, negative error code otherwise.
  */
-int __init intel_fpga_pcie_chr_init(void)
-{
-    int retval;
-    dev_t dev_id;
-    struct device *dev;
+int __init intel_fpga_pcie_chr_init(void) {
+  int retval;
+  dev_t dev_id;
+  struct device *dev;
 
-    if (unlikely(mutex_lock_interruptible(&global_bk.lock))) {
-        INTEL_FPGA_PCIE_ERR("global driver lock acquisition has been "
-                            "interrupted during driver initialization.");
-        return -ERESTARTSYS;
-    }
+  if (unlikely(mutex_lock_interruptible(&global_bk.lock))) {
+    INTEL_FPGA_PCIE_ERR(
+        "global driver lock acquisition has been "
+        "interrupted during driver initialization.");
+    return -ERESTARTSYS;
+  }
 
-    // Create a class of devices; this also populates sysfs entries
-    global_bk.chr_class = class_create(THIS_MODULE,
-                                       INTEL_FPGA_PCIE_DRIVER_NAME);
-    if (IS_ERR(global_bk.chr_class)) {
-        retval = PTR_ERR(global_bk.chr_class);
-        INTEL_FPGA_PCIE_ERR("couldn't create device class.");
-        goto failed_class_create;
-    }
+  // Create a class of devices; this also populates sysfs entries
+  global_bk.chr_class = class_create(THIS_MODULE, INTEL_FPGA_PCIE_DRIVER_NAME);
+  if (IS_ERR(global_bk.chr_class)) {
+    retval = PTR_ERR(global_bk.chr_class);
+    INTEL_FPGA_PCIE_ERR("couldn't create device class.");
+    goto failed_class_create;
+  }
 
-    // Dynamically allocate chrdev region major number
-    retval = alloc_chrdev_region(&dev_id, 0, 1, INTEL_FPGA_PCIE_DRIVER_NAME);
-    if (retval) {
-        INTEL_FPGA_PCIE_ERR("couldn't register character device.");
-        goto failed_alloc_chrdev;
-    }
-    global_bk.chr_major = MAJOR(dev_id);
-    global_bk.chr_minor = MINOR(dev_id);
+  // Dynamically allocate chrdev region major number
+  retval = alloc_chrdev_region(&dev_id, 0, 1, INTEL_FPGA_PCIE_DRIVER_NAME);
+  if (retval) {
+    INTEL_FPGA_PCIE_ERR("couldn't register character device.");
+    goto failed_alloc_chrdev;
+  }
+  global_bk.chr_major = MAJOR(dev_id);
+  global_bk.chr_minor = MINOR(dev_id);
 
-    /*
-     * Initialize and add character device to the kernel, and associate
-     * the correct file operations with this character device.
-     */
-    cdev_init(&global_bk.cdev, &intel_fpga_pcie_fops);
-    global_bk.cdev.owner = THIS_MODULE;
-    global_bk.cdev.ops = &intel_fpga_pcie_fops;
+  /*
+   * Initialize and add character device to the kernel, and associate
+   * the correct file operations with this character device.
+   */
+  cdev_init(&global_bk.cdev, &intel_fpga_pcie_fops);
+  global_bk.cdev.owner = THIS_MODULE;
+  global_bk.cdev.ops = &intel_fpga_pcie_fops;
 
-    // Connect the major/minor number to the character device
-    retval = cdev_add(&global_bk.cdev, dev_id, 1);
-    if (retval) {
-        INTEL_FPGA_PCIE_ERR("failed at creating character device <%i,%i>.",
-                            global_bk.chr_major, global_bk.chr_minor);
-        goto failed_create_chrdev;
-    }
+  // Connect the major/minor number to the character device
+  retval = cdev_add(&global_bk.cdev, dev_id, 1);
+  if (retval) {
+    INTEL_FPGA_PCIE_ERR("failed at creating character device <%i,%i>.",
+                        global_bk.chr_major, global_bk.chr_minor);
+    goto failed_create_chrdev;
+  }
 
-    /*
-     * Automatically load the character device to a /dev node.
-     * This works by sending uevents to udev; the exact behavior
-     * may be modified through /etc/udev/rules.d/.
-     *
-     * Alternatively, the character device could be loaded by the user using
-     * the system call mknod.
-     */
+  /*
+   * Automatically load the character device to a /dev node.
+   * This works by sending uevents to udev; the exact behavior
+   * may be modified through /etc/udev/rules.d/.
+   *
+   * Alternatively, the character device could be loaded by the user using
+   * the system call mknod.
+   */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
-    dev = device_create(global_bk.chr_class, NULL, dev_id,
-                        INTEL_FPGA_PCIE_DRIVER_NAME);
+  dev = device_create(global_bk.chr_class, NULL, dev_id,
+                      INTEL_FPGA_PCIE_DRIVER_NAME);
 #else
-    dev = device_create(global_bk.chr_class, NULL, dev_id, NULL,
-                        INTEL_FPGA_PCIE_DRIVER_NAME);
+  dev = device_create(global_bk.chr_class, NULL, dev_id, NULL,
+                      INTEL_FPGA_PCIE_DRIVER_NAME);
 #endif
-    if (IS_ERR(dev)) {
-        INTEL_FPGA_PCIE_ERR("failed at creating device under /dev/.");
-        goto failed_create_dev;
-    }
+  if (IS_ERR(dev)) {
+    INTEL_FPGA_PCIE_ERR("failed at creating device under /dev/.");
+    goto failed_create_dev;
+  }
 
-    mutex_unlock(&global_bk.lock);
-    return retval;
+  mutex_unlock(&global_bk.lock);
+  return retval;
 
 failed_create_dev:
-    cdev_del(&global_bk.cdev);
+  cdev_del(&global_bk.cdev);
 failed_create_chrdev:
-    unregister_chrdev_region(dev_id, 1);
-    global_bk.chr_major = 0;
-    global_bk.chr_minor = 0;
+  unregister_chrdev_region(dev_id, 1);
+  global_bk.chr_major = 0;
+  global_bk.chr_minor = 0;
 failed_alloc_chrdev:
-    class_destroy(global_bk.chr_class);
+  class_destroy(global_bk.chr_class);
 failed_class_create:
-    global_bk.chr_class = NULL;
-    mutex_unlock(&global_bk.lock);
-    return retval;
+  global_bk.chr_class = NULL;
+  mutex_unlock(&global_bk.lock);
+  return retval;
 }
 
 /**
@@ -428,30 +421,28 @@ failed_class_create:
  *
  * Return: Nothing
  */
-void intel_fpga_pcie_chr_exit(void)
-{
-    bool release_lock = true;
-    if (unlikely(mutex_lock_interruptible(&global_bk.lock))) {
-        INTEL_FPGA_PCIE_WARN("global driver lock acquisition has been "
-                             "interrupted during driver removal; "
-                             "internal structures may be corrupted!");
-        release_lock = false;
-    }
-    device_destroy(global_bk.chr_class, MKDEV(global_bk.chr_major,
-                                              global_bk.chr_minor));
-    cdev_del(&global_bk.cdev);
-    unregister_chrdev_region(MKDEV(global_bk.chr_major,
-                                   global_bk.chr_minor), 1);
-    global_bk.chr_major = 0;
-    global_bk.chr_minor = 0;
-    class_destroy(global_bk.chr_class);
-    global_bk.chr_class = NULL;
+void intel_fpga_pcie_chr_exit(void) {
+  bool release_lock = true;
+  if (unlikely(mutex_lock_interruptible(&global_bk.lock))) {
+    INTEL_FPGA_PCIE_WARN(
+        "global driver lock acquisition has been "
+        "interrupted during driver removal; "
+        "internal structures may be corrupted!");
+    release_lock = false;
+  }
+  device_destroy(global_bk.chr_class,
+                 MKDEV(global_bk.chr_major, global_bk.chr_minor));
+  cdev_del(&global_bk.cdev);
+  unregister_chrdev_region(MKDEV(global_bk.chr_major, global_bk.chr_minor), 1);
+  global_bk.chr_major = 0;
+  global_bk.chr_minor = 0;
+  class_destroy(global_bk.chr_class);
+  global_bk.chr_class = NULL;
 
-    if (release_lock) {
-        mutex_unlock(&global_bk.lock);
-    }
+  if (release_lock) {
+    mutex_unlock(&global_bk.lock);
+  }
 }
-
 
 /******************************************************************************
  * Helper functions
@@ -493,149 +484,145 @@ void intel_fpga_pcie_chr_exit(void)
  * Return: The number of bytes actually accessed.
  */
 static ssize_t chr_access(struct file *filp, const char __user *buf,
-                          size_t count, loff_t *offp, bool is_read)
-{
-    struct chr_dev_bookkeep *chr_dev_bk;
-    struct dev_bookkeep *dev_bk;
-    struct intel_fpga_pcie_cmd kcmd;
+                          size_t count, loff_t *offp, bool is_read) {
+  struct chr_dev_bookkeep *chr_dev_bk;
+  struct dev_bookkeep *dev_bk;
+  struct intel_fpga_pcie_cmd kcmd;
 
+  /*
+   * Align to 32B boundary so it can be used with 32B aligned transfers.
+   * The extra 32B exist to allow source and destination addresses
+   * to have the same 32B alignment as well as to allow prefetching.
+   */
+  uint8_t data[MAX_TRANSFER_SIZE + 32] __attribute__((aligned(32)));
+  uint8_t *data_ptr;
+  unsigned int bar_num;
+  uint64_t offset;
+  uintptr_t ep_addr;
+  uintptr_t ep_addr_aligned, data_ptr_aligned;
+  const char __user *user_addr;
+  ssize_t bar_len;
+  bool is_hprxm;
+  bool is_prefetchable;
+
+  if (count == 0) return 0;
+
+  /*
+   * Put a limit on the maximum size that can be transferred in one
+   * system call. This is to avoid the use of kmalloc or multiple
+   * copy_from/to_user calls.
+   */
+  if (count > MAX_TRANSFER_SIZE) {
+    count = MAX_TRANSFER_SIZE;
+    INTEL_FPGA_PCIE_VERBOSE_DEBUG("access size reduced to %d.",
+                                  MAX_TRANSFER_SIZE);
+  }
+
+  // Retrieve bookkeeping information.
+  chr_dev_bk = filp->private_data;
+  dev_bk = chr_dev_bk->dev_bk;
+
+  // Determine target BAR, offset, and user addresses.
+  if (chr_dev_bk->use_cmd) {
+    if (copy_from_user(&kcmd, buf, sizeof(kcmd))) {
+      INTEL_FPGA_PCIE_DEBUG("couldn't copy cmd from user.");
+      return -EFAULT;
+    }
+    bar_num = kcmd.bar_num;
+    offset = kcmd.bar_offset;
+    user_addr = kcmd.user_addr;
+  } else {
+    bar_num = chr_dev_bk->cur_bar_num;
+    offset = *offp;
+    user_addr = buf;
+  }
+
+  // Validate access address, and potentially truncate.
+  ep_addr = get_address(dev_bk, bar_num, offset, &count);
+  if (unlikely((void *)ep_addr == NULL)) {
+    INTEL_FPGA_PCIE_VERBOSE_DEBUG("invalid address selected.");
+    return -EFAULT;
+  }
+
+  // Get address & BAR type
+  bar_len = dev_bk->bar[bar_num].len;
+  is_hprxm = dev_bk->bar[bar_num].is_hprxm;
+  is_prefetchable = dev_bk->bar[bar_num].is_prefetchable;
+
+  // Access validity check
+  if (is_hprxm) {
     /*
-     * Align to 32B boundary so it can be used with 32B aligned transfers.
-     * The extra 32B exist to allow source and destination addresses
-     * to have the same 32B alignment as well as to allow prefetching.
+     * For HPRXM, smallest granularity is 4B, unless reading
+     * prefetchable region.
      */
-    uint8_t data[MAX_TRANSFER_SIZE + 32] __attribute__((aligned (32)));
-    uint8_t *data_ptr;
-    unsigned int bar_num;
-    uint64_t offset;
-    uintptr_t ep_addr;
-    uintptr_t ep_addr_aligned, data_ptr_aligned;
-    const char __user *user_addr;
-    ssize_t bar_len;
-    bool is_hprxm;
-    bool is_prefetchable;
-
-
-    if (count == 0) return 0;
-
-    /*
-     * Put a limit on the maximum size that can be transferred in one
-     * system call. This is to avoid the use of kmalloc or multiple
-     * copy_from/to_user calls.
-     */
-    if (count > MAX_TRANSFER_SIZE) {
-        count = MAX_TRANSFER_SIZE;
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("access size reduced to %d.",
-                                      MAX_TRANSFER_SIZE);
+    if (unlikely(!(is_read && is_prefetchable) &&
+                 ((ep_addr % 4) || (count % 4)))) {
+      INTEL_FPGA_PCIE_VERBOSE_DEBUG(
+          "access granularity is smaller "
+          "than a DWORD.");
+      return -EINVAL;
     }
+  } else {
+    // For RXM, any access is possible using multiple transactions.
+  }
 
-    // Retrieve bookkeeping information.
-    chr_dev_bk = filp->private_data;
-    dev_bk = chr_dev_bk->dev_bk;
+  /*
+   * Align data pointer to the same offset within a 4B or 32B frame
+   * as the ep_addr. This allows source and destination addresses to be
+   * aligned and thus allows use of aligned instructions.
+   */
+  data_ptr = data;
+  if (is_hprxm) {
+    data_ptr += ep_addr % 32;
+  } else {
+    data_ptr += ep_addr % 4;
+  }
 
-    // Determine target BAR, offset, and user addresses.
-    if (chr_dev_bk->use_cmd) {
-        if (copy_from_user(&kcmd, buf, sizeof(kcmd))) {
-            INTEL_FPGA_PCIE_DEBUG("couldn't copy cmd from user.");
-            return -EFAULT;
-        }
-        bar_num = kcmd.bar_num;
-        offset = kcmd.bar_offset;
-        user_addr = kcmd.user_addr;
+  //  If access is a write, copy over write data from user.
+  if (!is_read && copy_from_user(data_ptr, user_addr, count)) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy data from user.");
+    return -EFAULT;
+  }
+
+  // Do access
+  if (is_hprxm) {
+    if (is_read && is_prefetchable) {
+      ep_addr_aligned = ep_addr & ~(uintptr_t)0x1f;
+      data_ptr_aligned = (uintptr_t)data_ptr & ~(uintptr_t)0x1f;
+
+      // For simplicity, just read extra
+      hprxm_access_single(ep_addr_aligned, (uint8_t *)data_ptr_aligned, 32,
+                          is_read);
+      if (((ep_addr & 0x1f) + count) > 32) {
+        hprxm_access_single(ep_addr_aligned + 32,
+                            (uint8_t *)data_ptr_aligned + 32, 32, is_read);
+      }
+      if (((ep_addr & 0x3f) + count) > 64) {
+        hprxm_access_single(ep_addr_aligned + 64,
+                            (uint8_t *)data_ptr_aligned + 64, 32, is_read);
+      }
     } else {
-        bar_num = chr_dev_bk->cur_bar_num;
-        offset = *offp;
-        user_addr = buf;
+      hprxm_access(ep_addr, data_ptr, (uint16_t)count, is_read);
     }
+  } else {
+    rxm_access(ep_addr, data_ptr, (uint16_t)count, is_read, is_prefetchable);
+  }
 
-    // Validate access address, and potentially truncate.
-    ep_addr = get_address(dev_bk, bar_num, offset, &count);
-    if (unlikely((void *)ep_addr == NULL)) {
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("invalid address selected.");
-        return -EFAULT;
+  // If access is a read, copy over read data to user.
+  if (is_read && copy_to_user((char __user *)user_addr, data_ptr, count)) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy data to user.");
+    return -EFAULT;
+  }
+
+  // If necessary, update the file offset.
+  if (!chr_dev_bk->use_cmd) {
+    *offp = *offp + count;
+    if (*offp == bar_len) {
+      *offp = 0;
     }
+  }
 
-    // Get address & BAR type
-    bar_len = dev_bk->bar[bar_num].len;
-    is_hprxm = dev_bk->bar[bar_num].is_hprxm;
-    is_prefetchable = dev_bk->bar[bar_num].is_prefetchable;
-
-    // Access validity check
-    if (is_hprxm) {
-        /*
-         * For HPRXM, smallest granularity is 4B, unless reading
-         * prefetchable region.
-         */
-        if (unlikely(!(is_read && is_prefetchable)
-                     && ((ep_addr % 4) || (count % 4)))) {
-            INTEL_FPGA_PCIE_VERBOSE_DEBUG("access granularity is smaller "
-                                          "than a DWORD.");
-            return -EINVAL;
-        }
-    } else {
-        // For RXM, any access is possible using multiple transactions.
-    }
-
-    /*
-     * Align data pointer to the same offset within a 4B or 32B frame
-     * as the ep_addr. This allows source and destination addresses to be
-     * aligned and thus allows use of aligned instructions.
-     */
-    data_ptr = data;
-    if (is_hprxm) {
-        data_ptr += ep_addr % 32;
-    } else {
-        data_ptr += ep_addr % 4;
-    }
-
-    //  If access is a write, copy over write data from user.
-    if (!is_read && copy_from_user(data_ptr, user_addr, count)) {
-        INTEL_FPGA_PCIE_DEBUG("couldn't copy data from user.");
-        return -EFAULT;
-    }
-
-    // Do access
-    if (is_hprxm) {
-        if (is_read && is_prefetchable) {
-            ep_addr_aligned = ep_addr & ~(uintptr_t)0x1f;
-            data_ptr_aligned = (uintptr_t)data_ptr & ~(uintptr_t)0x1f;
-
-            // For simplicity, just read extra
-            hprxm_access_single(ep_addr_aligned,
-                                (uint8_t *)data_ptr_aligned, 32, is_read);
-            if (((ep_addr & 0x1f) + count) > 32) {
-                hprxm_access_single(ep_addr_aligned + 32,
-                                    (uint8_t *)data_ptr_aligned + 32,
-                                    32, is_read);
-            }
-            if (((ep_addr&0x3f) + count) > 64) {
-                hprxm_access_single(ep_addr_aligned + 64,
-                                    (uint8_t *)data_ptr_aligned + 64,
-                                    32, is_read);
-            }
-        } else {
-            hprxm_access(ep_addr, data_ptr, (uint16_t)count, is_read);
-        }
-    } else {
-        rxm_access(ep_addr, data_ptr, (uint16_t)count,
-                   is_read, is_prefetchable);
-    }
-
-    // If access is a read, copy over read data to user.
-    if (is_read && copy_to_user((char __user *) user_addr, data_ptr, count)) {
-        INTEL_FPGA_PCIE_DEBUG("couldn't copy data to user.");
-        return -EFAULT;
-    }
-
-    // If necessary, update the file offset.
-    if (!chr_dev_bk->use_cmd) {
-        *offp = *offp + count;
-        if (*offp == bar_len) {
-            *offp = 0;
-        }
-    }
-
-    return count;
+  return count;
 }
 
 /**
@@ -661,37 +648,37 @@ static ssize_t chr_access(struct file *filp, const char __user *buf,
  * Return: NULL if desired access location is invalid. Otherwise,
  *         the address at the offset in a BAR region is returned.
  */
-static uintptr_t get_address(struct dev_bookkeep *dev_bk,
-                             unsigned int bar_num,
-                             uint64_t offset, size_t *count)
-{
-    void __iomem *addr, __iomem *bar_base;
-    ssize_t bar_len, remaining_region;
+static uintptr_t get_address(struct dev_bookkeep *dev_bk, unsigned int bar_num,
+                             uint64_t offset, size_t *count) {
+  void __iomem *addr, __iomem *bar_base;
+  ssize_t bar_len, remaining_region;
 
-    bar_base = dev_bk->bar[bar_num].base_addr;
-    if (unlikely(bar_base == NULL)) {
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("invalid BAR selected.");
-        return (uintptr_t) NULL;
-    }
+  bar_base = dev_bk->bar[bar_num].base_addr;
+  if (unlikely(bar_base == NULL)) {
+    INTEL_FPGA_PCIE_VERBOSE_DEBUG("invalid BAR selected.");
+    return (uintptr_t)NULL;
+  }
 
-    bar_len = dev_bk->bar[bar_num].len;
+  bar_len = dev_bk->bar[bar_num].len;
 
-    if (unlikely(offset >= bar_len)) {
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("offset %llu larger than size of "
-                                      "BAR region %ld.", offset, bar_len);
-        return (uintptr_t) NULL;
-    }
+  if (unlikely(offset >= bar_len)) {
+    INTEL_FPGA_PCIE_VERBOSE_DEBUG(
+        "offset %llu larger than size of "
+        "BAR region %ld.",
+        offset, bar_len);
+    return (uintptr_t)NULL;
+  }
 
-    addr = bar_base + offset;
+  addr = bar_base + offset;
 
-    remaining_region = bar_len - offset;
-    if (unlikely(*count > remaining_region)) {
-        // Truncate the count value.
-        *count = remaining_region;
-        INTEL_FPGA_PCIE_VERBOSE_DEBUG("truncated access to the end of BAR.");
-    }
+  remaining_region = bar_len - offset;
+  if (unlikely(*count > remaining_region)) {
+    // Truncate the count value.
+    *count = remaining_region;
+    INTEL_FPGA_PCIE_VERBOSE_DEBUG("truncated access to the end of BAR.");
+  }
 
-    return (uintptr_t) addr;
+  return (uintptr_t)addr;
 }
 
 /**
@@ -732,49 +719,48 @@ static uintptr_t get_address(struct dev_bookkeep *dev_bk,
  *
  * Return: Nothing
  */
-static void hprxm_access(uintptr_t addr, uint8_t *data,
-                         uint16_t count, bool is_read)
-{
-    uint16_t start_addr, end_addr;
-    uint16_t align_mask;
-    uint16_t next_po2_div2;
-    uint16_t offset;
-    uint16_t diff;
+static void hprxm_access(uintptr_t addr, uint8_t *data, uint16_t count,
+                         bool is_read) {
+  uint16_t start_addr, end_addr;
+  uint16_t align_mask;
+  uint16_t next_po2_div2;
+  uint16_t offset;
+  uint16_t diff;
 
-    start_addr = addr % 32;
-    end_addr = start_addr + count;
+  start_addr = addr % 32;
+  end_addr = start_addr + count;
 
+  /*
+   * Determine the largest power of 2 _not greater_ than @count
+   * and find a mask for it.
+   */
+  align_mask = round_down_to_po2_mask(count);
+
+  // Determine if access is already justified or requires splitting.
+  if ((start_addr & align_mask) == 0) {
+    hprxm_access_left_justified(addr, data, count, is_read);
+  } else if ((end_addr & align_mask) == 0) {
+    hprxm_access_right_justified(addr, data, count, is_read);
+  } else {
     /*
-     * Determine the largest power of 2 _not greater_ than @count
-     * and find a mask for it.
+     * Calculate the split point.
+     * This is done by repeatedly shifting the access location
+     * by the largest power of 2 _less than_ the end address
+     * until the access crosses address 0.
      */
-    align_mask = round_down_to_po2_mask(count);
+    offset = 0;
+    do {
+      next_po2_div2 = round_up_to_po2(end_addr - offset);
+      next_po2_div2 >>= 1;
 
-    // Determine if access is already justified or requires splitting.
-    if ((start_addr & align_mask) == 0) {
-        hprxm_access_left_justified(addr, data, count, is_read);
-    } else if ((end_addr & align_mask) == 0) {
-        hprxm_access_right_justified(addr, data, count, is_read);
-    } else {
-        /*
-         * Calculate the split point.
-         * This is done by repeatedly shifting the access location
-         * by the largest power of 2 _less than_ the end address
-         * until the access crosses address 0.
-         */
-        offset = 0;
-        do {
-            next_po2_div2 = round_up_to_po2(end_addr - offset);
-            next_po2_div2 >>= 1;
+      offset += next_po2_div2;
+    } while (next_po2_div2 < (start_addr - offset + next_po2_div2));
 
-            offset += next_po2_div2;
-        } while (next_po2_div2 < (start_addr - offset + next_po2_div2));
-
-        diff = offset - start_addr;
-        hprxm_access_right_justified(addr, data, diff, is_read);
-        hprxm_access_left_justified(addr + diff, data + diff,
-                                    count - diff, is_read);
-    }
+    diff = offset - start_addr;
+    hprxm_access_right_justified(addr, data, diff, is_read);
+    hprxm_access_left_justified(addr + diff, data + diff, count - diff,
+                                is_read);
+  }
 }
 
 /**
@@ -799,19 +785,18 @@ static void hprxm_access(uintptr_t addr, uint8_t *data,
  *   3. Access 4B at address 24.
  */
 static void hprxm_access_left_justified(uintptr_t addr, uint8_t *data,
-                                        uint16_t count, bool is_read)
-{
-    uint16_t po2 = round_up_to_po2(count);
+                                        uint16_t count, bool is_read) {
+  uint16_t po2 = round_up_to_po2(count);
 
-    while (count > 0) {
-        while (count >= po2) {
-            hprxm_access_single(addr, data, po2, is_read);
-            addr += po2;
-            data += po2;
-            count -= po2;
-        }
-        po2 >>= 1;
+  while (count > 0) {
+    while (count >= po2) {
+      hprxm_access_single(addr, data, po2, is_read);
+      addr += po2;
+      data += po2;
+      count -= po2;
     }
+    po2 >>= 1;
+  }
 }
 
 /**
@@ -836,22 +821,20 @@ static void hprxm_access_left_justified(uintptr_t addr, uint8_t *data,
  *     3. Access 16B at address 16.
  */
 static void hprxm_access_right_justified(uintptr_t addr, uint8_t *data,
-                                         uint16_t count, bool is_read)
-{
-    uint16_t po2 = 2;
-    uint16_t po2_div2;
-    while (count > 0) {
-        po2_div2 = po2/2;
-        if (count % po2) {
-            hprxm_access_single(addr, data, po2_div2, is_read);
-            addr += po2_div2;
-            data += po2_div2;
-            count -= po2_div2;
-        }
-        po2 <<= 1;
+                                         uint16_t count, bool is_read) {
+  uint16_t po2 = 2;
+  uint16_t po2_div2;
+  while (count > 0) {
+    po2_div2 = po2 / 2;
+    if (count % po2) {
+      hprxm_access_single(addr, data, po2_div2, is_read);
+      addr += po2_div2;
+      data += po2_div2;
+      count -= po2_div2;
     }
+    po2 <<= 1;
+  }
 }
-
 
 /**
  * hprxm_access_single() - Access a BAR which routes to an HPRXM. Access
@@ -868,52 +851,51 @@ static void hprxm_access_right_justified(uintptr_t addr, uint8_t *data,
  * 2^n bytes of data is accessed at some address, where n is 2 to 6 inclusive.
  * The address must be aligned at a multiple of the size within a 32B frame.
  */
-static void hprxm_access_single(uintptr_t addr_, uint8_t *data,
-                                uint16_t count, bool is_read)
-{
-    void __iomem *addr = (void __iomem *)addr_;
-    switch (count) {
+static void hprxm_access_single(uintptr_t addr_, uint8_t *data, uint16_t count,
+                                bool is_read) {
+  void __iomem *addr = (void __iomem *)addr_;
+  switch (count) {
     case 64:
-        if (is_read) {
-            custom_ioread256_x86(data, addr);
-            custom_ioread256_x86(data+32, addr+32);
-        } else {
-            custom_iowrite256_x86(data, addr);
-            custom_iowrite256_x86(data+32, addr+32);
-        }
-        break;
+      if (is_read) {
+        custom_ioread256_x86(data, addr);
+        custom_ioread256_x86(data + 32, addr + 32);
+      } else {
+        custom_iowrite256_x86(data, addr);
+        custom_iowrite256_x86(data + 32, addr + 32);
+      }
+      break;
     case 32:
-        if (is_read) {
-            custom_ioread256_x86(data, addr);
-        } else {
-            custom_iowrite256_x86(data, addr);
-        }
-        break;
+      if (is_read) {
+        custom_ioread256_x86(data, addr);
+      } else {
+        custom_iowrite256_x86(data, addr);
+      }
+      break;
     case 16:
-        if (is_read) {
-            custom_ioread128_x86(data, addr);
-        } else {
-            custom_iowrite128_x86(data, addr);
-        }
-        break;
+      if (is_read) {
+        custom_ioread128_x86(data, addr);
+      } else {
+        custom_iowrite128_x86(data, addr);
+      }
+      break;
     case 8:
-        if (is_read) {
-            custom_ioread64(data, addr);
-        } else {
-            custom_iowrite64(data, addr);
-        }
-        break;
+      if (is_read) {
+        custom_ioread64(data, addr);
+      } else {
+        custom_iowrite64(data, addr);
+      }
+      break;
     case 4:
-        if (is_read) {
-            *(uint32_t *)data = ioread32(addr);
-        } else {
-            iowrite32(*(uint32_t *)data, addr);
-        }
-        break;
+      if (is_read) {
+        *(uint32_t *)data = ioread32(addr);
+      } else {
+        iowrite32(*(uint32_t *)data, addr);
+      }
+      break;
     default:
-        // No other sizes are valid.
-        break;
-    }
+      // No other sizes are valid.
+      break;
+  }
 }
 
 /**
@@ -932,40 +914,39 @@ static void hprxm_access_single(uintptr_t addr_, uint8_t *data,
  *     3. Access remaining 1-3B of data.
  */
 static void rxm_access(uintptr_t addr, uint8_t *data, uint16_t count,
-                       bool is_read, bool is_prefetchable)
-{
-    uint16_t first_access_max;
+                       bool is_read, bool is_prefetchable) {
+  uint16_t first_access_max;
 
-    // Potentially do first access; align future accesses to a DWORD address.
-    first_access_max = 4 - (addr % 4);
-    if (first_access_max < count) {
-        if (is_read && is_prefetchable) {
-            rxm_prefetchable_single_read(addr, data, first_access_max);
-        } else {
-            rxm_access_single(addr, data, first_access_max, is_read);
-        }
-
-        data += first_access_max;
-        addr += first_access_max;
-        count -= first_access_max;
+  // Potentially do first access; align future accesses to a DWORD address.
+  first_access_max = 4 - (addr % 4);
+  if (first_access_max < count) {
+    if (is_read && is_prefetchable) {
+      rxm_prefetchable_single_read(addr, data, first_access_max);
+    } else {
+      rxm_access_single(addr, data, first_access_max, is_read);
     }
 
-    // Do intermediate accesses
-    while (count >= 4) {
-        rxm_access_single(addr, data, 4, is_read);
-        addr += 4;
-        data += 4;
-        count -= 4;
-    }
+    data += first_access_max;
+    addr += first_access_max;
+    count -= first_access_max;
+  }
 
-    // Potentially do last access
-    if (count > 0) {
-        if (is_read && is_prefetchable) {
-            rxm_prefetchable_single_read(addr, data, count);
-        } else {
-            rxm_access_single(addr, data, count, is_read);
-        }
+  // Do intermediate accesses
+  while (count >= 4) {
+    rxm_access_single(addr, data, 4, is_read);
+    addr += 4;
+    data += 4;
+    count -= 4;
+  }
+
+  // Potentially do last access
+  if (count > 0) {
+    if (is_read && is_prefetchable) {
+      rxm_prefetchable_single_read(addr, data, count);
+    } else {
+      rxm_access_single(addr, data, count, is_read);
     }
+  }
 }
 
 /**
@@ -982,65 +963,64 @@ static void rxm_access(uintptr_t addr, uint8_t *data, uint16_t count,
  * the access requested does not cross a DWORD frame. Specifically, @addr_/4
  * (integer division) and (@addr_+@count)/4 must be equal.
  */
-static void rxm_access_single(uintptr_t addr_, uint8_t *data,
-                              uint16_t count, bool is_read)
-{
-    void __iomem *addr = (void __iomem *)addr_;
-    if (likely(count == 4)) {
-        if (is_read) {
-            *(uint32_t *)data = ioread32(addr);
-        } else {
-            iowrite32(*(uint32_t *)data, addr);
-        }
-    } else if (count == 1) {
-        if (is_read) {
-            data[0] = ioread8(addr);
-        } else {
-            iowrite8(data[0], addr);
-        }
-    } else if (count == 2) {
-        if ((addr_ % 2) == 1) {
-            /*
-             * Unaligned 2B access - PCIe allows this but RXM does not.
-             * The access must be split into two 1B accesses.
-             */
-            if (is_read) {
-                data[0] = ioread8(addr);
-                data[1] = ioread8(addr+1);
-            } else {
-                iowrite8(data[0], addr);
-                iowrite8(data[1], addr+1);
-            }
-        } else {
-            if (is_read) {
-                *(uint16_t *)data = ioread16(addr);
-            } else {
-                iowrite16(*(uint16_t *)data, addr);
-            }
-        }
-    } else { // count == 3
-        /*
-         * 3B access - PCIe allows this but RXM does not. The access
-         * must be split into an aligned 2B access and a 1B access.
-         */
-        if ((addr_ % 2) == 1) {
-            if (is_read) {
-                data[0] = ioread8(addr);
-                *(uint16_t *)(data+1) = ioread16(addr+1);
-            } else {
-                iowrite8(data[0], addr);
-                iowrite16(*(uint16_t *)(data+1), addr+1);
-            }
-        } else {
-            if (is_read) {
-                *(uint16_t *)data = ioread16(addr);
-                data[2] = ioread8(addr+2);
-            } else {
-                iowrite16(*(uint16_t *)data, addr);
-                iowrite8(data[2], addr+2);
-            }
-        }
+static void rxm_access_single(uintptr_t addr_, uint8_t *data, uint16_t count,
+                              bool is_read) {
+  void __iomem *addr = (void __iomem *)addr_;
+  if (likely(count == 4)) {
+    if (is_read) {
+      *(uint32_t *)data = ioread32(addr);
+    } else {
+      iowrite32(*(uint32_t *)data, addr);
     }
+  } else if (count == 1) {
+    if (is_read) {
+      data[0] = ioread8(addr);
+    } else {
+      iowrite8(data[0], addr);
+    }
+  } else if (count == 2) {
+    if ((addr_ % 2) == 1) {
+      /*
+       * Unaligned 2B access - PCIe allows this but RXM does not.
+       * The access must be split into two 1B accesses.
+       */
+      if (is_read) {
+        data[0] = ioread8(addr);
+        data[1] = ioread8(addr + 1);
+      } else {
+        iowrite8(data[0], addr);
+        iowrite8(data[1], addr + 1);
+      }
+    } else {
+      if (is_read) {
+        *(uint16_t *)data = ioread16(addr);
+      } else {
+        iowrite16(*(uint16_t *)data, addr);
+      }
+    }
+  } else {  // count == 3
+    /*
+     * 3B access - PCIe allows this but RXM does not. The access
+     * must be split into an aligned 2B access and a 1B access.
+     */
+    if ((addr_ % 2) == 1) {
+      if (is_read) {
+        data[0] = ioread8(addr);
+        *(uint16_t *)(data + 1) = ioread16(addr + 1);
+      } else {
+        iowrite8(data[0], addr);
+        iowrite16(*(uint16_t *)(data + 1), addr + 1);
+      }
+    } else {
+      if (is_read) {
+        *(uint16_t *)data = ioread16(addr);
+        data[2] = ioread8(addr + 2);
+      } else {
+        iowrite16(*(uint16_t *)data, addr);
+        iowrite8(data[2], addr + 2);
+      }
+    }
+  }
 }
 
 /**
@@ -1054,19 +1034,18 @@ static void rxm_access_single(uintptr_t addr_, uint8_t *data,
  * of the data is copied into the data buffer.
  */
 static void rxm_prefetchable_single_read(uintptr_t addr, uint8_t *data,
-                                         uint16_t count)
-{
-    // Always read full DW and save data appropriately.
-    uint8_t temp_data[4];
-    uint8_t offset;
-    void __iomem *aligned_addr;
+                                         uint16_t count) {
+  // Always read full DW and save data appropriately.
+  uint8_t temp_data[4];
+  uint8_t offset;
+  void __iomem *aligned_addr;
 
-    // Mask lower 2 bits
-    aligned_addr = (void __iomem *)(addr & ~((uintptr_t)0x3));
-    *(uint32_t *)temp_data = ioread32(aligned_addr);
+  // Mask lower 2 bits
+  aligned_addr = (void __iomem *)(addr & ~((uintptr_t)0x3));
+  *(uint32_t *)temp_data = ioread32(aligned_addr);
 
-    offset = addr % 4;
-    memcpy(data, temp_data+offset, count);
+  offset = addr % 4;
+  memcpy(data, temp_data + offset, count);
 }
 
 /**
@@ -1076,15 +1055,14 @@ static void rxm_prefetchable_single_read(uintptr_t addr, uint8_t *data,
  *
  * Return: a power of 2 closest to @num but not less than @num.
  */
-static inline uint16_t round_up_to_po2(uint16_t num)
-{
-    --num;
-    num |= num >> 1;
-    num |= num >> 2;
-    num |= num >> 4;
-    num |= num >> 8;
-    ++num;
-    return num;
+static inline uint16_t round_up_to_po2(uint16_t num) {
+  --num;
+  num |= num >> 1;
+  num |= num >> 2;
+  num |= num >> 4;
+  num |= num >> 8;
+  ++num;
+  return num;
 }
 
 /**
@@ -1097,14 +1075,13 @@ static inline uint16_t round_up_to_po2(uint16_t num)
  * Return: a bit mask for a number where the number is a power of 2 closest
  *         to @num but not greater than @num.
  */
-static inline uint16_t round_down_to_po2_mask(uint16_t num)
-{
-    num |= num >> 1;
-    num |= num >> 2;
-    num |= num >> 4;
-    num |= num >> 8;
-    num >>= 1;
-    return num;
+static inline uint16_t round_down_to_po2_mask(uint16_t num) {
+  num |= num >> 1;
+  num |= num >> 2;
+  num |= num >> 4;
+  num |= num >> 8;
+  num >>= 1;
+  return num;
 }
 
 /*
@@ -1135,19 +1112,16 @@ static inline uint16_t round_down_to_po2_mask(uint16_t num)
  * 256-bit movement requires AVX for 256-bit registers ymm0-ymm7/ymm15 as well
  * as the vmovdqa instruction.
  */
-static void custom_ioread256_x86(uint8_t *data, void __iomem *addr)
-{
+static void custom_ioread256_x86(uint8_t *data, void __iomem *addr) {
 #ifdef __AVX__
-    // Read from address location to 256-bit ymm1 register.
-    asm volatile("vmovdqa %0,%%ymm1"
-                 :
-                 :"m"(*(volatile uint8_t * __force) addr));
+  // Read from address location to 256-bit ymm1 register.
+  asm volatile("vmovdqa %0,%%ymm1" : : "m"(*(volatile uint8_t * __force) addr));
 
-    // Move data from ymm1 to data location.
-    asm volatile("vmovdqa %%ymm1,%0":"=m"(*data): :"memory");
-#else /* !__AVX__ */
-    custom_ioread128_x86(data, addr);
-    custom_ioread128_x86(data + 16, addr + 16);
+  // Move data from ymm1 to data location.
+  asm volatile("vmovdqa %%ymm1,%0" : "=m"(*data) : : "memory");
+#else  /* !__AVX__ */
+  custom_ioread128_x86(data, addr);
+  custom_ioread128_x86(data + 16, addr + 16);
 #endif /* !__AVX__ */
 }
 
@@ -1162,19 +1136,19 @@ static void custom_ioread256_x86(uint8_t *data, void __iomem *addr)
  * 256-bit movement requires AVX for 256-bit registers ymm0-ymm7/ymm15 as well
  * as the vmovdqa instruction.
  */
-static void custom_iowrite256_x86(uint8_t *data, void __iomem *addr)
-{
+static void custom_iowrite256_x86(uint8_t *data, void __iomem *addr) {
 #ifdef __AVX__
-    // Move data to 256-bit ymm1 register.
-    asm volatile("vmovdqa %0,%%ymm2": :"m"(*data));
+  // Move data to 256-bit ymm1 register.
+  asm volatile("vmovdqa %0,%%ymm2" : : "m"(*data));
 
-    // Write ymm1 register to address location.
-    asm volatile("vmovdqa %%ymm2,%0"
-                 :"=m"(*(volatile uint8_t * __force) addr)
-                 : :"memory");
-#else /* !__AVX__ */
-    custom_iowrite128_x86(data, addr);
-    custom_iowrite128_x86(data + 16, addr + 16);
+  // Write ymm1 register to address location.
+  asm volatile("vmovdqa %%ymm2,%0"
+               : "=m"(*(volatile uint8_t * __force) addr)
+               :
+               : "memory");
+#else  /* !__AVX__ */
+  custom_iowrite128_x86(data, addr);
+  custom_iowrite128_x86(data + 16, addr + 16);
 #endif /* !__AVX__ */
 }
 
@@ -1189,24 +1163,23 @@ static void custom_iowrite256_x86(uint8_t *data, void __iomem *addr)
  * 128-bit movement requires SSE2 for 128-bit registers xmm0-xmm7/xmm15 as well
  * as the movdqa instruction.
  */
-static void custom_ioread128_x86(uint8_t *data, void __iomem *addr)
-{
+static void custom_ioread128_x86(uint8_t *data, void __iomem *addr) {
 #ifdef __SSE2__
-    // Read from address location to 128-bit xmm1 register.
-    asm volatile("movdqa %0,%%xmm1"   // %0 -> xmm1 register
-                 :                    // no output
-                 :"m"(*(volatile uint8_t * __force) addr) // one input
-                 : );                 // no clobbering
+  // Read from address location to 128-bit xmm1 register.
+  asm volatile("movdqa %0,%%xmm1"                         // %0 -> xmm1 register
+               :                                          // no output
+               : "m"(*(volatile uint8_t * __force) addr)  // one input
+               :);                                        // no clobbering
 
-    // Move data from xmm1 to data location.
-    asm volatile("movdqa %%xmm1,%0"   // xmm1 register -> %0
-                 :"=m"(*data)         // one output
-                 :                    // no input
-                 :"memory" );         // clobbers memory
-#else /* !__SSE2__ */
-    custom_ioread64(data, addr);
-    custom_ioread64(data + 8, addr + 8);
-#endif /* !__SSE2__ */
+  // Move data from xmm1 to data location.
+  asm volatile("movdqa %%xmm1,%0"  // xmm1 register -> %0
+               : "=m"(*data)       // one output
+               :                   // no input
+               : "memory");        // clobbers memory
+#else                              /* !__SSE2__ */
+  custom_ioread64(data, addr);
+  custom_ioread64(data + 8, addr + 8);
+#endif                             /* !__SSE2__ */
 }
 
 /**
@@ -1220,23 +1193,23 @@ static void custom_ioread128_x86(uint8_t *data, void __iomem *addr)
  * 128-bit movement requires SSE2 for 128-bit registers xmm0-xmm7/xmm15 as well
  * as the movdqa instruction.
  */
-static void custom_iowrite128_x86(uint8_t *data, void __iomem *addr)
-{
+static void custom_iowrite128_x86(uint8_t *data, void __iomem *addr) {
 #ifdef __SSE2__
-    // Move data to 128-bit xmm2 register.
-    asm volatile("movdqa %0,%%xmm2"   // %0 -> xmm2 register
-                 :                    // no output
-                 :"m"(*data)          // one input
-                 : );                 // no clobbering
+  // Move data to 128-bit xmm2 register.
+  asm volatile("movdqa %0,%%xmm2"  // %0 -> xmm2 register
+               :                   // no output
+               : "m"(*data)        // one input
+               :);                 // no clobbering
 
-    // Write xmm1 register to address location.
-    asm volatile("movdqa %%xmm2,%0"   // xmm2 register -> %0
-                 :"=m"(*(volatile uint8_t * __force) addr)  // one output
-                 : :"memory");        // clobbers memory
-#else /* !__SSE2__ */
-    custom_iowrite64(data, addr);
-    custom_iowrite64(data + 8, addr + 8);
-#endif /* !__SSE2__ */
+  // Write xmm1 register to address location.
+  asm volatile("movdqa %%xmm2,%0"  // xmm2 register -> %0
+               : "=m"(*(volatile uint8_t * __force) addr)  // one output
+               :
+               : "memory");  // clobbers memory
+#else                        /* !__SSE2__ */
+  custom_iowrite64(data, addr);
+  custom_iowrite64(data + 8, addr + 8);
+#endif                       /* !__SSE2__ */
 }
 
 /**
@@ -1245,14 +1218,13 @@ static void custom_iowrite128_x86(uint8_t *data, void __iomem *addr)
  * @data: A pointer to the data buffer to save data read from the EP.
  * @addr: A pointer to the EP address to be targeted.
  */
-static void custom_ioread64(uint8_t *data, void __iomem *addr)
-{
+static void custom_ioread64(uint8_t *data, void __iomem *addr) {
 #ifdef CONFIG_64BIT
-    *(uint64_t *)data = readq(addr);
+  *(uint64_t *)data = readq(addr);
 #else  /* !CONFIG_64BIT */
-    *(uint32_t *)data = ioread32(addr);
-    *(uint32_t *)(data + 4) = ioread32(addr + 4);
-#endif  /* !CONFIG_64BIT */
+  *(uint32_t *)data = ioread32(addr);
+  *(uint32_t *)(data + 4) = ioread32(addr + 4);
+#endif /* !CONFIG_64BIT */
 }
 
 /**
@@ -1262,12 +1234,11 @@ static void custom_ioread64(uint8_t *data, void __iomem *addr)
  * @addr: A pointer to the EP address to be targeted.
  *
  */
-static void custom_iowrite64(uint8_t *data, void __iomem *addr)
-{
+static void custom_iowrite64(uint8_t *data, void __iomem *addr) {
 #ifdef CONFIG_64BIT
-    writeq(*(uint64_t *)data, addr);
-#else /* !CONFIG_64BIT */
-    iowrite32(*(uint32_t *)data, addr);
-    iowrite32(*(uint32_t *)(data + 4), addr + 4);
-#endif  /* !CONFIG_64BIT */
+  writeq(*(uint64_t *)data, addr);
+#else  /* !CONFIG_64BIT */
+  iowrite32(*(uint32_t *)data, addr);
+  iowrite32(*(uint32_t *)(data + 4), addr + 4);
+#endif /* !CONFIG_64BIT */
 }

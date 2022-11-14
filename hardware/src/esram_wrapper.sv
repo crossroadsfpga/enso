@@ -2,7 +2,7 @@
 
 module esram_wrapper(
     input  logic clk_esram_ref, //100 MHz
-    output logic esram_pll_lock, 
+    output logic esram_pll_lock,
 `ifdef USE_BRAM
     input logic clk_esram, //200 MHz
 `else

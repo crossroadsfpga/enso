@@ -1,13 +1,13 @@
 # (C) 2001-2019 Intel Corporation. All rights reserved.
-# Your use of Intel Corporation's design tools, logic functions and other 
-# software and tools, and its AMPP partner logic functions, and any output 
-# files from any of the foregoing (including device programming or simulation 
-# files), and any associated documentation or information are expressly subject 
-# to the terms and conditions of the Intel Program License Subscription 
-# Agreement, Intel FPGA IP License Agreement, or other applicable 
-# license agreement, including, without limitation, that your use is for the 
-# sole purpose of programming logic devices manufactured by Intel and sold by 
-# Intel or its authorized distributors.  Please refer to the applicable 
+# Your use of Intel Corporation's design tools, logic functions and other
+# software and tools, and its AMPP partner logic functions, and any output
+# files from any of the foregoing (including device programming or simulation
+# files), and any associated documentation or information are expressly subject
+# to the terms and conditions of the Intel Program License Subscription
+# Agreement, Intel FPGA IP License Agreement, or other applicable
+# license agreement, including, without limitation, that your use is for the
+# sole purpose of programming logic devices manufactured by Intel and sold by
+# Intel or its authorized distributors.  Please refer to the applicable
 # agreement for further details.
 
 
@@ -41,10 +41,10 @@ catch {
 #
 proc ai_post_message {msg_type msg {msg_context sta_only}} {
 #
-# Description: Posts a message to Quartus, depending on 
+# Description: Posts a message to Quartus, depending on
 # msg_context (sta_only, all)
-#              
-#              
+#
+#
 #
 # ----------------------------------------------------------------
 
@@ -148,7 +148,7 @@ foreach { inst } $instances {
         unset pins
     }
     array set pins $local_db($inst)
-   
+
     # Clock constraints
     create_generated_clock -name ${inst}_cpa_clk0 -source [get_pins $pins(src)] -divide_by $var(vco_divider) [get_pins $pins(itgt)]
     create_generated_clock -name ${inst}_cpa_clk1 -source [get_pins $pins(src)] -divide_by $var(vco_divider) [get_pins $pins(itgt1)]
@@ -156,11 +156,8 @@ foreach { inst } $instances {
     create_generated_clock -name ${inst}_clk1 -source [get_pins $pins(itgt1)] -divide_by 1 [get_pins $pins(tgt1)]
     if { $var(vco_div_internal) != 1} {
        # Skip this generated clock when VCO divisor is 1
-       create_generated_clock -name ${inst}_internal -source [get_pins $pins(src)] -divide_by $var(vco_div_internal) $pins(c0clk) 
+       create_generated_clock -name ${inst}_internal -source [get_pins $pins(src)] -divide_by $var(vco_div_internal) $pins(c0clk)
     }
 
-   
+
 }
-
-
-

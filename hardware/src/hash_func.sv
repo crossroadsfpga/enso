@@ -67,7 +67,7 @@ always@(posedge clk)begin
         a <= 32'hdeadbefb + key[31:0] + initval;
         b <= 32'hdeadbefb + key[63:32] + initval;
         c <= 32'hdeadbefb + key[95:64] + initval;
-        
+
         a1 <= a;
         b1 <= b;
         c1 <= (c ^ b) - {b[17:0],b[31:18]};

@@ -1,13 +1,13 @@
 # (C) 2001-2019 Intel Corporation. All rights reserved.
-# Your use of Intel Corporation's design tools, logic functions and other 
-# software and tools, and its AMPP partner logic functions, and any output 
-# files from any of the foregoing (including device programming or simulation 
-# files), and any associated documentation or information are expressly subject 
-# to the terms and conditions of the Intel Program License Subscription 
-# Agreement, Intel FPGA IP License Agreement, or other applicable 
-# license agreement, including, without limitation, that your use is for the 
-# sole purpose of programming logic devices manufactured by Intel and sold by 
-# Intel or its authorized distributors.  Please refer to the applicable 
+# Your use of Intel Corporation's design tools, logic functions and other
+# software and tools, and its AMPP partner logic functions, and any output
+# files from any of the foregoing (including device programming or simulation
+# files), and any associated documentation or information are expressly subject
+# to the terms and conditions of the Intel Program License Subscription
+# Agreement, Intel FPGA IP License Agreement, or other applicable
+# license agreement, including, without limitation, that your use is for the
+# sole purpose of programming logic devices manufactured by Intel and sold by
+# Intel or its authorized distributors.  Please refer to the applicable
 # agreement for further details.
 
 
@@ -21,10 +21,10 @@
 # FILE DESCRIPTION
 # ----------------
 # This file contains the traversal routines that are used by
-# esram_altera_iopll_1930_rnqonzq.sdc scripts. 
+# esram_altera_iopll_1930_rnqonzq.sdc scripts.
 #
-# These routines are only meant to support the SDC. 
-# Trying to using them in a different context can have unexpected 
+# These routines are only meant to support the SDC.
+# Trying to using them in a different context can have unexpected
 # results.
 
 set ::GLOBAL_top_esram_altera_iopll_1930_rnqonzq_corename_debug 0
@@ -44,7 +44,7 @@ proc get_warnings_disabled {} {
             break
         }
     }
-    return $local_disable_warnings 
+    return $local_disable_warnings
 }
 set ::GLOBAL_top_esram_altera_iopll_1930_rnqonzq_corename_disable_warnings [get_warnings_disabled]
 
@@ -52,10 +52,10 @@ set ::GLOBAL_top_esram_altera_iopll_1930_rnqonzq_corename_disable_warnings [get_
 #
 proc ai_post_message {msg_type msg {msg_context sta_only}} {
 #
-# Description: Posts a message to Quartus, depending on 
+# Description: Posts a message to Quartus, depending on
 # msg_context (sta_only, all)
-#              
-#              
+#
+#
 #
 # ----------------------------------------------------------------
 
@@ -81,7 +81,7 @@ proc ai_are_entity_names_on { } {
 # Description: Determines if the entity names option is on
 #
 # ----------------------------------------------------------------
-	return [set_project_mode -is_show_entity]	
+	return [set_project_mode -is_show_entity]
 }
 
 # ----------------------------------------------------------------
@@ -105,9 +105,9 @@ proc ai_initialize_pll_db { pll_db_par } {
 		set clock_data_dicts [ai_get_pll_pins $instname]
 		lassign $clock_data_dicts base_clock_data_dict gen_clock_data_dict
         print_clock_data $base_clock_data_dict
-        print_clock_data $gen_clock_data_dict 
+        print_clock_data $gen_clock_data_dict
 
-		set local_pll_db($instname) $clock_data_dicts 
+		set local_pll_db($instname) $clock_data_dicts
 	}
 }
 
@@ -139,7 +139,7 @@ proc ai_get_core_full_instance_list {corename} {
 # ----------------------------------------------------------------
 
 	set instance_list [design::get_instances -entity $corename]
-                               
+
 	if {[ llength $instance_list ] == 0} {
 
         if {!$::GLOBAL_top_esram_altera_iopll_1930_rnqonzq_corename_disable_warnings} {
@@ -171,12 +171,12 @@ proc ai_get_pin_node_name {pattern} {
     set num_pins [get_collection_size $pin_collection]
     if {$num_pins == 1} {
         foreach_in_collection id $pin_collection {
-            set node_name [get_node_info -name $id]	     
+            set node_name [get_node_info -name $id]
             return $node_name
         }
-    } 
+    }
     return ""
- 
+
 }
 
 # ----------------------------------------------------------------
@@ -196,7 +196,7 @@ proc print_clock_data {d} {
 #
 # Description: Prints clock data dict
 #
-# ---------------------------------------------------------------- 
+# ----------------------------------------------------------------
     dict for {clock_key info} $d {
         ai_post_message debug "Clock:  $clock_key"
         dict for {key val} $info {
@@ -216,10 +216,10 @@ proc ai_subst_instname {clock_data_dict patt} {
         dict with info {
             regsub -all "__inst_name__" $name $patt new_name
             regsub -all "__inst_name__" $pattern $patt new_pattern
-            
+
             dict set clock_data_dict $clock_key name $new_name
             dict set clock_data_dict $clock_key pattern $new_pattern
-            
+
             if {[dict exists $clock_data_dict $clock_key "through_pin" ]} {
                 regsub -all "__inst_name__" $through_pin $patt new_through_pin
                 dict set clock_data_dict $clock_key through_pin $new_through_pin
@@ -241,7 +241,7 @@ proc ai_update_genclk_div_mult {clock_data_dict pll_parameters_dict} {
     # Loop over dict to find the compensated counter's div value first.
     dict for {clock_key info} $clock_data_dict {
         dict with info {
-            if {[info exists counter_index]} { 
+            if {[info exists counter_index]} {
                 if {$counter_index == $clock_to_compensate} {
                     set compensated_counter_div [dict get $pll_parameters_dict c${counter_index}_total]
                 }
@@ -251,7 +251,7 @@ proc ai_update_genclk_div_mult {clock_data_dict pll_parameters_dict} {
     }
     dict for {clock_key info} $clock_data_dict {
         dict with info {
-            ai_post_message debug "Getting div/mult factors for clock $clock_key" 
+            ai_post_message debug "Getting div/mult factors for clock $clock_key"
 
             set ccnt -1
             if {[info exists counter_index]} {
@@ -307,10 +307,10 @@ proc ai_set_genclk_pin_info {clock_data_dict} {
                 # Always set valid to true if we found the pin node
                 ai_post_message debug "Setting clock as valid."
                 dict set clock_data_dict $clock_key is_valid true
-                
+
                 # This for loop should only loop once.
                 foreach_in_collection id $pin_collection {
-                    set node_name [get_node_info -name $id]	     
+                    set node_name [get_node_info -name $id]
                     dict set clock_data_dict $clock_key pin_id $id
                     dict set clock_data_dict $clock_key pin_node_name $node_name
                 }
@@ -318,7 +318,7 @@ proc ai_set_genclk_pin_info {clock_data_dict} {
                 # set key "exists" on the clock info dict.
                 dict set clock_data_dict $clock_key exists [ai_clock_exists $node_name]
 
-            
+
             } else {
                 dict set clock_data_dict $clock_key is_valid false
             }
@@ -326,9 +326,9 @@ proc ai_set_genclk_pin_info {clock_data_dict} {
         }
     }
     return $clock_data_dict
-    
-    
-} 
+
+
+}
 # ----------------------------------------------------------------
 #
 proc ai_set_baseclk_pin_info {clock_data_dict refclk_data_dict} {
@@ -342,12 +342,12 @@ proc ai_set_baseclk_pin_info {clock_data_dict refclk_data_dict} {
     dict for {clock_key info} $clock_data_dict {
         dict with info {
             ai_post_message debug "Setting pin info for clock $clock_key"
-            
+
             # For each clock in refclk dict, find the one whose pin name
             # matches the pattern in baseclk dict. WE need to do this since
             # we dont find refclk nodes with patterns, but rather by traversal
             # of netlist from outclk backwards.
-            
+
             set node_name ""
             dict for {clock_id info} $refclk_data_dict {
                 dict with info {
@@ -370,7 +370,7 @@ proc ai_set_baseclk_pin_info {clock_data_dict refclk_data_dict} {
         }
     }
     return $clock_data_dict
-    
+
 }
 proc ai_get_n_cnt_clock_node_name {gen_clock_data_dict} {
     dict for {clock_key info} $gen_clock_data_dict {
@@ -398,12 +398,12 @@ proc ai_update_baseclk_data {base_clock_data_dict pll_parameters_dict} {
         dict with info {
             if {$is_main_refclk} {
                 set ref_period [dict get $pll_parameters_dict refclk_period]
-                set ref_period [expr round($ref_period * 1000.0)/1000.0] 
+                set ref_period [expr round($ref_period * 1000.0)/1000.0]
                 set ref_period [format %.3f $ref_period]
                 dict set base_clock_data_dict $base_clock_key period $ref_period
 
                 set half_period [expr $ref_period /2]
-                set half_period [expr round($half_period * 1000.0)/1000.0] 
+                set half_period [expr round($half_period * 1000.0)/1000.0]
                 set half_period [format %.3f $half_period]
                 dict set base_clock_data_dict $base_clock_key half_period $half_period
             }
@@ -453,7 +453,7 @@ proc ai_update_genclk_sources {base_clock_data_dict gen_clock_data_dict pll_para
                     }
                 }
             }
- 
+
             if {$clock_key != "n_cnt_clock" && ![dict get $pll_parameters_dict n_bypass]} {
                 set src "n_cnt_clock"
             }
@@ -463,10 +463,10 @@ proc ai_update_genclk_sources {base_clock_data_dict gen_clock_data_dict pll_para
             } elseif {$src == "n_cnt_clock"} {
                 set src_ [ai_get_n_cnt_clock_node_name $gen_clock_data_dict]
             } else {
-                set src_ "" 
+                set src_ ""
                 ai_post_message "warning" "Undefined clock source: $src"
 
-                dict set gen_clock_data_dict $clock_key is_valid false 
+                dict set gen_clock_data_dict $clock_key is_valid false
             }
 
             if {$clock_key != "n_cnt_clock" && $clock_key != "vcoph" && $vcoph_exists} {
@@ -476,8 +476,8 @@ proc ai_update_genclk_sources {base_clock_data_dict gen_clock_data_dict pll_para
             dict set gen_clock_data_dict $clock_key src $src_
         }
     }
-    return $gen_clock_data_dict 
-    
+    return $gen_clock_data_dict
+
 }
 proc ai_invalidate_clocks {clock_data_dict} {
     # Set the is_valid flag on each clock to false
@@ -501,7 +501,7 @@ proc ai_get_first_outclk_node {clock_data_dict} {
     if {$outclk_pin_id == "None"} {
         ai_post_message "warning" "Could not find any valid outclks"
     }
-    return $outclk_pin_id 
+    return $outclk_pin_id
 }
 # ----------------------------------------------------------------
 #
@@ -518,12 +518,12 @@ proc ai_get_pll_pins { instname } {
     set gen_clock_data_dict [ai_subst_instname $gen_clock_data_dict $instname]
 
 
-    set pll_parameters_dict [ai_get_pll_atom_parameters $instname] 
+    set pll_parameters_dict [ai_get_pll_atom_parameters $instname]
     set gen_clock_data_dict [ai_set_genclk_pin_info $gen_clock_data_dict]
 
     ai_post_message debug "gen_clock_data_dict initial: "
-    print_clock_data $gen_clock_data_dict 
-    
+    print_clock_data $gen_clock_data_dict
+
     # Traverse the first generated clock back to find FPGA pins for refclks.
     set outclk_node_id [ai_get_first_outclk_node $gen_clock_data_dict]
     if {$outclk_node_id != "None"} {
@@ -533,10 +533,10 @@ proc ai_get_pll_pins { instname } {
 
         set base_clock_data_dict [ai_set_baseclk_pin_info $base_clock_data_dict $refclk_data_dict]
         set gen_clock_data_dict [ai_update_genclk_sources $base_clock_data_dict $gen_clock_data_dict $pll_parameters_dict]
-        set gen_clock_data_dict [ai_update_genclk_div_mult $gen_clock_data_dict $pll_parameters_dict] 
-        set base_clock_data_dict [ai_update_baseclk_data $base_clock_data_dict $pll_parameters_dict] 
+        set gen_clock_data_dict [ai_update_genclk_div_mult $gen_clock_data_dict $pll_parameters_dict]
+        set base_clock_data_dict [ai_update_baseclk_data $base_clock_data_dict $pll_parameters_dict]
         ai_post_message debug "base_clock_data_dict: "
-        print_clock_data $base_clock_data_dict 
+        print_clock_data $base_clock_data_dict
         ai_post_message debug "gen_clock_data_dict final: "
         print_clock_data $gen_clock_data_dict
     } else {
@@ -544,9 +544,9 @@ proc ai_get_pll_pins { instname } {
         # if no output clock was found
         set gen_clock_data_dict [ai_invalidate_clocks $gen_clock_data_dict]
     }
-    
+
     return [list $base_clock_data_dict $gen_clock_data_dict]
-    
+
 }
 
 # ----------------------------------------------------------------
@@ -559,7 +559,7 @@ proc ai_get_input_clk_info { outclk_pin_id } {
 #
 # ----------------------------------------------------------------
 	if {[ai_is_node_type_pll_clk $outclk_pin_id]} {
-        #stores the refclk pin ids that were found by tracing the 
+        #stores the refclk pin ids that were found by tracing the
         #output clocks back up
 		array set refclk_array [list]
 		ai_traverse_fanin_up_to_depth $outclk_pin_id ai_is_node_type_pll_inclk clock refclk_array 20
@@ -580,7 +580,7 @@ proc ai_get_input_clk_info { outclk_pin_id } {
         #   }
         # }
         set refclk_data [dict create]
-        
+
         set clock_id 0
 
         #only works if there is either 1 or 2 refclks
@@ -590,16 +590,16 @@ proc ai_get_input_clk_info { outclk_pin_id } {
                 array set user_refclk_array [list]
                 array unset refclk_array
                 array unset user_refclk_array [list]
-					 
+
                 ai_traverse_fanin_up_to_depth $refclk_pin_id ai_is_node_type_user_clock clock user_refclk_array 5
                 ai_traverse_fanin_up_to_depth $refclk_pin_id ai_is_node_type_pin clock refclk_array 5
-					 
+
                 # If fed by any user specified clock (which could be specified at the pin level or at the
                 # buffer level), then use that pin as the source.
                 # Otherwise, trace back to the dedicated input pin (depth 5 so that we don't include global clocks)
                 if {[array size user_refclk_array] == 1 || [array size refclk_array] < 1} {
-                    # Fed by a user specified clock, a global clock etc. 
-                    dict set refclk_data $clock_id ref_pin_id $refclk_pin_id 
+                    # Fed by a user specified clock, a global clock etc.
+                    dict set refclk_data $clock_id ref_pin_id $refclk_pin_id
                     dict set refclk_data $clock_id ref_pin_node_name $refclk_info_array($refclk_pin_id)
                     dict set refclk_data $clock_id ref_port_id ""
                     dict set refclk_data $clock_id ref_port_node_name ""
@@ -608,7 +608,7 @@ proc ai_get_input_clk_info { outclk_pin_id } {
                     # Fed by a dedicated input pin
                     set port_id_ [lindex [array names refclk_array] 0]
 
-                    dict set refclk_data $clock_id ref_pin_id $refclk_pin_id 
+                    dict set refclk_data $clock_id ref_pin_id $refclk_pin_id
                     dict set refclk_data $clock_id ref_pin_node_name $refclk_info_array($refclk_pin_id)
                     dict set refclk_data $clock_id ref_port_id $port_id_
                     dict set refclk_data $clock_id ref_port_node_name [get_node_info -name $port_id_]
@@ -650,8 +650,8 @@ proc ai_is_node_type_user_clock { node_id } {
 # Description: Determines if a node is a user-defined clock
 #
 # ----------------------------------------------------------------
-    set node_name [get_node_info -name $node_id]	 
-   
+    set node_name [get_node_info -name $node_id]
+
     if {[ai_clock_exists $node_name]} {
         return 1
     } else {
@@ -668,7 +668,7 @@ proc ai_is_node_type_pll_clk { node_id } {
 # ----------------------------------------------------------------
 
 	set cell_id [get_node_info -cell $node_id]
-	
+
 	if {$cell_id == ""} {
 		set result 0
 	} else {
@@ -679,13 +679,13 @@ proc ai_is_node_type_pll_clk { node_id } {
 			if {[string match "*fourteennm_pll\|outclk\\\[*\\\]" $node_name]||[string match "*tennm_pll\|outclk\\\[*\\\]" $node_name]} {
 				set result 1
 			} elseif {[string match "*fourteennm_pll~ncntr_reg" $node_name]||[string match "*tennm_pll~ncntr_reg" $node_name]} {
-				set result 1				
+				set result 1
 			} elseif {[string match "*fourteennm_pll~c*cntr_reg" $node_name]||[string match "*tennm_pll~c*cntr_reg" $node_name]} {
-				set result 1				
+				set result 1
 			} elseif {[string match "*fourteennm_pll~mcntr_reg" $node_name]||[string match "*tennm_pll~mcntr_reg" $node_name]} {
-				set result 1				
+				set result 1
 			} elseif {[string match "*fourteennm_pll\|lvds_clk\\\[*\\\]" $node_name]||[string match "*tennm_pll\|lvds_clk\\\[*\\\]" $node_name]} {
-				set result 1				
+				set result 1
 			} elseif {[string match "*fourteennm_pll\|loaden\\\[*\\\]" $node_name]||[string match "*tennm_pll\|loaden\\\[*\\\]" $node_name]} {
 				set result 1
 			} elseif {[string match "*fourteennm_pll\|vcoph\\\[*\\\]" $node_name]||[string match "*tennm_pll\|vcoph\\\[*\\\]" $node_name]} {
@@ -714,7 +714,7 @@ proc ai_is_node_type_pll_inclk { node_id } {
 
 
 	set cell_id [get_node_info -cell $node_id]
-	
+
 	if {$cell_id == ""} {
 		set result 0
 	} else {
@@ -746,7 +746,7 @@ proc ai_traverse_fanin_up_to_depth { node_id match_command edge_type results_arr
 # ----------------------------------------------------------------
 
 	upvar 1 $results_array_name results
-	
+
 	if {$depth < 0} {
 		error "Internal error: Bad timing netlist search depth"
 	}
@@ -793,13 +793,13 @@ proc ai_round_3dp { x } {
 }
 
 # ----------------------------------------------------------------
-# Description: Checks whether a given clock already exists 
+# Description: Checks whether a given clock already exists
 # ----------------------------------------------------------------
 proc ai_clock_exists { clock_name } {
     set clock_found false
     set input_clocks_col [get_clocks -nowarn]
     set num_input_clocks [get_collection_size $input_clocks_col]
-    
+
     if {$num_input_clocks > 0} {
         foreach_in_collection iclk $input_clocks_col {
             if {![is_clock_defined $iclk]} {
@@ -823,7 +823,7 @@ proc ai_clock_exists { clock_name } {
         }
     }
 
-   return $clock_found 
+   return $clock_found
 }
 
 proc ai_get_pll_atom {instname} {
@@ -853,7 +853,7 @@ proc ai_get_mult_div_factors {clock_key src ncnt mcnt ccnt counter_index \
             set clock_mult 1
             set clock_div $ccnt
         } else {
-            # Handle NDFB mode. 
+            # Handle NDFB mode.
             # The equation for counter which is to be compensated: C_k = M / N
             # The equation for all other counters:                 C_!k = (M * C_k) / (N * C_!k)
             if {$compensation_mode == "NON_DEDICATED_SOURCE_SYNC" || $compensation_mode == "NON_DEDICATED_NORMAL"} {
@@ -882,13 +882,13 @@ proc ai_get_mult_div_factors {clock_key src ncnt mcnt ccnt counter_index \
 #
 proc ai_get_pll_atom_parameters {instname} {
 #
-# Description: Gets the PLL paramaters from the Quartus atom and not 
+# Description: Gets the PLL paramaters from the Quartus atom and not
 #              from the IP generated parameters.
 #
 # ----------------------------------------------------------------
 
     set pll_atom [ai_get_pll_atom $instname]
-																			 
+
 	dict set pll_params compensation_mode [get_atom_node_info -key ENUM_IOPLL_FEEDBACK -node $pll_atom]
 	dict set pll_params clock_to_compensate [get_atom_node_info -key INT_IOPLL_CLOCK_TO_COMPENSATE -node $pll_atom]
 
@@ -957,12 +957,11 @@ proc set_max_delay_in_fit_or_false_path_in_sta_through_no_warn {through_pin dela
 
     set through_pin_collection [get_pins -compatibility_mode -nowarn $through_pin]
     if {[get_collection_size $through_pin_collection] <= 0} { return }
-    
-    # if fit_flow == 1
-    if {$::TimeQuestInfo(nameofexecutable) == "quartus_fit" } { 
-        set_max_delay -through $through_pin_collection $delay
-    } else { 
-        set_false_path -through $through_pin_collection
-    } 
-} 
 
+    # if fit_flow == 1
+    if {$::TimeQuestInfo(nameofexecutable) == "quartus_fit" } {
+        set_max_delay -through $through_pin_collection $delay
+    } else {
+        set_false_path -through $through_pin_collection
+    }
+}

@@ -26,18 +26,18 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest, batch_size):
     sample_pkts = []
     ipv4_len = pkt_size - 14 - 4
     for i in range(nb_dest):
-        dst_ip = ipaddress.ip_address('192.168.0.0') + i
-        src_offset = int(i/(nb_dest/nb_src))
-        src_ip = ipaddress.ip_address('192.168.0.0') + src_offset
+        dst_ip = ipaddress.ip_address("192.168.0.0") + i
+        src_offset = int(i / (nb_dest / nb_src))
+        src_ip = ipaddress.ip_address("192.168.0.0") + src_offset
         pkt = (
-            Ether() /
-            IP(dst=str(dst_ip), src=str(src_ip), len=ipv4_len) /
-            UDP(dport=80, sport=8080)
+            Ether()
+            / IP(dst=str(dst_ip), src=str(src_ip), len=ipv4_len)
+            / UDP(dport=80, sport=8080)
         )
 
         missing_bytes = pkt_size - len(pkt) - 4  # no CRC
-        payload = binascii.unhexlify('00' * missing_bytes)
-        pkt = pkt/Raw(load=payload)
+        payload = binascii.unhexlify("00" * missing_bytes)
+        pkt = pkt / Raw(load=payload)
         pkt = bytes_encode(pkt)
         sample_pkts.append(pkt)
 
@@ -55,8 +55,11 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest, batch_size):
 
 def main():
     if (len(sys.argv) < 6) or (len(sys.argv) > 7):
-        print('Usage:', sys.argv[0],
-              'nb_pkts pkt_size nb_src nb_dest output_pcap [batch_size]')
+        print(
+            "Usage:",
+            sys.argv[0],
+            "nb_pkts pkt_size nb_src nb_dest output_pcap [batch_size]",
+        )
         sys.exit(1)
 
     nb_pkts = int(sys.argv[1])
@@ -70,7 +73,7 @@ def main():
         batch_size = 1
 
     if os.path.exists(out_pcap):
-        warnings.warn('Pcap with the same name already exists. Skipping.')
+        warnings.warn("Pcap with the same name already exists. Skipping.")
         sys.exit(0)
 
     generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest, batch_size)

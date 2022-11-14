@@ -174,7 +174,7 @@ module my_stats (
 
     logic tx_clear;
     logic tx_busy;
-    
+
     logic [31:0] tx_pkt_cnt;
 
     logic [31:0] pktID;
@@ -264,15 +264,15 @@ module my_stats (
     logic rd_valid_2;
     logic rd_valid_3;
 
-    logic [TRACKER_DWIDTH-1:0] tx_tracker_wdata;    
-    logic [TRACKER_AWIDTH-1:0] tx_tracker_rdaddr;      
-    logic tx_tracker_rden;     
-    logic [TRACKER_AWIDTH-1:0] tx_tracker_wraddr;   
+    logic [TRACKER_DWIDTH-1:0] tx_tracker_wdata;
+    logic [TRACKER_AWIDTH-1:0] tx_tracker_rdaddr;
+    logic tx_tracker_rden;
+    logic [TRACKER_AWIDTH-1:0] tx_tracker_wraddr;
     logic tx_tracker_wren;
     logic [TRACKER_DWIDTH-1:0] tx_tracker_rdata;
-    logic [TRACKER_AWIDTH-1:0] tx_tracker_rdaddr_r;      
-    logic tx_tracker_rden_r;     
-    logic tx_tracker_rd_valid;     
+    logic [TRACKER_AWIDTH-1:0] tx_tracker_rdaddr_r;
+    logic tx_tracker_rden_r;
+    logic tx_tracker_rd_valid;
 
 
     assign clear = reg_ctrl[0];
@@ -567,9 +567,9 @@ module my_stats (
         o_rx_data <= rx_data_r1;
     end
 
-    //Filter out src_mac  
+    //Filter out src_mac
     assign src_mac = rx_data[463:416];
-    assign src_mac_filter = 48'hb8599f0b3bd8; 
+    assign src_mac_filter = 48'hb8599f0b3bd8;
 
     always @(posedge clk_rx)begin
         if(rx_clear | arst)begin
@@ -679,7 +679,7 @@ module my_stats (
     ///////////////////////////
     //tx tracker
     //////////////////////////
-    //tracker first 512 tx pkts. 
+    //tracker first 512 tx pkts.
     always @(posedge clk_tx)begin
         if(tx_clear | arst)begin
             tx_tracker_wren <= 1'b0;
@@ -708,21 +708,21 @@ module my_stats (
     //Latency
     //////////////////////////
     always @(posedge clk_tx)begin
-        fetch_rd_1 <= fetch_rd;   
-        fetch_rd_2 <= fetch_rd_1;   
-        tx_fetch_rd <= fetch_rd_2;   
-        fetch_rd_addr_1 <= fetch_rd_addr;   
-        fetch_rd_addr_2 <= fetch_rd_addr_1;   
-        tx_fetch_rd_addr <= fetch_rd_addr_2;   
+        fetch_rd_1 <= fetch_rd;
+        fetch_rd_2 <= fetch_rd_1;
+        tx_fetch_rd <= fetch_rd_2;
+        fetch_rd_addr_1 <= fetch_rd_addr;
+        fetch_rd_addr_2 <= fetch_rd_addr_1;
+        tx_fetch_rd_addr <= fetch_rd_addr_2;
     end
 
     always @(posedge clk_status)begin
-        fetch_rd_data_1 <= tx_fetch_rd_data;   
-        fetch_rd_data_2 <= fetch_rd_data_1;   
-        fetch_rd_data <= fetch_rd_data_2;   
-        fetch_rd_valid_1 <= tx_fetch_rd_valid;   
-        fetch_rd_valid_2 <= fetch_rd_valid_1;   
-        fetch_rd_valid <= fetch_rd_valid_2;   
+        fetch_rd_data_1 <= tx_fetch_rd_data;
+        fetch_rd_data_2 <= fetch_rd_data_1;
+        fetch_rd_data <= fetch_rd_data_2;
+        fetch_rd_valid_1 <= tx_fetch_rd_valid;
+        fetch_rd_valid_2 <= fetch_rd_valid_1;
+        fetch_rd_valid <= fetch_rd_valid_2;
     end
 
 
@@ -783,7 +783,7 @@ module my_stats (
                             wr_data <= wr_data_1 + 1;
                         end else if (rd_addr_5 == rd_addr_2) begin
                             wr_data <= wr_data_2 + 1;
-                        end else begin 
+                        end else begin
                             wr_data <= rd_data + 1;
                         end
                     end
@@ -827,23 +827,23 @@ module my_stats (
         .DEPTH(1024)
     )
     latency_hist (
-    	.address     (rd_addr),    
-    	.clken       (1'b1),      
-    	.chipselect  (rd), 
-    	.write       (1'b0),      
-    	.readdata    (rd_data),   
-    	.writedata   (0),  
-        .byteenable  ({4{1'b1}}), 
-    	.address2    (wr_addr), 
-    	.chipselect2 (wr),  
-    	.clken2      (1'b1),                                                 
-    	.write2      (wr),                                                 
-    	.readdata2   (),     
-    	.writedata2  (wr_data),                                                 
-        .byteenable2 ({4{1'b1}}),                                                 
-    	.clk         (clk_tx),                             
-    	.reset       (tx_rst_sync_2),                   
-    	.reset_req   (tx_rst_sync_2)                
+    	.address     (rd_addr),
+    	.clken       (1'b1),
+    	.chipselect  (rd),
+    	.write       (1'b0),
+    	.readdata    (rd_data),
+    	.writedata   (0),
+        .byteenable  ({4{1'b1}}),
+    	.address2    (wr_addr),
+    	.chipselect2 (wr),
+    	.clken2      (1'b1),
+    	.write2      (wr),
+    	.readdata2   (),
+    	.writedata2  (wr_data),
+        .byteenable2 ({4{1'b1}}),
+    	.clk         (clk_tx),
+    	.reset       (tx_rst_sync_2),
+    	.reset_req   (tx_rst_sync_2)
     );
 
 	dc_fifo_reg_core  timestamp_sync (
@@ -864,13 +864,13 @@ module my_stats (
     )
 
     tx_pkt_tracker (
-    	.data       (tx_tracker_wdata),    
-    	.rdaddress  (tx_tracker_rdaddr),      
-    	.rdclock    (clk_status), 
-    	.rden       (tx_tracker_rden),      
-    	.wraddress  (tx_tracker_wraddr),   
-    	.wrclock    (clk_tx),  
-        .wren       (tx_tracker_wren), 
+    	.data       (tx_tracker_wdata),
+    	.rdaddress  (tx_tracker_rdaddr),
+    	.rdclock    (clk_status),
+    	.rden       (tx_tracker_rden),
+    	.wraddress  (tx_tracker_wraddr),
+    	.wrclock    (clk_tx),
+        .wren       (tx_tracker_wren),
     	.q          (tx_tracker_rdata)
     );
 */

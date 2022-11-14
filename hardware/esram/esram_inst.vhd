@@ -124,4 +124,3 @@
 			c7_wren_n_0     => CONNECTED_TO_c7_wren_n_0,     --           .s2c7_mea_n_0
 			refclk          => CONNECTED_TO_refclk           --           .clock
 		);
-

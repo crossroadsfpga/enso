@@ -278,7 +278,7 @@ always @(posedge pcie_clk) begin
             in_queue_in_valid <= 1;
 
             rx_pkt_head_upd_cnt <= rx_pkt_head_upd_cnt + 1;
-        end 
+        end
 
         if (pcie_rx_meta_buf_ready & pcie_rx_meta_buf_valid) begin
             automatic pkt_meta_with_queues_t meta;
@@ -287,7 +287,7 @@ always @(posedge pcie_clk) begin
             meta.size = pcie_rx_meta_buf_data.size;
             meta.descriptor_only = 0;
 
-            // If both the head update and the incoming metadata affect the same 
+            // If both the head update and the incoming metadata affect the same
             // packet queue, we merge the two and signal here that the packet
             // needs a descriptor.
             meta.needs_dsc = merge_head_pkt;

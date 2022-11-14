@@ -60,4 +60,3 @@ module esram (
 		input  wire        refclk           //           .clock
 	);
 endmodule
-

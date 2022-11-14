@@ -19,7 +19,7 @@ module  singledsp_altera_s10_native_fixed_point_dsp_181_op75vsa  (
             input  clk2;
 
             wire [36:0] sub_wire0;
-            wire [36:0] resulta = sub_wire0[36:0];    
+            wire [36:0] resulta = sub_wire0[36:0];
 
             fourteennm_mac        fourteennm_mac_component (
                                         .ax (ax),
@@ -50,21 +50,21 @@ module  singledsp_altera_s10_native_fixed_point_dsp_181_op75vsa  (
 					fourteennm_mac_component.input_pipeline_clock="0",
 					fourteennm_mac_component.second_pipeline_clock="0",
 					fourteennm_mac_component.input_systolic_clock="none",
-					fourteennm_mac_component.preadder_subtract_a = "false", 
-					fourteennm_mac_component.preadder_subtract_b = "false", 
-					fourteennm_mac_component.delay_scan_out_ay = "false", 
-					fourteennm_mac_component.delay_scan_out_by = "false", 
-					fourteennm_mac_component.ay_use_scan_in = "false", 
-					fourteennm_mac_component.by_use_scan_in = "false", 
-					fourteennm_mac_component.operand_source_may = "input", 
-					fourteennm_mac_component.operand_source_mby = "input", 
-					fourteennm_mac_component.operand_source_max = "input", 
-					fourteennm_mac_component.operand_source_mbx = "input", 
-					fourteennm_mac_component.signed_max = "false", 
-					fourteennm_mac_component.signed_may = "false", 
-					fourteennm_mac_component.signed_mbx = "false", 
-					fourteennm_mac_component.signed_mby = "false", 
-					fourteennm_mac_component.operation_mode = "m18x18_full", 
+					fourteennm_mac_component.preadder_subtract_a = "false",
+					fourteennm_mac_component.preadder_subtract_b = "false",
+					fourteennm_mac_component.delay_scan_out_ay = "false",
+					fourteennm_mac_component.delay_scan_out_by = "false",
+					fourteennm_mac_component.ay_use_scan_in = "false",
+					fourteennm_mac_component.by_use_scan_in = "false",
+					fourteennm_mac_component.operand_source_may = "input",
+					fourteennm_mac_component.operand_source_mby = "input",
+					fourteennm_mac_component.operand_source_max = "input",
+					fourteennm_mac_component.operand_source_mbx = "input",
+					fourteennm_mac_component.signed_max = "false",
+					fourteennm_mac_component.signed_may = "false",
+					fourteennm_mac_component.signed_mbx = "false",
+					fourteennm_mac_component.signed_mby = "false",
+					fourteennm_mac_component.operation_mode = "m18x18_full",
 					fourteennm_mac_component.clear_type = "none",
 					fourteennm_mac_component.ax_width = 18,
 					fourteennm_mac_component.ay_scan_in_width = 18,
@@ -88,4 +88,3 @@ module  singledsp_altera_s10_native_fixed_point_dsp_181_op75vsa  (
 					fourteennm_mac_component.coef_b_7 = 0;
 
 endmodule
-

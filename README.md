@@ -48,7 +48,7 @@ sudo apt install \
   clang-8 \
   clang++-8 \
   libpcap-dev
-sudo pip3 install meson ninja 
+sudo pip3 install meson ninja
 ```
 
 ### Compilation

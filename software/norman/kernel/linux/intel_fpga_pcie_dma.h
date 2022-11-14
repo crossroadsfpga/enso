@@ -41,8 +41,8 @@
  * SOFTWARE.
  */
 
-#ifndef INTEL_FPGA_PCIE_DMA_H
-#define INTEL_FPGA_PCIE_DMA_H
+#ifndef SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_DMA_H_
+#define SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_DMA_H_
 
 #include "intel_fpga_pcie_setup.h"
 
@@ -59,14 +59,14 @@
 #define ONCHIP_MEM_BASE 0x0ULL
 
 // Read and write are from host's perspective.
-#define RDESC_FIFO_ADDR     0x01002000ULL
-#define WDESC_FIFO_ADDR     0x01000000ULL
+#define RDESC_FIFO_ADDR 0x01002000ULL
+#define WDESC_FIFO_ADDR 0x01000000ULL
 #define RC_DESC_BASE_L_REG_OFFSET 0x000
 #define RC_DESC_BASE_H_REG_OFFSET 0x004
 #define EP_FIFO_BASE_L_REG_OFFSET 0x008
 #define EP_FIFO_BASE_H_REG_OFFSET 0x00C
-#define LPTR_REG_OFFSET           0x010
-#define DT_SIZE_REG_OFFSET        0x014
+#define LPTR_REG_OFFSET 0x010
+#define DT_SIZE_REG_OFFSET 0x014
 // Transfer from card to system - register offset
 #define DMA_FROM_DEVICE_REG_OFFSET 0x100
 // Transfer from system to card - register offset
@@ -77,11 +77,11 @@
 
 #define DMA_CTRL_BAR 0
 #define MAX_NUM_DESCS 130
-#define ONCHIP_MEM_BASE         0x40000000ULL
-#define WRITE_DESC_NORM_OFFSET  0x000ULL
-#define WRITE_DESC_PRIO_OFFSET  0x200ULL
-#define READ_DESC_NORM_OFFSET   0x800ULL
-#define READ_DESC_PRIO_OFFSET   0xA00ULL
+#define ONCHIP_MEM_BASE 0x40000000ULL
+#define WRITE_DESC_NORM_OFFSET 0x000ULL
+#define WRITE_DESC_PRIO_OFFSET 0x200ULL
+#define READ_DESC_NORM_OFFSET 0x800ULL
+#define READ_DESC_PRIO_OFFSET 0xA00ULL
 
 #endif /* End if DMA_VERSION_MAJOR==4 */
 
@@ -92,24 +92,26 @@
 
 struct desc_status {
   volatile uint32_t status[128];
-} __attribute__ ((packed)); // Aligned to 4-byte boundary
+} __attribute__((packed));  // Aligned to 4-byte boundary
 
 struct desc {
-  uint64_t src_addr;  // Card Address for C2S transfers, System Address for S2C transfers: in little-endian format
-  uint64_t dst_addr;  // System Address for C2S transfers and vice-versa: in little-endian format
-  uint32_t ctrl;      // Transfer Size in dwords plus control info, little-endian format
+  uint64_t src_addr;  // Card Address for C2S transfers, System Address for S2C
+                      // transfers: in little-endian format
+  uint64_t dst_addr;  // System Address for C2S transfers and vice-versa: in
+                      // little-endian format
+  uint32_t
+      ctrl;  // Transfer Size in dwords plus control info, little-endian format
   uint32_t reserved[3];
-} __attribute__ ((packed));
+} __attribute__((packed));
 
 struct desc_table {
   struct desc_status header;
   struct desc descriptor[MAX_NUM_DESCS];
-} __attribute__ ((packed));
-
+} __attribute__((packed));
 
 int intel_fpga_pcie_dma_probe(struct dev_bookkeep *dev_bk);
 void intel_fpga_pcie_dma_remove(struct dev_bookkeep *dev_bk);
 int intel_fpga_pcie_dma_queue(struct dev_bookkeep *dev_bk, unsigned long uarg);
 int intel_fpga_pcie_dma_send(struct dev_bookkeep *dev_bk, unsigned long uarg);
 
-#endif /* INTEL_FPGA_PCIE_DMA_H */
+#endif  // SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_DMA_H_

@@ -1,22 +1,22 @@
 # (C) 2001-2019 Intel Corporation. All rights reserved.
-# Your use of Intel Corporation's design tools, logic functions and other 
-# software and tools, and its AMPP partner logic functions, and any output 
-# files from any of the foregoing (including device programming or simulation 
-# files), and any associated documentation or information are expressly subject 
-# to the terms and conditions of the Intel Program License Subscription 
-# Agreement, Intel FPGA IP License Agreement, or other applicable 
-# license agreement, including, without limitation, that your use is for the 
-# sole purpose of programming logic devices manufactured by Intel and sold by 
-# Intel or its authorized distributors.  Please refer to the applicable 
+# Your use of Intel Corporation's design tools, logic functions and other
+# software and tools, and its AMPP partner logic functions, and any output
+# files from any of the foregoing (including device programming or simulation
+# files), and any associated documentation or information are expressly subject
+# to the terms and conditions of the Intel Program License Subscription
+# Agreement, Intel FPGA IP License Agreement, or other applicable
+# license agreement, including, without limitation, that your use is for the
+# sole purpose of programming logic devices manufactured by Intel and sold by
+# Intel or its authorized distributors.  Please refer to the applicable
 # agreement for further details.
 
 
-# ===================================================== 
+# =====================================================
 # 	Top level register map: Base Addresses
-# ===================================================== 
+# =====================================================
 source [file join [file dirname [info script]] "../sval_top/reg_map_inc.tcl"]
 
-# ================================================================== 
+# ==================================================================
 # 	PHY Registers
 # ==================================================================
 #
@@ -25,14 +25,14 @@ set ADDR_PHY_SCRTCH   0x01
 set ADDR_PHY_IPNAME2  0x02
 set ADDR_PHY_IPNAME1  0x03
 set ADDR_PHY_IPNAME0  0x04
-           
+
 # config bits, Alvin added 0x12
 set ADDR_PHY_PMACFG   0x10
 set ADDR_PHY_WORDLCK  0x12
 set ADDR_PHY_PMALOOP  0x13
 set ADDR_PHY_PHYFSEL  0x14
 set ADDR_PHY_PHYFLAG  0x15
-      
+
 # status flags, alvin added x28 and x29, removed x20
 set ADDR_PHY_FREQLOCK 0x21
 set ADDR_PHY_CLKMACOK 0x22
@@ -73,8 +73,8 @@ proc chkphy_revid {} {
 }
 
 proc setphy_lpon {} {
-    global BASE_RXPHY 
-    global ADDR_PHY_PMALOOP 
+    global BASE_RXPHY
+    global ADDR_PHY_PMALOOP
     # puts "RX PHY Register Access: Setting Serial PMA Loopback\n"
     reg_write   $BASE_RXPHY $ADDR_PHY_PMALOOP 0xffff
     reg_read    $BASE_RXPHY $ADDR_PHY_PMALOOP
@@ -158,7 +158,7 @@ proc setphy_lpoff {} {
 }
 
 proc chkphy_clk_speeds {} {
-    global BASE_RXPHY 
+    global BASE_RXPHY
     global ADDR_PHY_RFCLKHZ
     global ADDR_PHY_TXCLKHZ
     global ADDR_PHY_RXCLKHZ
@@ -180,23 +180,23 @@ proc chkphy_clk_speeds {} {
 }
 
 proc setphy_clear_frame_error {} {
-    global BASE_RXPHY 
-    global ADDR_PHY_CLRFRMER 
+    global BASE_RXPHY
+    global ADDR_PHY_CLRFRMER
     reg_write  $BASE_RXPHY $ADDR_PHY_CLRFRMER 0x01
     reg_write  $BASE_RXPHY $ADDR_PHY_CLRFRMER 0x00
 }
 
 proc chkphy_frame_error {} {
-    global 	BASE_RXPHY 
-    global 	ADDR_PHY_FRMERROR 
+    global 	BASE_RXPHY
+    global 	ADDR_PHY_FRMERROR
     set rxfrm_err [ reg_read   $BASE_RXPHY $ADDR_PHY_FRMERROR ]
-    setphy_clear_frame_error 
+    setphy_clear_frame_error
     return $rxfrm_err
 }
 
 proc read_phy_frame_error {} {
-    global 	BASE_RXPHY 
-    global 	ADDR_PHY_FRMERROR 
+    global 	BASE_RXPHY
+    global 	ADDR_PHY_FRMERROR
     set rxfrm_err [ reg_read   $BASE_RXPHY $ADDR_PHY_FRMERROR ]
     return $rxfrm_err
 }
@@ -238,7 +238,7 @@ proc tmpcntrst_off {} {settmp_rst_off}
 #
 
 proc phy_locked {} {
-    global BASE_RXPHY 
+    global BASE_RXPHY
     global ADDR_PHY_FALIGNED
     set locked [ reg_read $BASE_RXPHY $ADDR_PHY_FALIGNED ]
     return $locked

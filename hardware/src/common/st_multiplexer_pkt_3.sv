@@ -1,30 +1,30 @@
 // (C) 2001-2018 Intel Corporation. All rights reserved.
-// Your use of Intel Corporation's design tools, logic functions and other 
-// software and tools, and its AMPP partner logic functions, and any output 
-// files from any of the foregoing (including device programming or simulation 
-// files), and any associated documentation or information are expressly subject 
-// to the terms and conditions of the Intel Program License Subscription 
-// Agreement, Intel FPGA IP License Agreement, or other applicable 
-// license agreement, including, without limitation, that your use is for the 
-// sole purpose of programming logic devices manufactured by Intel and sold by 
-// Intel or its authorized distributors.  Please refer to the applicable 
+// Your use of Intel Corporation's design tools, logic functions and other
+// software and tools, and its AMPP partner logic functions, and any output
+// files from any of the foregoing (including device programming or simulation
+// files), and any associated documentation or information are expressly subject
+// to the terms and conditions of the Intel Program License Subscription
+// Agreement, Intel FPGA IP License Agreement, or other applicable
+// license agreement, including, without limitation, that your use is for the
+// sole purpose of programming logic devices manufactured by Intel and sold by
+// Intel or its authorized distributors.  Please refer to the applicable
 // agreement for further details.
 
 
 // altera message_level level1
 // (C) 2001-2013 Altera Corporation. All rights reserved.
-// Your use of Altera Corporation's design tools, logic functions and other 
-// software and tools, and its AMPP partner logic functions, and any output 
-// files any of the foregoing (including device programming or simulation 
-// files), and any associated documentation or information are expressly subject 
-// to the terms and conditions of the Altera Program License Subscription 
-// Agreement, Altera MegaCore Function License Agreement, or other applicable 
-// license agreement, including, without limitation, that your use is for the 
-// sole purpose of programming logic devices manufactured by Altera and sold by 
-// Altera or its authorized distributors.  Please refer to the applicable 
+// Your use of Altera Corporation's design tools, logic functions and other
+// software and tools, and its AMPP partner logic functions, and any output
+// files any of the foregoing (including device programming or simulation
+// files), and any associated documentation or information are expressly subject
+// to the terms and conditions of the Altera Program License Subscription
+// Agreement, Altera MegaCore Function License Agreement, or other applicable
+// license agreement, including, without limitation, that your use is for the
+// sole purpose of programming logic devices manufactured by Altera and sold by
+// Altera or its authorized distributors.  Please refer to the applicable
 // agreement for further details.
 
- 
+
 // $Id: //acds/rel/13.1/ip/.../avalon-st_multiplexer.sv.terp#1 $
 // $Revision: #1 $
 // $Date: 2013/09/09 $
@@ -56,12 +56,12 @@
 //   inPayloadWidth:     520
 //   use_packet_scheduling: true
 //   schedulingSize:        2
-//   schedulingSizeInBits:     1   
-//   
+//   schedulingSizeInBits:     1
+//
 // ------------------------------------------
 
 
-module st_multiplexer_pkt_3 (     
+module st_multiplexer_pkt_3 (
 // Interface: out
  output reg     [2-1: 0] out_channel,
  output reg              out_valid,
@@ -75,25 +75,25 @@ module st_multiplexer_pkt_3 (
  input           in0_valid,
  output reg      in0_ready,
  input [512-1: 0] in0_data,
-           
+
  input           in0_startofpacket,
- input           in0_endofpacket, 
+ input           in0_endofpacket,
  input [6-1: 0]  in0_empty,
 // Interface: in1
  input           in1_valid,
  output reg      in1_ready,
  input [512-1: 0] in1_data,
-           
+
  input           in1_startofpacket,
- input           in1_endofpacket, 
+ input           in1_endofpacket,
  input [6-1: 0]  in1_empty,
 // Interface: in2
  input           in2_valid,
  output reg      in2_ready,
  input [512-1: 0] in2_data,
-           
+
  input           in2_startofpacket,
- input           in2_endofpacket, 
+ input           in2_endofpacket,
  input [6-1: 0]  in2_empty,
   // Interface: clk
  input              clk,
@@ -108,16 +108,16 @@ module st_multiplexer_pkt_3 (
    reg [520 -1:0]      in0_payload;
    reg [520 -1:0]      in1_payload;
    reg [520 -1:0]      in2_payload;
- 
+
    reg [2-1:0]        decision = 0;
-   reg [2-1:0]        select = 0;   
+   reg [2-1:0]        select = 0;
    reg                selected_endofpacket = 0;
    reg                selected_valid;
    wire               out_valid_wire;
    wire               selected_ready;
-   reg   [520 -1 :0]   selected_payload;  
+   reg   [520 -1 :0]   selected_payload;
    reg                packet_in_progress;
-   wire [2-1:0]       out_select;   
+   wire [2-1:0]       out_select;
    wire [520 - 1:0]    out_payload;
 
    // ---------------------------------------------------------------------
@@ -128,35 +128,35 @@ module st_multiplexer_pkt_3 (
      in1_payload = {in1_data,in1_startofpacket,in1_endofpacket,in1_empty};
      in2_payload = {in2_data,in2_startofpacket,in2_endofpacket,in2_empty};
    end
-   
+
    // ---------------------------------------------------------------------
    //| Scheduling Algorithm
    // ---------------------------------------------------------------------
    always @* begin
-         
+
       decision = 0;
-      case(select) 
+      case(select)
          0 : begin
             if (in0_valid) decision = 0;
             if (in2_valid) decision = 2;
             if (in1_valid) decision = 1;
-         end  
+         end
          1 : begin
             if (in1_valid) decision = 1;
             if (in0_valid) decision = 0;
             if (in2_valid) decision = 2;
-         end  
+         end
          2 : begin
             if (in2_valid) decision = 2;
             if (in1_valid) decision = 1;
             if (in0_valid) decision = 0;
-         end  
+         end
          default : begin // Same as '0', should never get used.
             if (in0_valid) decision = 0;
             if (in2_valid) decision = 2;
             if (in1_valid) decision = 1;
-         end  
-      endcase   
+         end
+      endcase
    end
 
    // ---------------------------------------------------------------------
@@ -185,24 +185,24 @@ module st_multiplexer_pkt_3 (
    //| Mux
    // ---------------------------------------------------------------------
    always @* begin
-      case(select) 
+      case(select)
          0 : begin
-            selected_payload = in0_payload;         
+            selected_payload = in0_payload;
             selected_valid   = in0_valid;
             selected_endofpacket = in0_endofpacket;
-         end  
+         end
          1 : begin
-            selected_payload = in1_payload;         
+            selected_payload = in1_payload;
             selected_valid   = in1_valid;
             selected_endofpacket = in1_endofpacket;
-         end  
+         end
          2 : begin
-            selected_payload = in2_payload;         
+            selected_payload = in2_payload;
             selected_valid   = in2_valid;
             selected_endofpacket = in2_endofpacket;
-         end  
+         end
          default : begin
-            selected_payload = in0_payload;         
+            selected_payload = in0_payload;
             selected_valid = in0_valid;
             selected_endofpacket = in0_endofpacket;
          end
@@ -292,4 +292,3 @@ module test_multiplexer_3_multiplexer_181_qtdnhwa_1stage_pipeline
    end // always @ (negedge reset_n, posedge clk)
 
 endmodule //
-

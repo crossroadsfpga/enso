@@ -32,5 +32,3 @@ module  rom_2port_sim  (
     end
 
 endmodule
-
-

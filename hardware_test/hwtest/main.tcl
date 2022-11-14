@@ -1,13 +1,13 @@
 # (C) 2001-2019 Intel Corporation. All rights reserved.
-# Your use of Intel Corporation's design tools, logic functions and other 
-# software and tools, and its AMPP partner logic functions, and any output 
-# files from any of the foregoing (including device programming or simulation 
-# files), and any associated documentation or information are expressly subject 
-# to the terms and conditions of the Intel Program License Subscription 
-# Agreement, Intel FPGA IP License Agreement, or other applicable 
-# license agreement, including, without limitation, that your use is for the 
-# sole purpose of programming logic devices manufactured by Intel and sold by 
-# Intel or its authorized distributors.  Please refer to the applicable 
+# Your use of Intel Corporation's design tools, logic functions and other
+# software and tools, and its AMPP partner logic functions, and any output
+# files from any of the foregoing (including device programming or simulation
+# files), and any associated documentation or information are expressly subject
+# to the terms and conditions of the Intel Program License Subscription
+# Agreement, Intel FPGA IP License Agreement, or other applicable
+# license agreement, including, without limitation, that your use is for the
+# sole purpose of programming logic devices manufactured by Intel and sold by
+# Intel or its authorized distributors.  Please refer to the applicable
 # agreement for further details.
 
 #Zhipeng Start
@@ -164,7 +164,7 @@ proc run_txsftrst_cnt_err  {} {
               set phyfsel [ reg_read    $BASE_RXPHY $ADDR_PHY_PHYFSEL ]
               set phyflag [ reg_read    $BASE_RXPHY $ADDR_PHY_PHYFLAG ]
               set freqlock [ reg_read    $BASE_RXPHY $ADDR_PHY_FREQLOCK ]
-              set clkmacok  [ reg_read    $BASE_RXPHY $ADDR_PHY_CLKMACOK ] 
+              set clkmacok  [ reg_read    $BASE_RXPHY $ADDR_PHY_CLKMACOK ]
               set frmerror  [ reg_read    $BASE_RXPHY $ADDR_PHY_FRMERROR ]
               set clrfrmer  [ reg_read    $BASE_RXPHY $ADDR_PHY_CLRFRMER ]
               set sftreset  [ reg_read    $BASE_RXPHY $ADDR_PHY_SFTRESET ]
@@ -202,7 +202,7 @@ proc run_txsftrst_cnt_err  {} {
               set phyfsel [ reg_read    $BASE_RXPHY $ADDR_PHY_PHYFSEL ]
               set phyflag [ reg_read    $BASE_RXPHY $ADDR_PHY_PHYFLAG ]
               set freqlock [ reg_read    $BASE_RXPHY $ADDR_PHY_FREQLOCK ]
-              set clkmacok  [ reg_read    $BASE_RXPHY $ADDR_PHY_CLKMACOK ] 
+              set clkmacok  [ reg_read    $BASE_RXPHY $ADDR_PHY_CLKMACOK ]
               set frmerror  [ reg_read    $BASE_RXPHY $ADDR_PHY_FRMERROR ]
               set clrfrmer  [ reg_read    $BASE_RXPHY $ADDR_PHY_CLRFRMER ]
               set sftreset  [ reg_read    $BASE_RXPHY $ADDR_PHY_SFTRESET ]
@@ -370,7 +370,7 @@ proc run_external_serial_loopbk_pcs_am_chk  {} {
 proc run_internal_serial_loopbk_rxfreq_chk  {} {
     global BASE_RXPHY
     global ADDR_PHY_RXCLKHZ
-    
+
     for {set i 0} {$i < 3} {incr i} {
 
            loop_on
@@ -378,7 +378,7 @@ proc run_internal_serial_loopbk_rxfreq_chk  {} {
            rxsft_rst_off
            sleep 5
            set rxclk  [ expr [ reg_read $BASE_RXPHY $ADDR_PHY_RXCLKHZ ]]
-           
+
 
        if {$rxclk == 39060 | $rxclk == 39061  | $rxclk == 39062  | $rxclk == 39063 |  $rxclk == 39064 } {
               puts "  ============================================================"
@@ -398,7 +398,7 @@ proc run_internal_serial_loopbk_rxfreq_chk  {} {
 proc run_exnternal_serial_loopbk_rxfreq_chk  {} {
     global BASE_RXPHY
     global ADDR_PHY_RXCLKHZ
-    
+
     for {set i 0} {$i < 3} {incr i} {
 
            loop_off
@@ -406,7 +406,7 @@ proc run_exnternal_serial_loopbk_rxfreq_chk  {} {
            rxsft_rst_off
            sleep 5
            set rxclk  [ expr [ reg_read $BASE_RXPHY $ADDR_PHY_RXCLKHZ ]]
-           
+
 
        if {$rxclk == 39060 | $rxclk == 39061  | $rxclk == 39062  | $rxclk == 39063 |  $rxclk == 39064 } {
               puts "  ============================================================"
@@ -425,7 +425,7 @@ proc run_exnternal_serial_loopbk_rxfreq_chk  {} {
 proc run_internal_serial_loopbk_txfreq_chk  {} {
     global BASE_RXPHY
     global ADDR_PHY_TXCLKHZ
-    
+
     for {set i 0} {$i < 3} {incr i} {
 
            loop_on
@@ -433,7 +433,7 @@ proc run_internal_serial_loopbk_txfreq_chk  {} {
            txsft_rst_off
            sleep 5
            set txclk  [ expr [ reg_read $BASE_RXPHY $ADDR_PHY_TXCLKHZ ]]
-           
+
 
        if {$txclk == 39060 | $txclk == 39061  | $txclk == 39062  | $txclk == 39063 |  $txclk == 39064 } {
               puts "  ============================================================"
@@ -453,7 +453,7 @@ proc run_internal_serial_loopbk_txfreq_chk  {} {
 proc run_external_serial_loopbk_txfreq_chk  {} {
     global BASE_RXPHY
     global ADDR_PHY_TXCLKHZ
-    
+
     for {set i 0} {$i < 3} {incr i} {
 
            loop_off
@@ -461,7 +461,7 @@ proc run_external_serial_loopbk_txfreq_chk  {} {
            txsft_rst_off
            sleep 5
            set txclk  [ expr [ reg_read $BASE_RXPHY $ADDR_PHY_TXCLKHZ ]]
-           
+
 
        if {$txclk == 39060 | $txclk == 39061  | $txclk == 39062  | $txclk == 39063 |  $txclk == 39064 } {
               puts "  ============================================================"
@@ -480,7 +480,7 @@ proc run_external_serial_loopbk_txfreq_chk  {} {
 proc run_internal_serial_loopbk_reffreq_chk  {} {
     global BASE_RXPHY
     global ADDR_PHY_RFCLKHZ
-    
+
     for {set i 0} {$i < 3} {incr i} {
 
            loop_on
@@ -488,7 +488,7 @@ proc run_internal_serial_loopbk_reffreq_chk  {} {
            rxsft_rst_off
            sleep 5
            set refclk  [ expr [ reg_read $BASE_RXPHY $ADDR_PHY_RFCLKHZ ]]
-           
+
 
        if {$refclk == 64451 | $refclk == 64452  | $refclk == 64453  | $refclk == 64454 |  $refclk == 64455 } {
               puts "  ============================================================"
@@ -508,7 +508,7 @@ proc run_internal_serial_loopbk_reffreq_chk  {} {
 proc run_external_serial_loopbk_reffreq_chk  {} {
     global BASE_RXPHY
     global ADDR_PHY_RFCLKHZ
-    
+
     for {set i 0} {$i < 3} {incr i} {
 
            loop_off
@@ -516,7 +516,7 @@ proc run_external_serial_loopbk_reffreq_chk  {} {
            rxsft_rst_off
            sleep 5
            set refclk  [ expr [ reg_read $BASE_RXPHY $ADDR_PHY_RFCLKHZ ]]
-           
+
 
        if {$refclk == 64451 | $refclk == 64452  | $refclk == 64453  | $refclk == 64454 |  $refclk == 64455 } {
               puts "  ============================================================"
@@ -556,7 +556,7 @@ proc run_internal_serial_los_chk  {} {
               incr k
        }
     }
- 
+
        if {$j == 50} {
               puts "  ============================================================"
               puts "  ===== RX LOS Test -- 50 run with $j OK    =================="
@@ -650,7 +650,7 @@ proc run_internal_eiosyssftrst_chk  {} {
 #            return -1
        }
     }
- 
+
        if {$j == 50} {
               puts "  ============================================================"
               puts "  =====  SYS RST Test -- 50 run with $j OK    ================"
@@ -729,7 +729,7 @@ proc run_external_eiosyssftrst_chk  {} {
 
        }
     }
- 
+
        if {$j == 50} {
               puts "  =========================================================="
               puts "  =====  SYS RST Test -- 50 run with $j OK    =============="
@@ -772,7 +772,7 @@ proc run_internal_txsftrst_chk  {} {
               incr k
        }
     }
- 
+
        if {$j == 50} {
               puts "  ============================================================"
               puts "  ===== TX SOFT RST Test -- 50 run with $j OK    =============="
@@ -814,7 +814,7 @@ proc run_external_txsftrst_chk  {} {
               incr k
        }
     }
- 
+
        if {$j == 50} {
               puts "  ============================================================"
               puts "  ===== TX SOFT RST Test -- 50 run with $j OK    =============="
@@ -857,7 +857,7 @@ proc run_internal_rxsftrst_chk  {} {
               incr k
        }
     }
- 
+
        if {$j == 50} {
               puts "  ============================================================"
               puts "  ===== RX SOFT RST Test -- 50 run with $j OK    =============="
@@ -901,7 +901,7 @@ proc run_external_rxsftrst_chk  {} {
               incr k
        }
     }
- 
+
        if {$j == 50} {
               puts "  ============================================================"
               puts "  ===== RX SOFT RST Test -- 50 run with $j OK    =============="
@@ -917,6 +917,3 @@ proc run_external_rxsftrst_chk  {} {
           }
 
 }
-
-
-

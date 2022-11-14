@@ -2,7 +2,7 @@
 module basic_data_mover (
     input  logic         clk,
     input  logic         rst,
-    
+
     input  logic          meta_valid,
     input  var metadata_t meta_data,
     output logic          meta_ready,
@@ -11,11 +11,11 @@ module basic_data_mover (
     output logic                     pkt_buffer_read,
     input  logic                     pkt_buffer_readvalid,
     input  var flit_t                pkt_buffer_readdata,
-    
+
     output logic [PKT_AWIDTH-1:0] emptylist_in_data,
     output logic                  emptylist_in_valid,
     input  logic                  emptylist_in_ready,
-    
+
     // When set, routes all incoming packets back to Ethernet.
     input  logic disable_pcie,
 

@@ -64,17 +64,17 @@ module fifo_pkt_wrapper #(
 		.out_startofpacket (out_startofpacket),                    //  output,    width = 1,          .startofpacket
 		.out_endofpacket   (out_endofpacket),                      //  output,    width = 1,          .endofpacket
 		.out_empty         (out_empty),                            //  output,    width = 6,          .empty
-		.csr_address       (2'b00),                                // (terminated),                         
-		.csr_read          (1'b0),                                 // (terminated),                         
-		.csr_write         (1'b0),                                 // (terminated),                         
-		.csr_readdata      (),                                     // (terminated),                         
-		.csr_writedata     (32'b00000000000000000000000000000000), // (terminated),                         
-		.almost_full_data  (),                                     // (terminated),                         
-		.almost_empty_data (),                                     // (terminated),                         
-		.in_error          (1'b0),                                 // (terminated),                         
-		.out_error         (),                                     // (terminated),                         
-		.in_channel        (1'b0),                                 // (terminated),                         
-		.out_channel       ()                                      // (terminated),                         
+		.csr_address       (2'b00),                                // (terminated),
+		.csr_read          (1'b0),                                 // (terminated),
+		.csr_write         (1'b0),                                 // (terminated),
+		.csr_readdata      (),                                     // (terminated),
+		.csr_writedata     (32'b00000000000000000000000000000000), // (terminated),
+		.almost_full_data  (),                                     // (terminated),
+		.almost_empty_data (),                                     // (terminated),
+		.in_error          (1'b0),                                 // (terminated),
+		.out_error         (),                                     // (terminated),
+		.in_channel        (1'b0),                                 // (terminated),
+		.out_channel       ()                                      // (terminated),
 	);
 
 endmodule

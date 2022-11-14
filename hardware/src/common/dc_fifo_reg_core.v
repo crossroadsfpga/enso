@@ -14,9 +14,9 @@
 `timescale 1ns / 1ps
 // synthesis translate_on
 
-// turn off superfluous verilog processor warnings 
-// altera message_level Level1 
-// altera message_off 10034 10035 10036 10037 10230 10240 10030 13469 16735 16788 
+// turn off superfluous verilog processor warnings
+// altera message_level Level1
+// altera message_off 10034 10035 10036 10037 10230 10240 10030 13469 16735 16788
 
 module test_fifo_0_altera_avalon_fifo_181_hicnqoy_dual_clock_fifo (
                                                                     // inputs:
@@ -90,9 +90,9 @@ endmodule
 `timescale 1ns / 1ps
 // synthesis translate_on
 
-// turn off superfluous verilog processor warnings 
-// altera message_level Level1 
-// altera message_off 10034 10035 10036 10037 10230 10240 10030 13469 16735 16788 
+// turn off superfluous verilog processor warnings
+// altera message_level Level1
+// altera message_off 10034 10035 10036 10037 10230 10240 10030 13469 16735 16788
 
 module test_fifo_0_altera_avalon_fifo_181_hicnqoy_dcfifo_with_controls (
                                                                          // inputs:
@@ -148,9 +148,9 @@ endmodule
 `timescale 1ns / 1ps
 // synthesis translate_on
 
-// turn off superfluous verilog processor warnings 
-// altera message_level Level1 
-// altera message_off 10034 10035 10036 10037 10230 10240 10030 13469 16735 16788 
+// turn off superfluous verilog processor warnings
+// altera message_level Level1
+// altera message_off 10034 10035 10036 10037 10230 10240 10030 13469 16735 16788
 
 module dc_fifo_reg_core (
                                                     // inputs:
@@ -217,7 +217,7 @@ wire             wrreq;
     begin
       if (rdreset_n == 0)
           avalonst_source_valid <= 0;
-      else 
+      else
         avalonst_source_valid <= !rdempty;
     end
 
@@ -225,4 +225,3 @@ wire             wrreq;
   assign rdreq = !rdempty;
 
 endmodule
-

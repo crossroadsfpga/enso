@@ -1397,13 +1397,13 @@ set_global_assignment -entity "esram" -library "esram" -name IP_COMPONENT_PARAME
 
 set_global_assignment -library "altera_iopll_1930" -name VERILOG_FILE [file join $::quartus(qip_path) "altera_iopll_1930/synth/esram_altera_iopll_1930_rnqonzq.v"]
 set_instance_assignment -entity "esram_altera_iopll_1930_rnqonzq" -library "altera_iopll_1930" -name TCL_ENTITY_FILE [file join $::quartus(qip_path) "altera_iopll_1930/synth/esram_altera_iopll_1930_rnqonzq_parameters.tcl"]
-set_instance_assignment -entity "esram_altera_iopll_1930_rnqonzq" -library "altera_iopll_1930" -name SDC_ENTITY_FILE [file join $::quartus(qip_path) "altera_iopll_1930/synth/esram_altera_iopll_1930_rnqonzq.sdc"] -no_sdc_promotion  -no_auto_inst_discovery 
+set_instance_assignment -entity "esram_altera_iopll_1930_rnqonzq" -library "altera_iopll_1930" -name SDC_ENTITY_FILE [file join $::quartus(qip_path) "altera_iopll_1930/synth/esram_altera_iopll_1930_rnqonzq.sdc"] -no_sdc_promotion  -no_auto_inst_discovery
 set_instance_assignment -entity "esram_altera_iopll_1930_rnqonzq" -library "altera_iopll_1930" -name TCL_ENTITY_FILE [file join $::quartus(qip_path) "altera_iopll_1930/synth/esram_altera_iopll_1930_rnqonzq_pin_map.tcl"]
 set_global_assignment -library "altera_iopll_1930" -name VERILOG_FILE [file join $::quartus(qip_path) "altera_iopll_1930/synth/stratix10_altera_iopll.v"]
 set_global_assignment -library "esram_1913" -name VERILOG_FILE [file join $::quartus(qip_path) "esram_1913/synth/iopll.v"]
 set_global_assignment -library "esram_1913" -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "esram_1913/synth/esram_esram_1913_a3ainji.sv"]
 set_instance_assignment -entity "esram_esram_1913_a3ainji" -library "esram_1913" -name TCL_ENTITY_FILE [file join $::quartus(qip_path) "esram_1913/synth/stratix10_esram_sdc_parameters.tcl"]
-set_instance_assignment -entity "esram_esram_1913_a3ainji" -library "esram_1913" -name SDC_ENTITY_FILE [file join $::quartus(qip_path) "esram_1913/synth/stratix10_esram.sdc"] -no_sdc_promotion  -no_auto_inst_discovery 
+set_instance_assignment -entity "esram_esram_1913_a3ainji" -library "esram_1913" -name SDC_ENTITY_FILE [file join $::quartus(qip_path) "esram_1913/synth/stratix10_esram.sdc"] -no_sdc_promotion  -no_auto_inst_discovery
 set_global_assignment -library "esram" -name VERILOG_FILE [file join $::quartus(qip_path) "synth/esram.v"]
 
 
@@ -1413,4 +1413,3 @@ set_global_assignment -entity "esram_esram_1913_a3ainji" -library "esram_1913" -
 set_global_assignment -entity "esram_altera_iopll_1930_rnqonzq" -library "altera_iopll_1930" -name IP_TOOL_NAME "altera_iopll"
 set_global_assignment -entity "esram_altera_iopll_1930_rnqonzq" -library "altera_iopll_1930" -name IP_TOOL_VERSION "19.3.0"
 set_global_assignment -entity "esram_altera_iopll_1930_rnqonzq" -library "altera_iopll_1930" -name IP_TOOL_ENV "QsysPrimePro"
-

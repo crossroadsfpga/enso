@@ -32,7 +32,7 @@ module tb;
 
 `define SKIP_PCIE_RD  // Set it to skip PCIe read after simulation is done.
 
-`define CHECK_QUEUE_HEAD_TAIL // Set it to check head and tail pointers for 
+`define CHECK_QUEUE_HEAD_TAIL // Set it to check head and tail pointers for
                               // every pkt queue at the end of the simulation.
 
 // `define TAG_FLITS  // Set it to include a flit counter in all sent flits.
@@ -789,7 +789,7 @@ always @(posedge clk_pcie) begin
         if (cnt >= cnt_delay) begin
           automatic flow_table_config_t flow_table_config = 0;
           automatic logic [31:0] new_dsc_tail;
-          automatic logic [31:0] dsc_q = 
+          automatic logic [31:0] dsc_q =
             nb_config_queues[31:0] / pkt_per_dsc_queue;
           automatic logic [31:0] tx_dsc_q_addr;
 
@@ -831,7 +831,7 @@ always @(posedge clk_pcie) begin
         if (cnt >= cnt_delay) begin
           automatic rate_limit_config_t rate_limit_config = 0;
           automatic logic [31:0] new_dsc_tail;
-          automatic logic [31:0] dsc_q = 
+          automatic logic [31:0] dsc_q =
             nb_config_queues[31:0] / pkt_per_dsc_queue;
           automatic logic [31:0] tx_dsc_q_addr;
 
@@ -927,7 +927,7 @@ always @(posedge clk_pcie) begin
         automatic logic [31:0] tx_dsc_buf_queue;
         automatic pcie_tx_dsc_t tx_dsc = delayed_pcie_bas_writedata;
         automatic pcie_tx_dsc_t old_tx_dsc = ram[cur_queue][cur_address];
-        
+
         assert(tx_dsc.signal == 0) else $fatal;
 
         // If config dsc, do nothing.
@@ -1246,7 +1246,7 @@ pcie_rddm_queue (
   .in_valid      (pcie_rddm_write),
   .in_ready      (pcie_rddm_queue_in_ready),
   .out_data      ({
-    top_pcie_rddm_writedata, 
+    top_pcie_rddm_writedata,
     top_pcie_rddm_byteenable,
     top_pcie_rddm_address
   }),
@@ -1254,7 +1254,7 @@ pcie_rddm_queue (
   .out_ready     (!top_pcie_rddm_waitrequest)
 );
 
-assign top_pcie_rddm_write = 
+assign top_pcie_rddm_write =
   pcie_rddm_queue_out_valid && !top_pcie_rddm_waitrequest;
 
 `ASSERT_KNOWN(PcieRddmWriteKnown, pcie_rddm_write, clk_pcie, rst)
@@ -1408,7 +1408,7 @@ always @(posedge clk_status) begin
               end else if (((s_addr - NB_CONTROL_REGS) % 4) == 1) begin
                 automatic int queue =
                     (s_addr[JTAG_ADDR_WIDTH-1:0] - NB_CONTROL_REGS) / 4;
-                assert (last_tail == top_readdata) else begin 
+                assert (last_tail == top_readdata) else begin
                   $display("queue %d: tail: %h, head: %h", queue, last_tail,
                            top_readdata);
                 end
@@ -1426,7 +1426,7 @@ always @(posedge clk_status) begin
               + REGS_PER_PKT_Q * MAX_NB_FLOWS
               + NB_CONTROL_REGS;
             s_writedata <= 0;
-            
+
             `ifdef CHECK_QUEUE_HEAD_TAIL
               s_read <= 0;
               conf_state <= IDLE;

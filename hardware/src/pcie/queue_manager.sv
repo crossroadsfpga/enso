@@ -7,16 +7,16 @@
 module queue_manager #(
     /// Number of queue in the module.
     parameter NB_QUEUES,
-    
+
     /// Number of bits in the extra metadata.
     parameter EXTRA_META_BITS,
-    
+
     /// Set to 1 to advance pointer by a single unit.
     parameter UNIT_POINTER=0,
-    
+
     /// Queue ID width.
     parameter QUEUE_ID_WIDTH=$clog2(NB_QUEUES),
-    
+
     /// Depth of the input FIFO.
     parameter IN_FIFO_DEPTH=16,
 

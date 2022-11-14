@@ -534,7 +534,7 @@ always @(posedge clk) begin
                     <= (tx_dsc_tails[dsc_q] + 1) % DSC_BUF_SIZE;
                 end else begin
                   tx_dsc_tails[dsc_q]
-                    <= (tx_dsc_tails[dsc_q] + 2) % DSC_BUF_SIZE; 
+                    <= (tx_dsc_tails[dsc_q] + 2) % DSC_BUF_SIZE;
                 end
               end
 

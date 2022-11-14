@@ -110,7 +110,7 @@ always @(posedge clk) begin
 
   tx_compl_buf_ready <= 1;
   tx_compl_buf_occup <= 0;
-  
+
   pcie_rddm_prio_ready <= 1;
 
   pcie_rddm_tx_valid <= 0;

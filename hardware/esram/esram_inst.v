@@ -59,4 +59,3 @@
 		.c7_wren_n_0     (_connected_to_c7_wren_n_0_),     //   input,   width = 1,           .s2c7_mea_n_0
 		.refclk          (_connected_to_refclk_)           //   input,   width = 1,           .clock
 	);
-

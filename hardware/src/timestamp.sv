@@ -88,9 +88,9 @@ always_comb begin
 
     tx_in_pkt_ready = tx_out_pkt_ready;
 
-    rtt = timestamp_counter - 
+    rtt = timestamp_counter -
         rx_in_pkt_data[REVERSED_OFFSET +: TIMESTAMP_WIDTH];
-    
+
     if (timestamp_enabled) begin
         // Timestamp TX packets.
         if (tx_in_pkt_sop) begin

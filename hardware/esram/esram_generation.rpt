@@ -5,7 +5,7 @@ Info: esram.esram_0: Targeting device family: Stratix 10.
 Info: esram.esram_0.iopll: Able to implement PLL with user settings
 Info: qsys-generate succeeded.
 Info: Finished: Create block symbol file (.bsf)
-Info: 
+Info:
 Info: Starting: Create HDL design files for synthesis
 Info: qsys-generate /home/zzhao1/project/gen_esram_19_3/esram.ip --synthesis=VERILOG --output-directory=/home/zzhao1/project/gen_esram_19_3/esram --family="Stratix 10" --part=1SM21BHU2F53E2VGS1
 Info: esram.esram_0: Targeting device family: Stratix 10.

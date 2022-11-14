@@ -41,14 +41,14 @@
  * SOFTWARE.
  */
 
-#ifndef INTEL_FPGA_PCIE_SETUP_H
-#define INTEL_FPGA_PCIE_SETUP_H
+#ifndef SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_SETUP_H_
+#define SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_SETUP_H_
 
 #include <linux/cdev.h>
 #include <linux/dma-mapping.h>
 #include <linux/fs.h>
-#include <linux/ioctl.h>
 #include <linux/init.h>
+#include <linux/ioctl.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/ktime.h>
@@ -56,27 +56,23 @@
 #include <linux/moduleparam.h>
 #include <linux/mutex.h>
 #include <linux/pci.h>
-#include <linux/types.h>
 #include <linux/radix-tree.h>
 #include <linux/sched.h>
+#include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/uio_driver.h>
 #include <linux/version.h>
 
-#include "event_queue.h"
-
 #include "../intel_fpga_pcie_ip_params.h"
-
+#include "event_queue.h"
 
 #define INTEL_FPGA_VENDOR_ID 0x1172
 #define INTEL_FPGA_DEVICE_ID 0x09C4
 #define INTEL_FPGA_PCIE_DRIVER_NAME "intel_fpga_pcie_drv"
 
-
 #ifndef PCI_DEVID
-#define PCI_DEVID(bus, devfn)  ((((u16)(bus)) << 8) | (devfn))
+#define PCI_DEVID(bus, devfn) ((((u16)(bus)) << 8) | (devfn))
 #endif
-
 
 /**
  * struct bar_info - Contains information about a single BAR.
@@ -88,10 +84,10 @@
  *                      HPRXM within the end-point.
  */
 struct bar_info {
-    void * __iomem base_addr;
-    ssize_t len;
-    bool is_prefetchable;
-    bool is_hprxm;
+  void *__iomem base_addr;
+  ssize_t len;
+  bool is_prefetchable;
+  bool is_hprxm;
 };
 
 /**
@@ -103,9 +99,9 @@ struct bar_info {
  * @size:           Memory size in number of bytes.
  */
 struct kmem_info {
-    void *virt_addr;
-    dma_addr_t bus_addr;
-    size_t size;
+  void *virt_addr;
+  dma_addr_t bus_addr;
+  size_t size;
 };
 
 /**
@@ -127,14 +123,14 @@ struct kmem_info {
  * @last_ptr_wrap:  Indicates that the last pointer has wrapped around.
  */
 struct dma_info {
-    unsigned int timer;
+  unsigned int timer;
 
-    // DMA descriptor tables, one for each direction
-    struct desc_table *dt_virt_addr[2];
-    dma_addr_t dt_bus_addr[2];
-    uint8_t last_ptr[2];
-    uint8_t num_pending[2];
-    bool last_ptr_wrap[2];
+  // DMA descriptor tables, one for each direction
+  struct desc_table *dt_virt_addr[2];
+  dma_addr_t dt_bus_addr[2];
+  uint8_t last_ptr[2];
+  uint8_t num_pending[2];
+  bool last_ptr_wrap[2];
 };
 
 /**
@@ -151,15 +147,14 @@ struct dma_info {
  *                  used in interrupt context.
  */
 struct global_bookkeep {
-    struct cdev cdev;
-    struct class *chr_class;
-    int chr_major;
-    int chr_minor;
-    struct radix_tree_root dev_tree;
-    struct mutex lock;
-    event_kthread_data_t event_kthread_data;
+  struct cdev cdev;
+  struct class *chr_class;
+  int chr_major;
+  int chr_minor;
+  struct radix_tree_root dev_tree;
+  struct mutex lock;
+  event_kthread_data_t event_kthread_data;
 };
-
 
 /**
  * struct dev_bookkeep - Bookkeeping structure per device.
@@ -177,16 +172,15 @@ struct global_bookkeep {
  * @info:           uio info.
  */
 struct dev_bookkeep {
-    struct pci_dev *dev;
-    uint16_t bdf;
-    struct bar_info bar[6];
-    struct kmem_info kmem_info;
-    struct dma_info dma_info;
-    int chr_open_cnt;
-    struct semaphore sem;
-    struct uio_info info;
+  struct pci_dev *dev;
+  uint16_t bdf;
+  struct bar_info bar[6];
+  struct kmem_info kmem_info;
+  struct dma_info dma_info;
+  int chr_open_cnt;
+  struct semaphore sem;
+  struct uio_info info;
 };
-
 
 /**
  * struct chr_dev_bookkeep - Bookkeeping structure per character device
@@ -200,17 +194,15 @@ struct dev_bookkeep {
  *                  accessed.
  */
 struct chr_dev_bookkeep {
-    struct dev_bookkeep *dev_bk;
-    bool use_cmd;
-    unsigned int cur_bar_num;
+  struct dev_bookkeep *dev_bk;
+  bool use_cmd;
+  unsigned int cur_bar_num;
 };
 
 int intel_fpga_pcie_probe(struct pci_dev *dev, const struct pci_device_id *id);
 void intel_fpga_pcie_remove(struct pci_dev *dev);
 int intel_fpga_pcie_sriov_configure(struct pci_dev *dev, int numvfs);
 
-
 extern struct global_bookkeep global_bk;
 
-
-#endif /* INTEL_FPGA_PCIE_SETUP_H */
+#endif  // SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_SETUP_H_

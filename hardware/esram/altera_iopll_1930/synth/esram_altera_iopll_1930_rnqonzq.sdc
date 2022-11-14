@@ -1,13 +1,13 @@
 # (C) 2001-2019 Intel Corporation. All rights reserved.
-# Your use of Intel Corporation's design tools, logic functions and other 
-# software and tools, and its AMPP partner logic functions, and any output 
-# files from any of the foregoing (including device programming or simulation 
-# files), and any associated documentation or information are expressly subject 
-# to the terms and conditions of the Intel Program License Subscription 
-# Agreement, Intel FPGA IP License Agreement, or other applicable 
-# license agreement, including, without limitation, that your use is for the 
-# sole purpose of programming logic devices manufactured by Intel and sold by 
-# Intel or its authorized distributors.  Please refer to the applicable 
+# Your use of Intel Corporation's design tools, logic functions and other
+# software and tools, and its AMPP partner logic functions, and any output
+# files from any of the foregoing (including device programming or simulation
+# files), and any associated documentation or information are expressly subject
+# to the terms and conditions of the Intel Program License Subscription
+# Agreement, Intel FPGA IP License Agreement, or other applicable
+# license agreement, including, without limitation, that your use is for the
+# sole purpose of programming logic devices manufactured by Intel and sold by
+# Intel or its authorized distributors.  Please refer to the applicable
 # agreement for further details.
 
 
@@ -85,17 +85,17 @@ foreach { inst } $instances {
 		# Clean-up stale content
 		unset pins
 	}
-	
+
 	# -------------------------------- #
 	# -                              - #
 	# --- Determine PLL Parameters --- #
 	# -                              - #
 	# -------------------------------- #
-	
+
 	set pll_atoms [get_atom_nodes -matching ${inst}* -type IOPLL]
 	set num_pll_inst [get_collection_size $pll_atoms]
-	
-	if {$num_pll_inst > 1} { 
+
+	if {$num_pll_inst > 1} {
 		# Error condition
 		post_message -type error "SDC: More than one PLL atom found with instance name $inst"
 	} else {
@@ -107,7 +107,7 @@ foreach { inst } $instances {
 
     # These dictionaries hold all the clock information.
     lassign $::GLOBAL_top_esram_altera_iopll_1930_rnqonzq_corename_ai_pll_db($inst) base_clock_data_dict gen_clock_data_dict
-	
+
 	# ------------------------ #
 	# -                      - #
 	# ---REFERENCE CLOCK(s)--- #
@@ -138,10 +138,10 @@ foreach { inst } $instances {
                     -phase $phase \
                     -duty_cycle $duty_cycle \
                     $pin_node_name
-                
-                if {[string match lvds* $clock_key] && [string match *loaden* $pattern] && [dict exists $gen_clock_data_dict $clock_key "through_pin" ] } {  
+
+                if {[string match lvds* $clock_key] && [string match *loaden* $pattern] && [dict exists $gen_clock_data_dict $clock_key "through_pin" ] } {
                     set_max_delay_in_fit_or_false_path_in_sta_through_no_warn $through_pin $max_delay
-                } 
+                }
             }
         }
     }

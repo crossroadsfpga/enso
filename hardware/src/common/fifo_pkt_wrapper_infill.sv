@@ -76,12 +76,12 @@ module fifo_pkt_wrapper_infill #(
 		.out_startofpacket (out_startofpacket), //  output,    width = 1,          .startofpacket
 		.out_endofpacket   (out_endofpacket),   //  output,    width = 1,          .endofpacket
 		.out_empty         (out_empty),         //  output,    width = 6,          .empty
-		.almost_full_data  (),                  // (terminated),                         
-		.almost_empty_data (),                  // (terminated),                         
-		.in_error          (1'b0),              // (terminated),                         
-		.out_error         (),                  // (terminated),                         
-		.in_channel        (1'b0),              // (terminated),                         
-		.out_channel       ()                   // (terminated),                         
+		.almost_full_data  (),                  // (terminated),
+		.almost_empty_data (),                  // (terminated),
+		.in_error          (1'b0),              // (terminated),
+		.out_error         (),                  // (terminated),
+		.in_channel        (1'b0),              // (terminated),
+		.out_channel       ()                   // (terminated),
 	);
 
 endmodule

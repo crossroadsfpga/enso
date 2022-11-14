@@ -28,5 +28,3 @@ module  rom_2port_noreg_sim  (
     end
 
 endmodule
-
-

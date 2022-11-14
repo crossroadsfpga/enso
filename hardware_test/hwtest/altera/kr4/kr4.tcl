@@ -1,18 +1,18 @@
 # (C) 2001-2019 Intel Corporation. All rights reserved.
-# Your use of Intel Corporation's design tools, logic functions and other 
-# software and tools, and its AMPP partner logic functions, and any output 
-# files from any of the foregoing (including device programming or simulation 
-# files), and any associated documentation or information are expressly subject 
-# to the terms and conditions of the Intel Program License Subscription 
-# Agreement, Intel FPGA IP License Agreement, or other applicable 
-# license agreement, including, without limitation, that your use is for the 
-# sole purpose of programming logic devices manufactured by Intel and sold by 
-# Intel or its authorized distributors.  Please refer to the applicable 
+# Your use of Intel Corporation's design tools, logic functions and other
+# software and tools, and its AMPP partner logic functions, and any output
+# files from any of the foregoing (including device programming or simulation
+# files), and any associated documentation or information are expressly subject
+# to the terms and conditions of the Intel Program License Subscription
+# Agreement, Intel FPGA IP License Agreement, or other applicable
+# license agreement, including, without limitation, that your use is for the
+# sole purpose of programming logic devices manufactured by Intel and sold by
+# Intel or its authorized distributors.  Please refer to the applicable
 # agreement for further details.
 
 
 set ver 0.1s10c2e
- 
+
  set ADDR_KR4_BASECTRL    0xb0
  set ADDR_KR4_BASESTAT    0xb1
  set ADDR_KR4_FECCTRL0    0xb2
@@ -38,9 +38,9 @@ proc Get_value_in_variable {uservar} {
 }
 
 proc rst_pcs {} {
-    global BASE_RXPHY 
-    global ADDR_PHY_PMACFG 
-    
+    global BASE_RXPHY
+    global ADDR_PHY_PMACFG
+
     reg_write   $BASE_RXPHY $ADDR_PHY_PMACFG 1
     reg_write   $BASE_RXPHY $ADDR_PHY_PMACFG 0
 }
@@ -48,7 +48,7 @@ proc rst_pcs {} {
 proc kr_restart {} {
   global BASE_KR4
   global ADDR_KR4_BASECTRL
-  
+
   set reg [reg_read   $BASE_KR4 $ADDR_KR4_BASECTRL]
   reg_write $BASE_KR4 $ADDR_KR4_BASECTRL [expr $reg | 0x7]
 }
@@ -56,7 +56,7 @@ proc kr_restart {} {
 proc an_disable {} {
   global BASE_KR4
   global ADDR_KR4_ANCTRL
-  
+
   set an_c0 [reg_read    $BASE_KR4 $ADDR_KR4_ANCTRL]
   set an_c0 [expr $an_c0 & 0xFE]
   reg_write   $BASE_KR4 $ADDR_KR4_ANCTRL $an_c0
@@ -65,7 +65,7 @@ proc an_disable {} {
 proc an_enable {} {
   global BASE_KR4
   global ADDR_KR4_ANCTRL
-  
+
   set an_c0 [reg_read    $BASE_KR4 $ADDR_KR4_ANCTRL]
   set an_c0 [expr $an_c0 | 0x1]
   reg_write   $BASE_KR4 $ADDR_KR4_ANCTRL $an_c0
@@ -158,17 +158,17 @@ proc reconfig_write {chan addr val} {
 
 proc reconfig_rmw {chan addr mask val} {
     set value [reconfig_read $chan $addr]
-    set value [expr $value & [expr 0xffffffff & ~$mask]] 
-    set value [expr $value | $val] 
+    set value [expr $value & [expr 0xffffffff & ~$mask]]
+    set value [expr $value | $val]
     reconfig_write $chan $addr $value
 }
 
 proc a10dprio_read {chan type} {
     global ADDR_A10_$type
     global ADDR_A10_${type}_M
-    
+
     set reg [reconfig_read $chan [set ADDR_A10_$type]]
-    
+
     return [expr $reg & [set ADDR_A10_${type}_M]]
 }
 
@@ -178,7 +178,7 @@ proc disable_bgcal { {ip_100g 1}} {
     if {$ip_100g} {
         reconfig_write 2 0x542 0
         reconfig_write 3 0x542 0
-    }	    
+    }
 }
 
 
@@ -188,7 +188,7 @@ proc enable_bgcal { {ip_100g 1}} {
     if {$ip_100g} {
         reconfig_write 2 0x542 1
         reconfig_write 3 0x542 1
-    }	    
+    }
 }
 
 proc fec_err_corr {chan} {
@@ -234,14 +234,14 @@ proc fec_errs {} {
 proc clear_fec_err {chan} {
     global BASE_KR4
     global ADDR_KR4_FECCTRL$chan
-    
-    
+
+
     reg_write $BASE_KR4 [set ADDR_KR4_FECCTRL$chan] 0x1000
     reg_write $BASE_KR4 [set ADDR_KR4_FECCTRL$chan] 0x0000
 }
 
 proc clear_all_fec_err {} {
-    for {set idx 0} {$idx < 4} {incr idx} { 
+    for {set idx 0} {$idx < 4} {incr idx} {
       clear_fec_err $idx
     }
 }
@@ -279,8 +279,8 @@ proc ins_burst_err {chan len} {
 proc fec_block_lock {chan} {
     global BASE_KR4
     global ADDR_KR4_BASESTAT
-    
-    
+
+
     set reg [reg_read $BASE_KR4 $ADDR_KR4_BASESTAT]
     return [expr ($reg & (0x100000 << $chan)) != 0]
 }
@@ -288,15 +288,15 @@ proc fec_block_lock {chan} {
 proc force_fec {{on 1}} {
     global BASE_KR4
     global ADDR_KR4_BASECTRL
-    
-    
+
+
     set reg [reg_read $BASE_KR4 $ADDR_KR4_BASECTRL]
     if {$on} {
         set reg [expr $reg | 0x80]
     } else {
         set reg [expr $reg & (~0x80)]
     }
-    
+
     reg_write $BASE_KR4 $ADDR_KR4_BASECTRL $reg
 }
 
@@ -360,15 +360,15 @@ proc chan_stat_csv {chan {usefec 0}} {
     global ADDR_PHY_TXPLLOCK
     global ADDR_PHY_FREQLOCK
     global ADDR_PHY_FRMERROR
-    
-    
+
+
     puts -nonewline "LANE$chan\t"
-    
+
     set rdreg [reg_read $BASE_KR4 [set ADDR_KR4_LTSET$chan]]
     set vod [expr $rdreg & 0x0000003f]
     set post [expr ($rdreg & 0x00001f00)>>8]
     set pre [expr ($rdreg & 0x000f0000)>>16]
-    
+
     set vod_rd [a10dprio_read $chan VOD]
     set vod_rd [expr $vod_rd & 0x1f]
     set post_rd [a10dprio_read $chan PST1]
@@ -383,11 +383,11 @@ proc chan_stat_csv {chan {usefec 0}} {
     } else {
         set pre_rd [expr -($pre_rd & 0x1f)]
     }
-    
-    #  Test bus = ADP 171[4:1]=1	
+
+    #  Test bus = ADP 171[4:1]=1
     reconfig_rmw $chan 0x171 0x1E 0x16
     reconfig_write $chan 0x17E 0
-    
+
     if {[reconfig_read $chan 0x161] & 0x20} {
         set dlev "m"
     } else {
@@ -417,7 +417,7 @@ proc chan_stat_csv {chan {usefec 0}} {
         set ctle_ac [expr [expr [ reconfig_read $chan 0x17E ] >> 3] & 0XF]
     }
 
-    #  Test bus = ADP 171[4:1]=1	
+    #  Test bus = ADP 171[4:1]=1
     if {[reconfig_read $chan 0x161] & 0x40} {
         set tap1 "m"
         set tap2 "m"
@@ -458,13 +458,13 @@ proc chan_stat_csv {chan {usefec 0}} {
         set tap7 [expr [reconfig_read $chan   0x17E] & 0x1F]
         set tap7 [expr ($tap7 & 0x0F) * (($tap7 & 0x10) ? -1 : 1)]
     }
-    
-    
-    
-    
+
+
+
+
     set fec_corr [fec_err_corr $chan]
     set fec_uncorr [fec_err_uncorr $chan]
-    
+
     puts -nonewline "$vod, $post, $pre,   \t$vod_rd, $post_rd, $pre_rd,   \t    $dlev,   $vga,    $ctle_ac,         $ctle_dc, "
     puts -nonewline "   $tap1,    $tap2,    $tap3,    $tap4,    $tap5,    $tap6,    $tap7,"
     if {$usefec} {puts -nonewline " \t$fec_corr, $fec_uncorr, "}
@@ -476,11 +476,11 @@ proc chan_stat_csv {chan {usefec 0}} {
     set rdreg [reg_read $BASE_RXPHY $ADDR_PHY_FREQLOCK]
     # RX CDR Not Locked
     if {!($rdreg & (1 << $chan))} {puts -nonewline "    x"}
-    
+
     set rdreg [reg_read $BASE_RXPHY $ADDR_PHY_FRMERROR]
     # 40G frame error
     if {$rdreg & (1 << $chan)} {puts -nonewline "    e"}
-    
+
     set rdreg [reg_read $BASE_KR4 $ADDR_KR4_LTSTAT]
     # not trained
     if {!($rdreg & (1 << ($chan * 8)))} {puts -nonewline "    N"}
@@ -493,7 +493,7 @@ proc chan_stat_csv {chan {usefec 0}} {
 
     # FEC not locked
     if {$usefec & ![fec_block_lock $chan]} {puts -nonewline "    L"}
-       
+
 }
 
 proc run_test_meas {t} {
@@ -517,15 +517,15 @@ proc run_test_meas {t} {
     global REG_STAT_CFG
     global REG_STAT_STATUS
     global ver
-    
-    
+
+
     #set degf [expr [reg_read $CLIENT_BASE $REG_TEMP_SENSE]]
     set degf 72
     set refclk [ expr [ reg_read $BASE_RXPHY $ADDR_PHY_RFCLKHZ ]]
-    
+
     puts "---------------------------------------"
     puts "KR4 TEST $ver, TIME $t, ????? F, refclk $refclk"
-    
+
     stop_pkt_gen
     setphy_clear_frame_error
     # clear stats
@@ -535,24 +535,24 @@ proc run_test_meas {t} {
     # todo add error counter/global status readout
     start_pkt_gen
     after $t
-    
+
     stop_pkt_gen
     after 100
-    
+
     puts "GLOBAL,reg 0xB0  ,reg 0xB1  ,reg 0xC2  ,reg 0xD0  ,reg 0xD1  ,reg 0xD2  ,\tTX Starts,RX Starts,RX FCS Err,\tFlags"
-    
+
     set txcnt [expr [stats_read $BASE_TXSTATS $REG_ST_LO]]
     set rxcnt [expr [stats_read $BASE_RXSTATS $REG_ST_LO]]
     set err [expr [stats_read $BASE_RXSTATS $REG_CRCERR_LO]]
-    reg_read $BASE_KR4 $ADDR_KR4_ANSTAT 
+    reg_read $BASE_KR4 $ADDR_KR4_ANSTAT
     puts -nonewline "GLOBAL,[reg_read $BASE_KR4 $ADDR_KR4_BASECTRL],[reg_read $BASE_KR4 $ADDR_KR4_BASESTAT],[reg_read $BASE_KR4 $ADDR_KR4_ANSTAT],[reg_read $BASE_KR4 $ADDR_KR4_LTCTRL],[reg_read $BASE_KR4 $ADDR_KR4_LTCTL2],[reg_read $BASE_KR4 $ADDR_KR4_LTSTAT],\t$txcnt,$rxcnt,$err,\t"
-    
+
     set rdreg [reg_read $BASE_RXPHY $ADDR_PHY_FALIGNED]
     # 40G lanes not deskewed
     if {!($rdreg & 1)} {puts -nonewline "d"}
     # 40G hi BER
     if {$rdreg & 2} {puts -nonewline "H"}
-    
+
     set rdreg [reg_read $BASE_RXPHY $ADDR_PHY_CLKMACOK]
     # Tx analog not online
     if {!($rdreg & 1)} {puts -nonewline "a"}
@@ -560,7 +560,7 @@ proc run_test_meas {t} {
     if {!($rdreg & 2)} {puts -nonewline "P"}
     # Rx mac pll not lock
     if {!($rdreg & 4)} {puts -nonewline "p"}
-    
+
     set rdreg [reg_read $BASE_KR4 $ADDR_KR4_BASESTAT]
     # link down (not ready)
     if {!($rdreg & 1)} {puts -nonewline "D"}
@@ -568,28 +568,28 @@ proc run_test_meas {t} {
     if {$rdreg & 2} {puts -nonewline "A"}
     #link train timeout
     if {$rdreg & 4} {puts -nonewline "T"}
-    
-  
+
+
     set rdreg [reg_read $BASE_KR4 $ADDR_KR4_ANSTAT]
     #AN not complete
     if {!($rdreg & 4)} {puts -nonewline "n"}
     #ANSM not idle
     if {!($rdreg & 0x10)} {puts -nonewline "I"}
-    
+
     set fec_mode [expr ($rdreg & 0x100) != 0]
 
     set rdreg [reg_read $BASE_RXSTATS $REG_STAT_STATUS]
     # parity error detected somewhere in stats
     if {$rdreg & 1} {puts -nonewline "*"}
-    
+
     puts ""
     puts -nonewline "LANE#\tvod, post, pre,\tvod_rd, post_rd, pre_rd, DLEV, VGA , CTLE_AC, CTLE_DC, DFE1, DFE2, DFE3, DFE4, DFE5, DFE6, DFE7, "
     if {$fec_mode} { puts -nonewline "\tFEC Corr, FEC Uncorr,"}
     puts " Flags"
-    
-    for {set idx 0} {$idx < 4} {incr idx} { 
+
+    for {set idx 0} {$idx < 4} {incr idx} {
       chan_stat_csv $idx $fec_mode
       puts ""
     }
-    
+
 }

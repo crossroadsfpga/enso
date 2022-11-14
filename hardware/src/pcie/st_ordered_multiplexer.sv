@@ -62,7 +62,7 @@ assign out_fifo_almost_full = out_fifo_occup > 16;
 
 always_comb begin
     for (integer i = 0; i < NB_IN; i++) begin
-        in_ready[i] = 0; 
+        in_ready[i] = 0;
     end
     in_ready[next_stream_id] = !out_fifo_almost_full & next_stream_id_valid;
     next_stream_valid = in_ready[next_stream_id] & in_valid[next_stream_id];

@@ -14,7 +14,7 @@ module flow_director(
     input  logic          out_meta_ready,
 
     /// Configure number of fallback queues. We send packets to fallback queues
-    /// whenever they don't match an entry in the flow table. 
+    /// whenever they don't match an entry in the flow table.
     input logic [31:0] nb_fallback_queues,
 
     /// Enable packet round robin for fallback queues. When disabled, use a hash
@@ -54,7 +54,7 @@ always_comb begin
             if (enable_rr) begin
                 out_meta_data.pkt_queue_id = next_rr_queue;
             end else begin
-                out_meta_data.pkt_queue_id = 
+                out_meta_data.pkt_queue_id =
                     in_meta_data.hash & fallback_q_mask;
             end
         end

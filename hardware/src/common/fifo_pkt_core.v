@@ -41,8 +41,8 @@ module fifo_pkt_core
     // flag is deasserted on the cycle after a write.
     //
     // Another way to think of it is the latency for a
-    // write to propagate to the output. 
-    // 
+    // write to propagate to the output.
+    //
     // An empty latency of 0 implies lookahead, which is
     // only implemented for the register-based FIFO.
     // --------------------------------------------------
@@ -98,7 +98,7 @@ module fifo_pkt_core
     localparam ADDR_WIDTH   = log2ceil(FIFO_DEPTH);
     localparam DEPTH        = FIFO_DEPTH;
     localparam PKT_SIGNALS_WIDTH = 2 + EMPTY_WIDTH;
-    localparam PAYLOAD_WIDTH     = (USE_PACKETS == 1) ? 
+    localparam PAYLOAD_WIDTH     = (USE_PACKETS == 1) ?
                    2 + EMPTY_WIDTH + DATA_WIDTH + ERROR_WIDTH + CHANNEL_WIDTH:
                    DATA_WIDTH + ERROR_WIDTH + CHANNEL_WIDTH;
 
@@ -178,7 +178,7 @@ module fifo_pkt_core
         if (EMPTY_WIDTH > 0) begin : gen_blk1
             assign in_packet_signals = {in_startofpacket, in_endofpacket, in_empty};
             assign {out_startofpacket, out_endofpacket, out_empty} = out_packet_signals;
-        end 
+        end
         else begin : gen_blk1_else
             assign out_empty = in_error;
             assign in_packet_signals = {in_startofpacket, in_endofpacket};
@@ -243,8 +243,8 @@ module fifo_pkt_core
     // --------------------------------------------------
     // Memory-based FIFO storage
     //
-    // To allow a ready latency of 0, the read index is 
-    // obtained from the next read pointer and memory 
+    // To allow a ready latency of 0, the read index is
+    // obtained from the next read pointer and memory
     // outputs are unregistered.
     //
     // If the empty latency is 1, we infer bypass logic
@@ -252,7 +252,7 @@ module fifo_pkt_core
     // outputs on the next cycle.
     //
     // Do not change the way this is coded: Quartus needs
-    // a perfect match to the template, and any attempt to 
+    // a perfect match to the template, and any attempt to
     // refactor the two always blocks into one will break
     // memory inference.
     // --------------------------------------------------
@@ -279,7 +279,7 @@ module fifo_pkt_core
         end
 
         assign mem_rd_ptr = next_rd_ptr;
-    
+
     end else begin : gen_blk9_else
 
     // --------------------------------------------------
@@ -291,21 +291,21 @@ module fifo_pkt_core
     // The occupancy bits are contiguous and start from the
     // lsb, so 0000, 0001, 0011, 0111, 1111 for a 4-deep
     // FIFO.
-    // 
+    //
     // Each slot is enabled during a read or when it
     // is unoccupied. New data is always written to every
     // going-to-be-empty slot (we keep track of which ones
     // are actually useful with the occupancy bits). On a
     // read we shift occupied slots.
-    // 
-    // The exception is the last slot, which always gets 
+    //
+    // The exception is the last slot, which always gets
     // new data when it is unoccupied.
     // --------------------------------------------------
         for (i = 0; i < DEPTH-1; i = i + 1) begin : shift_reg
             always @(posedge clk or posedge reset) begin
                 if (reset) begin
                     mem[i] <= 0;
-                end 
+                end
                 else if (read || !mem_used[i]) begin
                     if (!mem_used[i+1])
                         mem[i] <= in_payload;
@@ -318,14 +318,14 @@ module fifo_pkt_core
         always @(posedge clk, posedge reset) begin
             if (reset) begin
                 mem[DEPTH-1] <= 0;
-            end 
+            end
             else begin
                 if (DEPTH == 1) begin
                     if (write)
                         mem[DEPTH-1] <= in_payload;
                 end
                 else if (!mem_used[DEPTH-1])
-                    mem[DEPTH-1] <= in_payload;    
+                    mem[DEPTH-1] <= in_payload;
             end
         end
 
@@ -372,7 +372,7 @@ module fifo_pkt_core
         always @(posedge clk or posedge reset) begin
             if (reset) begin
                 mem_used[0] <= 0;
-            end 
+            end
             else begin
                 if (write ^ read) begin
                     if (write)
@@ -382,7 +382,7 @@ module fifo_pkt_core
                             mem_used[0] <= mem_used[1];
                         else
                             mem_used[0] <= 0;
-                    end    
+                    end
                 end
             end
         end
@@ -392,8 +392,8 @@ module fifo_pkt_core
                 if (reset) begin
                     mem_used[DEPTH-1] <= 0;
                 end
-                else begin 
-                    if (write ^ read) begin            
+                else begin
+                    if (write ^ read) begin
                         mem_used[DEPTH-1] <= 0;
                         if (write)
                             mem_used[DEPTH-1] <= mem_used[DEPTH-2];
@@ -401,23 +401,23 @@ module fifo_pkt_core
                 end
             end
           end
-     
+
         for (i = 1; i < DEPTH-1; i = i + 1) begin : storage_logic
             always @(posedge clk, posedge reset) begin
                 if (reset) begin
                     mem_used[i] <= 0;
-                end 
+                end
                 else begin
                     if (write ^ read) begin
                         if (write)
                             mem_used[i] <= mem_used[i-1];
                         else if (read)
-                            mem_used[i] <= mem_used[i+1];     
+                            mem_used[i] <= mem_used[i+1];
                     end
                 end
             end
         end
-     
+
     end
     endgenerate
 
@@ -426,7 +426,7 @@ module fifo_pkt_core
     // Memory FIFO Status Management
     //
     // Generates the full and empty signals from the
-    // pointers. The FIFO is full when the next write 
+    // pointers. The FIFO is full when the next write
     // pointer will be equal to the read pointer after
     // a write. Reading from a FIFO clears full.
     //
@@ -434,7 +434,7 @@ module fifo_pkt_core
     // be equal to the write pointer after a read. Writing
     // to a FIFO clears empty.
     //
-    // A simultaneous read and write must not change any of 
+    // A simultaneous read and write must not change any of
     // the empty or full flags unless there is a drop on error event.
     // --------------------------------------------------
     generate if (USE_MEMORY_BLOCKS == 1) begin : gen_blk13
@@ -442,20 +442,20 @@ module fifo_pkt_core
         always @* begin
             next_full = full;
             next_empty = empty;
-     
+
             if (read && !write) begin
                 next_full = 1'b0;
-     
+
                 if (incremented_rd_ptr == wr_ptr)
                     next_empty = 1'b1;
             end
-            
+
             if (write && !read) begin
                 if (!drop_on_error)
                   next_empty = 1'b0;
                 else if (curr_sop_ptr == rd_ptr)   // drop on error and only 1 pkt in fifo
                   next_empty = 1'b1;
-     
+
                 if (incremented_wr_ptr == rd_ptr && !drop_on_error)
                     next_full = 1'b1;
             end
@@ -465,13 +465,13 @@ module fifo_pkt_core
                   next_empty = 1'b1;
             end
         end
-     
+
         always @(posedge clk or posedge reset) begin
             if (reset) begin
                 empty <= 1;
                 full  <= 0;
             end
-            else begin 
+            else begin
                 empty <= next_empty;
                 full  <= next_full;
             end
@@ -520,13 +520,13 @@ module fifo_pkt_core
     // --------------------------------------------------
     // Avalon-ST Signals
     //
-    // The in_ready signal is straightforward. 
+    // The in_ready signal is straightforward.
     //
-    // To match memory latency when empty latency > 1, 
+    // To match memory latency when empty latency > 1,
     // out_valid assertions must be delayed by one clock
     // cycle.
     //
-    // Note: out_valid deassertions must not be delayed or 
+    // Note: out_valid deassertions must not be delayed or
     // the FIFO will underflow.
     // --------------------------------------------------
     assign in_ready = !full;
@@ -555,25 +555,25 @@ module fifo_pkt_core
     // --------------------------------------------------
     // Single Output Pipeline Stage
     //
-    // This output pipeline stage is enabled if the FIFO's 
+    // This output pipeline stage is enabled if the FIFO's
     // empty latency is set to 3 (default). It is disabled
     // for all other allowed latencies.
     //
     // Reason: The memory outputs are unregistered, so we have to
     // register the output or fmax will drop if combinatorial
     // logic is present on the output datapath.
-    // 
+    //
     // Q: The Avalon-ST spec says that I have to register my outputs
     //    But isn't the memory counted as a register?
     // A: The path from the address lookup to the memory output is
-    //    slow. Registering the memory outputs is a good idea. 
+    //    slow. Registering the memory outputs is a good idea.
     //
     // The registers get packed into the memory by the fitter
     // which means minimal resources are consumed (the result
-    // is a altsyncram with registered outputs, available on 
-    // all modern Altera devices). 
+    // is a altsyncram with registered outputs, available on
+    // all modern Altera devices).
     //
-    // This output stage acts as an extra slot in the FIFO, 
+    // This output stage acts as an extra slot in the FIFO,
     // and complicates the fill level.
     // --------------------------------------------------
     generate if (EMPTY_LATENCY == 3) begin : gen_blk15
@@ -609,7 +609,7 @@ module fifo_pkt_core
     // is enabled, the fill level is an up-down counter
     // for fmax optimization reasons.
     //
-    // If the output pipeline is enabled, the fill level 
+    // If the output pipeline is enabled, the fill level
     // must account for it, or we'll always be off by one.
     // This may, or may not be important depending on the
     // application.
@@ -625,7 +625,7 @@ module fifo_pkt_core
         if (USE_STORE_FORWARD) begin
 
             reg [ADDR_WIDTH : 0] curr_packet_len_less_one;
-            
+
             // --------------------------------------------------
             // We only drop on endofpacket. As long as we don't add to the fill
             // level on the dropped endofpacket cycle, we can simply subtract
@@ -660,7 +660,7 @@ module fifo_pkt_core
         end else begin
 
             always @(posedge clk or posedge reset) begin
-                if (reset) 
+                if (reset)
                     fifo_fill_level <= 0;
                 else if (next_full & !drop_on_error)
                     fifo_fill_level <= depth32[ADDR_WIDTH:0];
@@ -682,7 +682,7 @@ module fifo_pkt_core
     else begin : gen_blk16_else
         always @* begin
             fill_level = 0;
-        end  
+        end
     end
     endgenerate
 
@@ -694,7 +694,7 @@ module fifo_pkt_core
          assign almost_full_data = mem_used[ALMOST_FULL_THRESHOLD - 1];
       end
       else begin
-         assign almost_full_data = 0; 
+         assign almost_full_data = 0;
       end
     end
     endgenerate
@@ -715,7 +715,7 @@ module fifo_pkt_core
     // |  0     | R  |   Fill level    |
     //
     // The registering of this connection point means
-    // that there is a cycle of latency between 
+    // that there is a cycle of latency between
     // reads/writes and the updating of the fill level.
     // --------------------------------------------------
     generate if (USE_STORE_FORWARD) begin : gen_blk19
@@ -754,7 +754,7 @@ module fifo_pkt_core
                     almost_empty_threshold <= csr_writedata[23:0];
                else if(csr_address == 3'b010)
                   almost_full_threshold  <= csr_writedata[23:0];
-             end     
+             end
           end
       end
     end
@@ -781,7 +781,7 @@ module fifo_pkt_core
                    almost_empty_threshold <= csr_writedata[23:0];
                else if(csr_address == 3'b010)
                   almost_full_threshold  <= csr_writedata[23:0];
-             end       
+             end
           end
       end
     end
@@ -793,7 +793,7 @@ module fifo_pkt_core
           else if (csr_read) begin
               csr_readdata <= 0;
 
-              if (csr_address == 0) 
+              if (csr_address == 0)
                   csr_readdata <= {{(31 - ADDR_WIDTH){1'b0}}, fill_level};
           end
       end
@@ -810,7 +810,7 @@ module fifo_pkt_core
     generate if (USE_STORE_FORWARD) begin : gen_blk20
       assign wait_for_threshold   = (fifo_fill_level_lt_cut_through_threshold) & wait_for_pkt ;
       assign wait_for_pkt         = pkt_cnt_eq_zero  | (pkt_cnt_eq_one  & out_pkt_leave);
-      assign ok_to_forward        = (pkt_mode ? (~wait_for_pkt | ~pkt_has_started) : 
+      assign ok_to_forward        = (pkt_mode ? (~wait_for_pkt | ~pkt_has_started) :
                                      ~wait_for_threshold) | fifo_too_small_r;
       assign in_pkt_eop_arrive    = in_valid & in_ready & in_endofpacket;
       assign in_pkt_start         = in_valid & in_ready & in_startofpacket;
@@ -849,11 +849,11 @@ module fifo_pkt_core
           end
           else if((~in_pkt_eop_arrive | drop_on_error) & out_pkt_leave) begin
             pkt_cnt <= pkt_cnt - 1'b1;
-            if (pkt_cnt == 1) 
+            if (pkt_cnt == 1)
               pkt_cnt_eq_zero <= 1'b1;
             else
               pkt_cnt_eq_zero <= 1'b0;
-            if (pkt_cnt == 2) 
+            if (pkt_cnt == 2)
               pkt_cnt_eq_one <= 1'b1;
             else
               pkt_cnt_eq_one <= 1'b0;
@@ -874,7 +874,7 @@ module fifo_pkt_core
         end
         else begin
           // save the location of the SOP
-          if ( in_pkt_start ) 
+          if ( in_pkt_start )
             sop_ptr <= wr_ptr;
 
           // remember if error in pkt
@@ -886,7 +886,7 @@ module fifo_pkt_core
         end
       end
 
-      assign drop_on_error = drop_on_error_en & (error_in_pkt | in_pkt_error) & in_pkt_eop_arrive & 
+      assign drop_on_error = drop_on_error_en & (error_in_pkt | in_pkt_error) & in_pkt_eop_arrive &
                             ~sop_has_left_fifo & ~(out_pkt_sop_leave & pkt_cnt_eq_zero);
 
       assign curr_sop_ptr = (write && in_startofpacket && in_endofpacket) ? wr_ptr : sop_ptr;
@@ -922,5 +922,3 @@ module fifo_pkt_core
     endfunction
 
 endmodule
-
-

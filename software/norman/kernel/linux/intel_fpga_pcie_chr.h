@@ -41,8 +41,8 @@
  * SOFTWARE.
  */
 
-#ifndef INTEL_FPGA_PCIE_CHR_H
-#define INTEL_FPGA_PCIE_CHR_H
+#ifndef SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_CHR_H_
+#define SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_CHR_H_
 
 #include "intel_fpga_pcie_setup.h"
 
@@ -55,10 +55,8 @@
  */
 #define MAX_TRANSFER_SIZE 64
 
-
 int __init intel_fpga_pcie_chr_init(void);
 void intel_fpga_pcie_chr_exit(void);
-
 
 /**
  * struct intel_fpga_pcie_cmd - Main structure for user to communicate to
@@ -66,18 +64,18 @@ void intel_fpga_pcie_chr_exit(void);
  *                              write transaction.
  */
 struct intel_fpga_pcie_cmd {
-    /** @bar_num: BAR to be targeted for the transaction. */
-    unsigned int bar_num;
+  /** @bar_num: BAR to be targeted for the transaction. */
+  unsigned int bar_num;
 
-    /** @bar_offset: Byte offset within BAR to target. */
-    uint64_t bar_offset;
+  /** @bar_offset: Byte offset within BAR to target. */
+  uint64_t bar_offset;
 
-    /**
-     * @user_addr: Address in user-space to write/read data.
-     *             Always a virtual address. Used as the source of write data
-     *             and the destination of the read data.
-     */
-    void *user_addr;
-} __attribute__ ((packed));
+  /**
+   * @user_addr: Address in user-space to write/read data.
+   *             Always a virtual address. Used as the source of write data
+   *             and the destination of the read data.
+   */
+  void *user_addr;
+} __attribute__((packed));
 
-#endif /* INTEL_FPGA_PCIE_CHR_H */
+#endif  // SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_CHR_H_

@@ -3,7 +3,7 @@
 #USER W A R N I N G !
 #USER The PLL parameters are statically defined in this
 #USER file at generation time!
-#USER To ensure timing constraints and timing reports are correct, when you make 
+#USER To ensure timing constraints and timing reports are correct, when you make
 #USER any changes to the PLL component using the Qsys,
 #USER apply those changes to the PLL parameters in this file
 

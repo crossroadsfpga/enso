@@ -148,7 +148,7 @@ module dc_fifo_core
     // Memory Pointers
     // ---------------------------------------------------------------------
     (* ramstyle="no_rw_check" *) reg [PAYLOAD_WIDTH - 1 : 0] mem [DEPTH - 1 : 0];
-    
+
     wire [ADDR_WIDTH - 1 : 0] mem_wr_ptr;
     wire [ADDR_WIDTH - 1 : 0] mem_rd_ptr;
 
@@ -156,7 +156,7 @@ module dc_fifo_core
     reg [ADDR_WIDTH : 0] in_wr_ptr_lookahead;
     reg [ADDR_WIDTH : 0] out_rd_ptr;
     reg [ADDR_WIDTH : 0] out_rd_ptr_lookahead;
-    
+
     // ---------------------------------------------------------------------
     // Internal Signals
     // ---------------------------------------------------------------------
@@ -166,7 +166,7 @@ module dc_fifo_core
     wire [ADDR_WIDTH : 0] next_in_rd_ptr;
 
     reg  [ADDR_WIDTH : 0] in_wr_ptr_gray     /*synthesis ALTERA_ATTRIBUTE = "SUPPRESS_DA_RULE_INTERNAL=D102" */;
-    wire [ADDR_WIDTH : 0] out_wr_ptr_gray;    
+    wire [ADDR_WIDTH : 0] out_wr_ptr_gray;
 
     reg  [ADDR_WIDTH : 0] out_rd_ptr_gray    /*synthesis ALTERA_ATTRIBUTE = "SUPPRESS_DA_RULE_INTERNAL=D102" */;
     wire [ADDR_WIDTH : 0] in_rd_ptr_gray;
@@ -208,7 +208,7 @@ module dc_fifo_core
     always @ (posedge out_clk) begin
          internal_out_sclr <= out_reset_n;
     end
-    
+
     // --------------------------------------------------
     // Define Payload
     //
@@ -219,7 +219,7 @@ module dc_fifo_core
         if (EMPTY_WIDTH > 0) begin
             assign in_packet_signals = {in_startofpacket, in_endofpacket, in_empty};
             assign {out_startofpacket, out_endofpacket, out_empty} = out_packet_signals;
-        end 
+        end
         else begin
             assign in_packet_signals = {in_startofpacket, in_endofpacket};
             assign {out_startofpacket, out_endofpacket} = out_packet_signals;
@@ -298,8 +298,8 @@ module dc_fifo_core
     // Increment our good old read and write pointers on their native
     // clock domains.
     // ---------------------------------------------------------------------
-   
-    generate 
+
+    generate
          if (SYNC_RESET == 0) begin
             always @(posedge in_clk or negedge in_reset_n) begin
                 if (!in_reset_n) begin
@@ -327,7 +327,7 @@ module dc_fifo_core
     endgenerate
 
 
-    generate 
+    generate
          if(SYNC_RESET == 0) begin
             always @(posedge out_clk or negedge out_reset_n) begin
                 if (!out_reset_n) begin
@@ -384,7 +384,7 @@ module dc_fifo_core
                     empty <= (next_out_rd_ptr == next_out_wr_ptr);
             end
          end
-         else begin 
+         else begin
             always @(posedge out_clk) begin
                 if(~internal_out_sclr)
                     empty <= 1;
@@ -395,7 +395,7 @@ module dc_fifo_core
     endgenerate
 
     generate
-         if(SYNC_RESET == 0) begin 
+         if(SYNC_RESET == 0) begin
             always @(posedge in_clk or negedge in_reset_n) begin
                 if (!in_reset_n) begin
                     full <= 0;
@@ -428,8 +428,8 @@ module dc_fifo_core
     // want to know more? We ensure a one bit change at sampling time,
     // and then metastable harden the sampled gray pointer.
     // ---------------------------------------------------------------------
-    
-    generate 
+
+    generate
          if(SYNC_RESET == 0) begin
             always @(posedge in_clk or negedge in_reset_n) begin
                 if (!in_reset_n)
@@ -450,7 +450,7 @@ module dc_fifo_core
 
     generate
          if (SYNC_RESET == 0) begin
-            altera_dcfifo_synchronizer_bundle #(.WIDTH(ADDR_WIDTH+1), .DEPTH(WR_SYNC_DEPTH)) 
+            altera_dcfifo_synchronizer_bundle #(.WIDTH(ADDR_WIDTH+1), .DEPTH(WR_SYNC_DEPTH))
               write_crosser (
                 .clk(out_clk),
                 .reset_n(out_reset_n),
@@ -459,7 +459,7 @@ module dc_fifo_core
             );
          end
          else begin
-            altera_dcfifo_synchronizer_bundle #(.WIDTH(ADDR_WIDTH+1), .DEPTH(WR_SYNC_DEPTH)) 
+            altera_dcfifo_synchronizer_bundle #(.WIDTH(ADDR_WIDTH+1), .DEPTH(WR_SYNC_DEPTH))
               write_crosser (
                 .clk(out_clk),
                 .reset_n(1'b1),
@@ -470,7 +470,7 @@ module dc_fifo_core
     endgenerate
 
     // ---------------------------------------------------------------------
-    // Optionally pipeline the gray to binary conversion for the write pointer. 
+    // Optionally pipeline the gray to binary conversion for the write pointer.
     // Doing this will increase the latency of the FIFO, but increase fmax.
     // ---------------------------------------------------------------------
     generate if (PIPELINE_POINTERS) begin : wr_ptr_pipeline
@@ -529,7 +529,7 @@ module dc_fifo_core
 
    generate
       if(SYNC_RESET == 0) begin
-         altera_dcfifo_synchronizer_bundle #(.WIDTH(ADDR_WIDTH+1), .DEPTH(RD_SYNC_DEPTH)) 
+         altera_dcfifo_synchronizer_bundle #(.WIDTH(ADDR_WIDTH+1), .DEPTH(RD_SYNC_DEPTH))
             read_crosser (
               .clk(in_clk),
               .reset_n(in_reset_n),
@@ -538,7 +538,7 @@ module dc_fifo_core
          );
       end
       else begin
-         altera_dcfifo_synchronizer_bundle #(.WIDTH(ADDR_WIDTH+1), .DEPTH(RD_SYNC_DEPTH)) 
+         altera_dcfifo_synchronizer_bundle #(.WIDTH(ADDR_WIDTH+1), .DEPTH(RD_SYNC_DEPTH))
             read_crosser (
               .clk(in_clk),
               .reset_n(1'b1),
@@ -549,7 +549,7 @@ module dc_fifo_core
     endgenerate
 
     // ---------------------------------------------------------------------
-    // Optionally pipeline the gray to binary conversion of the read pointer. 
+    // Optionally pipeline the gray to binary conversion of the read pointer.
     // Doing this will increase the pessimism of the FIFO, but increase fmax.
     // ---------------------------------------------------------------------
     generate if (PIPELINE_POINTERS) begin : rd_ptr_pipeline
@@ -570,7 +570,7 @@ module dc_fifo_core
                     in_rd_ptr_gray_reg <= gray2bin(in_rd_ptr_gray);
             end
         end
-        
+
         assign next_in_rd_ptr = in_rd_ptr_gray_reg;
 
     end
@@ -597,7 +597,7 @@ module dc_fifo_core
     // --------------------------------------------------
     assign internal_out_ready = out_ready || !out_valid;
 
-    generate 
+    generate
          if(SYNC_RESET == 0) begin
             always @(posedge out_clk or negedge out_reset_n) begin
                 if (!out_reset_n) begin
@@ -629,19 +629,19 @@ module dc_fifo_core
     endgenerate
 
     // ---------------------------------------------------------------------
-    // Out Fill Level 
+    // Out Fill Level
     //
     // As in the SCFIFO, we account for the output stage as well in the
     // fill level calculations. This means that the out fill level always
-    // gives the most accurate fill level report. 
+    // gives the most accurate fill level report.
     //
     // On a full 16-deep FIFO, the out fill level will read 17. Funny, but
     // accurate.
     //
-    // That's essential on the output side, because a downstream component 
+    // That's essential on the output side, because a downstream component
     // might want to know the exact amount of data in the FIFO at any time.
     // ---------------------------------------------------------------------
-    generate 
+    generate
         if (USE_OUT_FILL_LEVEL || STREAM_ALMOST_EMPTY) begin
 
             if(SYNC_RESET == 0) begin
@@ -684,13 +684,13 @@ module dc_fifo_core
     // |    0   |  R   |   Reserved  |      Out fill level      |
     // |    1   |  RW  |   Reserved  |  Almost empty threshold  |
     // ---------------------------------------------------------------------
-    generate 
+    generate
     if (USE_OUT_FILL_LEVEL || STREAM_ALMOST_EMPTY) begin
          if(SYNC_RESET == 0) begin
             always @(posedge out_clk or negedge out_reset_n) begin
                 if (!out_reset_n) begin
                     out_csr_readdata <= 0;
-                    if (STREAM_ALMOST_EMPTY) 
+                    if (STREAM_ALMOST_EMPTY)
                         almost_empty_threshold <= 0;
                 end
                 else begin
@@ -713,7 +713,7 @@ module dc_fifo_core
             always @(posedge out_clk) begin
                 if (~internal_out_sclr) begin
                     out_csr_readdata <= 0;
-                    if (STREAM_ALMOST_EMPTY) 
+                    if (STREAM_ALMOST_EMPTY)
                         almost_empty_threshold <= 0;
                 end
                 else begin
@@ -763,24 +763,24 @@ module dc_fifo_core
 
     end
     endgenerate
-    
+
     // ---------------------------------------------------------------------
     // In Fill Level & In Status Connection Point
     //
     // Note that the input fill level does not account for the output
     // stage i.e it is only the fifo fill level.
     //
-    // Is this a problem? No, because the input fill is usually used to 
+    // Is this a problem? No, because the input fill is usually used to
     // see how much data can still be pushed into this FIFO. The FIFO
     // fill level gives exactly this information, and there's no need to
     // make our lives more difficult by including the output stage here.
-    // 
+    //
     // One might ask: why not just report a space available level on the
     // input side? Well, I'd like to make this FIFO be as similar as possible
-    // to its single clock cousin, and that uses fill levels and 
+    // to its single clock cousin, and that uses fill levels and
     // fill thresholds with nary a mention of space available.
     // ---------------------------------------------------------------------
-    generate 
+    generate
         if (USE_IN_FILL_LEVEL || STREAM_ALMOST_FULL) begin
 
             if(SYNC_RESET == 0) begin
@@ -809,8 +809,8 @@ module dc_fifo_core
 
     generate
         if (USE_SPACE_AVAIL_IF) begin
-       
-            if(SYNC_RESET == 0) begin 
+
+            if(SYNC_RESET == 0) begin
                always @(posedge in_clk or negedge in_reset_n) begin
                    if (!in_reset_n) begin
                        in_space_avail <= FIFO_DEPTH;
@@ -826,11 +826,11 @@ module dc_fifo_core
                        // first bit... as is done below.
                        // -------------------------------------
 
-                       in_space_avail <= {~next_in_rd_ptr[ADDR_WIDTH], 
+                       in_space_avail <= {~next_in_rd_ptr[ADDR_WIDTH],
                                            next_in_rd_ptr[ADDR_WIDTH-1:0]} -
                                          next_in_wr_ptr;
                    end
-               end   
+               end
             end
             else begin
                always @(posedge in_clk) begin
@@ -838,11 +838,11 @@ module dc_fifo_core
                        in_space_avail <= FIFO_DEPTH;
                    end
                    else begin
-                       in_space_avail <= {~next_in_rd_ptr[ADDR_WIDTH], 
+                       in_space_avail <= {~next_in_rd_ptr[ADDR_WIDTH],
                                            next_in_rd_ptr[ADDR_WIDTH-1:0]} -
                                          next_in_wr_ptr;
                    end
-               end   
+               end
             end
 
             assign space_avail_data = in_space_avail;
@@ -867,7 +867,7 @@ module dc_fifo_core
     // |    0   |  R    |   Reserved    |     In fill level      |
     // |    1   |  RW   |   Reserved    | Almost full threshold  |
     // ---------------------------------------------------------------------
-    generate 
+    generate
     if (USE_IN_FILL_LEVEL || STREAM_ALMOST_FULL) begin
          if(SYNC_RESET == 0) begin
             always @(posedge in_clk or negedge in_reset_n) begin
@@ -950,14 +950,14 @@ module dc_fifo_core
 
     // ---------------------------------------------------------------------
     // Gray Functions
-    // 
+    //
     // These are real beasts when you look at them. But they'll be
     // tested thoroughly.
     // ---------------------------------------------------------------------
     function [ADDR_WIDTH : 0] bin2gray;
         input [ADDR_WIDTH : 0]  bin_val;
-        integer i; 
-                
+        integer i;
+
         for (i = 0; i <= ADDR_WIDTH; i = i + 1)
         begin
             if (i == ADDR_WIDTH)
@@ -971,13 +971,13 @@ module dc_fifo_core
         input [ADDR_WIDTH : 0]  gray_val;
         integer i;
         integer j;
-                
+
         for (i = 0; i <= ADDR_WIDTH; i = i + 1) begin
-            
+
             gray2bin[i] = gray_val[i];
 
             for (j = ADDR_WIDTH; j > i; j = j - 1) begin
-                gray2bin[i] = gray2bin[i] ^ gray_val[j];	
+                gray2bin[i] = gray2bin[i] ^ gray_val[j];
             end
 
         end
@@ -1002,5 +1002,3 @@ module dc_fifo_core
     endfunction
 
 endmodule
-
-

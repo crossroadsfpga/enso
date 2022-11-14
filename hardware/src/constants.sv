@@ -75,13 +75,13 @@ localparam C2F_RB_AWIDTH = ($clog2(C2F_RB_DEPTH));
 localparam MAX_PKT_SIZE = 24; // in 512 bits
 
 localparam PCIE_TX_PKT_FIFO_DEPTH = 1024;
-localparam PCIE_TX_PKT_FIFO_ALM_FULL_THRESH = 
+localparam PCIE_TX_PKT_FIFO_ALM_FULL_THRESH =
     PCIE_TX_PKT_FIFO_DEPTH - 4 * MAX_PKT_SIZE;
 
-// The MAX_NB_APPS determines the max number of descriptor queues, while 
+// The MAX_NB_APPS determines the max number of descriptor queues, while
 // MAX_NB_FLOWS determines the max number of packet queues.
 // Both MAX_NB_APPS and MAX_NB_FLOWS must be powers of two.
-// These **must be kept in sync** with the variables with the same name on 
+// These **must be kept in sync** with the variables with the same name on
 // `hardware_test/hwtest/my_stats.tcl` and `software/norman/pcie.h`.
 // TODO(sadok): expose these values from JTAG so that software and the tcl
 // script can adapt to the bitstream that is loaded at a given moment.
@@ -107,7 +107,7 @@ localparam REG_SIZE = 4; // in bytes
 localparam REGS_PER_PKT_Q = 4;
 localparam REGS_PER_DSC_Q = 8;
 localparam NB_CONTROL_REGS = 4;
-localparam NB_QUEUE_REGS = MAX_NB_APPS * REGS_PER_DSC_Q 
+localparam NB_QUEUE_REGS = MAX_NB_APPS * REGS_PER_DSC_Q
                          + MAX_NB_FLOWS * REGS_PER_PKT_Q;
 localparam JTAG_ADDR_WIDTH = ($clog2(NB_QUEUE_REGS + NB_CONTROL_REGS));
 
@@ -115,7 +115,7 @@ localparam JTAG_ADDR_WIDTH = ($clog2(NB_QUEUE_REGS + NB_CONTROL_REGS));
 localparam PKT_Q_TABLE_DEPTH = MAX_NB_FLOWS;
 localparam PKT_Q_TABLE_AWIDTH = ($clog2(PKT_Q_TABLE_DEPTH));
 // TODO(sadok) we may save space by only holding an offset to kmem address,
-// we also do not need 32 bits for the tail and head 
+// we also do not need 32 bits for the tail and head
 localparam PKT_Q_TABLE_TAILS_DWIDTH = 32;
 localparam PKT_Q_TABLE_HEADS_DWIDTH = 32;
 localparam PKT_Q_TABLE_L_ADDRS_DWIDTH = 32;
@@ -133,7 +133,7 @@ localparam PKT_Q_TABLE_H_ADDRS_DWIDTH = 32;
 localparam DSC_Q_TABLE_DEPTH = MAX_NB_APPS;
 localparam DSC_Q_TABLE_AWIDTH = ($clog2(DSC_Q_TABLE_DEPTH));
 // TODO(sadok) we may save space by only holding an offset to kmem address,
-// we also do not need 32 bits for the tail and head 
+// we also do not need 32 bits for the tail and head
 localparam DSC_Q_TABLE_TAILS_DWIDTH = 32;
 localparam DSC_Q_TABLE_HEADS_DWIDTH = 32;
 localparam DSC_Q_TABLE_L_ADDRS_DWIDTH = 32;
@@ -169,10 +169,10 @@ typedef struct packed
 
 typedef struct packed
 {
-    logic [31:0] sIP; 
-    logic [31:0] dIP; 
-    logic [15:0] sPort; 
-    logic [15:0] dPort; 
+    logic [31:0] sIP;
+    logic [31:0] dIP;
+    logic [15:0] sPort;
+    logic [15:0] dPort;
 } tuple_t;
 localparam TUPLE_DWIDTH = $bits(tuple_t);
 

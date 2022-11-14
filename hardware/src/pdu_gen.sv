@@ -54,7 +54,7 @@ logic        out_meta_queue_ready;
 metadata_t in_meta_data_r;
 
 logic out_pkt_queue_alm_full;
-assign out_pkt_queue_alm_full = 
+assign out_pkt_queue_alm_full =
     out_pkt_queue_occup > PKT_Q_ALMOST_FULL_THRESHOLD;
 
 logic out_meta_queue_alm_full;

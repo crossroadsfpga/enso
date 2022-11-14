@@ -431,7 +431,7 @@ function void dma_rd_descriptor(
   automatic rddm_dst_addr_t dst_addr = 0;
   automatic rddm_desc_t rddm_desc = 0;
   automatic logic [DSC_Q_TABLE_HEADS_DWIDTH-1:0] nb_flits;
-  
+
   rddm_desc.single_dst = 1;
   rddm_desc.descriptor_id = 2;  // Make sure this remains different from the
                                 // one used in the `prio` queue.
@@ -447,7 +447,7 @@ function void dma_rd_descriptor(
 
   last_dsc_reads_queue_out_data <= q_state;
 
-  // Unless we need to send multiple transfers, we should go to START_TRANSFER. 
+  // Unless we need to send multiple transfers, we should go to START_TRANSFER.
   rddm_dsc_state <= START_TRANSFER;
 
   // Check if request wraps around.
@@ -472,7 +472,7 @@ function void dma_rd_descriptor(
   last_dsc_reads_queue_out_data.head <= (q_state.head + nb_flits) & rb_mask;
 
   rddm_desc.nb_dwords = nb_flits << 4;
-  
+
   // Save number of flits so that we can add to dsc_cnt_r2 in the next cycle.
   // We do it this way to help with timing.
   nb_flits_r <= nb_flits;
@@ -905,7 +905,7 @@ always_comb begin
   end else begin
     nb_requested_descriptors = 0;
   end
-  
+
   // Limit the number of in-flight requested descriptors. `inflight_desc_limit`
   // is configurable through JTAG.
   has_enough_credit =

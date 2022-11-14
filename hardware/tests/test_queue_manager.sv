@@ -110,7 +110,7 @@ always @(posedge clk) begin
         q_table_h_addrs_user.wr_data[31] <= 1'b1;
 
         cur_queue <= cur_queue + 1;
-        
+
         if (cur_queue + 1 == NB_QUEUES) begin
             cnt <= cnt + 1;
             cur_queue <= 0;
@@ -119,7 +119,7 @@ always @(posedge clk) begin
     end else if (cnt == 12) begin
         // Send NB_PKTS packets to the same queue and consume all of them.
         automatic logic [QUEUE_ADDR_WIDTH-1:0] queue_id = 1;
-        
+
         // Feed packets.
         if (!queue_almost_full && (pkt_tx_cnt < NB_PKTS)) begin
             in_data_valid <= 1;

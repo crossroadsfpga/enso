@@ -1,7 +1,7 @@
 `include "pcie_consts.sv"
 
 /// This module specializes the generic queue manager to packet queues.
-/// 
+///
 /// It is also responsible for determining when to send descriptors for incoming
 /// packets. It sends descriptors reactively to head pointer updates from
 /// software. The first packet for every queue is accompanied by a descriptor.
@@ -32,7 +32,7 @@ module pkt_queue_manager #(
 
     /// Configure the ring buffer size.
     input logic [RB_AWIDTH:0] rb_size,
-    
+
     /// If set, forces a descriptor to be sent for every packet.
     input logic desc_per_pkt,
 

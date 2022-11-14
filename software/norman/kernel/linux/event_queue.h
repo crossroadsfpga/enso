@@ -4,18 +4,18 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the disclaimer
  * below) provided that the following conditions are met:
- * 
+ *
  *      * Redistributions of source code must retain the above copyright notice,
  *      this list of conditions and the following disclaimer.
- * 
+ *
  *      * Redistributions in binary form must reproduce the above copyright
  *      notice, this list of conditions and the following disclaimer in the
  *      documentation and/or other materials provided with the distribution.
- * 
+ *
  *      * Neither the name of the copyright holder nor the names of its
  *      contributors may be used to endorse or promote products derived from
  *      this software without specific prior written permission.
- * 
+ *
  * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
  * THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
  * CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT
@@ -30,20 +30,18 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef NORMAN_EVENT_QUEUE_H
-#define NORMAN_EVENT_QUEUE_H
+#ifndef SOFTWARE_NORMAN_KERNEL_LINUX_EVENT_QUEUE_H_
+#define SOFTWARE_NORMAN_KERNEL_LINUX_EVENT_QUEUE_H_
 
 #include <linux/kthread.h>
 
-typedef struct kthread_struct
-{
-    wait_queue_head_t queue;
-    struct task_struct* task;
-}
-event_kthread_data_t;
+typedef struct kthread_struct {
+  wait_queue_head_t queue;
+  struct task_struct* task;
+} event_kthread_data_t;
 
 int event_queue_loop(event_kthread_data_t* data);
 int launch_event_kthread(void);
 void stop_event_kthread(void);
 
-#endif /* NORMAN_EVENT_QUEUE_H */
+#endif  // SOFTWARE_NORMAN_KERNEL_LINUX_EVENT_QUEUE_H_

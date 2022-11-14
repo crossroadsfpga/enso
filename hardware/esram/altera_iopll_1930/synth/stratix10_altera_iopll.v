@@ -1,13 +1,13 @@
 // (C) 2001-2019 Intel Corporation. All rights reserved.
-// Your use of Intel Corporation's design tools, logic functions and other 
-// software and tools, and its AMPP partner logic functions, and any output 
-// files from any of the foregoing (including device programming or simulation 
-// files), and any associated documentation or information are expressly subject 
-// to the terms and conditions of the Intel Program License Subscription 
-// Agreement, Intel FPGA IP License Agreement, or other applicable 
-// license agreement, including, without limitation, that your use is for the 
-// sole purpose of programming logic devices manufactured by Intel and sold by 
-// Intel or its authorized distributors.  Please refer to the applicable 
+// Your use of Intel Corporation's design tools, logic functions and other
+// software and tools, and its AMPP partner logic functions, and any output
+// files from any of the foregoing (including device programming or simulation
+// files), and any associated documentation or information are expressly subject
+// to the terms and conditions of the Intel Program License Subscription
+// Agreement, Intel FPGA IP License Agreement, or other applicable
+// license agreement, including, without limitation, that your use is for the
+// sole purpose of programming logic devices manufactured by Intel and sold by
+// Intel or its authorized distributors.  Please refer to the applicable
 // agreement for further details.
 
 
@@ -159,7 +159,7 @@ module stratix10_altera_iopll
     parameter dprio_interface_sel       = 8'b00000011,
     parameter pll_freqcal_en            = "true",
     parameter pll_defer_cal_user_mode   = "false"
-) ( 
+) (
     //Input signals
     input    refclk,
     input    refclk1,
@@ -174,7 +174,7 @@ module stratix10_altera_iopll
     input    extswitch,
     input    adjpllin,
     input    permit_cal,
-    
+
     //Output signals
     output    [8:0] outclk,
     output    fboutclk,
@@ -191,7 +191,7 @@ module stratix10_altera_iopll
 
     //Inout signals
     inout     zdbfbclk
-    
+
 );
 
 wire feedback_clk;
@@ -203,7 +203,7 @@ wire locked_wire;
 wire [10:0] reconfig_from_pll_wire;
 wire gnd /* synthesis keep*/;
 
-// For use in dps pulse gen module. 
+// For use in dps pulse gen module.
 wire final_updn;
 wire final_phase_en;
 wire [3:0] final_cntsel;
@@ -219,15 +219,15 @@ wire cal_ok_wire;
 
 // Reset logic:
 // There are a few scenarios:
-//  - Upstream PLL : 
+//  - Upstream PLL :
 //       - reset is anded with cal_ok_wire so that a reset signal from the
 //         user can't interrupt calibration.
 //       - permit_cal tied off to 1 -> rst_n_wire = ~(rst & cal_ok_wire)
-//  - Downstream PLL: 
+//  - Downstream PLL:
 //       - connect upstream locked to downstream permit_cal
 //       - until upstream PLL is locked, keep reset high so that the PLL
 //         can't be calibrated.
-   
+
 wire rst_n_wire = ~((rst & cal_ok_wire) | (~permit_cal));
 wire dprio_rst_n_wire = ~((~reconfig_to_pll[1] & cal_ok_wire) | (~permit_cal));
 
@@ -244,7 +244,7 @@ localparam counter8_enable = (output_clock_frequency8 != "0 ps" && output_clock_
 //------------- Counter enable localparams -------------------------------
 
 generate
-    if (pll_type == "S10_Simple" || pll_type == "S10_Physical") 
+    if (pll_type == "S10_Simple" || pll_type == "S10_Physical")
     begin: s10_iopll
 
         // ==========================================================================================
@@ -274,7 +274,7 @@ generate
             .prot_mode(prot_mode),
             .reference_clock_frequency (reference_clock_frequency),
             .vco_frequency (pll_output_clk_frequency),
-            .feedback((operation_mode == "external") ? "EXT_FB": ((operation_mode == "source_synchronous") ? "SOURCE_SYNC" : ((operation_mode == "NDFB normal") ? "NON_DEDICATED_NORMAL" : ((operation_mode == "NDFB source synchronous") ? "NON_DEDICATED_SOURCE_SYNC" : operation_mode)))),  
+            .feedback((operation_mode == "external") ? "EXT_FB": ((operation_mode == "source_synchronous") ? "SOURCE_SYNC" : ((operation_mode == "NDFB normal") ? "NON_DEDICATED_NORMAL" : ((operation_mode == "NDFB source synchronous") ? "NON_DEDICATED_SOURCE_SYNC" : operation_mode)))),
             .output_clock_frequency_0(output_clock_frequency0),
             .output_clock_frequency_1(output_clock_frequency1),
             .output_clock_frequency_2(output_clock_frequency2),
@@ -338,7 +338,7 @@ generate
             .pll_c_counter_0_high (c_cnt_hi_div0),
             .pll_c_counter_0_low (c_cnt_lo_div0),
             .pll_c_counter_0_ph_mux_prst (c_cnt_ph_mux_prst0),
-            .pll_c_counter_0_prst (c_cnt_prst0),    
+            .pll_c_counter_0_prst (c_cnt_prst0),
             .pll_c_counter_0_in_src("c_m_cnt_in_src_ph_mux_clk"),
             .pll_c_counter_1_bypass_en (c_cnt_bypass_en1),
             .pll_c_counter_1_even_duty_en (c_cnt_odd_div_duty_en1),
@@ -543,15 +543,15 @@ generate
             .vcoph(phout),
             .cal_ok(cal_ok_wire)
         );
-                    
+
         assign reconfig_from_pll_wire[8] = locked_wire;
         assign reconfig_from_pll_wire[9] = phase_done;
         assign reconfig_from_pll_wire[10] = cal_ok_wire;
         assign extclk_out[0] = fboutclk_wire;
-    end        
+    end
 endgenerate
 
-assign fboutclk = (operation_mode == "external" || operation_mode == "zdb") ? fb_out_clk : fboutclk_wire; 
+assign fboutclk = (operation_mode == "external" || operation_mode == "zdb") ? fb_out_clk : fboutclk_wire;
 assign locked = locked_wire;
 
 // ==================================================================================
@@ -567,7 +567,7 @@ generate
     end
 endgenerate
 
-generate 
+generate
     if (operation_mode == "external")
     begin: fb_obuf
         alt_outbuf #(.enable_bus_hold("NONE"))  fb_obuf (
@@ -607,15 +607,15 @@ module dps_pulse_gen_fourteennm_iopll (
     input  wire clk,            // the DPS clock
     input  wire rst,            // active high reset
     input  wire user_phase_en,  // the user's phase_en signal
-    input  wire user_updn,     
-    input  wire [2:0] user_num_ps,  
-    input  wire [3:0] user_cntsel,  
+    input  wire user_updn,
+    input  wire [2:0] user_num_ps,
+    input  wire [3:0] user_cntsel,
     output reg  phase_en,        // the phase_en signal for the IOPLL atom
-    output reg updn,     
-    output reg [2:0] num_ps,  
-    output reg [3:0] cntsel  
+    output reg updn,
+    output reg [2:0] num_ps,
+    output reg [3:0] cntsel
  );
- 
+
     //-------------------------------------------------------------------------
     // States
     localparam IDLE        = 0,  // Idle state: user_phase_en = 0, phase_en = 0
@@ -624,42 +624,41 @@ module dps_pulse_gen_fourteennm_iopll (
 
     //-------------------------------------------------------------------------
     // FSM current and next states
-    reg [1:0] state, next;     
-    
+    reg [1:0] state, next;
+
     // State update
     always @(posedge clk) begin
-    
+
         updn <= user_updn;
         cntsel <= user_cntsel;
         num_ps <= user_num_ps;
-    
-        if (rst)    state <= IDLE;
-        else        state <= next; 
-    end  
 
-    //-------------------------------------------------------------------------    
+        if (rst)    state <= IDLE;
+        else        state <= next;
+    end
+
+    //-------------------------------------------------------------------------
     // Next-state and output logic
     always @(*) begin
-        next     = IDLE;  // Default next state 
+        next     = IDLE;  // Default next state
         phase_en = 1'b0;  // Default output
-        
+
         case (state)
             IDLE :  begin
                         if (user_phase_en)  next = PULSE;
                         else                next = IDLE;
-                    end     
-                         
+                    end
+
             PULSE : begin
                         phase_en = 1'b1;
                         next     = WAIT;
                     end
-                         
-            WAIT :  begin         
+
+            WAIT :  begin
                         if (~user_phase_en) next = IDLE;
-                        else                next = WAIT;                  
-                    end  
+                        else                next = WAIT;
+                    end
         endcase
     end
-     
- endmodule
 
+ endmodule

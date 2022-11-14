@@ -74,16 +74,16 @@ module dc_fifo_wrapper_infill_mlab #(
 		.out_startofpacket (out_startofpacket),                    //  output,    width = 1,              .startofpacket
 		.out_endofpacket   (out_endofpacket),                      //  output,    width = 1,              .endofpacket
 		.out_empty         (out_empty),                            //  output,    width = 6,              .empty
-		.out_csr_address   (1'b0),                                 // (terminated),                             
-		.out_csr_read      (1'b0),                                 // (terminated),                             
-		.out_csr_write     (1'b0),                                 // (terminated),                             
-		.out_csr_readdata  (),                                     // (terminated),                             
-		.out_csr_writedata (32'b00000000000000000000000000000000), // (terminated),                             
-		.in_error          (1'b0),                                 // (terminated),                             
-		.out_error         (),                                     // (terminated),                             
-		.in_channel        (1'b0),                                 // (terminated),                             
-		.out_channel       (),                                     // (terminated),                             
-		.space_avail_data  ()                                      // (terminated),                             
+		.out_csr_address   (1'b0),                                 // (terminated),
+		.out_csr_read      (1'b0),                                 // (terminated),
+		.out_csr_write     (1'b0),                                 // (terminated),
+		.out_csr_readdata  (),                                     // (terminated),
+		.out_csr_writedata (32'b00000000000000000000000000000000), // (terminated),
+		.in_error          (1'b0),                                 // (terminated),
+		.out_error         (),                                     // (terminated),
+		.in_channel        (1'b0),                                 // (terminated),
+		.out_channel       (),                                     // (terminated),
+		.space_avail_data  ()                                      // (terminated),
 	);
 
 endmodule

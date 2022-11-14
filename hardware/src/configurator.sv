@@ -25,8 +25,8 @@ module configurator(
 );
 
 always_comb begin
-  in_config_ready = 
-    out_conf_ft_ready & 
+  in_config_ready =
+    out_conf_ft_ready &
     out_conf_ts_ready &
     out_conf_rl_ready;
 

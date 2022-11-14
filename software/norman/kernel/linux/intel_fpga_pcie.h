@@ -41,46 +41,42 @@
  * SOFTWARE.
  */
 
-#ifndef INTEL_FPGA_PCIE_H
-#define INTEL_FPGA_PCIE_H
+#ifndef SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_H_
+#define SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_H_
 
 /* Debugging defines */
-#define INTEL_FPGA_PCIE_PRINT(level,...)                    \
-    do {                                                    \
-        printk(level "%s - %04d: ", __func__, __LINE__);    \
-        printk(__VA_ARGS__);                                \
-        printk("\n");                                       \
-    } while (0)
+#define INTEL_FPGA_PCIE_PRINT(level, ...)            \
+  do {                                               \
+    printk(level "%s - %04d: ", __func__, __LINE__); \
+    printk(__VA_ARGS__);                             \
+    printk("\n");                                    \
+  } while (0)
 
-
-#define INTEL_FPGA_PCIE_ERR(...)                            \
-    INTEL_FPGA_PCIE_PRINT(KERN_ERR, __VA_ARGS__)
-#define INTEL_FPGA_PCIE_WARN(...)                           \
-    INTEL_FPGA_PCIE_PRINT(KERN_WARNING, __VA_ARGS__)
+#define INTEL_FPGA_PCIE_ERR(...) INTEL_FPGA_PCIE_PRINT(KERN_ERR, __VA_ARGS__)
+#define INTEL_FPGA_PCIE_WARN(...) \
+  INTEL_FPGA_PCIE_PRINT(KERN_WARNING, __VA_ARGS__)
 
 #ifdef DEBUG
-#  define INTEL_FPGA_PCIE_DEBUG(...)                        \
-    INTEL_FPGA_PCIE_PRINT(KERN_DEBUG, __VA_ARGS__)
+#define INTEL_FPGA_PCIE_DEBUG(...) \
+  INTEL_FPGA_PCIE_PRINT(KERN_DEBUG, __VA_ARGS__)
 #else /* !DEBUG */
-#  define INTEL_FPGA_PCIE_DEBUG(...)                        \
-({                                                          \
-    if (0) {                                                \
-        INTEL_FPGA_PCIE_PRINT(KERN_DEBUG, __VA_ARGS__);     \
-    }                                                       \
-})
+#define INTEL_FPGA_PCIE_DEBUG(...)                    \
+  ({                                                  \
+    if (0) {                                          \
+      INTEL_FPGA_PCIE_PRINT(KERN_DEBUG, __VA_ARGS__); \
+    }                                                 \
+  })
 #endif /* !DEBUG */
 
 #ifdef VERBOSE_DEBUG
-#  define INTEL_FPGA_PCIE_VERBOSE_DEBUG(...)                \
-    INTEL_FPGA_PCIE_DEBUG(__VA_ARGS__)
+#define INTEL_FPGA_PCIE_VERBOSE_DEBUG(...) INTEL_FPGA_PCIE_DEBUG(__VA_ARGS__)
 #else /* !VERBOSE_DEBUG */
-#  define INTEL_FPGA_PCIE_VERBOSE_DEBUG(...)                \
-({                                                          \
-    if (0) {                                                \
-        INTEL_FPGA_PCIE_DEBUG(__VA_ARGS__);                 \
-    }                                                       \
-})
+#define INTEL_FPGA_PCIE_VERBOSE_DEBUG(...) \
+  ({                                       \
+    if (0) {                               \
+      INTEL_FPGA_PCIE_DEBUG(__VA_ARGS__);  \
+    }                                      \
+  })
 #endif /* !VERBOSE_DEBUG */
 
-
-#endif /* INTEL_FPGA_PCIE_H */
+#endif  // SOFTWARE_NORMAN_KERNEL_LINUX_INTEL_FPGA_PCIE_H_

@@ -173,7 +173,7 @@ logic [FT_SUBTABLE-1:0] p_ft_empty_r;
 logic s_busy;
 logic p_busy;
 assign in_meta_ready = !s_busy;
-// Using out_meta_ready as "stall" signal for this pipeline. 
+// Using out_meta_ready as "stall" signal for this pipeline.
 assign s_busy = !out_meta_ready;
 
 assign in_control_ready = !p_busy;
@@ -199,8 +199,8 @@ assign p_ft_empty[1] = !ft1_q_b.valid;
 assign p_ft_empty[2] = !ft2_q_b.valid;
 assign p_ft_empty[3] = !ft3_q_b.valid;
 
-// Lookup from Port A of the BRAM. Fully pipelined.  
-// Entry is updated by CPU through port B of the BRAM. 
+// Lookup from Port A of the BRAM. Fully pipelined.
+// Entry is updated by CPU through port B of the BRAM.
 always@(posedge clk) begin
     if (rst) begin
         ft0_rden_a <= 1'b0;
@@ -251,7 +251,7 @@ always@(posedge clk) begin
             rd_valid_a_r <= ft0_rden_a;
             s_meta_r1 <= s_meta_r;
             s_lookup_tuple_r1 <= s_lookup_tuple;
-            
+
             // Stage 2.
             rd_valid_a <= rd_valid_a_r;
             s_meta_r2 <= s_meta_r1;
@@ -259,7 +259,7 @@ always@(posedge clk) begin
 
             // Stage 3.
             // Assign output whenever the rd data is valid (should be two cycles
-            // later). 
+            // later).
             if (rd_valid_a) begin
                 out_meta_valid <= 1'b1;
                 out_meta_data <= s_meta_r2;
@@ -285,7 +285,7 @@ always@(posedge clk) begin
             end
         end
     end
-end 
+end
 
 
 // Placement FSM.

@@ -47,4 +47,3 @@ quartus_syn --read_settings_files=on --write_settings_files=off alt_ehipc2_hw \
 
 parallel --tmux \
   "${SCRIPT_DIR}/quartus_fit_save.sh {} ${bitstream_destination}" ::: $SEEDS
-

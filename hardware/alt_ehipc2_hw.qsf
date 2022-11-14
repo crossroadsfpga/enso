@@ -247,7 +247,7 @@ set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr
 set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in14 -entity alt_ehipc2_hw
 set_instance_assignment -name IO_STANDARD "HIGH SPEED DIFFERENTIAL I/O" -to xcvr_tx_out15 -entity alt_ehipc2_hw
 set_instance_assignment -name IO_STANDARD "CURRENT MODE LOGIC (CML)" -to xcvr_rx_in15 -entity alt_ehipc2_hw
-    
+
 
 # end ENTITY(alt_ehipc2_hw)
 # -------------------------
