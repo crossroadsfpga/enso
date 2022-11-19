@@ -64,6 +64,8 @@ static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg);
 static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg);
 static long get_ktimer(struct dev_bookkeep *dev_bk,
                        unsigned int __user *user_addr);
+static long get_uio_dev_name(struct chr_dev_bookkeep *chr_dev_bk,
+                             char __user *user_addr);
 
 /******************************************************************************
  * Device and I/O control function
@@ -163,6 +165,9 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
       break;
     case INTEL_FPGA_PCIE_IOCTL_GET_KTIMER:
       retval = get_ktimer(dev_bk, (unsigned int __user *)uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_CHR_GET_UIO_DEV_NAME:
+      retval = get_uio_dev_name(chr_dev_bk, (char __user *)uarg);
       break;
     default:
       retval = -ENOTTY;
@@ -284,6 +289,40 @@ static long get_dev(struct chr_dev_bookkeep *chr_dev_bk,
 
   if (copy_to_user(user_addr, &bdf, sizeof(bdf))) {
     INTEL_FPGA_PCIE_DEBUG("couldn't copy BDF information to user.");
+    return -EFAULT;
+  }
+
+  return 0;
+}
+
+/**
+ * get_uio_dev_name() - Copies the currently selected device's uio device name
+ *                      to userspace.
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ * @user_addr:  Address to a string buffer in user-space.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long get_uio_dev_name(struct chr_dev_bookkeep *chr_dev_bk,
+                             char __user *user_addr) {
+  struct dev_bookkeep *dev_bk;
+  const char *dev_name;
+  size_t dev_name_size;
+
+  dev_bk = chr_dev_bk->dev_bk;
+  dev_name = dev_bk->info.uio_dev->dev.kobj.name;
+
+  if (dev_name == NULL) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't get uio device name.");
+    return -EFAULT;
+  }
+
+  dev_name_size = strlen(dev_name);
+
+  if (copy_to_user(user_addr, dev_name, dev_name_size)) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy uio dev information to user.");
     return -EFAULT;
   }
 

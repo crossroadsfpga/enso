@@ -319,6 +319,13 @@ class intel_fpga_pcie_dev {
    */
   unsigned int get_ktimer(void);
 
+  /**
+   * Retrieve the UIO device name.
+   * @return 0 on success. On error, -1 is returned and errno is set
+   *         appropriately.
+   */
+  int get_uio_dev_name(char *name);
+
  private:
   INTEL_FPGA_PCIE_DEV_HANDLE m_dev_handle;
   INTEL_FPGA_PCIE_DEV_HANDLE m_uio_dev_handle;

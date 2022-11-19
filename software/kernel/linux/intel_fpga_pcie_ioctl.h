@@ -112,7 +112,9 @@ struct intel_fpga_pcie_ksize {
   _IOW(INTEL_FPGA_PCIE_IOCTL_MAGIC, 9, unsigned int)
 #define INTEL_FPGA_PCIE_IOCTL_GET_KTIMER \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 10, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 10
+#define INTEL_FPGA_PCIE_IOCTL_CHR_GET_UIO_DEV_NAME \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 11, char *)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 11
 
 long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
                                     unsigned long arg);

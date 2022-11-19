@@ -48,11 +48,14 @@ static dsc_queue_t dsc_queue[MAX_NB_CORES];
 // TODO(sadok) replace with hash table?
 static socket_internal open_sockets[MAX_NB_SOCKETS];
 static unsigned int nb_open_sockets = 0;
+static uint16_t bdf = 0;
+
+// HACK(sadok): We need a better way to specify the BDF.
+void set_bdf(uint16_t bdf_) { bdf = bdf_; }
 
 int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
            int nb_queues) noexcept {  // HACK(sadok) using protocol as nb_queues
   intel_fpga_pcie_dev* dev;
-  uint16_t bdf = 0;
   int bar = -1;
   int result;
 

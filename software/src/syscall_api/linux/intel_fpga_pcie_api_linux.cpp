@@ -19,6 +19,7 @@
 #include <sched.h>
 #include <unistd.h>
 
+#include <iostream>
 #include <stdexcept>
 
 #include "../intel_fpga_pcie_api.hpp"
@@ -98,17 +99,6 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar) {
   }
   m_dev_handle = fd;
 
-  fd = open("/dev/uio0", O_RDWR | O_CLOEXEC);  // HACK(sadok) assume it's uio0
-
-  if (fd == -1) {
-    close(m_dev_handle);
-    throw std::runtime_error(
-        "could not open uio character device; "
-        "ensure that Intel FPGA kernel driver "
-        "has been loaded");
-  }
-  m_uio_dev_handle = fd;
-
   if (bdf > 0) {
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV, bdf);
     if (result != 0) {
@@ -144,6 +134,24 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar) {
     }
     m_bar = u_bar;
   }
+
+  char device_name[1000] = "/dev/";
+  if (get_uio_dev_name(device_name + 5)) {
+    throw std::runtime_error("could not get uio device name");
+  }
+
+  std::cout << "Using UIO device: " << device_name << std::endl;
+
+  fd = open(device_name, O_RDWR | O_CLOEXEC);
+
+  if (fd == -1) {
+    close(m_dev_handle);
+    throw std::runtime_error(
+        "could not open uio character device; "
+        "ensure that Intel FPGA kernel driver "
+        "has been loaded");
+  }
+  m_uio_dev_handle = fd;
 
   m_bdf = bdf;
   m_kmem_size = 0;
@@ -420,4 +428,9 @@ unsigned int intel_fpga_pcie_dev::get_ktimer(void) {
   }
 
   return timer_usec;
+}
+
+int intel_fpga_pcie_dev::get_uio_dev_name(char *uio_dev_name) {
+  return ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_GET_UIO_DEV_NAME,
+               uio_dev_name);
 }

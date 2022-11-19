@@ -47,6 +47,8 @@ typedef unsigned int socklen_t;
 #define MAX_NB_CORES 128
 #define MAX_NB_SOCKETS 16384
 
+void set_bdf(uint16_t bdf_);
+
 int socket(int domain, int type, int protocol) noexcept;
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) noexcept;
