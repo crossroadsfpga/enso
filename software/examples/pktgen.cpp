@@ -47,6 +47,7 @@
 #include <cerrno>
 #include <chrono>
 #include <csignal>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -130,7 +131,9 @@ static void print_usage(const char* program_name) {
       " [--rtt]\n"
       " [--rtt-hist HIST_FILE]\n"
       " [--rtt-hist-offset HIST_OFFSET]\n"
-      " [--rtt-hist-len HIST_LEN]\n\n"
+      " [--rtt-hist-len HIST_LEN]\n"
+      " [--stats-delay STATS_DELAY]\n"
+      " [--pcie-addr PCIE_ADDR]\n\n"
 
       "  PCAP_FILE: Pcap file with packets to transmit.\n"
       "  RATE_NUM: Numerator of the rate used to transmit packets.\n"
@@ -151,7 +154,8 @@ static void print_usage(const char* program_name) {
       "                  will still be saved, but there will be a\n"
       "                  performance penalty.\n"
       "  --stats-delay: Delay between displayed stats in milliseconds\n"
-      "                 (default: %d).\n",
+      "                 (default: %d).\n"
+      "  --pcie-addr: Specify the PCIe address of the dataplane to use.\n",
       program_name, DEFAULT_CORE_ID, DEFAULT_NB_QUEUES, DEFAULT_HIST_OFFSET,
       DEFAULT_HIST_LEN, DEFAULT_STATS_DELAY);
 }
@@ -167,6 +171,7 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_RTT_HIST_OFF "rtt-hist-offset"
 #define CMD_OPT_RTT_HIST_LEN "rtt-hist-len"
 #define CMD_OPT_STATS_DELAY "stats-delay"
+#define CMD_OPT_PCIE_ADDR "pcie-addr"
 
 // Map long options to short options.
 enum {
@@ -180,7 +185,8 @@ enum {
   CMD_OPT_RTT_HIST_NUM,
   CMD_OPT_RTT_HIST_OFF_NUM,
   CMD_OPT_RTT_HIST_LEN_NUM,
-  CMD_OPT_STATS_DELAY_NUM
+  CMD_OPT_STATS_DELAY_NUM,
+  CMD_OPT_PCIE_ADDR_NUM,
 };
 
 static const char short_options[] = "";
@@ -197,6 +203,7 @@ static const struct option long_options[] = {
     {CMD_OPT_RTT_HIST_OFF, required_argument, NULL, CMD_OPT_RTT_HIST_OFF_NUM},
     {CMD_OPT_RTT_HIST_LEN, required_argument, NULL, CMD_OPT_RTT_HIST_LEN_NUM},
     {CMD_OPT_STATS_DELAY, required_argument, NULL, CMD_OPT_STATS_DELAY_NUM},
+    {CMD_OPT_PCIE_ADDR, required_argument, NULL, CMD_OPT_PCIE_ADDR_NUM},
     {0, 0, 0, 0}};
 
 struct parsed_args_t {
@@ -215,6 +222,7 @@ struct parsed_args_t {
   uint32_t rtt_hist_offset;
   uint32_t rtt_hist_len;
   uint32_t stats_delay;
+  std::string pcie_addr;
 };
 
 static int parse_args(int argc, char** argv,
@@ -269,6 +277,9 @@ static int parse_args(int argc, char** argv,
         break;
       case CMD_OPT_STATS_DELAY_NUM:
         parsed_args.stats_delay = atoi(optarg);
+        break;
+      case CMD_OPT_PCIE_ADDR_NUM:
+        parsed_args.pcie_addr = optarg;
         break;
       default:
         return -1;
@@ -599,6 +610,20 @@ int main(int argc, char** argv) {
       return 0;
     }
     return 1;
+  }
+
+  // Parse the PCI address in format 0000:00:00.0
+  if (parsed_args.pcie_addr != "") {
+    uint32_t domain, bus, dev, func;
+    if (sscanf(parsed_args.pcie_addr.c_str(), "%x:%x:%x.%x", &domain, &bus,
+               &dev, &func) != 4) {
+      std::cerr << "Invalid PCI address: " << parsed_args.pcie_addr
+                << std::endl;
+      std::cerr << "Use format 0000:00:00.0" << std::endl;
+      return 1;
+    }
+    uint16_t bdf = (bus << 8) | (dev << 3) | (func & 0x7);
+    norman::set_bdf(bdf);
   }
 
   char errbuf[PCAP_ERRBUF_SIZE];
