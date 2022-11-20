@@ -170,6 +170,21 @@ class NormanPktgen(Pktgen):
         self.current_pps = pkts_per_sec
         self.expected_tx_duration = nb_pkts / pkts_per_sec
 
+        # Make sure remote stats file does not exist.
+        remote_stats_file = remote_command(
+            self.dataplane.ssh_client,
+            f"rm -f {self.stats_file}",
+            print_command=False,
+        )
+        watch_command(
+            remote_stats_file, stdout=self.log_file, stderr=self.log_file
+        )
+        status = remote_stats_file.recv_exit_status()
+        if status != 0:
+            raise RuntimeError(
+                f"Error removing remote stats file ({self.stats_file})"
+            )
+
         command = (
             f"sudo {self.dataplane.remote_norman_path}/{NORMAN_PKTGEN_CMD}"
             f" {self.pcap_path} {rate_frac.numerator} {rate_frac.denominator}"
