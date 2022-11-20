@@ -215,9 +215,9 @@ class NormanPktgen(Pktgen):
             stderr=self.log_file,
             keyboard_int=lambda: self.pktgen_cmd.send(b"\x03"),
         )
-        # status = self.pktgen_cmd.recv_exit_status()
-        # if status != 0:
-        #     raise RuntimeError('Error running Norman Pktgen')
+        status = self.pktgen_cmd.recv_exit_status()
+        if status != 0:
+            raise RuntimeError("Error running Norman Pktgen")
 
         self.update_stats()
 
