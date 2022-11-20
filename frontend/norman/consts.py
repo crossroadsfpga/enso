@@ -8,7 +8,7 @@ DEFAULT_BATCH_SIZE = 64
 
 # The following paths are relative to the norman path.
 SETUP_SW_CMD = "software/setup.sh"
-NORMAN_PKTGEN_CMD = "software/pktgen"
+NORMAN_PKTGEN_CMD = "software/build/examples/pktgen"
 PCAPS_DIR = "frontend/pcaps/"
 PCAP_GEN_CMD = "hardware/input_gen/generate_synthetic_trace.py"
 
