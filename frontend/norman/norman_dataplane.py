@@ -1,4 +1,4 @@
-import sys
+from typing import TextIO, Union
 
 from netexp.helpers import RemoteIntelFpga, remote_command, watch_command
 
@@ -24,8 +24,8 @@ class NormanDataplane(RemoteIntelFpga):
     using JTAG and recompile the library according to the specified parameters.
 
     Attributes:
-        host:
         fpga_id:
+        host:
         remote_norman_path:
         load_bitstream:
         ensure_clean:
@@ -40,6 +40,7 @@ class NormanDataplane(RemoteIntelFpga):
         sw_batch_size:
         skip_config:
         verbose:
+        log_file:
     """
 
     def __init__(
@@ -62,6 +63,7 @@ class NormanDataplane(RemoteIntelFpga):
         latency_opt: bool = False,
         skip_config: bool = False,
         verbose: bool = False,
+        log_file: Union[bool, TextIO] = False,
     ):
         if load_bitstream and verbose:
             print("Loading bitstream, it might take a couple of seconds.")
@@ -69,18 +71,13 @@ class NormanDataplane(RemoteIntelFpga):
         load_bitstream_cmd = f"{remote_norman_path}/{LOAD_BITSTREAM_CMD}"
         run_console_cmd = f"{remote_norman_path}/{RUN_CONSOLE_CMD}"
 
-        if verbose:
-            self.log_file = sys.stdout
-        else:
-            self.log_file = False
-
         super().__init__(
             host,
             fpga_id,
             run_console_cmd,
             load_bitstream_cmd,
             load_bitstream=load_bitstream,
-            log_file=self.log_file,
+            log_file=log_file,
         )
 
         self.remote_norman_path = remote_norman_path
