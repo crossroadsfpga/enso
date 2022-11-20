@@ -5,7 +5,7 @@ import tempfile
 from collections import defaultdict
 from csv import DictReader
 from fractions import Fraction
-from typing import Optional
+from typing import Optional, TextIO, Union
 
 from netexp.helpers import remote_command, watch_command, download_file
 from netexp.pcap import mean_pkt_size_remote_pcap
@@ -95,6 +95,7 @@ class NormanPktgen(Pktgen):
         hist_file: Optional[str] = None,
         stats_delay: Optional[int] = None,
         verbose: bool = False,
+        log_file: Union[bool, TextIO] = False,
         check_tx_rate=False,
     ) -> None:
         super().__init__()
@@ -117,6 +118,7 @@ class NormanPktgen(Pktgen):
         self.hist_file = hist_file or "hist.csv"
 
         self.verbose = verbose
+        self.log_file = log_file
         self.check_tx_rate = check_tx_rate
 
         self.pktgen_cmd = None
@@ -138,7 +140,7 @@ class NormanPktgen(Pktgen):
         pcap_gen_cmd = remote_command(
             self.dataplane.ssh_client, pcap_gen_cmd, print_command=self.verbose
         )
-        watch_command(pcap_gen_cmd, stdout=self.verbose, stderr=self.verbose)
+        watch_command(pcap_gen_cmd, stdout=self.log_file, stderr=self.log_file)
         status = pcap_gen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError("Error generating pcap")
@@ -209,8 +211,8 @@ class NormanPktgen(Pktgen):
 
         watch_command(
             self.pktgen_cmd,
-            stdout=self.verbose,
-            stderr=self.verbose,
+            stdout=self.log_file,
+            stderr=self.log_file,
             keyboard_int=lambda: self.pktgen_cmd.send(b"\x03"),
         )
         # status = self.pktgen_cmd.recv_exit_status()
@@ -317,7 +319,7 @@ class NormanPktgen(Pktgen):
         self.pktgen_cmd.send(b"\x03")
 
         watch_command(
-            self.pktgen_cmd, stdout=self.verbose, stderr=self.verbose
+            self.pktgen_cmd, stdout=self.log_file, stderr=self.log_file
         )
         status = self.pktgen_cmd.recv_exit_status()
         if status != 0:
