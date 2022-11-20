@@ -94,6 +94,7 @@ class NormanPktgen(Pktgen):
         stats_file: Optional[str] = None,
         hist_file: Optional[str] = None,
         stats_delay: Optional[int] = None,
+        pcie_addr: Optional[str] = None,
         verbose: bool = False,
         log_file: Union[bool, TextIO] = False,
         check_tx_rate=False,
@@ -113,6 +114,10 @@ class NormanPktgen(Pktgen):
         self.rtt_hist_offset = rtt_hist_offset
         self.rtt_hist_len = rtt_hist_len
         self.stats_delay = stats_delay
+
+        if pcie_addr is not None and pcie_addr.count(":") == 1:
+            pcie_addr = f"0000:{pcie_addr}"  # Add domain.
+        self.pcie_addr = pcie_addr
 
         self.stats_file = stats_file or "stats.csv"
         self.hist_file = hist_file or "hist.csv"
@@ -211,6 +216,9 @@ class NormanPktgen(Pktgen):
 
         if self.stats_delay is not None:
             command += f" --stats-delay {self.stats_delay}"
+
+        if self.pcie_addr is not None:
+            command += f" --pcie-addr {self.pcie_addr}"
 
         self.pktgen_cmd = remote_command(
             self.dataplane.ssh_client,
