@@ -26,3 +26,4 @@ cd build
 meson configure -Ddsc_buf_size=$1 -Dpkt_buf_size=$2 -Dbatch_size=$3 \
     -Dlatency_opt=$4
 ninja
+sudo ninja install
