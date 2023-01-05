@@ -219,17 +219,31 @@ always_comb begin
         last_incr_tail_0 = (last_states[0].tail + 1) & rb_mask;
         last_incr_tail_1 = (last_states[1].tail + 1) & rb_mask;
     end else begin
-        queue_full = (free_slot < cur_metadata.pkt_size)
-                     & !cur_metadata.pass_through;
-        last_queue_full_0 = (last_free_slot_0 < cur_metadata.pkt_size)
-                            & !cur_metadata.pass_through;
-        last_queue_full_1 = (last_free_slot_1 < cur_metadata.pkt_size)
-                            & !cur_metadata.pass_through;
-        incr_tail = (tail + cur_metadata.pkt_size) & rb_mask;
+        // Length occupied in the buffer (in flits). When SKIP_AHEAD is enabled,
+        // we use more than the packet size.
+        automatic logic [$clog2(MAX_PKT_SIZE):0] size_in_buffer;
+        automatic logic [$clog2(MAX_PKT_SIZE):0] size_in_buffer_0;
+        automatic logic [$clog2(MAX_PKT_SIZE):0] size_in_buffer_1;
+`ifdef SKIP_AHEAD
+        size_in_buffer = cur_metadata.pkt_size + tail[4:2];
+        size_in_buffer_0 = cur_metadata.pkt_size + last_states[0].tail[4:2];
+        size_in_buffer_1 = cur_metadata.pkt_size + last_states[1].tail[4:2];
+`else
+        size_in_buffer = cur_metadata.pkt_size;
+        size_in_buffer_0 = cur_metadata.pkt_size;
+        size_in_buffer_1 = cur_metadata.pkt_size;
+`endif  // SKIP_AHEAD
+        queue_full = (free_slot < size_in_buffer) & !cur_metadata.pass_through;
+        last_queue_full_0 =
+            (last_free_slot_0 < size_in_buffer_0) & !cur_metadata.pass_through;
+        last_queue_full_1 =
+            (last_free_slot_1 < size_in_buffer_1)
+            & !cur_metadata.pass_through;
+        incr_tail = (tail + size_in_buffer) & rb_mask;
         last_incr_tail_0 =
-            (last_states[0].tail + cur_metadata.pkt_size) & rb_mask;
+            (last_states[0].tail + size_in_buffer_0) & rb_mask;
         last_incr_tail_1 =
-            (last_states[1].tail + cur_metadata.pkt_size) & rb_mask;
+            (last_states[1].tail + size_in_buffer_1) & rb_mask;
     end
 end
 

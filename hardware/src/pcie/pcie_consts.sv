@@ -6,6 +6,12 @@
 localparam PCIE_WRDM_BASE_ADDR = 32'h4000_0000;
 localparam PCIE_RDDM_BASE_ADDR = 32'h4000_0000;
 
+// Used for benchmarking purposes. When defined, packets are not DMAed
+// continuously. Instead, we leave a variable, but predictable, gap between
+// them. This makes sure that the CPU reads are not contiguous, not benefiting
+// from the stream prefetcher.
+// `define SKIP_AHEAD
+
 typedef struct packed
 {
     logic [31:0] tail;

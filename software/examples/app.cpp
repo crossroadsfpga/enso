@@ -51,6 +51,13 @@
 #define ZERO_COPY
 #define SEND_BACK
 
+// Uncomment to enable "skip ahead." Must also be enabled in hardware and must
+// be used without SEND_BACK enabled. When SKIP_AHEAD is enabled, packets are
+// not DMAed continuously. Instead, we leave a variable, but predictable, gap
+// between them. This makes sure that the CPU reads are not contiguous, not
+// benefiting from the stream prefetcher.
+// #define SKIP_AHEAD
+
 static volatile int keep_running = 1;
 static volatile int setup_done = 0;
 
@@ -80,11 +87,12 @@ int main(int argc, const char* argv[]) {
   std::thread socket_thread = std::thread([&recv_bytes, port, addr_offset,
                                            nb_queues, &nb_batches, &nb_pkts,
                                            &nb_cycles] {
+#ifdef SEND_BACK
     uint32_t tx_pr_head = 0;
     uint32_t tx_pr_tail = 0;
+#endif  // SEND_BACK
     tx_pending_request_t* tx_pending_requests =
         new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
-    (void)nb_cycles;
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -128,6 +136,13 @@ int main(int argc, const char* argv[]) {
 
     setup_done = 1;
 
+#ifdef SKIP_AHEAD
+    uint16_t* offset = new uint16_t[nb_queues];
+    for (int i = 0; i < nb_queues; ++i) {
+      offset[i] = 0;
+    }
+#endif
+
     while (keep_running) {
       // HACK(sadok) this only works because socket_fd is incremental, it
       // would not work with an actual file descriptor
@@ -149,25 +164,39 @@ int main(int argc, const char* argv[]) {
 #endif
           int processed_bytes = 0;
           uint8_t* pkt = buf;
+#ifdef SKIP_AHEAD
+          pkt += offset[socket_fd];
+          int original_recv_len = recv_len;
+          recv_len -= offset[socket_fd];
+#endif
 
           while (processed_bytes < recv_len) {
             uint16_t pkt_len = norman::get_pkt_len(pkt);
             uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-            uint16_t pkt_aligned_len = nb_flits * 64;
 
             ++pkt[63];  // Increment payload.
 
-            // for (uint32_t i = 0; i < nb_cycles; ++i) {
-            //     asm("nop");
-            // }
+            for (uint32_t i = 0; i < nb_cycles; ++i) {
+              asm("nop");
+            }
 
+#ifdef SKIP_AHEAD
+            uint64_t skip_ahead_offset = ((uint64_t)pkt & 0x700) >> 8;
+            nb_flits += skip_ahead_offset;
+#endif
+            uint16_t pkt_aligned_len = nb_flits * 64;
             pkt += pkt_aligned_len;
             processed_bytes += pkt_aligned_len;
+            recv_bytes += pkt_len;
             ++nb_pkts;
           }
 
+#ifdef SKIP_AHEAD
+          offset[socket_fd] = processed_bytes - recv_len;
+          recv_len = original_recv_len;
+#endif
+
           ++nb_batches;
-          recv_bytes += recv_len;
 
 #ifdef SEND_BACK
           uint64_t phys_addr = norman::convert_buf_addr_to_phys(socket_fd, buf);
@@ -204,6 +233,10 @@ int main(int argc, const char* argv[]) {
       norman::shutdown(socket_fd, SHUT_RDWR);
     }
 
+#ifdef SKIP_AHEAD
+    delete[] offset;
+#endif
+
     delete[] tx_pending_requests;
   });
 
@@ -231,8 +264,9 @@ int main(int argc, const char* argv[]) {
     uint64_t delta_bytes = recv_bytes - recv_bytes_before;
     uint64_t delta_pkts = nb_pkts - nb_pkts_before;
     uint64_t delta_batches = nb_batches - nb_batches_before;
-    std::cout << std::dec << delta_bytes * 8. / 1e6 << " Mbps  " << recv_bytes
-              << " B  " << nb_batches << " batches  " << nb_pkts << " pkts";
+    std::cout << std::dec << delta_bytes * 8. / 1e6 << " Mbps  "
+              << delta_pkts / 1e6 << " Mpps  " << recv_bytes << " B  "
+              << nb_batches << " batches  " << nb_pkts << " pkts";
 
     if (delta_batches > 0) {
       std::cout << "  " << delta_bytes / delta_batches << " B/batch";
