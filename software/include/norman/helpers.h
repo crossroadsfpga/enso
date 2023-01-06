@@ -57,29 +57,27 @@ namespace norman {
   } while (0)
 
 /**
- * enable_timestamp() - Enable hardware timestamping.
- * @dsc_queue: Descriptor queue to send configuration through.
+ * Enables hardware timestamping.
  *
  * All outgoing packets will receive a timestamp and all incoming packets will
  * have an RTT (in number of cycles). Use `get_pkt_rtt` to retrieve the value.
  *
- * Return: Return 0 if configuration was successful.
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @return 0 if configuration was successful.
  */
-int enable_timestamp(dsc_queue_t* dsc_queue);
+int enable_timestamp(struct NotificationBufPair* notification_buf_pair);
 
 /**
- * disable_timestamp() - Disable hardware timestamping.
- * @dsc_queue: Descriptor queue to send configuration through.
- *
- * Return: Return 0 if configuration was successful.
+ * Disables hardware timestamping.
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @return 0 if configuration was successful.
  */
-int disable_timestamp(dsc_queue_t* dsc_queue);
+int disable_timestamp(struct NotificationBufPair* notification_buf_pair);
 
 /**
- * enable_rate_limit() - Enable hardware rate limit.
- * @dsc_queue: Descriptor queue to send configuration through.
- * @num: Rate numerator.
- * @den: Rate denominator.
+ * Enables hardware rate limit.
  *
  * Once rate limiting is enabled, packets from all queues are sent at a rate of
  * (num/den * MAX_HARDWARE_FLIT_RATE) flits per second (a flit is 64 bytes).
@@ -106,28 +104,34 @@ int disable_timestamp(dsc_queue_t* dsc_queue);
  * packet is two flits, for MAX_HARDWARE_FLIT_RATE=200e6, the maximum rate is
  * 100e9/((128+20)*8)*2/200e6, which is approximately 125/148.
  *
- * Return: Return 0 if configuration was successful.
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @param num Rate numerator.
+ * @param den Rate denominator.
+ * @return 0 if configuration was successful.
  */
-int enable_rate_limit(dsc_queue_t* dsc_queue, uint16_t num, uint16_t den);
+int enable_rate_limit(struct NotificationBufPair* notification_buf_pair,
+                      uint16_t num, uint16_t den);
 
 /**
- * disable_rate_limit() - Disable hardware rate limit.
- * @dsc_queue: Descriptor queue to send configuration through.
+ * Disables hardware rate limit.
  *
- * Return: Return 0 if configuration was successful.
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @return 0 if configuration was successful.
  */
-int disable_rate_limit(dsc_queue_t* dsc_queue);
+int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
 
 /**
- * get_pkt_rtt() - Return RTT, in number of cycles, for a given packet.
- * @pkt: Packet to retrieve the RTT from.
+ * Returns RTT, in number of cycles, for a given packet.
  *
  * This assumes that the packet has been timestamped by hardware. To enable
  * timestamping call the `enable_timestamp` function.
  *
  * To convert from number of cycles to ns. Do `cycles * NS_PER_TIMESTAMP_CYCLE`.
  *
- * Return: Return RTT measure for the packet in nanoseconds. If timestamp is
+ * @param pkt Packet to retrieve the RTT from.
+ * @return Return RTT measure for the packet in nanoseconds. If timestamp is
  *         not enabled the value returned is undefined.
  */
 inline uint32_t get_pkt_rtt(uint8_t* pkt) {

@@ -167,7 +167,7 @@ int main(int argc, const char* argv[]) {
               rb_states[buf_idx].head = (my_head + recv_len) % BUF_LEN;
             }
 #ifdef ZERO_COPY
-            norman::free_pkt_buf(socket_fd, recv_len);
+            norman::free_enso_pipe(socket_fd, recv_len);
 #endif
           }
           recv_bytes += recv_len;

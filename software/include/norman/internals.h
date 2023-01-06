@@ -39,12 +39,12 @@
 namespace norman {
 
 #if MAX_NB_FLOWS < 65536
-typedef uint16_t pkt_q_id_t;
+using pkt_q_id_t = uint16_t;
 #else
-typedef uint32_t pkt_q_id_t;
+using pkt_q_id_t = uint32_t;
 #endif
 
-typedef struct queue_regs {
+struct QueueRegs {
   uint32_t rx_tail;
   uint32_t rx_head;
   uint32_t rx_mem_low;
@@ -54,27 +54,27 @@ typedef struct queue_regs {
   uint32_t tx_mem_low;
   uint32_t tx_mem_high;
   uint32_t padding[8];
-} queue_regs_t;
+};
 
-typedef struct __attribute__((__packed__)) {
+struct __attribute__((__packed__)) RxNotification {
   uint64_t signal;
   uint64_t queue_id;
   uint64_t tail;
   uint64_t pad[5];
-} pcie_rx_dsc_t;
+};
 
-typedef struct __attribute__((__packed__)) {
+struct __attribute__((__packed__)) TxNotification {
   uint64_t signal;
   uint64_t phys_addr;
   uint64_t length;  // In bytes (up to 1MB).
   uint64_t pad[5];
-} pcie_tx_dsc_t;
+};
 
-typedef struct {
+struct NotificationBufPair {
   // First cache line:
-  pcie_rx_dsc_t* rx_buf;
+  struct RxNotification* rx_buf;
   pkt_q_id_t* last_rx_ids;  // Last queue ids consumed from rx_buf.
-  pcie_tx_dsc_t* tx_buf;
+  struct TxNotification* tx_buf;
   uint32_t* rx_head_ptr;
   uint32_t* tx_tail_ptr;
   uint32_t rx_head;
@@ -86,22 +86,21 @@ typedef struct {
   uint32_t __gap;
 
   // Second cache line:
-  queue_regs_t* regs;
+  struct QueueRegs* regs;
   uint64_t tx_full_cnt;
   uint32_t ref_cnt;
 
   uint8_t* wrap_tracker;
   uint32_t* pending_pkt_tails;
 
-  // HACK(sadok): This is used to decrement the packet queue id and use it as
-  // an index to the pending_pkt_tails array. This only works because packet
-  // queues for the same app are contiguous. This will no longer hold in the
-  // future. How bad would it be to use a hash table to keep
-  // `pending_pkt_tails`?
+  // HACK(sadok): This is used to decrement the enso pipe id and use it as
+  // an index to the pending_pkt_tails array. This only works because enso pipes
+  // for the same app are contiguous. This will no longer hold in the future.
+  // How bad would it be to use a hash table to keep `pending_pkt_tails`?
   // Another option is to get rid of the pending_pkt_tails array and instead
   // save the tails with `last_rx_ids`.
-  uint32_t pkt_queue_id_offset;
-} dsc_queue_t;
+  uint32_t enso_pipe_id_offset;
+};
 
 }  // namespace norman
 

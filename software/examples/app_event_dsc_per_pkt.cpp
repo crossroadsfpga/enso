@@ -161,7 +161,7 @@ int main(int argc, const char* argv[]) {
           tx_pr_tail = (tx_pr_tail + 1) % (MAX_PENDING_TX_REQUESTS + 1);
         }
 #else
-        norman::free_pkt_buf(socket_fd, recv_len);
+        norman::free_enso_pipe(socket_fd, recv_len);
 #endif
       }
 
@@ -171,7 +171,7 @@ int main(int argc, const char* argv[]) {
       // Free data that was already sent.
       for (int i = 0; i < nb_tx_completions; ++i) {
         tx_pending_request_t tx_req = tx_pending_requests[tx_pr_head];
-        norman::free_pkt_buf(tx_req.socket_fd, tx_req.length);
+        norman::free_enso_pipe(tx_req.socket_fd, tx_req.length);
         tx_pr_head = (tx_pr_head + 1) % (MAX_PENDING_TX_REQUESTS + 1);
       }
 #endif

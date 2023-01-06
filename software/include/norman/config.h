@@ -39,31 +39,33 @@ namespace norman {
 
 /**
  * insert_flow_entry() - Insert flow entry in the data plane flow table.
- * @dsc_queue: Descriptor queue to send configuration through.
+ * @notification_buf_pair: Notification buffer to send configuration through.
  * @dst_port: Destination port number of the flow entry.
  * @src_port: Source port number of the flow entry.
  * @dst_ip: Destination IP address of the flow entry.
  * @src_ip: Source IP address of the flow entry.
  * @protocol: Protocol of the flow entry.
- * @pkt_queue_id: Packet queue ID that will be associated with the flow entry.
+ * @enso_pipe_id: Enso Pipe ID that will be associated with the flow entry.
  *
  * Inserts a rule in the data plane flow table that will direct all packets
- * matching the flow entry to the `pkt_queue_id`.
+ * matching the flow entry to the `enso_pipe_id`.
  *
  * Return: Return 0 if configuration was successful.
  */
-int insert_flow_entry(dsc_queue_t* dsc_queue, uint16_t dst_port,
-                      uint16_t src_port, uint32_t dst_ip, uint32_t src_ip,
-                      uint32_t protocol, uint32_t pkt_queue_id);
+int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
+                      uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+                      uint32_t src_ip, uint32_t protocol,
+                      uint32_t enso_pipe_id);
 
 /**
  * send_config() - Send configuration to the dataplane.
- * @dsc_queue: Descriptor queue to send configuration through.
- * @config_dsc: Configuration descriptor.
+ * @notification_buf_pair: Notification buffer to send configuration through.
+ * @config_notification: Configuration notification.
  *
  * Return: Return 0 if configuration was successful.
  */
-int send_config(dsc_queue_t* dsc_queue, pcie_tx_dsc_t* config_dsc);
+int send_config(struct NotificationBufPair* notification_buf_pair,
+                struct TxNotification* config_notification);
 
 }  // namespace norman
 

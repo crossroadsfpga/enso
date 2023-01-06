@@ -35,8 +35,8 @@
 
 namespace norman {
 
-// These determine the maximum number of descriptor and packet queues, these
-// macros also exist in hardware and **must be kept in sync**. Update the
+// These determine the maximum number of notification buffers and enso pipes,
+// these macros also exist in hardware and **must be kept in sync**. Update the
 // variables with the same name on `hardware/src/constants.sv` and
 // `hardware_test/hwtest/my_stats.tcl`.
 #define MAX_NB_APPS 1024
@@ -46,31 +46,31 @@ namespace norman {
 
 #define MAX_TRANSFER_LEN 131072
 
-#define MAX_PENDING_TX_REQUESTS (DSC_BUF_SIZE - 1)
-
 #ifndef BATCH_SIZE
 // Maximum number of packets to process in call to get_next_batch_from_queue
 #define BATCH_SIZE 64
 #endif
 
-#ifndef DSC_BUF_SIZE
+#ifndef NOTIFICATION_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes).
-#define DSC_BUF_SIZE 16384
+#define NOTIFICATION_BUF_SIZE 16384
 #endif
 
-#ifndef PKT_BUF_SIZE
+#ifndef ENSO_PIPE_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes).
-#define PKT_BUF_SIZE 32768
+#define ENSO_PIPE_SIZE 32768
 #endif
+
+#define MAX_PENDING_TX_REQUESTS (NOTIFICATION_BUF_SIZE - 1)
 
 #define BUF_PAGE_SIZE (1UL << 21)  // using 2MB huge pages (size in bytes)
 
 // Sizes aligned to the huge page size, but if both buffers fit in a single
 // page, we may put them in the same page
 #define ALIGNED_DSC_BUF_PAIR_SIZE \
-  ((((DSC_BUF_SIZE * 64 * 2 - 1) / BUF_PAGE_SIZE + 1) * BUF_PAGE_SIZE))
+  ((((NOTIFICATION_BUF_SIZE * 64 * 2 - 1) / BUF_PAGE_SIZE + 1) * BUF_PAGE_SIZE))
 
 // Assumes that the FPGA `clk_datamover` runs at 200MHz. If we change the clock,
 // we must also change this value.

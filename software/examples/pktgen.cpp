@@ -60,8 +60,8 @@
 
 #include "app.h"
 
-// Number of loop iterations to wait before probing the TX dsc queue again when
-// reclaiming buffer space.
+// Number of loop iterations to wait before probing the TX notification buffer
+// again when reclaiming buffer space.
 #define TX_RECLAIM_DELAY 1024
 
 // If defined, ignore received packets.
@@ -375,8 +375,8 @@ static uint64_t virt_to_phys(void* virt) {
                     ((uintptr_t)virt) % pagesize);
 }
 
-struct PktBuffer {
-  PktBuffer(uint8_t* buf, uint32_t length, uint32_t nb_pkts)
+struct EnsoPipe {
+  EnsoPipe(uint8_t* buf, uint32_t length, uint32_t nb_pkts)
       : buf(buf), length(length), nb_pkts(nb_pkts) {
     phys_addr = virt_to_phys(buf);
   }
@@ -387,7 +387,7 @@ struct PktBuffer {
 };
 
 struct PcapHandlerContext {
-  std::vector<struct PktBuffer> pkt_buffers;
+  std::vector<struct EnsoPipe> enso_pipes;
   uint32_t free_flits;
   uint32_t hugepage_offset;
   pcap_t* pcap;
@@ -449,21 +449,21 @@ struct TxStats {
 };
 
 struct TxArgs {
-  TxArgs(std::vector<PktBuffer>& pkt_buffers, uint64_t total_bytes_to_send,
+  TxArgs(std::vector<EnsoPipe>& enso_pipes, uint64_t total_bytes_to_send,
          uint64_t pkts_in_last_buffer, int socket_fd)
       : ignored_reclaims(0),
         total_remaining_bytes(total_bytes_to_send),
         transmissions_pending(0),
         pkts_in_last_buffer(pkts_in_last_buffer),
-        pkt_buffers(pkt_buffers),
-        current_pkt_buf(pkt_buffers.begin()),
+        enso_pipes(enso_pipes),
+        current_enso_pipe(enso_pipes.begin()),
         socket_fd(socket_fd) {}
   uint64_t ignored_reclaims;
   uint64_t total_remaining_bytes;
   uint32_t transmissions_pending;
   uint64_t pkts_in_last_buffer;
-  std::vector<PktBuffer>& pkt_buffers;
-  std::vector<PktBuffer>::iterator current_pkt_buf;
+  std::vector<EnsoPipe>& enso_pipes;
+  std::vector<EnsoPipe>::iterator current_enso_pipe;
   int socket_fd;
 };
 
@@ -484,21 +484,21 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
       }
       context->hugepage_offset = BUFFER_SIZE;
     } else {
-      struct PktBuffer& pkt_buffer = context->pkt_buffers.back();
-      buf = pkt_buffer.buf + BUFFER_SIZE;
+      struct EnsoPipe& enso_pipe = context->enso_pipes.back();
+      buf = enso_pipe.buf + BUFFER_SIZE;
       context->hugepage_offset += BUFFER_SIZE;
     }
-    context->pkt_buffers.emplace_back(buf, 0, 0);
+    context->enso_pipes.emplace_back(buf, 0, 0);
     context->free_flits = BUFFER_SIZE / 64;
   }
 
-  struct PktBuffer& pkt_buffer = context->pkt_buffers.back();
-  uint8_t* dest = pkt_buffer.buf + pkt_buffer.length;
+  struct EnsoPipe& enso_pipe = context->enso_pipes.back();
+  uint8_t* dest = enso_pipe.buf + enso_pipe.length;
 
   memcpy(dest, pkt_bytes, len);
 
-  pkt_buffer.length += nb_flits * 64;  // Packets must be cache aligned.
-  ++(pkt_buffer.nb_pkts);
+  enso_pipe.length += nb_flits * 64;  // Packets must be cache aligned.
+  ++(enso_pipe.nb_pkts);
   context->free_flits -= nb_flits;
 }
 
@@ -545,7 +545,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
     rx_stats.pkts += nb_pkts;
     ++(rx_stats.nb_batches);
     rx_stats.bytes += recv_len;
-    norman::free_pkt_buf(socket_fd, recv_len);
+    norman::free_enso_pipe(socket_fd, recv_len);
   }
 #endif  // IGNORE_RX
   return nb_pkts;
@@ -553,15 +553,16 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 
 inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
   // Avoid transmitting new data when the TX buffer is full.
-  const uint32_t buf_fill_thresh = DSC_BUF_SIZE - TRANSFERS_PER_BUFFER - 1;
+  const uint32_t buf_fill_thresh =
+      NOTIFICATION_BUF_SIZE - TRANSFERS_PER_BUFFER - 1;
 
   if (likely(tx_args.transmissions_pending < buf_fill_thresh)) {
     uint32_t transmission_length = (uint32_t)std::min(
         (uint64_t)(BUFFER_SIZE), tx_args.total_remaining_bytes);
     transmission_length =
-        std::min(transmission_length, tx_args.current_pkt_buf->length);
+        std::min(transmission_length, tx_args.current_enso_pipe->length);
 
-    void* phys_addr = (void*)tx_args.current_pkt_buf->phys_addr;
+    void* phys_addr = (void*)tx_args.current_enso_pipe->phys_addr;
 
     norman::send(tx_args.socket_fd, phys_addr, transmission_length, 0);
     tx_stats.bytes += transmission_length;
@@ -576,15 +577,15 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
     }
 
     // Move to next packet buffer.
-    tx_stats.pkts += tx_args.current_pkt_buf->nb_pkts;
-    tx_args.current_pkt_buf = std::next(tx_args.current_pkt_buf);
-    if (tx_args.current_pkt_buf == tx_args.pkt_buffers.end()) {
-      tx_args.current_pkt_buf = tx_args.pkt_buffers.begin();
+    tx_stats.pkts += tx_args.current_enso_pipe->nb_pkts;
+    tx_args.current_enso_pipe = std::next(tx_args.current_enso_pipe);
+    if (tx_args.current_enso_pipe == tx_args.enso_pipes.end()) {
+      tx_args.current_enso_pipe = tx_args.enso_pipes.begin();
     }
   }
 
-  // Reclaim TX descriptor buffer space.
-  if ((tx_args.transmissions_pending > (DSC_BUF_SIZE / 4))) {
+  // Reclaim TX notification buffer space.
+  if ((tx_args.transmissions_pending > (NOTIFICATION_BUF_SIZE / 4))) {
     if (tx_args.ignored_reclaims > TX_RECLAIM_DELAY) {
       tx_args.ignored_reclaims = 0;
       tx_args.transmissions_pending -=
@@ -638,7 +639,7 @@ int main(int argc, char** argv) {
   context.free_flits = 0;
   context.hugepage_offset = HUGEPAGE_SIZE;
   context.pcap = pcap;
-  std::vector<PktBuffer>& pkt_buffers = context.pkt_buffers;
+  std::vector<EnsoPipe>& enso_pipes = context.enso_pipes;
 
   // Initialize packet buffers with packets read from pcap file.
   if (pcap_loop(pcap, 0, pcap_pkt_handler, (u_char*)&context) < 0) {
@@ -649,9 +650,9 @@ int main(int argc, char** argv) {
 
   // For small pcaps we copy the same packets over the remaining of the
   // buffer. This reduces the number of transfers that we need to issue.
-  if ((pkt_buffers.size() == 1) &&
-      (pkt_buffers.front().length < BUFFER_SIZE / 2)) {
-    PktBuffer& buffer = pkt_buffers.front();
+  if ((enso_pipes.size() == 1) &&
+      (enso_pipes.front().length < BUFFER_SIZE / 2)) {
+    EnsoPipe& buffer = enso_pipes.front();
     uint32_t original_buf_length = buffer.length;
     uint32_t original_nb_pkts = buffer.nb_pkts;
     while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
@@ -670,7 +671,7 @@ int main(int argc, char** argv) {
   if (parsed_args.nb_pkts > 0) {
     uint64_t total_pkts_in_buffers = 0;
     uint64_t total_bytes_in_buffers = 0;
-    for (auto& buffer : pkt_buffers) {
+    for (auto& buffer : enso_pipes) {
       total_pkts_in_buffers += buffer.nb_pkts;
       total_bytes_in_buffers += buffer.length;
     }
@@ -681,10 +682,10 @@ int main(int argc, char** argv) {
     total_bytes_to_send = nb_full_iters * total_bytes_in_buffers;
 
     if (nb_pkts_remaining == 0) {
-      pkts_in_last_buffer = pkt_buffers.back().nb_pkts;
+      pkts_in_last_buffer = enso_pipes.back().nb_pkts;
     }
 
-    for (auto& buffer : pkt_buffers) {
+    for (auto& buffer : enso_pipes) {
       if (nb_pkts_remaining < buffer.nb_pkts) {
         uint8_t* pkt = buffer.buf;
         while (nb_pkts_remaining > 0) {
@@ -774,7 +775,7 @@ int main(int argc, char** argv) {
 
       rx_done = true;
 
-      norman::disable_device_rate_limit();
+      // norman::disable_device_rate_limit();
 
       if (parsed_args.enable_rtt) {
         norman::disable_device_timestamp();
@@ -789,7 +790,7 @@ int main(int argc, char** argv) {
 
     std::thread tx_thread =
         std::thread([total_bytes_to_send, pkts_in_last_buffer, &parsed_args,
-                     &pkt_buffers, &tx_stats] {
+                     &enso_pipes, &tx_stats] {
           std::this_thread::sleep_for(std::chrono::seconds(1));
 
           int socket_fd =
@@ -805,7 +806,7 @@ int main(int argc, char** argv) {
 
           std::cout << "Running TX on core " << sched_getcpu() << std::endl;
 
-          TxArgs tx_args(pkt_buffers, total_bytes_to_send, pkts_in_last_buffer,
+          TxArgs tx_args(enso_pipes, total_bytes_to_send, pkts_in_last_buffer,
                          socket_fd);
 
           while (keep_running) {
@@ -845,7 +846,7 @@ int main(int argc, char** argv) {
     // Send and receive packets within the same thread.
     std::thread rx_tx_thread =
         std::thread([&parsed_args, &rx_stats, total_bytes_to_send,
-                     pkts_in_last_buffer, &pkt_buffers, &tx_stats] {
+                     pkts_in_last_buffer, &enso_pipes, &tx_stats] {
           std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
           for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
@@ -874,7 +875,7 @@ int main(int argc, char** argv) {
           rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
 
           int socket_fd = 0;  // Using first socket to transmit.
-          TxArgs tx_args(pkt_buffers, total_bytes_to_send, pkts_in_last_buffer,
+          TxArgs tx_args(enso_pipes, total_bytes_to_send, pkts_in_last_buffer,
                          socket_fd);
 
           rx_ready = 1;
@@ -902,7 +903,7 @@ int main(int argc, char** argv) {
 
           reclaim_all_buffers(tx_args);
 
-          norman::disable_device_rate_limit();
+          // norman::disable_device_rate_limit();
 
           if (parsed_args.enable_rtt) {
             norman::disable_device_timestamp();
@@ -1071,7 +1072,7 @@ int main(int argc, char** argv) {
     thread.join();
   }
 
-  for (auto& buffer : pkt_buffers) {
+  for (auto& buffer : enso_pipes) {
     // Only free hugepage-aligned buffers.
     if ((buffer.phys_addr & (HUGEPAGE_SIZE - 1)) == 0) {
       munmap(buffer.buf, HUGEPAGE_SIZE);

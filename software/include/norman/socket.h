@@ -119,7 +119,7 @@ int disable_device_rate_limit();
 /*
  * Free packet buffer. Use this to free received packets.
  */
-void free_pkt_buf(int sockfd, size_t len);
+void free_enso_pipe(int sockfd, size_t len);
 
 void print_sock_stats(int sockfd);
 

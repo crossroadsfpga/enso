@@ -69,7 +69,7 @@ namespace norman {
 typedef struct {
   uint32_t* buf;
   uint64_t buf_phys_addr;
-  queue_regs_t* regs;
+  struct QueueRegs* regs;
   uint32_t* buf_head_ptr;
   uint32_t rx_head;
   uint32_t rx_tail;
@@ -77,7 +77,7 @@ typedef struct {
 } pkt_queue_t;
 
 typedef struct {
-  dsc_queue_t* dsc_queue;
+  struct NotificationBufPair* notification_buf_pair;
   intel_fpga_pcie_dev* dev;
   pkt_queue_t pkt_queue;
   int queue_id;
@@ -89,39 +89,41 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
 int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
                               size_t len);
 
-int get_next_batch(dsc_queue_t* dsc_queue, socket_internal* socket_entries,
-                   int* pkt_queue_id, void** buf, size_t len);
+int get_next_batch(struct NotificationBufPair* notification_buf_pair,
+                   socket_internal* socket_entries, int* enso_pipe_id,
+                   void** buf, size_t len);
 
 /*
- * Free the next `len` bytes in the packet buffer associated with the
+ * Frees the next `len` bytes in the packet buffer associated with the
  * `socket_entry` socket. If `len` is greater than the number of allocated bytes
  * in the buffer, the behavior is undefined.
  */
 void advance_ring_buffer(socket_internal* socket_entry, size_t len);
 
 /**
- * send_to_queue() - Send data through a given queue.
- * @dsc_queue: Descriptor queue to send data through.
- * @phys_addr: Physical memory address of the data to be sent.
- * @len: Length, in bytes, of the data.
+ * Sends data through a given queue.
  *
  * This function returns as soon as a transmission requests has been enqueued to
- * the TX dsc queue. That means that it is not safe to modify or deallocate the
- * buffer pointed by `phys_addr` right after it returns. Instead, the caller
- * must use `get_unreported_completions` to figure out when the transmission is
- * complete.
+ * the TX notification buffer. That means that it is not safe to modify or
+ * deallocate the buffer pointed by `phys_addr` right after it returns. Instead,
+ * the caller must use `get_unreported_completions` to figure out when the
+ * transmission is complete.
  *
- * This function currently blocks if there is not enough space in the descriptor
- * queue.
+ * This function currently blocks if there is not enough space in the
+ * notification buffer.
  *
- * Return: Return 0 if transfer was successful.
+ * @param notification_buf_pair Notification buffer to send data through.
+ * @param phys_addr Physical memory address of the data to be sent.
+ * @param len Length, in bytes, of the data.
+ *
+ * @return 0 if transfer was successful.
  */
-int send_to_queue(dsc_queue_t* dsc_queue, void* phys_addr, size_t len);
+int send_to_queue(struct NotificationBufPair* notification_buf_pair,
+                  void* phys_addr, size_t len);
 
 /**
- * get_unreported_completions() - Return the number of transmission requests
- * that were completed since the last call to this function.
- * @dsc_queue: Descriptor queue to get completions from.
+ * Returns the number of transmission requests that were completed since the
+ * last call to this function.
  *
  * Since transmissions are always completed in order, one can figure out which
  * transmissions were completed by keeping track of all the calls to
@@ -130,24 +132,23 @@ int send_to_queue(dsc_queue_t* dsc_queue, void* phys_addr, size_t len);
  * multiple times, without calling `get_unreported_completions` the number of
  * completed requests can surpass `MAX_PENDING_TX_REQUESTS`.
  *
- * Return: Return the number of transmission requests that were completed since
- *         the last call to this function.
+ * @param notification_buf_pair Notification buffer to get completions from.
+ * @return number of transmission requests that were completed since the last
+ *         call to this function.
  */
-uint32_t get_unreported_completions(dsc_queue_t* dsc_queue);
+uint32_t get_unreported_completions(
+    struct NotificationBufPair* notification_buf_pair);
 
 /**
- * update_tx_head() - Update the tx head and the number of TX completions.
- * @dsc_queue: Descriptor queue to be updated.
+ * Updates the tx head and the number of TX completions.
+ *
+ * @param notification_buf_pair Notification buffer to be updated.
  */
-void update_tx_head(dsc_queue_t* dsc_queue);
+void update_tx_head(struct NotificationBufPair* notification_buf_pair);
 
 int dma_finish(socket_internal* socket_entry);
 
-uint32_t get_pkt_queue_id_from_socket(socket_internal* socket_entry);
-
-void print_queue_regs(queue_regs_t* pb);
-
-void print_slot(uint32_t* rp_addr, uint32_t start, uint32_t range);
+uint32_t get_enso_pipe_id_from_socket(socket_internal* socket_entry);
 
 void print_fpga_reg(intel_fpga_pcie_dev* dev, unsigned nb_regs);
 

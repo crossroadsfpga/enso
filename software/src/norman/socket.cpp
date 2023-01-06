@@ -43,7 +43,7 @@
 
 namespace norman {
 
-static dsc_queue_t dsc_queue[MAX_NB_CORES];
+static struct NotificationBufPair notification_buf_pair[MAX_NB_CORES];
 
 // TODO(sadok) replace with hash table?
 static socket_internal open_sockets[MAX_NB_SOCKETS];
@@ -81,7 +81,8 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
   unsigned int socket_id = nb_open_sockets++;
 
   open_sockets[socket_id].dev = dev;
-  open_sockets[socket_id].dsc_queue = &dsc_queue[sched_getcpu()];
+  open_sockets[socket_id].notification_buf_pair =
+      &notification_buf_pair[sched_getcpu()];
 
   result = dma_init(&open_sockets[socket_id], socket_id, nb_queues);
 
@@ -98,13 +99,13 @@ int bind(int sockfd, const struct sockaddr* addr, socklen_t addrlen) noexcept {
   socket_internal* socket = &open_sockets[sockfd];
   sockaddr_in* addr_in = (sockaddr_in*)addr;
 
-  uint32_t pkt_queue_id = get_pkt_queue_id_from_socket(socket);
+  uint32_t enso_pipe_id = get_enso_pipe_id_from_socket(socket);
 
   // TODO(sadok): insert flow entry from kernel.
-  insert_flow_entry(socket->dsc_queue, ntohs(addr_in->sin_port), 0,
+  insert_flow_entry(socket->notification_buf_pair, ntohs(addr_in->sin_port), 0,
                     ntohl(addr_in->sin_addr.s_addr), 0,
                     0x11,  // TODO(sadok): support protocols other than UDP.
-                    pkt_queue_id);
+                    enso_pipe_id);
 
   return 0;
 }
@@ -155,21 +156,24 @@ ssize_t recv_zc(int sockfd, void** buf, size_t len,
 
 ssize_t recv_select(int ref_sockfd, int* sockfd, void** buf, size_t len,
                     int flags __attribute__((unused))) {
-  dsc_queue_t* dsc_queue = open_sockets[ref_sockfd].dsc_queue;
-  return get_next_batch(dsc_queue, open_sockets, sockfd, buf, len);
+  struct NotificationBufPair* notification_buf_pair =
+      open_sockets[ref_sockfd].notification_buf_pair;
+  return get_next_batch(notification_buf_pair, open_sockets, sockfd, buf, len);
 }
 
 ssize_t send(int sockfd, void* phys_addr, size_t len,
              int flags __attribute__((unused))) {
-  return send_to_queue(open_sockets[sockfd].dsc_queue, phys_addr, len);
+  return send_to_queue(open_sockets[sockfd].notification_buf_pair, phys_addr,
+                       len);
 }
 
 uint32_t get_completions(int ref_sockfd) {
-  dsc_queue_t* dsc_queue = open_sockets[ref_sockfd].dsc_queue;
-  return get_unreported_completions(dsc_queue);
+  struct NotificationBufPair* notification_buf_pair =
+      open_sockets[ref_sockfd].notification_buf_pair;
+  return get_unreported_completions(notification_buf_pair);
 }
 
-void free_pkt_buf(int sockfd, size_t len) {
+void free_enso_pipe(int sockfd, size_t len) {
   advance_ring_buffer(&open_sockets[sockfd], len);
 }
 
@@ -177,28 +181,28 @@ int enable_device_timestamp() {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return enable_timestamp(open_sockets[0].dsc_queue);
+  return enable_timestamp(open_sockets[0].notification_buf_pair);
 }
 
 int disable_device_timestamp() {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return disable_timestamp(open_sockets[0].dsc_queue);
+  return disable_timestamp(open_sockets[0].notification_buf_pair);
 }
 
 int enable_device_rate_limit(uint16_t num, uint16_t den) {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return enable_rate_limit(open_sockets[0].dsc_queue, num, den);
+  return enable_rate_limit(open_sockets[0].notification_buf_pair, num, den);
 }
 
 int disable_device_rate_limit() {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return disable_rate_limit(open_sockets[0].dsc_queue);
+  return disable_rate_limit(open_sockets[0].notification_buf_pair);
 }
 
 int shutdown(int sockfd, int how __attribute__((unused))) noexcept {

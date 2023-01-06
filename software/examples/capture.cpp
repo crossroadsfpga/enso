@@ -165,7 +165,7 @@ int main(int argc, const char* argv[]) {
             ++nb_batches;
             recv_bytes += recv_len;
 
-            norman::free_pkt_buf(socket_fd, recv_len);
+            norman::free_enso_pipe(socket_fd, recv_len);
           }
         }
 

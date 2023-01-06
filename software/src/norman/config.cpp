@@ -36,6 +36,8 @@
 #include <norman/helpers.h>
 #include <norman/internals.h>
 
+#include <cstdio>
+
 #include "../pcie.h"
 
 namespace norman {
@@ -46,7 +48,7 @@ enum ConfigId {
   RATE_LIMIT_CONFIG_ID = 3
 };
 
-typedef struct __attribute__((__packed__)) {
+struct __attribute__((__packed__)) FlowTableConfig {
   uint64_t signal;
   uint64_t config_id;
   uint16_t dst_port;
@@ -54,68 +56,83 @@ typedef struct __attribute__((__packed__)) {
   uint32_t dst_ip;
   uint32_t src_ip;
   uint32_t protocol;
-  uint32_t pkt_queue_id;
+  uint32_t enso_pipe_id;
   uint8_t pad[28];
-} flow_table_config_t;
+};
 
-typedef struct __attribute__((__packed__)) {
+struct __attribute__((__packed__)) TimestampConfig {
   uint64_t signal;
   uint64_t config_id;
   uint64_t enable;
   uint8_t pad[40];
-} timestamp_config_t;
+};
 
-typedef struct __attribute__((__packed__)) {
+struct __attribute__((__packed__)) RateLimitConfig {
   uint64_t signal;
   uint64_t config_id;
   uint16_t denominator;
   uint16_t numerator;
   uint32_t enable;
   uint8_t pad[40];
-} rate_limit_config_t;
+};
 
-int send_config(dsc_queue_t* dsc_queue, pcie_tx_dsc_t* config_dsc) {
-  pcie_tx_dsc_t* tx_buf = dsc_queue->tx_buf;
-  uint32_t tx_tail = dsc_queue->tx_tail;
-  uint32_t free_slots = (dsc_queue->tx_head - tx_tail - 1) % DSC_BUF_SIZE;
+/**
+ * Sends configuration through a notification buffer.
+ *
+ * @param notification_buf_pair The notification buffer pair to send the
+ *                              configuration through.
+ * @param config_notification The configuration notification to send. Must be
+ *                            a config notification, i.e., signal >= 2.
+ * @return 0 on success, -1 on failure.
+ */
+int send_config(struct NotificationBufPair* notification_buf_pair,
+                struct TxNotification* config_notification) {
+  struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
+  uint32_t tx_tail = notification_buf_pair->tx_tail;
+  uint32_t free_slots =
+      (notification_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
 
-  // Make sure it's a config descriptor.
-  if (config_dsc->signal < 2) {
+  // Make sure it's a config notification.
+  if (config_notification->signal < 2) {
     return -1;
   }
 
   // Block until we can send.
   while (unlikely(free_slots == 0)) {
-    ++dsc_queue->tx_full_cnt;
-    update_tx_head(dsc_queue);
-    free_slots = (dsc_queue->tx_head - tx_tail - 1) % DSC_BUF_SIZE;
+    ++notification_buf_pair->tx_full_cnt;
+    update_tx_head(notification_buf_pair);
+    free_slots =
+        (notification_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
   }
 
-  pcie_tx_dsc_t* tx_dsc = tx_buf + tx_tail;
-  *tx_dsc = *config_dsc;
+  struct TxNotification* tx_notification = tx_buf + tx_tail;
+  *tx_notification = *config_notification;
 
-  _mm_clflushopt(tx_dsc);
+  _mm_clflushopt(tx_notification);
 
-  tx_tail = (tx_tail + 1) % DSC_BUF_SIZE;
-  dsc_queue->tx_tail = tx_tail;
+  tx_tail = (tx_tail + 1) % NOTIFICATION_BUF_SIZE;
+  notification_buf_pair->tx_tail = tx_tail;
 
   _norman_compiler_memory_barrier();
-  *(dsc_queue->tx_tail_ptr) = tx_tail;
+  *(notification_buf_pair->tx_tail_ptr) = tx_tail;
 
   // Wait for request to be consumed.
-  uint32_t nb_unreported_completions = dsc_queue->nb_unreported_completions;
-  while (dsc_queue->nb_unreported_completions == nb_unreported_completions) {
-    update_tx_head(dsc_queue);
+  uint32_t nb_unreported_completions =
+      notification_buf_pair->nb_unreported_completions;
+  while (notification_buf_pair->nb_unreported_completions ==
+         nb_unreported_completions) {
+    update_tx_head(notification_buf_pair);
   }
-  dsc_queue->nb_unreported_completions = nb_unreported_completions;
+  notification_buf_pair->nb_unreported_completions = nb_unreported_completions;
 
   return 0;
 }
 
-int insert_flow_entry(dsc_queue_t* dsc_queue, uint16_t dst_port,
-                      uint16_t src_port, uint32_t dst_ip, uint32_t src_ip,
-                      uint32_t protocol, uint32_t pkt_queue_id) {
-  flow_table_config_t config;
+int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
+                      uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+                      uint32_t src_ip, uint32_t protocol,
+                      uint32_t enso_pipe_id) {
+  struct FlowTableConfig config;
 
   config.signal = 2;
   config.config_id = FLOW_TABLE_CONFIG_ID;
@@ -124,33 +141,39 @@ int insert_flow_entry(dsc_queue_t* dsc_queue, uint16_t dst_port,
   config.dst_ip = dst_ip;
   config.src_ip = src_ip;
   config.protocol = protocol;
-  config.pkt_queue_id = pkt_queue_id;
+  config.enso_pipe_id = enso_pipe_id;
 
-  return send_config(dsc_queue, (pcie_tx_dsc_t*)&config);
+  printf(
+      "Inserting flow entry: dst_port=%u, src_port=%u, dst_ip=%u, src_ip=%u,"
+      "protocol=%u, enso_pipe_id=%u)\n",
+      dst_port, src_port, dst_ip, src_ip, protocol, enso_pipe_id);
+
+  return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }
 
-int enable_timestamp(dsc_queue_t* dsc_queue) {
-  timestamp_config_t config;
+int enable_timestamp(struct NotificationBufPair* notification_buf_pair) {
+  TimestampConfig config;
 
   config.signal = 2;
   config.config_id = TIMESTAMP_CONFIG_ID;
   config.enable = -1;
 
-  return send_config(dsc_queue, (pcie_tx_dsc_t*)&config);
+  return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }
 
-int disable_timestamp(dsc_queue_t* dsc_queue) {
-  timestamp_config_t config;
+int disable_timestamp(struct NotificationBufPair* notification_buf_pair) {
+  TimestampConfig config;
 
   config.signal = 2;
   config.config_id = TIMESTAMP_CONFIG_ID;
   config.enable = 0;
 
-  return send_config(dsc_queue, (pcie_tx_dsc_t*)&config);
+  return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }
 
-int enable_rate_limit(dsc_queue_t* dsc_queue, uint16_t num, uint16_t den) {
-  rate_limit_config_t config;
+int enable_rate_limit(struct NotificationBufPair* notification_buf_pair,
+                      uint16_t num, uint16_t den) {
+  struct RateLimitConfig config;
 
   config.signal = 2;
   config.config_id = RATE_LIMIT_CONFIG_ID;
@@ -158,17 +181,17 @@ int enable_rate_limit(dsc_queue_t* dsc_queue, uint16_t num, uint16_t den) {
   config.numerator = num;
   config.enable = -1;
 
-  return send_config(dsc_queue, (pcie_tx_dsc_t*)&config);
+  return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }
 
-int disable_rate_limit(dsc_queue_t* dsc_queue) {
-  rate_limit_config_t config;
+int disable_rate_limit(struct NotificationBufPair* notification_buf_pair) {
+  struct RateLimitConfig config;
 
   config.signal = 2;
   config.config_id = RATE_LIMIT_CONFIG_ID;
   config.enable = 0;
 
-  return send_config(dsc_queue, (pcie_tx_dsc_t*)&config);
+  return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }
 
 }  // namespace norman
