@@ -1,8 +1,9 @@
 
-option('dsc_buf_size', type: 'integer', min: 0, max: 32768, value: 16384,
-       description: 'Buffer size used by each software descriptor buffer')
-option('pkt_buf_size', type: 'integer', min: 0, max: 32768, value: 32768,
-       description: 'Buffer size used by each software packet buffer')
+option('notification_buf_size', type: 'integer', min: 0, max: 32768,
+       value: 16384,
+       description: 'Buffer size used by each software notification buffer')
+option('enso_pipe_size', type: 'integer', min: 0, max: 32768, value: 32768,
+       description: 'Buffer size used by each software enso pipe')
 option('batch_size', type: 'integer', min: 0, value: 64,
        description: 'Number of packets in a batch')
 option('latency_opt', type: 'boolean', value: false,

@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 if [[ "$#" -ne 4 ]]; then
-    echo "Syntax: ./setup.sh DSC_BUF_SIZE PKT_BUF_SIZE BATCH_SIZE LATENCY_OPT"
+    echo "Syntax: ./setup.sh NOTIFICATION_BUF_SIZE ENSO_PIPE_SIZE BATCH_SIZE LATENCY_OPT"
     exit 1
 fi
 
@@ -23,7 +23,7 @@ CC=clang-8 CXX=clang++-8 meson build-clang
 ln -sfn build-clang build
 
 cd build
-meson configure -Ddsc_buf_size=$1 -Dpkt_buf_size=$2 -Dbatch_size=$3 \
+meson configure -Denso_pipe_size=$1 -Denso_pipe_size=$2 -Dbatch_size=$3 \
     -Dlatency_opt=$4
 ninja
 sudo ninja install
