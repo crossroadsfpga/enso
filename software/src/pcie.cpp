@@ -397,6 +397,8 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
       socket_entry->pkt_queue.rx_head;
 
   // Setting the address enables the queue. Do this last.
+  // The least significant bits in rx_mem_low are used to keep the descriptor
+  // queue ID. Therefore we add `dsc_queue_id` to the address.
   _norman_compiler_memory_barrier();
   pkt_queue_regs->rx_mem_low = (uint32_t)phys_addr + dsc_queue_id;
   pkt_queue_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
