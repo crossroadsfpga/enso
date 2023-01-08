@@ -319,12 +319,62 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   return 0;
 }
 
+int enso_pipe_init(struct RxEnsoPipe* enso_pipe,
+                   volatile struct QueueRegs* enso_pipe_regs,
+                   struct NotificationBufPair* notification_buf_pair,
+                   enso_pipe_id_t enso_pipe_id) {
+  enso_pipe->regs = (struct QueueRegs*)enso_pipe_regs;
+
+  // Make sure the queue is disabled.
+  enso_pipe_regs->rx_mem_low = 0;
+  enso_pipe_regs->rx_mem_high = 0;
+  _norman_compiler_memory_barrier();
+  while (enso_pipe_regs->rx_mem_low != 0 || enso_pipe_regs->rx_mem_high != 0)
+    continue;
+
+  // Make sure head and tail start at zero.
+  enso_pipe_regs->rx_tail = 0;
+  _norman_compiler_memory_barrier();
+  while (enso_pipe_regs->rx_tail != 0) continue;
+
+  enso_pipe_regs->rx_head = 0;
+  _norman_compiler_memory_barrier();
+  while (enso_pipe_regs->rx_head != 0) continue;
+
+  enso_pipe->buf = (uint32_t*)get_huge_page(enso_pipe_id, BUF_PAGE_SIZE);
+  if (enso_pipe->buf == NULL) {
+    std::cerr << "Could not get huge page" << std::endl;
+    return -1;
+  }
+  uint64_t phys_addr = virt_to_phys(enso_pipe->buf);
+
+  enso_pipe->buf_phys_addr = phys_addr;
+  enso_pipe->phys_buf_offset = phys_addr - (uint64_t)(enso_pipe->buf);
+
+  enso_pipe->id = enso_pipe_id - notification_buf_pair->enso_pipe_id_offset;
+  enso_pipe->buf_head_ptr = (uint32_t*)&enso_pipe_regs->rx_head;
+  enso_pipe->rx_head = 0;
+  enso_pipe->rx_tail = 0;
+
+  // make sure the last tail matches the current head
+  notification_buf_pair->pending_pkt_tails[enso_pipe->id] = enso_pipe->rx_head;
+
+  // Setting the address enables the queue. Do this last.
+  // The least significant bits in rx_mem_low are used to keep the notification
+  // buffer ID. Therefore we add `notification_buf_pair->id` to the address.
+  _norman_compiler_memory_barrier();
+  enso_pipe_regs->rx_mem_low = (uint32_t)phys_addr + notification_buf_pair->id;
+  enso_pipe_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
+
+  return 0;
+}
+
 int dma_init(intel_fpga_pcie_dev* dev,
              struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipe* enso_pipe, unsigned socket_id,
              unsigned nb_queues) {
   void* uio_mmap_bar2_addr;
-  int enso_pipe_id;
+  enso_pipe_id_t enso_pipe_id;
 
   printf("Running with BATCH_SIZE: %i\n", BATCH_SIZE);
   printf("Running with NOTIFICATION_BUF_SIZE: %i\n", NOTIFICATION_BUF_SIZE);
@@ -339,12 +389,14 @@ int dma_init(intel_fpga_pcie_dev* dev,
   assert(ENSO_PIPE_SIZE * 64 == BUF_PAGE_SIZE);
 
   // FIXME(sadok) should find a better identifier than core id.
-  enso_pipe_id = sched_getcpu() * nb_queues + socket_id;
+
   notification_buf_pair->id = sched_getcpu();
-  if (enso_pipe_id < 0) {
+  if (notification_buf_pair->id < 0) {
     std::cerr << "Could not get cpu id" << std::endl;
     return -1;
   }
+
+  enso_pipe_id = notification_buf_pair->id * nb_queues + socket_id;
 
   uio_mmap_bar2_addr =
       dev->uio_mmap((1 << 12) * (MAX_NB_FLOWS + MAX_NB_APPS), 2);
@@ -368,60 +420,23 @@ int dma_init(intel_fpga_pcie_dev* dev,
     // currently placed back to back.
     enso_pipe_id_t enso_pipe_id_offset = enso_pipe_id;
 
-    notification_buf_init(notification_buf_pair, notification_buf_pair_regs,
-                          nb_queues, enso_pipe_id_offset);
+    int ret =
+        notification_buf_init(notification_buf_pair, notification_buf_pair_regs,
+                              nb_queues, enso_pipe_id_offset);
+    if (ret != 0) {
+      return ret;
+    }
   }
 
   ++(notification_buf_pair->ref_cnt);
 
   // register associated with the packet queue
-  volatile struct QueueRegs* pkt_queue_regs =
+  volatile struct QueueRegs* enso_pipe_regs =
       (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
                           enso_pipe_id * MEMORY_SPACE_PER_QUEUE);
-  enso_pipe->regs = (struct QueueRegs*)pkt_queue_regs;
 
-  // Make sure the queue is disabled.
-  pkt_queue_regs->rx_mem_low = 0;
-  pkt_queue_regs->rx_mem_high = 0;
-  _norman_compiler_memory_barrier();
-  while (pkt_queue_regs->rx_mem_low != 0 || pkt_queue_regs->rx_mem_high != 0)
-    continue;
-
-  // Make sure head and tail start at zero.
-  pkt_queue_regs->rx_tail = 0;
-  _norman_compiler_memory_barrier();
-  while (pkt_queue_regs->rx_tail != 0) continue;
-
-  pkt_queue_regs->rx_head = 0;
-  _norman_compiler_memory_barrier();
-  while (pkt_queue_regs->rx_head != 0) continue;
-
-  enso_pipe->buf = (uint32_t*)get_huge_page(enso_pipe_id, BUF_PAGE_SIZE);
-  if (enso_pipe->buf == NULL) {
-    std::cerr << "Could not get huge page" << std::endl;
-    return -1;
-  }
-  uint64_t phys_addr = virt_to_phys(enso_pipe->buf);
-
-  enso_pipe->buf_phys_addr = phys_addr;
-  enso_pipe->phys_buf_offset = phys_addr - (uint64_t)(enso_pipe->buf);
-
-  enso_pipe->id = enso_pipe_id - notification_buf_pair->enso_pipe_id_offset;
-  enso_pipe->buf_head_ptr = (uint32_t*)&pkt_queue_regs->rx_head;
-  enso_pipe->rx_head = 0;
-  enso_pipe->rx_tail = 0;
-
-  // make sure the last tail matches the current head
-  notification_buf_pair->pending_pkt_tails[enso_pipe->id] = enso_pipe->rx_head;
-
-  // Setting the address enables the queue. Do this last.
-  // The least significant bits in rx_mem_low are used to keep the notification
-  // buffer ID. Therefore we add `notification_buf_pair->id` to the address.
-  _norman_compiler_memory_barrier();
-  pkt_queue_regs->rx_mem_low = (uint32_t)phys_addr + notification_buf_pair->id;
-  pkt_queue_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
-
-  return 0;
+  return enso_pipe_init(enso_pipe, enso_pipe_regs, notification_buf_pair,
+                        enso_pipe_id);
 }
 
 static inline uint16_t get_new_tails(
@@ -656,9 +671,9 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
 int dma_finish(struct SocketInternal* socket_entry) {
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
-  struct QueueRegs* pkt_queue_regs = socket_entry->enso_pipe.regs;
-  pkt_queue_regs->rx_mem_low = 0;
-  pkt_queue_regs->rx_mem_high = 0;
+  struct QueueRegs* enso_pipe_regs = socket_entry->enso_pipe.regs;
+  enso_pipe_regs->rx_mem_low = 0;
+  enso_pipe_regs->rx_mem_high = 0;
 
   munmap(socket_entry->enso_pipe.buf, BUF_PAGE_SIZE);
 
