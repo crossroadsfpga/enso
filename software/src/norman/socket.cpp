@@ -46,7 +46,7 @@ namespace norman {
 static struct NotificationBufPair notification_buf_pair[MAX_NB_CORES];
 
 // TODO(sadok) replace with hash table?
-static socket_internal open_sockets[MAX_NB_SOCKETS];
+static struct SocketInternal open_sockets[MAX_NB_SOCKETS];
 static unsigned int nb_open_sockets = 0;
 static uint16_t bdf = 0;
 
@@ -80,11 +80,17 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
   // FIXME(sadok) use __sync_fetch_and_add to update atomically
   unsigned int socket_id = nb_open_sockets++;
 
-  open_sockets[socket_id].dev = dev;
-  open_sockets[socket_id].notification_buf_pair =
-      &notification_buf_pair[sched_getcpu()];
+  struct SocketInternal* socket_entry = &open_sockets[socket_id];
 
-  result = dma_init(&open_sockets[socket_id], socket_id, nb_queues);
+  socket_entry->dev = dev;
+  socket_entry->notification_buf_pair = &notification_buf_pair[sched_getcpu()];
+
+  struct NotificationBufPair* notification_buf_pair =
+      socket_entry->notification_buf_pair;
+  struct RxEnsoPipe* pkt_queue = &socket_entry->pkt_queue;
+
+  result =
+      dma_init(dev, notification_buf_pair, pkt_queue, socket_id, nb_queues);
 
   if (unlikely(result < 0)) {
     std::cerr << "Problem initializing DMA" << std::endl;
@@ -96,7 +102,7 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
 
 int bind(int sockfd, const struct sockaddr* addr, socklen_t addrlen) noexcept {
   (void)addrlen;  // Avoid unused warnings.
-  socket_internal* socket = &open_sockets[sockfd];
+  struct SocketInternal* socket = &open_sockets[sockfd];
   sockaddr_in* addr_in = (sockaddr_in*)addr;
 
   uint32_t enso_pipe_id = get_enso_pipe_id_from_socket(socket);
@@ -134,7 +140,7 @@ uint64_t convert_buf_addr_to_phys(int sockfd, void* addr) {
 ssize_t recv(int sockfd, void* buf, size_t len,
              int flags __attribute__((unused))) {
   void* ring_buf;
-  socket_internal* socket = &open_sockets[sockfd];
+  struct SocketInternal* socket = &open_sockets[sockfd];
 
   ssize_t bytes_received = get_next_batch_from_queue(socket, &ring_buf, len);
 
@@ -227,8 +233,8 @@ int shutdown(int sockfd, int how __attribute__((unused))) noexcept {
 }
 
 void print_sock_stats(int sockfd) {
-  socket_internal* socket = &open_sockets[sockfd];
-  print_stats(socket, socket->queue_id == 0);
+  struct SocketInternal* socket = &open_sockets[sockfd];
+  print_stats(socket, socket->pkt_queue.id == 0);
 }
 
 }  // namespace norman

@@ -39,9 +39,9 @@
 namespace norman {
 
 #if MAX_NB_FLOWS < 65536
-using pkt_q_id_t = uint16_t;
+using enso_pipe_id_t = uint16_t;
 #else
-using pkt_q_id_t = uint32_t;
+using enso_pipe_id_t = uint32_t;
 #endif
 
 struct QueueRegs {
@@ -73,7 +73,7 @@ struct __attribute__((__packed__)) TxNotification {
 struct NotificationBufPair {
   // First cache line:
   struct RxNotification* rx_buf;
-  pkt_q_id_t* last_rx_ids;  // Last queue ids consumed from rx_buf.
+  enso_pipe_id_t* last_rx_ids;  // Last queue ids consumed from rx_buf.
   struct TxNotification* tx_buf;
   uint32_t* rx_head_ptr;
   uint32_t* tx_tail_ptr;
@@ -83,7 +83,7 @@ struct NotificationBufPair {
   uint16_t pending_rx_ids;
   uint16_t consumed_rx_ids;
   uint32_t nb_unreported_completions;
-  uint32_t __gap;
+  uint32_t id;
 
   // Second cache line:
   struct QueueRegs* regs;

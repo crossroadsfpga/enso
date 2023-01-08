@@ -225,13 +225,106 @@ static void* get_huge_page(int queue_id, size_t size) {
   return virt_addr;
 }
 
-int dma_init(socket_internal* socket_entry, unsigned socket_id,
+int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
+                          volatile struct QueueRegs* notification_buf_pair_regs,
+                          enso_pipe_id_t nb_queues,
+                          enso_pipe_id_t enso_pipe_id_offset) {
+  // Make sure the notification buffer is disabled.
+  notification_buf_pair_regs->rx_mem_low = 0;
+  notification_buf_pair_regs->rx_mem_high = 0;
+  _norman_compiler_memory_barrier();
+  while (notification_buf_pair_regs->rx_mem_low != 0 ||
+         notification_buf_pair_regs->rx_mem_high != 0)
+    continue;
+
+  // Make sure head and tail start at zero.
+  notification_buf_pair_regs->rx_tail = 0;
+  _norman_compiler_memory_barrier();
+  while (notification_buf_pair_regs->rx_tail != 0) continue;
+
+  notification_buf_pair_regs->rx_head = 0;
+  _norman_compiler_memory_barrier();
+  while (notification_buf_pair_regs->rx_head != 0) continue;
+
+  notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
+  notification_buf_pair->rx_buf = (struct RxNotification*)get_huge_page(
+      notification_buf_pair->id + MAX_NB_FLOWS, ALIGNED_DSC_BUF_PAIR_SIZE);
+  if (notification_buf_pair->rx_buf == NULL) {
+    std::cerr << "Could not get huge page" << std::endl;
+    return -1;
+  }
+
+  // Use first half of the huge page for RX and second half for TX.
+  notification_buf_pair->tx_buf =
+      (struct TxNotification*)((uint64_t)notification_buf_pair->rx_buf +
+                               ALIGNED_DSC_BUF_PAIR_SIZE / 2);
+
+  uint64_t phys_addr = virt_to_phys(notification_buf_pair->rx_buf);
+
+  notification_buf_pair->rx_head_ptr =
+      (uint32_t*)&notification_buf_pair_regs->rx_head;
+  notification_buf_pair->tx_tail_ptr =
+      (uint32_t*)&notification_buf_pair_regs->tx_tail;
+  notification_buf_pair->rx_head = notification_buf_pair_regs->rx_head;
+
+  // Preserve TX DSC tail and make head have the same value.
+  notification_buf_pair->tx_tail = notification_buf_pair_regs->tx_tail;
+  notification_buf_pair->tx_head = notification_buf_pair->tx_tail;
+
+  _norman_compiler_memory_barrier();
+  notification_buf_pair_regs->tx_head = notification_buf_pair->tx_head;
+
+  // HACK(sadok): assuming that we know the number of queues beforehand
+  notification_buf_pair->pending_pkt_tails = (uint32_t*)malloc(
+      sizeof(*(notification_buf_pair->pending_pkt_tails)) * nb_queues);
+  if (notification_buf_pair->pending_pkt_tails == NULL) {
+    std::cerr << "Could not allocate memory" << std::endl;
+    return -1;
+  }
+  memset(notification_buf_pair->pending_pkt_tails, 0, nb_queues);
+
+  notification_buf_pair->wrap_tracker =
+      (uint8_t*)malloc(NOTIFICATION_BUF_SIZE / 8);
+  if (notification_buf_pair->wrap_tracker == NULL) {
+    std::cerr << "Could not allocate memory" << std::endl;
+    return -1;
+  }
+  memset(notification_buf_pair->wrap_tracker, 0, NOTIFICATION_BUF_SIZE / 8);
+
+  notification_buf_pair->last_rx_ids =
+      (enso_pipe_id_t*)malloc(NOTIFICATION_BUF_SIZE * sizeof(enso_pipe_id_t));
+  if (notification_buf_pair->last_rx_ids == NULL) {
+    std::cerr << "Could not allocate memory" << std::endl;
+    return -1;
+  }
+
+  notification_buf_pair->pending_rx_ids = 0;
+  notification_buf_pair->consumed_rx_ids = 0;
+  notification_buf_pair->tx_full_cnt = 0;
+  notification_buf_pair->nb_unreported_completions = 0;
+
+  // HACK(sadok): This only works because enso pipes for the same app are
+  // currently placed back to back.
+  notification_buf_pair->enso_pipe_id_offset = enso_pipe_id_offset;
+
+  // Setting the address enables the queue. Do this last.
+  // Use first half of the huge page for RX and second half for TX.
+  _norman_compiler_memory_barrier();
+  notification_buf_pair_regs->rx_mem_low = (uint32_t)phys_addr;
+  notification_buf_pair_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
+  phys_addr += ALIGNED_DSC_BUF_PAIR_SIZE / 2;
+  notification_buf_pair_regs->tx_mem_low = (uint32_t)phys_addr;
+  notification_buf_pair_regs->tx_mem_high = (uint32_t)(phys_addr >> 32);
+
+  return 0;
+}
+
+int dma_init(intel_fpga_pcie_dev* dev,
+             struct NotificationBufPair* notification_buf_pair,
+             struct RxEnsoPipe* pkt_queue, unsigned socket_id,
              unsigned nb_queues) {
-  struct NotificationBufPair* notification_buf_pair =
-      socket_entry->notification_buf_pair;
   void* uio_mmap_bar2_addr;
-  int notification_buf_pair_id, enso_pipe_id;
-  intel_fpga_pcie_dev* dev = socket_entry->dev;
+  int enso_pipe_id;
 
   printf("Running with BATCH_SIZE: %i\n", BATCH_SIZE);
   printf("Running with NOTIFICATION_BUF_SIZE: %i\n", NOTIFICATION_BUF_SIZE);
@@ -247,7 +340,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
 
   // FIXME(sadok) should find a better identifier than core id.
   enso_pipe_id = sched_getcpu() * nb_queues + socket_id;
-  notification_buf_pair_id = sched_getcpu();
+  notification_buf_pair->id = sched_getcpu();
   if (enso_pipe_id < 0) {
     std::cerr << "Could not get cpu id" << std::endl;
     return -1;
@@ -268,95 +361,15 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
     // as an offset.
     volatile struct QueueRegs* notification_buf_pair_regs =
         (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
-                            (notification_buf_pair_id + MAX_NB_FLOWS) *
+                            (notification_buf_pair->id + MAX_NB_FLOWS) *
                                 MEMORY_SPACE_PER_QUEUE);
-
-    // Make sure the notification buffer is disabled.
-    notification_buf_pair_regs->rx_mem_low = 0;
-    notification_buf_pair_regs->rx_mem_high = 0;
-    _norman_compiler_memory_barrier();
-    while (notification_buf_pair_regs->rx_mem_low != 0 ||
-           notification_buf_pair_regs->rx_mem_high != 0)
-      continue;
-
-    // Make sure head and tail start at zero.
-    notification_buf_pair_regs->rx_tail = 0;
-    _norman_compiler_memory_barrier();
-    while (notification_buf_pair_regs->rx_tail != 0) continue;
-
-    notification_buf_pair_regs->rx_head = 0;
-    _norman_compiler_memory_barrier();
-    while (notification_buf_pair_regs->rx_head != 0) continue;
-
-    notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
-    notification_buf_pair->rx_buf = (struct RxNotification*)get_huge_page(
-        notification_buf_pair_id + MAX_NB_FLOWS, ALIGNED_DSC_BUF_PAIR_SIZE);
-    if (notification_buf_pair->rx_buf == NULL) {
-      std::cerr << "Could not get huge page" << std::endl;
-      return -1;
-    }
-
-    // Use first half of the huge page for RX and second half for TX.
-    notification_buf_pair->tx_buf =
-        (struct TxNotification*)((uint64_t)notification_buf_pair->rx_buf +
-                                 ALIGNED_DSC_BUF_PAIR_SIZE / 2);
-
-    uint64_t phys_addr = virt_to_phys(notification_buf_pair->rx_buf);
-
-    notification_buf_pair->rx_head_ptr =
-        (uint32_t*)&notification_buf_pair_regs->rx_head;
-    notification_buf_pair->tx_tail_ptr =
-        (uint32_t*)&notification_buf_pair_regs->tx_tail;
-    notification_buf_pair->rx_head = notification_buf_pair_regs->rx_head;
-
-    // Preserve TX DSC tail and make head have the same value.
-    notification_buf_pair->tx_tail = notification_buf_pair_regs->tx_tail;
-    notification_buf_pair->tx_head = notification_buf_pair->tx_tail;
-
-    _norman_compiler_memory_barrier();
-    notification_buf_pair_regs->tx_head = notification_buf_pair->tx_head;
-
-    // HACK(sadok) assuming that we know the number of queues beforehand
-    notification_buf_pair->pending_pkt_tails = (uint32_t*)malloc(
-        sizeof(*(notification_buf_pair->pending_pkt_tails)) * nb_queues);
-    if (notification_buf_pair->pending_pkt_tails == NULL) {
-      std::cerr << "Could not allocate memory" << std::endl;
-      return -1;
-    }
-    memset(notification_buf_pair->pending_pkt_tails, 0, nb_queues);
-
-    notification_buf_pair->wrap_tracker =
-        (uint8_t*)malloc(NOTIFICATION_BUF_SIZE / 8);
-    if (notification_buf_pair->wrap_tracker == NULL) {
-      std::cerr << "Could not allocate memory" << std::endl;
-      return -1;
-    }
-    memset(notification_buf_pair->wrap_tracker, 0, NOTIFICATION_BUF_SIZE / 8);
-
-    notification_buf_pair->last_rx_ids =
-        (pkt_q_id_t*)malloc(NOTIFICATION_BUF_SIZE * sizeof(pkt_q_id_t));
-    if (notification_buf_pair->last_rx_ids == NULL) {
-      std::cerr << "Could not allocate memory" << std::endl;
-      return -1;
-    }
-
-    notification_buf_pair->pending_rx_ids = 0;
-    notification_buf_pair->consumed_rx_ids = 0;
-    notification_buf_pair->tx_full_cnt = 0;
-    notification_buf_pair->nb_unreported_completions = 0;
 
     // HACK(sadok): This only works because pkt queues for the same app are
     // currently placed back to back.
-    notification_buf_pair->enso_pipe_id_offset = enso_pipe_id;
+    enso_pipe_id_t enso_pipe_id_offset = enso_pipe_id;
 
-    // Setting the address enables the queue. Do this last.
-    // Use first half of the huge page for RX and second half for TX.
-    _norman_compiler_memory_barrier();
-    notification_buf_pair_regs->rx_mem_low = (uint32_t)phys_addr;
-    notification_buf_pair_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
-    phys_addr += ALIGNED_DSC_BUF_PAIR_SIZE / 2;
-    notification_buf_pair_regs->tx_mem_low = (uint32_t)phys_addr;
-    notification_buf_pair_regs->tx_mem_high = (uint32_t)(phys_addr >> 32);
+    notification_buf_init(notification_buf_pair, notification_buf_pair_regs,
+                          nb_queues, enso_pipe_id_offset);
   }
 
   ++(notification_buf_pair->ref_cnt);
@@ -365,7 +378,7 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
   volatile struct QueueRegs* pkt_queue_regs =
       (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
                           enso_pipe_id * MEMORY_SPACE_PER_QUEUE);
-  socket_entry->pkt_queue.regs = (struct QueueRegs*)pkt_queue_regs;
+  pkt_queue->regs = (struct QueueRegs*)pkt_queue_regs;
 
   // Make sure the queue is disabled.
   pkt_queue_regs->rx_mem_low = 0;
@@ -383,33 +396,29 @@ int dma_init(socket_internal* socket_entry, unsigned socket_id,
   _norman_compiler_memory_barrier();
   while (pkt_queue_regs->rx_head != 0) continue;
 
-  socket_entry->pkt_queue.buf =
-      (uint32_t*)get_huge_page(enso_pipe_id, BUF_PAGE_SIZE);
-  if (socket_entry->pkt_queue.buf == NULL) {
+  pkt_queue->buf = (uint32_t*)get_huge_page(enso_pipe_id, BUF_PAGE_SIZE);
+  if (pkt_queue->buf == NULL) {
     std::cerr << "Could not get huge page" << std::endl;
     return -1;
   }
-  uint64_t phys_addr = virt_to_phys(socket_entry->pkt_queue.buf);
+  uint64_t phys_addr = virt_to_phys(pkt_queue->buf);
 
-  socket_entry->pkt_queue.buf_phys_addr = phys_addr;
-  socket_entry->pkt_queue.phys_buf_offset =
-      phys_addr - (uint64_t)(socket_entry->pkt_queue.buf);
+  pkt_queue->buf_phys_addr = phys_addr;
+  pkt_queue->phys_buf_offset = phys_addr - (uint64_t)(pkt_queue->buf);
 
-  socket_entry->queue_id =
-      enso_pipe_id - notification_buf_pair->enso_pipe_id_offset;
-  socket_entry->pkt_queue.buf_head_ptr = (uint32_t*)&pkt_queue_regs->rx_head;
-  socket_entry->pkt_queue.rx_head = 0;
-  socket_entry->pkt_queue.rx_tail = 0;
+  pkt_queue->id = enso_pipe_id - notification_buf_pair->enso_pipe_id_offset;
+  pkt_queue->buf_head_ptr = (uint32_t*)&pkt_queue_regs->rx_head;
+  pkt_queue->rx_head = 0;
+  pkt_queue->rx_tail = 0;
 
   // make sure the last tail matches the current head
-  notification_buf_pair->pending_pkt_tails[socket_entry->queue_id] =
-      socket_entry->pkt_queue.rx_head;
+  notification_buf_pair->pending_pkt_tails[pkt_queue->id] = pkt_queue->rx_head;
 
   // Setting the address enables the queue. Do this last.
   // The least significant bits in rx_mem_low are used to keep the notification
-  // buffer ID. Therefore we add `notification_buf_pair_id` to the address.
+  // buffer ID. Therefore we add `notification_buf_pair->id` to the address.
   _norman_compiler_memory_barrier();
-  pkt_queue_regs->rx_mem_low = (uint32_t)phys_addr + notification_buf_pair_id;
+  pkt_queue_regs->rx_mem_low = (uint32_t)phys_addr + notification_buf_pair->id;
   pkt_queue_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
 
   return 0;
@@ -433,7 +442,7 @@ static inline uint16_t get_new_tails(
     cur_notification->signal = 0;
     notification_buf_head = (notification_buf_head + 1) % NOTIFICATION_BUF_SIZE;
 
-    pkt_q_id_t enso_pipe_id =
+    enso_pipe_id_t enso_pipe_id =
         cur_notification->queue_id - notification_buf_pair->enso_pipe_id_offset;
     notification_buf_pair->pending_pkt_tails[enso_pipe_id] =
         (uint32_t)cur_notification->tail;
@@ -458,13 +467,13 @@ static inline uint16_t get_new_tails(
   return nb_consumed_notifications;
 }
 
-static inline int consume_queue(socket_internal* socket_entry, void** buf,
+static inline int consume_queue(struct SocketInternal* socket_entry, void** buf,
                                 size_t len) {
   uint32_t* enso_pipe = socket_entry->pkt_queue.buf;
   uint32_t enso_pipe_head = socket_entry->pkt_queue.rx_tail;
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
-  int queue_id = socket_entry->queue_id;
+  int queue_id = socket_entry->pkt_queue.id;
   (void)len;  // Ignoring it for now.
 
   *buf = &enso_pipe[enso_pipe_head * 16];
@@ -495,7 +504,7 @@ static inline int consume_queue(socket_internal* socket_entry, void** buf,
   return flit_aligned_size;
 }
 
-int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
+int get_next_batch_from_queue(struct SocketInternal* socket_entry, void** buf,
                               size_t len) {
   get_new_tails(socket_entry->notification_buf_pair);
   return consume_queue(socket_entry, buf, len);
@@ -503,7 +512,7 @@ int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
 
 // Return next batch among all open sockets.
 int get_next_batch(struct NotificationBufPair* notification_buf_pair,
-                   socket_internal* socket_entries, int* enso_pipe_id,
+                   struct SocketInternal* socket_entries, int* enso_pipe_id,
                    void** buf, size_t len) {
   // Consume up to a batch of notifications at a time. If the number of consumed
   // notifications is the same as the number of pending notifications, we are
@@ -520,17 +529,17 @@ int get_next_batch(struct NotificationBufPair* notification_buf_pair,
     }
   }
 
-  pkt_q_id_t __enso_pipe_id =
+  enso_pipe_id_t __enso_pipe_id =
       notification_buf_pair
           ->last_rx_ids[notification_buf_pair->consumed_rx_ids++];
   *enso_pipe_id = __enso_pipe_id;
 
-  socket_internal* socket_entry = &socket_entries[__enso_pipe_id];
+  struct SocketInternal* socket_entry = &socket_entries[__enso_pipe_id];
 
   return consume_queue(socket_entry, buf, len);
 }
 
-void advance_ring_buffer(socket_internal* socket_entry, size_t len) {
+void advance_ring_buffer(struct SocketInternal* socket_entry, size_t len) {
   uint32_t rx_pkt_head = socket_entry->pkt_queue.rx_head;
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
@@ -644,7 +653,7 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
   notification_buf_pair->tx_head = head;
 }
 
-int dma_finish(socket_internal* socket_entry) {
+int dma_finish(struct SocketInternal* socket_entry) {
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
   struct QueueRegs* pkt_queue_regs = socket_entry->pkt_queue.regs;
@@ -672,10 +681,10 @@ int dma_finish(socket_internal* socket_entry) {
   return 0;
 }
 
-uint32_t get_enso_pipe_id_from_socket(socket_internal* socket_entry) {
+uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
-  return (uint32_t)socket_entry->queue_id +
+  return (uint32_t)socket_entry->pkt_queue.id +
          notification_buf_pair->enso_pipe_id_offset;
 }
 
@@ -687,7 +696,7 @@ void print_fpga_reg(intel_fpga_pcie_dev* dev, unsigned nb_regs) {
   }
 }
 
-void print_stats(socket_internal* socket_entry, bool print_global) {
+void print_stats(struct SocketInternal* socket_entry, bool print_global) {
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
 

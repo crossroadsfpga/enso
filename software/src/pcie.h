@@ -66,7 +66,7 @@ namespace norman {
 #define ACTION_NO_MATCH 1
 #define ACTION_MATCH 2
 
-typedef struct {
+struct RxEnsoPipe {
   uint32_t* buf;
   uint64_t buf_phys_addr;
   struct QueueRegs* regs;
@@ -74,23 +74,25 @@ typedef struct {
   uint32_t rx_head;
   uint32_t rx_tail;
   uint64_t phys_buf_offset;  // Use to convert between phys and virt address.
-} pkt_queue_t;
+  enso_pipe_id_t id;
+};
 
-typedef struct {
+struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   intel_fpga_pcie_dev* dev;
-  pkt_queue_t pkt_queue;
-  int queue_id;
-} socket_internal;
+  struct RxEnsoPipe pkt_queue;
+};
 
-int dma_init(socket_internal* socket_entry, unsigned socket_id,
+int dma_init(intel_fpga_pcie_dev* dev,
+             struct NotificationBufPair* notification_buf_pair,
+             struct RxEnsoPipe* pkt_queue, unsigned socket_id,
              unsigned nb_queues);
 
-int get_next_batch_from_queue(socket_internal* socket_entry, void** buf,
+int get_next_batch_from_queue(struct SocketInternal* socket_entry, void** buf,
                               size_t len);
 
 int get_next_batch(struct NotificationBufPair* notification_buf_pair,
-                   socket_internal* socket_entries, int* enso_pipe_id,
+                   struct SocketInternal* socket_entries, int* enso_pipe_id,
                    void** buf, size_t len);
 
 /*
@@ -98,7 +100,7 @@ int get_next_batch(struct NotificationBufPair* notification_buf_pair,
  * `socket_entry` socket. If `len` is greater than the number of allocated bytes
  * in the buffer, the behavior is undefined.
  */
-void advance_ring_buffer(socket_internal* socket_entry, size_t len);
+void advance_ring_buffer(struct SocketInternal* socket_entry, size_t len);
 
 /**
  * Sends data through a given queue.
@@ -146,9 +148,9 @@ uint32_t get_unreported_completions(
  */
 void update_tx_head(struct NotificationBufPair* notification_buf_pair);
 
-int dma_finish(socket_internal* socket_entry);
+int dma_finish(struct SocketInternal* socket_entry);
 
-uint32_t get_enso_pipe_id_from_socket(socket_internal* socket_entry);
+uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 
 void print_fpga_reg(intel_fpga_pcie_dev* dev, unsigned nb_regs);
 
@@ -160,7 +162,7 @@ void print_pkt_header(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
 
-void print_stats(socket_internal* socket_entry, bool print_global);
+void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
 }  // namespace norman
 
