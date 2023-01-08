@@ -80,12 +80,12 @@ struct RxEnsoPipe {
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   intel_fpga_pcie_dev* dev;
-  struct RxEnsoPipe pkt_queue;
+  struct RxEnsoPipe enso_pipe;
 };
 
 int dma_init(intel_fpga_pcie_dev* dev,
              struct NotificationBufPair* notification_buf_pair,
-             struct RxEnsoPipe* pkt_queue, unsigned socket_id,
+             struct RxEnsoPipe* enso_pipe, unsigned socket_id,
              unsigned nb_queues);
 
 int get_next_batch_from_queue(struct SocketInternal* socket_entry, void** buf,

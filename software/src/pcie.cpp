@@ -321,7 +321,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
 
 int dma_init(intel_fpga_pcie_dev* dev,
              struct NotificationBufPair* notification_buf_pair,
-             struct RxEnsoPipe* pkt_queue, unsigned socket_id,
+             struct RxEnsoPipe* enso_pipe, unsigned socket_id,
              unsigned nb_queues) {
   void* uio_mmap_bar2_addr;
   int enso_pipe_id;
@@ -378,7 +378,7 @@ int dma_init(intel_fpga_pcie_dev* dev,
   volatile struct QueueRegs* pkt_queue_regs =
       (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
                           enso_pipe_id * MEMORY_SPACE_PER_QUEUE);
-  pkt_queue->regs = (struct QueueRegs*)pkt_queue_regs;
+  enso_pipe->regs = (struct QueueRegs*)pkt_queue_regs;
 
   // Make sure the queue is disabled.
   pkt_queue_regs->rx_mem_low = 0;
@@ -396,23 +396,23 @@ int dma_init(intel_fpga_pcie_dev* dev,
   _norman_compiler_memory_barrier();
   while (pkt_queue_regs->rx_head != 0) continue;
 
-  pkt_queue->buf = (uint32_t*)get_huge_page(enso_pipe_id, BUF_PAGE_SIZE);
-  if (pkt_queue->buf == NULL) {
+  enso_pipe->buf = (uint32_t*)get_huge_page(enso_pipe_id, BUF_PAGE_SIZE);
+  if (enso_pipe->buf == NULL) {
     std::cerr << "Could not get huge page" << std::endl;
     return -1;
   }
-  uint64_t phys_addr = virt_to_phys(pkt_queue->buf);
+  uint64_t phys_addr = virt_to_phys(enso_pipe->buf);
 
-  pkt_queue->buf_phys_addr = phys_addr;
-  pkt_queue->phys_buf_offset = phys_addr - (uint64_t)(pkt_queue->buf);
+  enso_pipe->buf_phys_addr = phys_addr;
+  enso_pipe->phys_buf_offset = phys_addr - (uint64_t)(enso_pipe->buf);
 
-  pkt_queue->id = enso_pipe_id - notification_buf_pair->enso_pipe_id_offset;
-  pkt_queue->buf_head_ptr = (uint32_t*)&pkt_queue_regs->rx_head;
-  pkt_queue->rx_head = 0;
-  pkt_queue->rx_tail = 0;
+  enso_pipe->id = enso_pipe_id - notification_buf_pair->enso_pipe_id_offset;
+  enso_pipe->buf_head_ptr = (uint32_t*)&pkt_queue_regs->rx_head;
+  enso_pipe->rx_head = 0;
+  enso_pipe->rx_tail = 0;
 
   // make sure the last tail matches the current head
-  notification_buf_pair->pending_pkt_tails[pkt_queue->id] = pkt_queue->rx_head;
+  notification_buf_pair->pending_pkt_tails[enso_pipe->id] = enso_pipe->rx_head;
 
   // Setting the address enables the queue. Do this last.
   // The least significant bits in rx_mem_low are used to keep the notification
@@ -469,11 +469,11 @@ static inline uint16_t get_new_tails(
 
 static inline int consume_queue(struct SocketInternal* socket_entry, void** buf,
                                 size_t len) {
-  uint32_t* enso_pipe = socket_entry->pkt_queue.buf;
-  uint32_t enso_pipe_head = socket_entry->pkt_queue.rx_tail;
+  uint32_t* enso_pipe = socket_entry->enso_pipe.buf;
+  uint32_t enso_pipe_head = socket_entry->enso_pipe.rx_tail;
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
-  int queue_id = socket_entry->pkt_queue.id;
+  int queue_id = socket_entry->enso_pipe.id;
   (void)len;  // Ignoring it for now.
 
   *buf = &enso_pipe[enso_pipe_head * 16];
@@ -500,7 +500,7 @@ static inline int consume_queue(struct SocketInternal* socket_entry, void** buf,
 
   enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64) % ENSO_PIPE_SIZE;
 
-  socket_entry->pkt_queue.rx_tail = enso_pipe_head;
+  socket_entry->enso_pipe.rx_tail = enso_pipe_head;
   return flit_aligned_size;
 }
 
@@ -540,14 +540,14 @@ int get_next_batch(struct NotificationBufPair* notification_buf_pair,
 }
 
 void advance_ring_buffer(struct SocketInternal* socket_entry, size_t len) {
-  uint32_t rx_pkt_head = socket_entry->pkt_queue.rx_head;
+  uint32_t rx_pkt_head = socket_entry->enso_pipe.rx_head;
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
   _norman_compiler_memory_barrier();
-  *(socket_entry->pkt_queue.buf_head_ptr) = rx_pkt_head;
+  *(socket_entry->enso_pipe.buf_head_ptr) = rx_pkt_head;
 
-  socket_entry->pkt_queue.rx_head = rx_pkt_head;
+  socket_entry->enso_pipe.rx_head = rx_pkt_head;
 }
 
 int send_to_queue(struct NotificationBufPair* notification_buf_pair,
@@ -656,11 +656,11 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
 int dma_finish(struct SocketInternal* socket_entry) {
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
-  struct QueueRegs* pkt_queue_regs = socket_entry->pkt_queue.regs;
+  struct QueueRegs* pkt_queue_regs = socket_entry->enso_pipe.regs;
   pkt_queue_regs->rx_mem_low = 0;
   pkt_queue_regs->rx_mem_high = 0;
 
-  munmap(socket_entry->pkt_queue.buf, BUF_PAGE_SIZE);
+  munmap(socket_entry->enso_pipe.buf, BUF_PAGE_SIZE);
 
   if (notification_buf_pair->ref_cnt == 0) {
     return 0;
@@ -684,7 +684,7 @@ int dma_finish(struct SocketInternal* socket_entry) {
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
-  return (uint32_t)socket_entry->pkt_queue.id +
+  return (uint32_t)socket_entry->enso_pipe.id +
          notification_buf_pair->enso_pipe_id_offset;
 }
 
@@ -708,8 +708,8 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global) {
     printf("Dsc TX head: %d\n\n", notification_buf_pair->tx_head);
   }
 
-  printf("Pkt RX tail: %d\n", socket_entry->pkt_queue.rx_tail);
-  printf("Pkt RX head: %d\n", socket_entry->pkt_queue.rx_head);
+  printf("Pkt RX tail: %d\n", socket_entry->enso_pipe.rx_tail);
+  printf("Pkt RX head: %d\n", socket_entry->enso_pipe.rx_head);
 }
 
 }  // namespace norman

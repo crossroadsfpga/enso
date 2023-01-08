@@ -87,10 +87,10 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
 
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
-  struct RxEnsoPipe* pkt_queue = &socket_entry->pkt_queue;
+  struct RxEnsoPipe* enso_pipe = &socket_entry->enso_pipe;
 
   result =
-      dma_init(dev, notification_buf_pair, pkt_queue, socket_id, nb_queues);
+      dma_init(dev, notification_buf_pair, enso_pipe, socket_id, nb_queues);
 
   if (unlikely(result < 0)) {
     std::cerr << "Problem initializing DMA" << std::endl;
@@ -120,21 +120,21 @@ int bind(int sockfd, const struct sockaddr* addr, socklen_t addrlen) noexcept {
  * Return physical address of the buffer associated with the socket.
  */
 uint64_t get_socket_phys_addr(int sockfd) {
-  return open_sockets[sockfd].pkt_queue.buf_phys_addr;
+  return open_sockets[sockfd].enso_pipe.buf_phys_addr;
 }
 
 /*
  * Return virtual address of the buffer associated with the socket.
  */
 void* get_socket_virt_addr(int sockfd) {
-  return (void*)open_sockets[sockfd].pkt_queue.buf;
+  return (void*)open_sockets[sockfd].enso_pipe.buf;
 }
 
 /*
  * Convert a socket buffer virtual address to physical address.
  */
 uint64_t convert_buf_addr_to_phys(int sockfd, void* addr) {
-  return (uint64_t)addr + open_sockets[sockfd].pkt_queue.phys_buf_offset;
+  return (uint64_t)addr + open_sockets[sockfd].enso_pipe.phys_buf_offset;
 }
 
 ssize_t recv(int sockfd, void* buf, size_t len,
@@ -234,7 +234,7 @@ int shutdown(int sockfd, int how __attribute__((unused))) noexcept {
 
 void print_sock_stats(int sockfd) {
   struct SocketInternal* socket = &open_sockets[sockfd];
-  print_stats(socket, socket->pkt_queue.id == 0);
+  print_stats(socket, socket->enso_pipe.id == 0);
 }
 
 }  // namespace norman
