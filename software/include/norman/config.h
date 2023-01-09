@@ -67,6 +67,72 @@ int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification);
 
+/**
+ * Enables hardware timestamping.
+ *
+ * All outgoing packets will receive a timestamp and all incoming packets will
+ * have an RTT (in number of cycles). Use `get_pkt_rtt` to retrieve the value.
+ *
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @return 0 if configuration was successful.
+ */
+int enable_timestamp(struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * Disables hardware timestamping.
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @return 0 if configuration was successful.
+ */
+int disable_timestamp(struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * Disables hardware rate limit.
+ *
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @return 0 if configuration was successful.
+ */
+int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * Enables hardware rate limit.
+ *
+ * Once rate limiting is enabled, packets from all queues are sent at a rate of
+ * (num/den * MAX_HARDWARE_FLIT_RATE) flits per second (a flit is 64 bytes).
+ * Note that this is slightly different from how we typically define throughput
+ * and you may need to take the packet sizes into account to set this properly.
+ *
+ * For example, suppose that you are sending 64-byte packets. Each packet
+ * occupies exactly one flit. For this packet size, line rate at 100 Gbps is
+ * 148.8Mpps. So if MAX_HARDWARE_FLIT_RATE is 200MHz, line rate actually
+ * corresponds to a 744/1000 rate. Therefore, if you want to send at 50Gbps (50%
+ * of line rate), you can use a 372/1000 (or 93/250) rate.
+ *
+ * The other thing to notice is that, while it might be tempting to use a large
+ * denominator in order to increase the rate precision. This has the side effect
+ * of increasing burstiness. The way the rate limit is implemented, we send a
+ * burst of `num` consecutive flits every `den` cycles. Which means that if
+ * `num` is too large, it might overflow the receiver buffer. For instance, in
+ * the example above, 93/250 would be a better rate than 372/1000. And 3/8 would
+ * be even better with a slight loss in precision.
+ *
+ * You can find the maximum packet rate for any packet size by using the
+ * expression: line_rate/((pkt_size + 20)*8). So for 100Gbps and 128-byte
+ * packets we have: 100e9/((128+20)*8) packets per second. Given that each
+ * packet is two flits, for MAX_HARDWARE_FLIT_RATE=200e6, the maximum rate is
+ * 100e9/((128+20)*8)*2/200e6, which is approximately 125/148.
+ *
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @param num Rate numerator.
+ * @param den Rate denominator.
+ * @return 0 if configuration was successful.
+ */
+int enable_rate_limit(struct NotificationBufPair* notification_buf_pair,
+                      uint16_t num, uint16_t den);
+
 }  // namespace norman
 
 #endif  // SOFTWARE_INCLUDE_NORMAN_CONFIG_H_
