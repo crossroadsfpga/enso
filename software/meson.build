@@ -1,7 +1,7 @@
 project('norman_app', 'c', 'cpp', meson_version: '>=0.58.0',
         default_options: [
             'prefix=/usr/local',
-            'cpp_std=c++11',
+            'cpp_std=c++17',
             'debug=true',
             'optimization=3',
             'warning_level=3',
