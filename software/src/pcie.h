@@ -83,6 +83,16 @@ struct SocketInternal {
   struct RxEnsoPipe enso_pipe;
 };
 
+int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
+                          volatile struct QueueRegs* notification_buf_pair_regs,
+                          enso_pipe_id_t nb_queues,
+                          enso_pipe_id_t enso_pipe_id_offset);
+
+int enso_pipe_init(struct RxEnsoPipe* enso_pipe,
+                   volatile struct QueueRegs* enso_pipe_regs,
+                   struct NotificationBufPair* notification_buf_pair,
+                   enso_pipe_id_t enso_pipe_id);
+
 int dma_init(intel_fpga_pcie_dev* dev,
              struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipe* enso_pipe, unsigned socket_id,
