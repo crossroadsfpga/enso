@@ -430,7 +430,7 @@ int dma_init(intel_fpga_pcie_dev* dev,
 
   ++(notification_buf_pair->ref_cnt);
 
-  // register associated with the packet queue
+  // Register associated with the enso pipe.
   volatile struct QueueRegs* enso_pipe_regs =
       (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
                           enso_pipe_id * MEMORY_SPACE_PER_QUEUE);
@@ -668,29 +668,34 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
   notification_buf_pair->tx_head = head;
 }
 
+void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
+  notification_buf_pair->regs->rx_mem_low = 0;
+  notification_buf_pair->regs->rx_mem_high = 0;
+
+  notification_buf_pair->regs->tx_mem_low = 0;
+  notification_buf_pair->regs->tx_mem_high = 0;
+  munmap(notification_buf_pair->rx_buf, ALIGNED_DSC_BUF_PAIR_SIZE);
+  free(notification_buf_pair->pending_pkt_tails);
+  free(notification_buf_pair->wrap_tracker);
+  free(notification_buf_pair->last_rx_ids);
+
+  --(notification_buf_pair->ref_cnt);
+}
+
+void enso_pipe_free(struct RxEnsoPipe* enso_pipe) {
+  enso_pipe->regs->rx_mem_low = 0;
+  enso_pipe->regs->rx_mem_high = 0;
+
+  munmap(enso_pipe->buf, BUF_PAGE_SIZE);
+}
+
 int dma_finish(struct SocketInternal* socket_entry) {
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
-  struct QueueRegs* enso_pipe_regs = socket_entry->enso_pipe.regs;
-  enso_pipe_regs->rx_mem_low = 0;
-  enso_pipe_regs->rx_mem_high = 0;
 
-  munmap(socket_entry->enso_pipe.buf, BUF_PAGE_SIZE);
-
+  enso_pipe_free(&socket_entry->enso_pipe);
   if (notification_buf_pair->ref_cnt == 0) {
-    return 0;
-  }
-
-  if (--(notification_buf_pair->ref_cnt) == 0) {
-    notification_buf_pair->regs->rx_mem_low = 0;
-    notification_buf_pair->regs->rx_mem_high = 0;
-
-    notification_buf_pair->regs->tx_mem_low = 0;
-    notification_buf_pair->regs->tx_mem_high = 0;
-    munmap(notification_buf_pair->rx_buf, ALIGNED_DSC_BUF_PAIR_SIZE);
-    free(notification_buf_pair->pending_pkt_tails);
-    free(notification_buf_pair->wrap_tracker);
-    free(notification_buf_pair->last_rx_ids);
+    notification_buf_free(notification_buf_pair);
   }
 
   return 0;

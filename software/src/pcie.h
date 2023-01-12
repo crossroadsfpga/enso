@@ -158,6 +158,10 @@ uint32_t get_unreported_completions(
  */
 void update_tx_head(struct NotificationBufPair* notification_buf_pair);
 
+void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
+
+void enso_pipe_free(struct RxEnsoPipe* enso_pipe);
+
 int dma_finish(struct SocketInternal* socket_entry);
 
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
