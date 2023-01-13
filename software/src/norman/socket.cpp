@@ -137,12 +137,18 @@ uint64_t convert_buf_addr_to_phys(int sockfd, void* addr) {
   return (uint64_t)addr + open_sockets[sockfd].enso_pipe.phys_buf_offset;
 }
 
-ssize_t recv(int sockfd, void* buf, size_t len,
-             int flags __attribute__((unused))) {
+ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
+  (void)len;
+  (void)flags;
+
   void* ring_buf;
   struct SocketInternal* socket = &open_sockets[sockfd];
+  struct RxEnsoPipe* enso_pipe = &socket->enso_pipe;
+  struct NotificationBufPair* notification_buf_pair =
+      socket->notification_buf_pair;
 
-  ssize_t bytes_received = get_next_batch_from_queue(socket, &ring_buf, len);
+  ssize_t bytes_received =
+      get_next_batch_from_queue(enso_pipe, notification_buf_pair, &ring_buf);
 
   if (unlikely(bytes_received <= 0)) {
     return bytes_received;
@@ -150,21 +156,31 @@ ssize_t recv(int sockfd, void* buf, size_t len,
 
   memcpy(buf, ring_buf, bytes_received);
 
-  advance_ring_buffer(socket, bytes_received);
+  advance_ring_buffer(enso_pipe, bytes_received);
 
   return bytes_received;
 }
 
-ssize_t recv_zc(int sockfd, void** buf, size_t len,
-                int flags __attribute__((unused))) {
-  return get_next_batch_from_queue(&open_sockets[sockfd], buf, len);
+ssize_t recv_zc(int sockfd, void** buf, size_t len, int flags) {
+  (void)len;
+  (void)flags;
+
+  struct SocketInternal* socket = &open_sockets[sockfd];
+  struct RxEnsoPipe* enso_pipe = &socket->enso_pipe;
+  struct NotificationBufPair* notification_buf_pair =
+      socket->notification_buf_pair;
+
+  return get_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
 }
 
 ssize_t recv_select(int ref_sockfd, int* sockfd, void** buf, size_t len,
-                    int flags __attribute__((unused))) {
+                    int flags) {
+  (void)len;
+  (void)flags;
+
   struct NotificationBufPair* notification_buf_pair =
       open_sockets[ref_sockfd].notification_buf_pair;
-  return get_next_batch(notification_buf_pair, open_sockets, sockfd, buf, len);
+  return get_next_batch(notification_buf_pair, open_sockets, sockfd, buf);
 }
 
 ssize_t send(int sockfd, void* phys_addr, size_t len,
@@ -180,7 +196,7 @@ uint32_t get_completions(int ref_sockfd) {
 }
 
 void free_enso_pipe(int sockfd, size_t len) {
-  advance_ring_buffer(&open_sockets[sockfd], len);
+  advance_ring_buffer(&(open_sockets[sockfd].enso_pipe), len);
 }
 
 int enable_device_timestamp() {

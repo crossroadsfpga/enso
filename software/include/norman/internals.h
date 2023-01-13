@@ -102,6 +102,17 @@ struct NotificationBufPair {
   uint32_t enso_pipe_id_offset;
 };
 
+struct RxEnsoPipe {
+  uint32_t* buf;
+  uint64_t buf_phys_addr;
+  struct QueueRegs* regs;
+  uint32_t* buf_head_ptr;
+  uint32_t rx_head;
+  uint32_t rx_tail;
+  uint64_t phys_buf_offset;  // Use to convert between phys and virt address.
+  enso_pipe_id_t id;
+};
+
 }  // namespace norman
 
 #endif  // SOFTWARE_INCLUDE_NORMAN_INTERNALS_H_

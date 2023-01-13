@@ -66,17 +66,6 @@ namespace norman {
 #define ACTION_NO_MATCH 1
 #define ACTION_MATCH 2
 
-struct RxEnsoPipe {
-  uint32_t* buf;
-  uint64_t buf_phys_addr;
-  struct QueueRegs* regs;
-  uint32_t* buf_head_ptr;
-  uint32_t rx_head;
-  uint32_t rx_tail;
-  uint64_t phys_buf_offset;  // Use to convert between phys and virt address.
-  enso_pipe_id_t id;
-};
-
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   intel_fpga_pcie_dev* dev;
@@ -98,19 +87,35 @@ int dma_init(intel_fpga_pcie_dev* dev,
              struct RxEnsoPipe* enso_pipe, unsigned socket_id,
              unsigned nb_queues);
 
-int get_next_batch_from_queue(struct SocketInternal* socket_entry, void** buf,
-                              size_t len);
+int get_next_batch_from_queue(struct RxEnsoPipe* enso_pipe,
+                              struct NotificationBufPair* notification_buf_pair,
+                              void** buf);
+
+int peek_next_batch_from_queue(
+    struct RxEnsoPipe* enso_pipe,
+    struct NotificationBufPair* notification_buf_pair, void** buf);
 
 int get_next_batch(struct NotificationBufPair* notification_buf_pair,
                    struct SocketInternal* socket_entries, int* enso_pipe_id,
-                   void** buf, size_t len);
+                   void** buf);
 
-/*
- * Frees the next `len` bytes in the packet buffer associated with the
- * `socket_entry` socket. If `len` is greater than the number of allocated bytes
- * in the buffer, the behavior is undefined.
+/**
+ * Frees the next `len` bytes in the buffer associated with the `socket_entry`
+ * socket. If `len` is greater than the number of allocated bytes in the buffer,
+ * the behavior is undefined.
+ *
+ * @param enso_pipe Enso pipe to advance.
+ * @param len Number of bytes to free.
  */
-void advance_ring_buffer(struct SocketInternal* socket_entry, size_t len);
+void advance_ring_buffer(struct RxEnsoPipe* enso_pipe, size_t len);
+
+/**
+ * Frees all the received bytes in the buffer associated with the `socket_entry`
+ * socket.
+ *
+ * @param enso_pipe Enso pipe to advance.
+ */
+void fully_advance_ring_buffer(struct RxEnsoPipe* enso_pipe);
 
 /**
  * Sends data through a given queue.

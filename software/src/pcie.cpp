@@ -35,11 +35,6 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <immintrin.h>
-#include <netinet/ether.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
 #include <norman/consts.h>
 #include <norman/helpers.h>
 #include <sched.h>
@@ -368,8 +363,8 @@ int dma_init(intel_fpga_pcie_dev* dev,
                         enso_pipe_id);
 }
 
-static inline uint16_t get_new_tails(
-    struct NotificationBufPair* notification_buf_pair) {
+static norman_always_inline uint16_t
+__get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   struct RxNotification* notification_buf = notification_buf_pair->rx_buf;
   uint32_t notification_buf_head = notification_buf_pair->rx_head;
   uint16_t nb_consumed_notifications = 0;
@@ -411,16 +406,15 @@ static inline uint16_t get_new_tails(
   return nb_consumed_notifications;
 }
 
-static inline int consume_queue(struct SocketInternal* socket_entry, void** buf,
-                                size_t len) {
-  uint32_t* enso_pipe = socket_entry->enso_pipe.buf;
-  uint32_t enso_pipe_head = socket_entry->enso_pipe.rx_tail;
-  struct NotificationBufPair* notification_buf_pair =
-      socket_entry->notification_buf_pair;
-  int queue_id = socket_entry->enso_pipe.id;
-  (void)len;  // Ignoring it for now.
+static norman_always_inline int __consume_queue(
+    struct RxEnsoPipe* enso_pipe,
+    struct NotificationBufPair* notification_buf_pair, void** buf,
+    bool peek = false) {
+  uint32_t* enso_pipe_buf = enso_pipe->buf;
+  uint32_t enso_pipe_head = enso_pipe->rx_tail;
+  int queue_id = enso_pipe->id;
 
-  *buf = &enso_pipe[enso_pipe_head * 16];
+  *buf = &enso_pipe_buf[enso_pipe_head * 16];
 
   uint32_t enso_pipe_tail = notification_buf_pair->pending_pkt_tails[queue_id];
 
@@ -433,31 +427,32 @@ static inline int consume_queue(struct SocketInternal* socket_entry, void** buf,
   uint32_t flit_aligned_size =
       ((enso_pipe_tail - enso_pipe_head) % ENSO_PIPE_SIZE) * 64;
 
-  // FIXME(sadok): The following may split the transfer in the middle of a
-  // packet. We should probably have a separate function that is packet-aware
-  // and that can enforce a transfer limit.
+  if (!peek) {
+    enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64) % ENSO_PIPE_SIZE;
+    enso_pipe->rx_tail = enso_pipe_head;
+  }
 
-  // Reached the buffer limit.
-  // if (unlikely(flit_aligned_size > len)) {
-  //     flit_aligned_size = len & 0xffffffc0;  // Align len to 64 bytes.
-  // }
-
-  enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64) % ENSO_PIPE_SIZE;
-
-  socket_entry->enso_pipe.rx_tail = enso_pipe_head;
   return flit_aligned_size;
 }
 
-int get_next_batch_from_queue(struct SocketInternal* socket_entry, void** buf,
-                              size_t len) {
-  get_new_tails(socket_entry->notification_buf_pair);
-  return consume_queue(socket_entry, buf, len);
+int get_next_batch_from_queue(struct RxEnsoPipe* enso_pipe,
+                              struct NotificationBufPair* notification_buf_pair,
+                              void** buf) {
+  __get_new_tails(notification_buf_pair);
+  return __consume_queue(enso_pipe, notification_buf_pair, buf);
+}
+
+int peek_next_batch_from_queue(
+    struct RxEnsoPipe* enso_pipe,
+    struct NotificationBufPair* notification_buf_pair, void** buf) {
+  __get_new_tails(notification_buf_pair);
+  return __consume_queue(enso_pipe, notification_buf_pair, buf, true);
 }
 
 // Return next batch among all open sockets.
 int get_next_batch(struct NotificationBufPair* notification_buf_pair,
                    struct SocketInternal* socket_entries, int* enso_pipe_id,
-                   void** buf, size_t len) {
+                   void** buf) {
   // Consume up to a batch of notifications at a time. If the number of consumed
   // notifications is the same as the number of pending notifications, we are
   // done processing the last batch and can get the next one. Using batches here
@@ -466,7 +461,7 @@ int get_next_batch(struct NotificationBufPair* notification_buf_pair,
   if (notification_buf_pair->pending_rx_ids ==
       notification_buf_pair->consumed_rx_ids) {
     notification_buf_pair->pending_rx_ids =
-        get_new_tails(notification_buf_pair);
+        __get_new_tails(notification_buf_pair);
     notification_buf_pair->consumed_rx_ids = 0;
     if (unlikely(notification_buf_pair->pending_rx_ids == 0)) {
       return 0;
@@ -479,19 +474,27 @@ int get_next_batch(struct NotificationBufPair* notification_buf_pair,
   *enso_pipe_id = __enso_pipe_id;
 
   struct SocketInternal* socket_entry = &socket_entries[__enso_pipe_id];
+  struct RxEnsoPipe* enso_pipe = &socket_entry->enso_pipe;
 
-  return consume_queue(socket_entry, buf, len);
+  return __consume_queue(enso_pipe, notification_buf_pair, buf);
 }
 
-void advance_ring_buffer(struct SocketInternal* socket_entry, size_t len) {
-  uint32_t rx_pkt_head = socket_entry->enso_pipe.rx_head;
+void advance_ring_buffer(struct RxEnsoPipe* enso_pipe, size_t len) {
+  uint32_t rx_pkt_head = enso_pipe->rx_head;
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
   _norman_compiler_memory_barrier();
-  *(socket_entry->enso_pipe.buf_head_ptr) = rx_pkt_head;
+  *(enso_pipe->buf_head_ptr) = rx_pkt_head;
 
-  socket_entry->enso_pipe.rx_head = rx_pkt_head;
+  enso_pipe->rx_head = rx_pkt_head;
+}
+
+void fully_advance_ring_buffer(struct RxEnsoPipe* enso_pipe) {
+  _norman_compiler_memory_barrier();
+  *(enso_pipe->buf_head_ptr) = enso_pipe->rx_tail;
+
+  enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 
 int send_to_queue(struct NotificationBufPair* notification_buf_pair,
