@@ -87,7 +87,7 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
 
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
-  struct RxEnsoPipe* enso_pipe = &socket_entry->enso_pipe;
+  struct RxEnsoPipeInternal* enso_pipe = &socket_entry->enso_pipe;
 
   result =
       dma_init(dev, notification_buf_pair, enso_pipe, socket_id, nb_queues);
@@ -143,7 +143,7 @@ ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
 
   void* ring_buf;
   struct SocketInternal* socket = &open_sockets[sockfd];
-  struct RxEnsoPipe* enso_pipe = &socket->enso_pipe;
+  struct RxEnsoPipeInternal* enso_pipe = &socket->enso_pipe;
   struct NotificationBufPair* notification_buf_pair =
       socket->notification_buf_pair;
 
@@ -166,7 +166,7 @@ ssize_t recv_zc(int sockfd, void** buf, size_t len, int flags) {
   (void)flags;
 
   struct SocketInternal* socket = &open_sockets[sockfd];
-  struct RxEnsoPipe* enso_pipe = &socket->enso_pipe;
+  struct RxEnsoPipeInternal* enso_pipe = &socket->enso_pipe;
   struct NotificationBufPair* notification_buf_pair =
       socket->notification_buf_pair;
 

@@ -102,7 +102,7 @@ struct NotificationBufPair {
   uint32_t enso_pipe_id_offset;
 };
 
-struct RxEnsoPipe {
+struct RxEnsoPipeInternal {
   uint32_t* buf;
   uint64_t buf_phys_addr;
   struct QueueRegs* regs;

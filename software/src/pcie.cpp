@@ -243,7 +243,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   return 0;
 }
 
-int enso_pipe_init(struct RxEnsoPipe* enso_pipe,
+int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id) {
@@ -295,7 +295,7 @@ int enso_pipe_init(struct RxEnsoPipe* enso_pipe,
 
 int dma_init(intel_fpga_pcie_dev* dev,
              struct NotificationBufPair* notification_buf_pair,
-             struct RxEnsoPipe* enso_pipe, unsigned socket_id,
+             struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
              unsigned nb_queues) {
   void* uio_mmap_bar2_addr;
   enso_pipe_id_t enso_pipe_id;
@@ -407,7 +407,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 }
 
 static norman_always_inline int __consume_queue(
-    struct RxEnsoPipe* enso_pipe,
+    struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf,
     bool peek = false) {
   uint32_t* enso_pipe_buf = enso_pipe->buf;
@@ -435,7 +435,7 @@ static norman_always_inline int __consume_queue(
   return flit_aligned_size;
 }
 
-int get_next_batch_from_queue(struct RxEnsoPipe* enso_pipe,
+int get_next_batch_from_queue(struct RxEnsoPipeInternal* enso_pipe,
                               struct NotificationBufPair* notification_buf_pair,
                               void** buf) {
   __get_new_tails(notification_buf_pair);
@@ -443,7 +443,7 @@ int get_next_batch_from_queue(struct RxEnsoPipe* enso_pipe,
 }
 
 int peek_next_batch_from_queue(
-    struct RxEnsoPipe* enso_pipe,
+    struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
   __get_new_tails(notification_buf_pair);
   return __consume_queue(enso_pipe, notification_buf_pair, buf, true);
@@ -474,12 +474,12 @@ int get_next_batch(struct NotificationBufPair* notification_buf_pair,
   *enso_pipe_id = __enso_pipe_id;
 
   struct SocketInternal* socket_entry = &socket_entries[__enso_pipe_id];
-  struct RxEnsoPipe* enso_pipe = &socket_entry->enso_pipe;
+  struct RxEnsoPipeInternal* enso_pipe = &socket_entry->enso_pipe;
 
   return __consume_queue(enso_pipe, notification_buf_pair, buf);
 }
 
-void advance_ring_buffer(struct RxEnsoPipe* enso_pipe, size_t len) {
+void advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t rx_pkt_head = enso_pipe->rx_head;
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
@@ -490,7 +490,7 @@ void advance_ring_buffer(struct RxEnsoPipe* enso_pipe, size_t len) {
   enso_pipe->rx_head = rx_pkt_head;
 }
 
-void fully_advance_ring_buffer(struct RxEnsoPipe* enso_pipe) {
+void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe) {
   _norman_compiler_memory_barrier();
   *(enso_pipe->buf_head_ptr) = enso_pipe->rx_tail;
 
@@ -614,7 +614,7 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   --(notification_buf_pair->ref_cnt);
 }
 
-void enso_pipe_free(struct RxEnsoPipe* enso_pipe) {
+void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe) {
   enso_pipe->regs->rx_mem_low = 0;
   enso_pipe->regs->rx_mem_high = 0;
 

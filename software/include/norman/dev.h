@@ -50,17 +50,17 @@ class PktIterator;
 class PeekPktIterator;
 
 int external_peek_next_batch_from_queue(
-    struct RxEnsoPipe* enso_pipe,
+    struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
 /**
- * A class that represents an Enso Pipe.
+ * A class that represents an RX Enso Pipe.
  *
  * Should be instantiated using a Device object.
  *
  * Example:
  *    auto device = Device::Create(core_id, nb_pipes, pcie_addr);
- *    Pipe* pipe = device->AllocatePipe();
+ *    RxTxPipe* pipe = device->AllocateRxTxPipe();
  *    pipe->Bind();
  *
  *    auto batch = pipe->RecvPkts(64);
@@ -69,7 +69,7 @@ int external_peek_next_batch_from_queue(
  *    }
  *    pipe->FreeAllBytes();
  */
-class Pipe {
+class RxTxPipe {
  public:
   /**
    * A class that represents a batch of packets.
@@ -103,7 +103,7 @@ class Pipe {
 
    private:
     /**
-     * Can only be constructed by Pipe.
+     * Can only be constructed by RxTxPipe.
      *
      * @param buf A pointer to the start of the batch.
      * @param available_bytes The number of bytes available in the batch.
@@ -112,22 +112,22 @@ class Pipe {
      *                             the bytes associated with each packet.
      */
     constexpr MessageBatch(uint8_t* buf, uint32_t available_bytes,
-                           uint32_t message_limit, Pipe* pipe)
+                           uint32_t message_limit, RxTxPipe* pipe)
         : kAvailableBytes(available_bytes),
           kMessageLimit(message_limit),
           kBuf(buf),
           pipe_(pipe) {}
 
-    friend class Pipe;
+    friend class RxTxPipe;
 
     uint8_t* const kBuf;
-    Pipe* pipe_;
+    RxTxPipe* pipe_;
   };
 
-  Pipe(const Pipe&) = delete;
-  Pipe& operator=(const Pipe&) = delete;
-  Pipe(Pipe&&) = delete;
-  Pipe& operator=(Pipe&&) = delete;
+  RxTxPipe(const RxTxPipe&) = delete;
+  RxTxPipe& operator=(const RxTxPipe&) = delete;
+  RxTxPipe(RxTxPipe&&) = delete;
+  RxTxPipe& operator=(RxTxPipe&&) = delete;
 
   /**
    * Binds the pipe to a given flow entry. Can be called multiple times.
@@ -216,19 +216,19 @@ class Pipe {
   }
 
   /**
-   * Frees a given number of bytes previously received on the Pipe.
+   * Frees a given number of bytes previously received on the RxTxPipe.
    *
    * @param nb_bytes The number of bytes to free.
    */
   void FreeBytes(uint32_t nb_bytes);
 
   /**
-   * Frees all bytes previously received on the Pipe.
+   * Frees all bytes previously received on the RxTxPipe.
    */
   void FreeAllBytes();
 
   /**
-   * Send a given number of bytes previously received on the Pipe.
+   * Send a given number of bytes previously received on the RxTxPipe.
    * This will also free the corresponding bytes, after transmission is done.
    * The user must be careful not to send more bytes than were received and to
    * make sure that sent bytes are not modified after calling this function.
@@ -242,28 +242,28 @@ class Pipe {
 
  private:
   /**
-   * Pipes can only be instantiated from a `Device` object, using the
-   * `AllocatePipe()` method.
+   * RxPipes can only be instantiated from a `Device` object, using the
+   * `AllocateRxTxPipe()` method.
    *
    * @param id The ID of the pipe.
    * @param notification_buf_pair The notification buffer pair to use for this
    *                             pipe.
    */
-  Pipe(enso_pipe_id_t id,
-       struct NotificationBufPair* notification_buf_pair) noexcept
+  RxTxPipe(enso_pipe_id_t id,
+           struct NotificationBufPair* notification_buf_pair) noexcept
       : kId(id), notification_buf_pair_(notification_buf_pair) {}
 
   /**
    * Pipes cannot be deallocated from outside. The `Device` object is in charge
    * of deallocating them.
    */
-  virtual ~Pipe();
+  virtual ~RxTxPipe();
 
   int Init(volatile struct QueueRegs* enso_pipe_regs) noexcept;
 
   friend class Device;
 
-  struct RxEnsoPipe rx_pipe_;
+  struct RxEnsoPipeInternal rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
 };
 
@@ -307,18 +307,18 @@ class PktIterator {
    * @param addr The address of the first packet.
    * @param pkt_limit The maximum number of packets to receive.
    */
-  constexpr PktIterator(uint8_t* addr, uint32_t pkt_limit, Pipe* pipe)
+  constexpr PktIterator(uint8_t* addr, uint32_t pkt_limit, RxTxPipe* pipe)
       : addr_(addr),
         next_addr_(get_next_pkt(addr)),
         missing_pkts_(pkt_limit),
         pipe_(pipe) {}
 
-  friend class Pipe::MessageBatch<PktIterator>;
+  friend class RxTxPipe::MessageBatch<PktIterator>;
 
   uint8_t* addr_;
   uint8_t* next_addr_;
   int32_t missing_pkts_;
-  Pipe* pipe_;
+  RxTxPipe* pipe_;
 };
 
 /**
@@ -361,18 +361,18 @@ class PeekPktIterator {
    * @param addr The address of the first packet.
    * @param pkt_limit The maximum number of packets to receive.
    */
-  constexpr PeekPktIterator(uint8_t* addr, uint32_t pkt_limit, Pipe* pipe)
+  constexpr PeekPktIterator(uint8_t* addr, uint32_t pkt_limit, RxTxPipe* pipe)
       : addr_(addr),
         next_addr_(get_next_pkt(addr)),
         missing_pkts_(pkt_limit),
         pipe_(pipe) {}
 
-  friend class Pipe::MessageBatch<PeekPktIterator>;
+  friend class RxTxPipe::MessageBatch<PeekPktIterator>;
 
   uint8_t* addr_;
   uint8_t* next_addr_;
   int32_t missing_pkts_;
-  Pipe* pipe_;
+  RxTxPipe* pipe_;
 };
 /**
  * A class that represents a device.
@@ -414,7 +414,7 @@ class Device {
    * Allocates a pipe.
    * @return A pointer to the pipe. May be null if the pipe cannot be created.
    */
-  Pipe* AllocatePipe() noexcept;
+  RxTxPipe* AllocateRxTxPipe() noexcept;
 
  private:
   /**
@@ -428,7 +428,7 @@ class Device {
 
   int Init() noexcept;
 
-  Pipe& NextPipeToRecv();
+  RxTxPipe& NextPipeToRecv();
 
   const std::string kPcieAddr;
   const uint32_t kNbPipes;
@@ -437,7 +437,7 @@ class Device {
   int16_t core_id_;
   uint16_t bdf_;
   void* uio_mmap_bar2_addr_;
-  std::vector<Pipe*> pipes_;
+  std::vector<RxTxPipe*> pipes_;
 };
 
 }  // namespace norman

@@ -87,10 +87,10 @@ int main(int argc, const char* argv[]) {
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
 
         using norman::Device;
-        using norman::Pipe;
+        using norman::RxTxPipe;
 
         std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
-        std::vector<Pipe*> pipes;
+        std::vector<RxTxPipe*> pipes;
 
         if (!dev) {
           std::cerr << "Problem creating device" << std::endl;
@@ -98,7 +98,7 @@ int main(int argc, const char* argv[]) {
         }
 
         for (int i = 0; i < nb_queues; ++i) {
-          pipes.push_back(dev->AllocatePipe());
+          pipes.push_back(dev->AllocateRxTxPipe());
         }
 
         setup_done = 1;

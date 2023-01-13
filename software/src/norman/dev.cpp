@@ -45,20 +45,20 @@
 namespace norman {
 
 int external_peek_next_batch_from_queue(
-    struct RxEnsoPipe* enso_pipe,
+    struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
   return peek_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
 }
 
-void Pipe::FreeBytes(uint32_t nb_bytes) {
+void RxTxPipe::FreeBytes(uint32_t nb_bytes) {
   advance_ring_buffer(&rx_pipe_, nb_bytes);
 }
 
-void Pipe::FreeAllBytes() { fully_advance_ring_buffer(&rx_pipe_); }
+void RxTxPipe::FreeAllBytes() { fully_advance_ring_buffer(&rx_pipe_); }
 
-Pipe::~Pipe() { enso_pipe_free(&rx_pipe_); }
+RxTxPipe::~RxTxPipe() { enso_pipe_free(&rx_pipe_); }
 
-int Pipe::Init(volatile struct QueueRegs* enso_pipe_regs) noexcept {
+int RxTxPipe::Init(volatile struct QueueRegs* enso_pipe_regs) noexcept {
   return enso_pipe_init(&rx_pipe_, enso_pipe_regs, notification_buf_pair_, kId);
 }
 
@@ -87,7 +87,7 @@ Device::~Device() {
   delete fpga_dev_;
 }
 
-Pipe* Device::AllocatePipe() noexcept {
+RxTxPipe* Device::AllocateRxTxPipe() noexcept {
   if (pipes_.size() >= kNbPipes) {
     // No more pipes available.
     return nullptr;
@@ -96,7 +96,8 @@ Pipe* Device::AllocatePipe() noexcept {
   enso_pipe_id_t enso_pipe_id =
       notification_buf_pair_.id * kNbPipes + pipes_.size();
 
-  Pipe* pipe(new (std::nothrow) Pipe(enso_pipe_id, &notification_buf_pair_));
+  RxTxPipe* pipe(new (std::nothrow)
+                     RxTxPipe(enso_pipe_id, &notification_buf_pair_));
 
   if (unlikely(!pipe)) {
     return nullptr;

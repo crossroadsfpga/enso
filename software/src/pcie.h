@@ -69,7 +69,7 @@ namespace norman {
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   intel_fpga_pcie_dev* dev;
-  struct RxEnsoPipe enso_pipe;
+  struct RxEnsoPipeInternal enso_pipe;
 };
 
 int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
@@ -77,22 +77,22 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
                           enso_pipe_id_t nb_queues,
                           enso_pipe_id_t enso_pipe_id_offset);
 
-int enso_pipe_init(struct RxEnsoPipe* enso_pipe,
+int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id);
 
 int dma_init(intel_fpga_pcie_dev* dev,
              struct NotificationBufPair* notification_buf_pair,
-             struct RxEnsoPipe* enso_pipe, unsigned socket_id,
+             struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
              unsigned nb_queues);
 
-int get_next_batch_from_queue(struct RxEnsoPipe* enso_pipe,
+int get_next_batch_from_queue(struct RxEnsoPipeInternal* enso_pipe,
                               struct NotificationBufPair* notification_buf_pair,
                               void** buf);
 
 int peek_next_batch_from_queue(
-    struct RxEnsoPipe* enso_pipe,
+    struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
 int get_next_batch(struct NotificationBufPair* notification_buf_pair,
@@ -107,7 +107,7 @@ int get_next_batch(struct NotificationBufPair* notification_buf_pair,
  * @param enso_pipe Enso pipe to advance.
  * @param len Number of bytes to free.
  */
-void advance_ring_buffer(struct RxEnsoPipe* enso_pipe, size_t len);
+void advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe, size_t len);
 
 /**
  * Frees all the received bytes in the buffer associated with the `socket_entry`
@@ -115,7 +115,7 @@ void advance_ring_buffer(struct RxEnsoPipe* enso_pipe, size_t len);
  *
  * @param enso_pipe Enso pipe to advance.
  */
-void fully_advance_ring_buffer(struct RxEnsoPipe* enso_pipe);
+void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe);
 
 /**
  * Sends data through a given queue.
@@ -165,7 +165,7 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair);
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
 
-void enso_pipe_free(struct RxEnsoPipe* enso_pipe);
+void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe);
 
 int dma_finish(struct SocketInternal* socket_entry);
 
