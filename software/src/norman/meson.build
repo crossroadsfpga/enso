@@ -1,6 +1,7 @@
 
 norman_sources = files(
     'config.cpp',
+    'helpers.cpp',
     'socket.cpp',
 )
 

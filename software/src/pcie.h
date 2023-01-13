@@ -168,14 +168,6 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 
 void print_fpga_reg(intel_fpga_pcie_dev* dev, unsigned nb_regs);
 
-void print_ip(uint32_t ip);
-
-void print_pkt_ips(uint8_t* pkt);
-
-void print_pkt_header(uint8_t* pkt);
-
-void print_buf(void* buf, const uint32_t nb_cache_lines);
-
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
 }  // namespace norman

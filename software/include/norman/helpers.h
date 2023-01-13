@@ -35,11 +35,17 @@
 
 #include <endian.h>
 #include <netinet/ether.h>
+#include <netinet/in.h>
 #include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
 #include <norman/consts.h>
 #include <norman/internals.h>
 
 #include <cstdint>
+#include <cstdio>
+#include <iostream>
+#include <string>
 
 namespace norman {
 
@@ -55,6 +61,8 @@ namespace norman {
   do {                                    \
     asm volatile("" : : : "memory");      \
   } while (0)
+
+#define norman_always_inline __attribute__((always_inline))
 
 /**
  * Returns RTT, in number of cycles, for a given packet.
@@ -73,11 +81,11 @@ inline uint32_t get_pkt_rtt(uint8_t* pkt) {
   return be32toh(rtt);
 }
 
-inline uint16_t be_to_le_16(uint16_t le) {
+constexpr uint16_t be_to_le_16(uint16_t le) {
   return ((le & (uint16_t)0x00ff) << 8) | ((le & (uint16_t)0xff00) >> 8);
 }
 
-static inline uint16_t get_pkt_len(uint8_t* addr) {
+constexpr uint16_t get_pkt_len(uint8_t* addr) {
   struct ether_header* l2_hdr = (struct ether_header*)addr;
   struct iphdr* l3_hdr = (struct iphdr*)(l2_hdr + 1);
   uint16_t total_len = be_to_le_16(l3_hdr->tot_len) + sizeof(*l2_hdr);
@@ -85,11 +93,19 @@ static inline uint16_t get_pkt_len(uint8_t* addr) {
   return total_len;
 }
 
-static inline uint8_t* get_next_pkt(uint8_t* pkt) {
+constexpr uint8_t* get_next_pkt(uint8_t* pkt) {
   uint16_t pkt_len = get_pkt_len(pkt);
   uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
   return pkt + nb_flits * 64;
 }
+
+void print_ip(uint32_t ip);
+
+void print_pkt_ips(uint8_t* pkt);
+
+void print_pkt_header(uint8_t* pkt);
+
+void print_buf(void* buf, const uint32_t nb_cache_lines);
 
 }  // namespace norman
 
