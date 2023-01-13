@@ -33,13 +33,12 @@
 #include "pcie.h"
 
 #include <arpa/inet.h>
-#include <fcntl.h>
 #include <immintrin.h>
 #include <norman/consts.h>
 #include <norman/helpers.h>
+#include <norman/ixy_helpers.h>
 #include <sched.h>
 #include <string.h>
-#include <termios.h>
 #include <time.h>
 
 #include <algorithm>
@@ -52,102 +51,10 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
-#include <system_error>
 
 #include "syscall_api/intel_fpga_pcie_api.hpp"
 
 namespace norman {
-
-// Adapted from ixy.
-static uint64_t virt_to_phys(void* virt) {
-  long pagesize = sysconf(_SC_PAGESIZE);
-  int fd = open("/proc/self/pagemap", O_RDONLY);
-  if (fd < 0) {
-    return 0;
-  }
-  // pagemap is an array of pointers for each normal-sized page
-  if (lseek(fd, (uintptr_t)virt / pagesize * sizeof(uintptr_t), SEEK_SET) < 0) {
-    close(fd);
-    return 0;
-  }
-
-  uintptr_t phy = 0;
-  if (read(fd, &phy, sizeof(phy)) < 0) {
-    close(fd);
-    return 0;
-  }
-  close(fd);
-
-  if (!phy) {
-    return 0;
-  }
-  // bits 0-54 are the page number
-  return (uint64_t)((phy & 0x7fffffffffffffULL) * pagesize +
-                    ((uintptr_t)virt) % pagesize);
-}
-
-// Adapted from ixy.
-static void* get_huge_page(int queue_id, size_t size) {
-  int fd;
-  char huge_pages_path[128];
-
-  snprintf(huge_pages_path, sizeof(huge_pages_path), "/mnt/huge/norman:%i",
-           queue_id);
-
-  fd = open(huge_pages_path, O_CREAT | O_RDWR, S_IRWXU);
-  if (fd == -1) {
-    std::cerr << "(" << errno << ") Problem opening huge page file descriptor"
-              << std::endl;
-    return NULL;
-  }
-
-  if (ftruncate(fd, (off_t)size)) {
-    std::cerr << "(" << errno
-              << ") Could not truncate huge page to size: " << size
-              << std::endl;
-    close(fd);
-    unlink(huge_pages_path);
-    return NULL;
-  }
-
-  void* virt_addr = (void*)mmap(NULL, size * 2, PROT_READ | PROT_WRITE,
-                                MAP_SHARED | MAP_HUGETLB, fd, 0);
-
-  if (virt_addr == (void*)-1) {
-    std::cerr << "(" << errno << ") Could not mmap huge page" << std::endl;
-    close(fd);
-    unlink(huge_pages_path);
-    return NULL;
-  }
-
-  // Allocate same huge page at the end of the last one.
-  void* ret =
-      (void*)mmap((uint8_t*)virt_addr + size, size, PROT_READ | PROT_WRITE,
-                  MAP_FIXED | MAP_SHARED | MAP_HUGETLB, fd, 0);
-
-  if (ret == (void*)-1) {
-    std::cerr << "(" << errno << ") Could not mmap second huge page"
-              << std::endl;
-    close(fd);
-    unlink(huge_pages_path);
-    free(virt_addr);
-    return NULL;
-  }
-
-  if (mlock(virt_addr, size)) {
-    std::cerr << "(" << errno << ") Could not lock huge page" << std::endl;
-    munmap(virt_addr, size);
-    close(fd);
-    unlink(huge_pages_path);
-    return NULL;
-  }
-
-  // Don't keep it around in the hugetlbfs.
-  close(fd);
-  unlink(huge_pages_path);
-
-  return virt_addr;
-}
 
 int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
                           volatile struct QueueRegs* notification_buf_pair_regs,
