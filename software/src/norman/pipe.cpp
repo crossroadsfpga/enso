@@ -44,10 +44,22 @@
 
 namespace norman {
 
-int external_peek_next_batch_from_queue(
+uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
   return peek_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
+}
+
+uint32_t RxPipe::RecvBytes(uint8_t** buf, uint32_t max_nb_bytes) {
+  uint32_t ret = PeekRecvBytes(buf, max_nb_bytes);
+  ConfirmBytes(ret);
+  return ret;
+}
+
+uint32_t RxPipe::PeekRecvBytes(uint8_t** buf, uint32_t max_nb_bytes) {
+  uint32_t ret = peek_next_batch_from_queue(
+      &internal_rx_pipe_, notification_buf_pair_, (void**)buf);
+  return std::min(ret, max_nb_bytes);
 }
 
 void RxPipe::FreeBytes(uint32_t nb_bytes) {

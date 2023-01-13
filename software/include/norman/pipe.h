@@ -49,7 +49,7 @@ namespace norman {
 class PktIterator;
 class PeekPktIterator;
 
-int external_peek_next_batch_from_queue(
+uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
@@ -147,7 +147,7 @@ class RxPipe {
    *
    * @return The number of bytes received or a negative error code.
    */
-  int32_t RecvBytes(uint8_t** buf, uint32_t max_nb_bytes);
+  uint32_t RecvBytes(uint8_t** buf, uint32_t max_nb_bytes);
 
   /**
    * Receives a batch of bytes without removing them from the queue.
@@ -157,7 +157,7 @@ class RxPipe {
    *
    * @return The number of bytes received or a negative error code.
    */
-  int32_t PeekRecvBytes(uint8_t** buf, uint32_t max_nb_bytes) const;
+  uint32_t PeekRecvBytes(uint8_t** buf, uint32_t max_nb_bytes);
 
   /**
    * Confirms a certain number of bytes have been received. This will make sure
@@ -188,7 +188,7 @@ class RxPipe {
   template <typename T>
   MessageBatch<T> RecvMessages(uint32_t max_nb_messages) {
     void* buf;
-    int recv = external_peek_next_batch_from_queue(
+    uint32_t recv = external_peek_next_batch_from_queue(
         &internal_rx_pipe_, notification_buf_pair_, &buf);
     return MessageBatch<T>((uint8_t*)buf, recv, max_nb_messages, this);
   }

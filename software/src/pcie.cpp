@@ -313,10 +313,10 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   return nb_consumed_notifications;
 }
 
-static norman_always_inline int __consume_queue(
-    struct RxEnsoPipeInternal* enso_pipe,
-    struct NotificationBufPair* notification_buf_pair, void** buf,
-    bool peek = false) {
+static norman_always_inline uint32_t
+__consume_queue(struct RxEnsoPipeInternal* enso_pipe,
+                struct NotificationBufPair* notification_buf_pair, void** buf,
+                bool peek = false) {
   uint32_t* enso_pipe_buf = enso_pipe->buf;
   uint32_t enso_pipe_head = enso_pipe->rx_tail;
   int queue_id = enso_pipe->id;
@@ -342,14 +342,14 @@ static norman_always_inline int __consume_queue(
   return flit_aligned_size;
 }
 
-int get_next_batch_from_queue(struct RxEnsoPipeInternal* enso_pipe,
-                              struct NotificationBufPair* notification_buf_pair,
-                              void** buf) {
+uint32_t get_next_batch_from_queue(
+    struct RxEnsoPipeInternal* enso_pipe,
+    struct NotificationBufPair* notification_buf_pair, void** buf) {
   __get_new_tails(notification_buf_pair);
   return __consume_queue(enso_pipe, notification_buf_pair, buf);
 }
 
-int peek_next_batch_from_queue(
+uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
   __get_new_tails(notification_buf_pair);
@@ -357,9 +357,9 @@ int peek_next_batch_from_queue(
 }
 
 // Return next batch among all open sockets.
-int get_next_batch(struct NotificationBufPair* notification_buf_pair,
-                   struct SocketInternal* socket_entries, int* enso_pipe_id,
-                   void** buf) {
+uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
+                        struct SocketInternal* socket_entries,
+                        int* enso_pipe_id, void** buf) {
   // Consume up to a batch of notifications at a time. If the number of consumed
   // notifications is the same as the number of pending notifications, we are
   // done processing the last batch and can get the next one. Using batches here

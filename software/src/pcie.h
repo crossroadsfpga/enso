@@ -87,17 +87,17 @@ int dma_init(intel_fpga_pcie_dev* dev,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
              unsigned nb_queues);
 
-int get_next_batch_from_queue(struct RxEnsoPipeInternal* enso_pipe,
-                              struct NotificationBufPair* notification_buf_pair,
-                              void** buf);
-
-int peek_next_batch_from_queue(
+uint32_t get_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
-int get_next_batch(struct NotificationBufPair* notification_buf_pair,
-                   struct SocketInternal* socket_entries, int* enso_pipe_id,
-                   void** buf);
+uint32_t peek_next_batch_from_queue(
+    struct RxEnsoPipeInternal* enso_pipe,
+    struct NotificationBufPair* notification_buf_pair, void** buf);
+
+uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
+                        struct SocketInternal* socket_entries,
+                        int* enso_pipe_id, void** buf);
 
 /**
  * Frees the next `len` bytes in the buffer associated with the `socket_entry`
