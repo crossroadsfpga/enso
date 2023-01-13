@@ -31,8 +31,8 @@
  */
 
 #include <norman/consts.h>
-#include <norman/dev.h>
 #include <norman/helpers.h>
+#include <norman/pipe.h>
 #include <norman/socket.h>
 #include <pthread.h>
 #include <sched.h>
@@ -72,8 +72,6 @@ int main(int argc, const char* argv[]) {
   int nb_queues = atoi(argv[3]);
   uint32_t nb_cycles = atoi(argv[4]);
 
-  // uint32_t addr_offset = core_id * nb_queues;
-
   signal(SIGINT, int_handler);
 
   std::thread socket_thread =
@@ -87,10 +85,10 @@ int main(int argc, const char* argv[]) {
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
 
         using norman::Device;
-        using norman::RxTxPipe;
+        using norman::RxPipe;
 
         std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
-        std::vector<RxTxPipe*> pipes;
+        std::vector<RxPipe*> pipes;
 
         if (!dev) {
           std::cerr << "Problem creating device" << std::endl;

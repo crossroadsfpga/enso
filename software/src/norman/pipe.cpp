@@ -30,8 +30,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <norman/dev.h>
 #include <norman/helpers.h>
+#include <norman/pipe.h>
 #include <sched.h>
 
 #include <cstdio>
@@ -50,16 +50,17 @@ int external_peek_next_batch_from_queue(
   return peek_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
 }
 
-void RxTxPipe::FreeBytes(uint32_t nb_bytes) {
-  advance_ring_buffer(&rx_pipe_, nb_bytes);
+void RxPipe::FreeBytes(uint32_t nb_bytes) {
+  advance_ring_buffer(&internal_rx_pipe_, nb_bytes);
 }
 
-void RxTxPipe::FreeAllBytes() { fully_advance_ring_buffer(&rx_pipe_); }
+void RxPipe::FreeAllBytes() { fully_advance_ring_buffer(&internal_rx_pipe_); }
 
-RxTxPipe::~RxTxPipe() { enso_pipe_free(&rx_pipe_); }
+RxPipe::~RxPipe() { enso_pipe_free(&internal_rx_pipe_); }
 
-int RxTxPipe::Init(volatile struct QueueRegs* enso_pipe_regs) noexcept {
-  return enso_pipe_init(&rx_pipe_, enso_pipe_regs, notification_buf_pair_, kId);
+int RxPipe::Init(volatile struct QueueRegs* enso_pipe_regs) noexcept {
+  return enso_pipe_init(&internal_rx_pipe_, enso_pipe_regs,
+                        notification_buf_pair_, kId);
 }
 
 std::unique_ptr<Device> Device::Create(const uint32_t nb_pipes, int16_t core_id,
@@ -87,7 +88,7 @@ Device::~Device() {
   delete fpga_dev_;
 }
 
-RxTxPipe* Device::AllocateRxTxPipe() noexcept {
+RxPipe* Device::AllocateRxPipe() noexcept {
   if (pipes_.size() >= kNbPipes) {
     // No more pipes available.
     return nullptr;
@@ -96,8 +97,8 @@ RxTxPipe* Device::AllocateRxTxPipe() noexcept {
   enso_pipe_id_t enso_pipe_id =
       notification_buf_pair_.id * kNbPipes + pipes_.size();
 
-  RxTxPipe* pipe(new (std::nothrow)
-                     RxTxPipe(enso_pipe_id, &notification_buf_pair_));
+  RxPipe* pipe(new (std::nothrow)
+                   RxPipe(enso_pipe_id, &notification_buf_pair_));
 
   if (unlikely(!pipe)) {
     return nullptr;
