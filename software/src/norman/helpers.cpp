@@ -34,6 +34,22 @@
 
 namespace norman {
 
+uint16_t get_bdf_from_pcie_addr(const std::string& pcie_addr) {
+  uint32_t domain, bus, dev, func;
+  uint16_t bdf = 0;
+  // Check if the address has format 00:00.0 (without domain).
+  if (sscanf(pcie_addr.c_str(), "%x:%x.%x", &bus, &dev, &func) != 3) {
+    // Check if the address has format 0000:00:00.0 (with domain).
+    if (sscanf(pcie_addr.c_str(), "%x:%x:%x.%x", &domain, &bus, &dev, &func) !=
+        4) {
+      // Could not parse PCIe address.
+      return 0;
+    }
+  }
+  bdf = (bus << 8) | (dev << 3) | (func & 0x7);
+  return bdf;
+}
+
 void print_buf(void* buf, const uint32_t nb_cache_lines) {
   for (uint32_t i = 0; i < nb_cache_lines * 64; i++) {
     printf("%02x ", ((uint8_t*)buf)[i]);

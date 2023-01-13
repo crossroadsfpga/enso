@@ -99,6 +99,8 @@ constexpr uint8_t* get_next_pkt(uint8_t* pkt) {
   return pkt + nb_flits * 64;
 }
 
+uint16_t get_bdf_from_pcie_addr(const std::string& pcie_addr);
+
 void print_ip(uint32_t ip);
 
 void print_pkt_ips(uint8_t* pkt);

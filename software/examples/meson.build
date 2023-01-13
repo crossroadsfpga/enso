@@ -12,3 +12,6 @@ executable('pktgen', 'pktgen.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: norman_lib, include_directories: inc)
 executable('capture', 'capture.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: norman_lib, include_directories: inc)
+
+executable('app_new', 'app_new.cpp', dependencies: thread_dep, link_with: norman_lib,
+           include_directories: inc)
