@@ -520,7 +520,7 @@ class PktIterator {
     return (missing_pkts_ > 0) && (next_addr_ <= other.addr_);
   }
 
- private:
+ protected:
   /**
    * Only MessageBatch can instantiate a PktIterator object.
    *
@@ -541,7 +541,6 @@ class PktIterator {
   RxPipe* pipe_;
 };
 
-// TODO(sadok): De-duplicate this code with PktIterator.
 /**
  * A class that represents a packet within a batch. It is designed to be used as
  * an iterator. It tracks the number of missing packets such that `operator!=`
@@ -550,7 +549,7 @@ class PktIterator {
  * The difference between this class and PktIterator is that this class does not
  * free the packets after they are iterated over.
  */
-class PeekPktIterator {
+class PeekPktIterator : public PktIterator {
  public:
   constexpr PeekPktIterator& operator++() {
     // We need to retrieve the next packet before we expose the current one to
@@ -564,17 +563,6 @@ class PeekPktIterator {
     return *this;
   }
 
-  constexpr uint8_t* operator*() { return addr_; }
-
-  /**
-   * This is the only way to check if the iterator has reached the end of the
-   * batch. It is necessary because the iterator is designed to be used in a
-   * range-based for loop.
-   */
-  constexpr bool operator!=(const PeekPktIterator& other) const {
-    return (missing_pkts_ > 0) && (next_addr_ <= other.addr_);
-  }
-
  private:
   /**
    * Only MessageBatch can instantiate a PktIterator object.
@@ -583,17 +571,9 @@ class PeekPktIterator {
    * @param pkt_limit The maximum number of packets to receive.
    */
   constexpr PeekPktIterator(uint8_t* addr, uint32_t pkt_limit, RxPipe* pipe)
-      : addr_(addr),
-        next_addr_(get_next_pkt(addr)),
-        missing_pkts_(pkt_limit),
-        pipe_(pipe) {}
+      : PktIterator(addr, pkt_limit, pipe) {}
 
   friend class RxPipe::MessageBatch<PeekPktIterator>;
-
-  uint8_t* addr_;
-  uint8_t* next_addr_;
-  int32_t missing_pkts_;
-  RxPipe* pipe_;
 };
 
 /**
