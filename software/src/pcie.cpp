@@ -77,9 +77,13 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   _norman_compiler_memory_barrier();
   while (notification_buf_pair_regs->rx_head != 0) continue;
 
+  char huge_page_name[128];
+  int id = notification_buf_pair->id + MAX_NB_FLOWS;
+  snprintf(huge_page_name, sizeof(huge_page_name), "norman_notif_buf:%i", id);
+
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
-  notification_buf_pair->rx_buf = (struct RxNotification*)get_huge_page(
-      notification_buf_pair->id + MAX_NB_FLOWS, ALIGNED_DSC_BUF_PAIR_SIZE);
+  notification_buf_pair->rx_buf =
+      (struct RxNotification*)get_huge_page(huge_page_name);
   if (notification_buf_pair->rx_buf == NULL) {
     std::cerr << "Could not get huge page" << std::endl;
     return -1;
@@ -172,7 +176,11 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   _norman_compiler_memory_barrier();
   while (enso_pipe_regs->rx_head != 0) continue;
 
-  enso_pipe->buf = (uint32_t*)get_huge_page(enso_pipe_id, BUF_PAGE_SIZE);
+  char huge_page_name[128];
+  snprintf(huge_page_name, sizeof(huge_page_name), "norman_enso_pipe:%i",
+           enso_pipe_id);
+
+  enso_pipe->buf = (uint32_t*)get_huge_page(huge_page_name, true);
   if (enso_pipe->buf == NULL) {
     std::cerr << "Could not get huge page" << std::endl;
     return -1;
