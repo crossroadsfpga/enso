@@ -83,7 +83,7 @@ ssize_t recv_select(int ref_sockfd, int *sockfd, void **buf, size_t len,
  * over. To figure out when the transmission is over, use the `get_completions`
  * function.
  */
-ssize_t send(int sockfd, void *phys_addr, size_t len, int flags);
+ssize_t send(int sockfd, uint64_t phys_addr, size_t len, int flags);
 
 /*
  * Return the number of transmission requests that were completed since the last

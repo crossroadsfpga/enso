@@ -404,13 +404,14 @@ void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe) {
   enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 
-int send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                  void* phys_addr, size_t len) {
+static norman_always_inline uint32_t
+__send_to_queue(struct NotificationBufPair* notification_buf_pair,
+                uint64_t phys_addr, uint32_t len) {
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
   uint32_t tx_tail = notification_buf_pair->tx_tail;
-  uint64_t missing_bytes = len;
+  uint32_t missing_bytes = len;
 
-  uint64_t transf_addr = (uint64_t)phys_addr;
+  uint64_t transf_addr = phys_addr;
   uint64_t hugepage_mask = ~((uint64_t)BUF_PAGE_SIZE - 1);
   uint64_t hugepage_base_addr = transf_addr & hugepage_mask;
   uint64_t hugepage_boundary = hugepage_base_addr + BUF_PAGE_SIZE;
@@ -428,8 +429,8 @@ int send_to_queue(struct NotificationBufPair* notification_buf_pair,
     }
 
     struct TxNotification* tx_notification = tx_buf + tx_tail;
-    uint64_t req_length = std::min(missing_bytes, (uint64_t)MAX_TRANSFER_LEN);
-    uint64_t missing_bytes_in_page = hugepage_boundary - transf_addr;
+    uint32_t req_length = std::min(missing_bytes, (uint32_t)MAX_TRANSFER_LEN);
+    uint32_t missing_bytes_in_page = hugepage_boundary - transf_addr;
     req_length = std::min(req_length, missing_bytes_in_page);
 
     // If the transmission needs to be split among multiple requests, we
@@ -455,7 +456,12 @@ int send_to_queue(struct NotificationBufPair* notification_buf_pair,
   _norman_compiler_memory_barrier();
   *(notification_buf_pair->tx_tail_ptr) = tx_tail;
 
-  return 0;
+  return len;
+}
+
+uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
+                       uint64_t phys_addr, uint32_t len) {
+  return __send_to_queue(notification_buf_pair, phys_addr, len);
 }
 
 uint32_t get_unreported_completions(

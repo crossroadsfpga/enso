@@ -183,8 +183,8 @@ ssize_t recv_select(int ref_sockfd, int* sockfd, void** buf, size_t len,
   return get_next_batch(notification_buf_pair, open_sockets, sockfd, buf);
 }
 
-ssize_t send(int sockfd, void* phys_addr, size_t len,
-             int flags __attribute__((unused))) {
+ssize_t send(int sockfd, uint64_t phys_addr, size_t len, int flags) {
+  (void)flags;
   return send_to_queue(open_sockets[sockfd].notification_buf_pair, phys_addr,
                        len);
 }

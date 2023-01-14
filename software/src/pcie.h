@@ -133,10 +133,10 @@ void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe);
  * @param phys_addr Physical memory address of the data to be sent.
  * @param len Length, in bytes, of the data.
  *
- * @return 0 if transfer was successful.
+ * @return number of bytes sent.
  */
-int send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                  void* phys_addr, size_t len);
+uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
+                       uint64_t phys_addr, uint32_t len);
 
 /**
  * Returns the number of transmission requests that were completed since the

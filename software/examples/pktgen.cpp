@@ -562,7 +562,7 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
     transmission_length =
         std::min(transmission_length, tx_args.current_enso_pipe->length);
 
-    void* phys_addr = (void*)tx_args.current_enso_pipe->phys_addr;
+    uint64_t phys_addr = tx_args.current_enso_pipe->phys_addr;
 
     norman::send(tx_args.socket_fd, phys_addr, transmission_length, 0);
     tx_stats.bytes += transmission_length;

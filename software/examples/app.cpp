@@ -200,7 +200,7 @@ int main(int argc, const char* argv[]) {
 
 #ifdef SEND_BACK
           uint64_t phys_addr = norman::convert_buf_addr_to_phys(socket_fd, buf);
-          norman::send(socket_fd, (void*)phys_addr, recv_len, 0);
+          norman::send(socket_fd, phys_addr, recv_len, 0);
 
           // TODO(sadok): This should be transparent to the app.
           // Save transmission request so that we can free the buffer once

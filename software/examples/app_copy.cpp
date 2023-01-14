@@ -335,8 +335,7 @@ int main(int argc, const char* argv[]) {
                 tx_pending_requests[tx_pr_tail].length = transmission_len;
                 tx_pr_tail = (tx_pr_tail + 1) % (MAX_PENDING_TX_REQUESTS + 1);
 
-                norman::send(socket_fd, (void*)bt->phys_addr, transmission_len,
-                             0);
+                norman::send(socket_fd, bt->phys_addr, transmission_len, 0);
               }
 
               // Free all packets.
