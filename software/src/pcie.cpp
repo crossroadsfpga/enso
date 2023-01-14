@@ -514,6 +514,9 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
+  if (notification_buf_pair->ref_cnt == 0) {
+    return;
+  }
   notification_buf_pair->regs->rx_mem_low = 0;
   notification_buf_pair->regs->rx_mem_high = 0;
 
@@ -531,7 +534,9 @@ void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe) {
   enso_pipe->regs->rx_mem_low = 0;
   enso_pipe->regs->rx_mem_high = 0;
 
-  munmap(enso_pipe->buf, BUF_PAGE_SIZE);
+  if (enso_pipe->buf) {
+    munmap(enso_pipe->buf, BUF_PAGE_SIZE);
+  }
 }
 
 int dma_finish(struct SocketInternal* socket_entry) {
