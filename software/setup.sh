@@ -15,15 +15,15 @@ sudo ./install
 cd $SCRIPT_DIR
 
 # Using GCC
-# CC=gcc-9 CXX=g++-9 meson build-gcc
+# meson setup --native-file gcc.ini build-gcc
 # ln -sfn build-gcc build
 
 # Using Clang
-CC=clang-8 CXX=clang++-8 meson build-clang
+meson setup --native-file llvm.ini build-clang
 ln -sfn build-clang build
 
 cd build
-meson configure -Denso_pipe_size=$1 -Denso_pipe_size=$2 -Dbatch_size=$3 \
+meson configure -Dnotification_buf_size=$1 -Denso_pipe_size=$2 -Dbatch_size=$3 \
     -Dlatency_opt=$4
-ninja
+ninja -v
 sudo ninja install

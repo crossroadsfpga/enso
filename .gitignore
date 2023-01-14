@@ -1,4 +1,3 @@
-*.ini
 input_gen/*.pcap
 input_gen/*.pkt
 transcript

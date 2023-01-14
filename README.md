@@ -67,12 +67,12 @@ Prepare the compilation using meson and compile it with ninja.
 
 To use gcc:
 ```bash
-CC=gcc-9 CXX=g++-9 meson build-gcc
+meson setup --native-file gcc.ini build-gcc
 ```
 
 To use clang:
 ```bash
-CC=clang-8 CXX=clang++-8 meson build-clang
+meson setup --native-file llvm.ini build-clang
 ```
 
 To compile:

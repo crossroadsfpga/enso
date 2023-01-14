@@ -6,7 +6,11 @@ project('norman_app', 'c', 'cpp', meson_version: '>=0.58.0',
             'optimization=3',
             'warning_level=3',
             'werror=true',
-            'default_library=static'
+            'default_library=static',
+            # 'cpp_eh=none',  # No exceptions.
+            'b_ndebug=true',  # Disable asserts.
+            'b_lto=true',  # Link-time optimization.
+            'cpp_rtti=false',  # No RTTI.
         ])
 
 add_global_arguments('-march=native', language: ['c', 'cpp'])
@@ -16,8 +20,10 @@ enso_pipe_size = get_option('enso_pipe_size')
 batch_size = get_option('batch_size')
 latency_opt = get_option('latency_opt')
 
-add_global_arguments(f'-D NOTIFICATION_BUF_SIZE=@notification_buf_size@', language: ['c', 'cpp'])
-add_global_arguments(f'-D ENSO_PIPE_SIZE=@enso_pipe_size@', language: ['c', 'cpp'])
+add_global_arguments(f'-D NOTIFICATION_BUF_SIZE=@notification_buf_size@',
+                     language: ['c', 'cpp'])
+add_global_arguments(f'-D ENSO_PIPE_SIZE=@enso_pipe_size@',
+                     language: ['c', 'cpp'])
 add_global_arguments(f'-D BATCH_SIZE=@batch_size@', language: ['c', 'cpp'])
 
 if latency_opt
