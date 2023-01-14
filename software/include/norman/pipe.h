@@ -262,7 +262,7 @@ class RxPipe {
    * RxPipes cannot be deallocated from outside. The `Device` object is in
    * charge of deallocating them.
    */
-  virtual ~RxPipe();
+  ~RxPipe();
 
   int Init(volatile struct QueueRegs* enso_pipe_regs) noexcept;
 
@@ -428,7 +428,7 @@ class TxPipe {
    * TxPipes cannot be deallocated from outside. The `Device` object is in
    * charge of deallocating them.
    */
-  virtual ~TxPipe();
+  ~TxPipe();
 
   int Init() noexcept;
 
@@ -630,7 +630,7 @@ class Device {
   Device(Device&&) = delete;
   Device& operator=(Device&&) = delete;
 
-  virtual ~Device();
+  ~Device();
 
   /**
    * Allocates a pipe.
