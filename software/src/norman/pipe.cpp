@@ -31,9 +31,12 @@
  */
 
 #include <norman/helpers.h>
+#include <norman/ixy_helpers.h>
 #include <norman/pipe.h>
 #include <sched.h>
 
+#include <algorithm>
+#include <cassert>
 #include <cstdio>
 #include <iostream>
 #include <memory>
@@ -75,10 +78,25 @@ int RxPipe::Init(volatile struct QueueRegs* enso_pipe_regs) noexcept {
                         notification_buf_pair_, kId);
 }
 
-std::unique_ptr<Device> Device::Create(const uint32_t nb_pipes, int16_t core_id,
+TxPipe::~TxPipe() { munmap(buf_, kMaxCapacity); }
+
+int TxPipe::Init() noexcept {
+  std::string name = "norman:tx_pipe_" + std::to_string(kId);
+  buf_ = (uint8_t*)get_huge_page(name, true);
+  if (unlikely(!buf_)) {
+    return -1;
+  }
+
+  buf_phys_addr_ = virt_to_phys(buf_);
+
+  return 0;
+}
+
+std::unique_ptr<Device> Device::Create(const uint32_t nb_rx_pipes,
+                                       int16_t core_id,
                                        const std::string& pcie_addr) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow)
-                                  Device(nb_pipes, core_id, pcie_addr));
+                                  Device(nb_rx_pipes, core_id, pcie_addr));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
@@ -91,7 +109,7 @@ std::unique_ptr<Device> Device::Create(const uint32_t nb_pipes, int16_t core_id,
 }
 
 Device::~Device() {
-  for (auto& pipe : pipes_) {
+  for (auto& pipe : rx_pipes_) {
     delete pipe;
   }
 
@@ -101,13 +119,13 @@ Device::~Device() {
 }
 
 RxPipe* Device::AllocateRxPipe() noexcept {
-  if (pipes_.size() >= kNbPipes) {
+  if (rx_pipes_.size() >= kNbRxPipes) {
     // No more pipes available.
     return nullptr;
   }
 
   enso_pipe_id_t enso_pipe_id =
-      notification_buf_pair_.id * kNbPipes + pipes_.size();
+      notification_buf_pair_.id * kNbRxPipes + rx_pipes_.size();
 
   RxPipe* pipe(new (std::nothrow)
                    RxPipe(enso_pipe_id, &notification_buf_pair_));
@@ -125,7 +143,24 @@ RxPipe* Device::AllocateRxPipe() noexcept {
     return nullptr;
   }
 
-  pipes_.push_back(pipe);
+  rx_pipes_.push_back(pipe);
+
+  return pipe;
+}
+
+TxPipe* Device::AllocateTxPipe() noexcept {
+  TxPipe* pipe(new (std::nothrow) TxPipe(tx_pipes_.size(), this));
+
+  if (unlikely(!pipe)) {
+    return nullptr;
+  }
+
+  if (pipe->Init()) {
+    delete pipe;
+    return nullptr;
+  }
+
+  tx_pipes_.push_back(pipe);
 
   return pipe;
 }
@@ -199,17 +234,46 @@ int Device::Init() noexcept {
 
   // HACK(sadok): This only works because pkt queues for the same app are
   // currently placed back to back.
-  enso_pipe_id_t enso_pipe_id_offset = id * kNbPipes;
+  enso_pipe_id_t enso_pipe_id_offset = id * kNbRxPipes;
 
   int ret =
       notification_buf_init(&notification_buf_pair_, notification_buf_pair_regs,
-                            kNbPipes, enso_pipe_id_offset);
+                            kNbRxPipes, enso_pipe_id_offset);
   if (ret != 0) {
     // Could not initialize notification buffer.
     return 8;
   }
 
   return 0;
+}
+
+void Device::SendBytes(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
+                       uint32_t nb_bytes) {
+  // TODO(sadok): We might be able to improve performance by avoiding the wrap
+  // tracker currently used inside send_to_queue.
+  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
+
+  uint32_t nb_pending_requests =
+      (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
+
+  if (unlikely(nb_pending_requests >= (kMaxPendingTxRequests - 2))) {
+    ProcessTxCompletions();
+  }
+
+  tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
+  tx_pending_requests_[tx_pr_tail_].nb_bytes = nb_bytes;
+  tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
+}
+
+void Device::ProcessTxCompletions() {
+  uint32_t tx_completions = get_unreported_completions(&notification_buf_pair_);
+  for (uint32_t i = 0; i < tx_completions; ++i) {
+    TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
+    tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
+
+    TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
+    pipe->NotifyCompletion(tx_req.nb_bytes);
+  }
 }
 
 }  // namespace norman
