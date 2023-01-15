@@ -53,23 +53,23 @@ uint32_t external_peek_next_batch_from_queue(
   return peek_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
 }
 
-uint32_t RxPipe::RecvBytes(uint8_t** buf, uint32_t max_nb_bytes) {
-  uint32_t ret = PeekRecvBytes(buf, max_nb_bytes);
+uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
+  uint32_t ret = PeekRecv(buf, max_nb_bytes);
   ConfirmBytes(ret);
   return ret;
 }
 
-uint32_t RxPipe::PeekRecvBytes(uint8_t** buf, uint32_t max_nb_bytes) {
+inline uint32_t RxPipe::PeekRecv(uint8_t** buf, uint32_t max_nb_bytes) {
   uint32_t ret = peek_next_batch_from_queue(
       &internal_rx_pipe_, notification_buf_pair_, (void**)buf);
   return std::min(ret, max_nb_bytes);
 }
 
-void RxPipe::FreeBytes(uint32_t nb_bytes) {
+void RxPipe::Free(uint32_t nb_bytes) {
   advance_ring_buffer(&internal_rx_pipe_, nb_bytes);
 }
 
-void RxPipe::FreeAllBytes() { fully_advance_ring_buffer(&internal_rx_pipe_); }
+void RxPipe::Clear() { fully_advance_ring_buffer(&internal_rx_pipe_); }
 
 RxPipe::~RxPipe() { enso_pipe_free(&internal_rx_pipe_); }
 
@@ -78,16 +78,36 @@ int RxPipe::Init(volatile struct QueueRegs* enso_pipe_regs) noexcept {
                         notification_buf_pair_, kId);
 }
 
-TxPipe::~TxPipe() { munmap(buf_, kMaxCapacity); }
+TxPipe::~TxPipe() {
+  if (internal_buf_) {
+    munmap(buf_, kMaxCapacity);
+  }
+}
 
 int TxPipe::Init() noexcept {
-  std::string name = "norman:tx_pipe_" + std::to_string(kId);
-  buf_ = (uint8_t*)get_huge_page(name, true);
-  if (unlikely(!buf_)) {
-    return -1;
+  if (internal_buf_) {
+    std::string name = "norman:tx_pipe_" + std::to_string(kId);
+    buf_ = (uint8_t*)get_huge_page(name, true);
+    if (unlikely(!buf_)) {
+      return -1;
+    }
   }
 
   buf_phys_addr_ = virt_to_phys(buf_);
+
+  return 0;
+}
+
+int RxTxPipe::Init() noexcept {
+  rx_pipe_ = device_->AllocateRxPipe();
+  if (rx_pipe_ == nullptr) {
+    return -1;
+  }
+
+  tx_pipe_ = device_->AllocateTxPipe(rx_pipe_->buf());
+  if (tx_pipe_ == nullptr) {
+    return -1;
+  }
 
   return 0;
 }
@@ -109,7 +129,15 @@ std::unique_ptr<Device> Device::Create(const uint32_t nb_rx_pipes,
 }
 
 Device::~Device() {
+  for (auto& pipe : rx_tx_pipes_) {
+    delete pipe;
+  }
+
   for (auto& pipe : rx_pipes_) {
+    delete pipe;
+  }
+
+  for (auto& pipe : tx_pipes_) {
     delete pipe;
   }
 
@@ -127,8 +155,7 @@ RxPipe* Device::AllocateRxPipe() noexcept {
   enso_pipe_id_t enso_pipe_id =
       notification_buf_pair_.id * kNbRxPipes + rx_pipes_.size();
 
-  RxPipe* pipe(new (std::nothrow)
-                   RxPipe(enso_pipe_id, &notification_buf_pair_));
+  RxPipe* pipe(new (std::nothrow) RxPipe(enso_pipe_id, this));
 
   if (unlikely(!pipe)) {
     return nullptr;
@@ -148,8 +175,8 @@ RxPipe* Device::AllocateRxPipe() noexcept {
   return pipe;
 }
 
-TxPipe* Device::AllocateTxPipe() noexcept {
-  TxPipe* pipe(new (std::nothrow) TxPipe(tx_pipes_.size(), this));
+TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
+  TxPipe* pipe(new (std::nothrow) TxPipe(tx_pipes_.size(), this, buf));
 
   if (unlikely(!pipe)) {
     return nullptr;
@@ -161,6 +188,28 @@ TxPipe* Device::AllocateTxPipe() noexcept {
   }
 
   tx_pipes_.push_back(pipe);
+
+  return pipe;
+}
+
+RxTxPipe* Device::AllocateRxTxPipe() noexcept {
+  if (rx_tx_pipes_.size() >= kNbRxPipes) {
+    // No more pipes available.
+    return nullptr;
+  }
+
+  RxTxPipe* pipe(new (std::nothrow) RxTxPipe(this));
+
+  if (unlikely(!pipe)) {
+    return nullptr;
+  }
+
+  if (pipe->Init()) {
+    delete pipe;
+    return nullptr;
+  }
+
+  rx_tx_pipes_.push_back(pipe);
 
   return pipe;
 }
@@ -247,8 +296,8 @@ int Device::Init() noexcept {
   return 0;
 }
 
-void Device::SendBytes(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
-                       uint32_t nb_bytes) {
+void Device::Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
+                  uint32_t nb_bytes) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
   send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
@@ -257,7 +306,7 @@ void Device::SendBytes(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
 
   if (unlikely(nb_pending_requests >= (kMaxPendingTxRequests - 2))) {
-    ProcessTxCompletions();
+    ProcessCompletions();
   }
 
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
@@ -265,7 +314,7 @@ void Device::SendBytes(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
 }
 
-void Device::ProcessTxCompletions() {
+void Device::ProcessCompletions() {
   uint32_t tx_completions = get_unreported_completions(&notification_buf_pair_);
   for (uint32_t i = 0; i < tx_completions; ++i) {
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];

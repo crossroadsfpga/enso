@@ -85,12 +85,10 @@ int main(int argc, const char* argv[]) {
         std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
 
         using norman::Device;
-        using norman::RxPipe;
-        using norman::TxPipe;
+        using norman::RxTxPipe;
 
         std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
-        std::vector<RxPipe*> rx_pipes;
-        std::vector<TxPipe*> tx_pipes;
+        std::vector<RxTxPipe*> pipes;
 
         if (!dev) {
           std::cerr << "Problem creating device" << std::endl;
@@ -98,28 +96,19 @@ int main(int argc, const char* argv[]) {
         }
 
         for (int i = 0; i < nb_queues; ++i) {
-          RxPipe* rx_pipe = dev->AllocateRxPipe();
-          if (!rx_pipe) {
+          RxTxPipe* pipe = dev->AllocateRxTxPipe();
+          if (!pipe) {
             std::cerr << "Problem creating RX pipe" << std::endl;
             exit(3);
           }
-          rx_pipes.push_back(rx_pipe);
-
-          TxPipe* tx_pipe = dev->AllocateTxPipe();
-          if (!tx_pipe) {
-            std::cerr << "Problem creating TX pipe" << std::endl;
-            exit(3);
-          }
-          tx_pipes.push_back(tx_pipe);
+          pipes.push_back(pipe);
         }
 
         setup_done = 1;
 
         while (keep_running) {
-          // for (auto& pipe : rx_pipes) {
-          for (int i = 0; i < nb_queues; ++i) {
-            auto& rx_pipe = rx_pipes[i];
-            auto batch = rx_pipe->RecvPkts(1024);
+          for (auto& pipe : pipes) {
+            auto batch = pipe->RecvPkts(1024);
 
             if (unlikely(batch.kAvailableBytes == 0)) {
               continue;
@@ -142,16 +131,7 @@ int main(int argc, const char* argv[]) {
               }
             }
             ++nb_batches;
-
-            auto& tx_pipe = tx_pipes[i];
-            uint8_t* tx_buf = tx_pipe->AllocateBuf();
-            tx_pipe->ExtendBufToTarget(batch_length);
-
-            memcpy(tx_buf, batch.kBuf, batch_length);
-
-            rx_pipe->Clear();
-
-            tx_pipe->SendAndFree(batch_length);
+            pipe->Send(batch_length);
           }
         }
       });
