@@ -119,6 +119,7 @@ def main(
         sw_batch_size=batch_size,
         latency_opt=latency_opt,
         verbose=True,
+        log_file=True,
     )
 
     norman_dp.interactive_shell()
