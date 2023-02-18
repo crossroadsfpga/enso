@@ -228,12 +228,12 @@ int dma_init(intel_fpga_pcie_dev* dev,
   assert(ENSO_PIPE_SIZE * 64 == BUF_PAGE_SIZE);
 
   // FIXME(sadok) should find a better identifier than core id.
-
-  notification_buf_pair->id = sched_getcpu();
-  if (notification_buf_pair->id < 0) {
+  int cpu_id = sched_getcpu();
+  if (cpu_id < 0) {
     std::cerr << "Could not get cpu id" << std::endl;
     return -1;
   }
+  notification_buf_pair->id = cpu_id;
 
   enso_pipe_id = notification_buf_pair->id * nb_queues + socket_id;
 

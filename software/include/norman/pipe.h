@@ -327,7 +327,7 @@ class RxPipe {
    *
    * @param nb_bytes The number of bytes to confirm (must be a multiple of 64).
    */
-  inline void ConfirmBytes(uint32_t nb_bytes) {
+  constexpr void ConfirmBytes(uint32_t nb_bytes) {
     uint32_t enso_pipe_head = internal_rx_pipe_.rx_tail;
     enso_pipe_head = (enso_pipe_head + nb_bytes / 64) % ENSO_PIPE_SIZE;
     internal_rx_pipe_.rx_tail = enso_pipe_head;
@@ -343,8 +343,8 @@ class RxPipe {
    *         messages.
    */
   template <typename T>
-  inline MessageBatch<T> RecvMessages(uint32_t max_nb_messages) {
-    void* buf;
+  constexpr MessageBatch<T> RecvMessages(uint32_t max_nb_messages) {
+    void* buf = nullptr;
     uint32_t recv = external_peek_next_batch_from_queue(
         &internal_rx_pipe_, notification_buf_pair_, &buf);
     return MessageBatch<T>((uint8_t*)buf, recv, max_nb_messages, this);

@@ -62,7 +62,7 @@ namespace norman {
     asm volatile("" : : : "memory");      \
   } while (0)
 
-#define norman_always_inline __attribute__((always_inline))
+#define norman_always_inline __attribute__((always_inline)) inline
 
 /**
  * Returns RTT, in number of cycles, for a given packet.
