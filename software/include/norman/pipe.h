@@ -231,13 +231,16 @@ class RxPipe {
       return T(kBuf + kAvailableBytes, kMessageLimit, this);
     }
 
-    uint32_t ProcessedBytes() const { return processed_bytes_; }
+    /**
+     * Number of bytes processed by the iterator.
+     */
+    uint32_t processed_bytes() const { return processed_bytes_; }
 
     /**
      * Number of bytes available in the batch. It may include more messages than
      * `kMessageLimit`, in which case, iterating over the batch will result in
      * fewer bytes. After iterating over the batch, the total number of bytes
-     * iterated over can be obtained by calling `ProcessedBytes()`.
+     * iterated over can be obtained by calling `processed_bytes()`.
      */
     const uint32_t kAvailableBytes;
 
@@ -255,8 +258,8 @@ class RxPipe {
      * @param buf A pointer to the start of the batch.
      * @param available_bytes The number of bytes available in the batch.
      * @param message_limit The maximum number of messages in the batch.
-     * @param ConfirmBytesFunction A function that will be called to confirm
-     *                             the bytes associated with each message.
+     * @param ConfirmBytesFunction A function that will be called to confirm the
+     *                             bytes associated with each message.
      */
     constexpr MessageBatch(uint8_t* buf, uint32_t available_bytes,
                            uint32_t message_limit, RxPipe* pipe)
@@ -315,8 +318,8 @@ class RxPipe {
 
   /**
    * Confirms a certain number of bytes have been received. This will make sure
-   * that the next call to `Recv` or `PeekRecv` will return a buffer
-   * that starts at the next byte after the last confirmed byte.
+   * that the next call to `Recv` or `PeekRecv` will return a buffer that starts
+   * at the next byte after the last confirmed byte.
    *
    * When using `Recv`, this is not necessary, as `Recv` will automatically
    * confirm the bytes received. You may use this to confirm bytes received by
@@ -405,7 +408,7 @@ class RxPipe {
    * RxPipes cannot be deallocated from outside. The `Device` object is in
    * charge of deallocating them.
    */
-  virtual ~RxPipe();
+  ~RxPipe();
 
   /**
    * Initializes the RX pipe.
@@ -797,7 +800,7 @@ class RxTxPipe {
    * RxTxPipes cannot be deallocated from outside. The `Device` object is in
    * charge of deallocating them.
    */
-  virtual ~RxTxPipe() = default;
+  ~RxTxPipe() = default;
 
   /**
    * Initializes the RX/TX pipe.
@@ -892,7 +895,7 @@ class PktIterator : public PktIteratorBase<PktIterator> {
 
  private:
   /**
-   * Only MessageBatch can instantiate a PktIteratorBase object.
+   * Only MessageBatch can instantiate a PktIterator object.
    *
    *  @see `PktIteratorBase::PktIteratorBase()`.
    */
@@ -921,7 +924,7 @@ class PeekPktIterator : public PktIteratorBase<PeekPktIterator> {
 
  private:
   /**
-   * Only MessageBatch can instantiate a PktIterator object.
+   * Only MessageBatch can instantiate a PeekPktIterator object.
    *
    * @param addr The address of the first packet.
    * @param pkt_limit The maximum number of packets to receive.
