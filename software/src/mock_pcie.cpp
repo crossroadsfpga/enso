@@ -54,6 +54,7 @@
 #include <stdexcept>
 
 #include "syscall_api/intel_fpga_pcie_api.hpp"
+#include "pipe.h"
 
 namespace norman {
 
@@ -123,6 +124,16 @@ void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe) {
   
 }
 
+uint64_t phys_to_virt(void* phys) {
+  long page_size = sysconf(_SC_PAGESIZE);
+
+  uintptr_t offset = (uintptr_t)phys % page_size;
+
+  // Bits 0-54 are the page number.
+  return (uint64_t)((buf_virt_addr_ & 0x7fffffffffffffULL) * page_size +
+                    ((uintptr_t)virt) % page_size);
+}
+
 static norman_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
                 uint64_t phys_addr, uint32_t len) {
@@ -131,7 +142,12 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
 
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len) {
-    std::string pcap_file = // read data from phys_addr to len
+    uint64_t virt_addr = phys_to_virt(phys_addr);
+    std::string pcap_file(len, '*');
+    for (int i = 0; i < len; i++) {
+        pcap_file[i] = phys_addr[i];
+    }
+
     // saving data from phys_addr to file
     pcap_t* pd = pcap_open_dead(DLT_EN10MB, 65535);
     pcap_dumper_t* pdumper = pcap_dump_open(pd, pcap_file.c_str());

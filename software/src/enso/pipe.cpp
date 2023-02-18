@@ -111,6 +111,7 @@ int TxPipe::Init() noexcept {
   }
 
   buf_phys_addr_ = virt_to_phys(buf_);
+  buf_virt_addr_ = buf_;
 
   return 0;
 }
