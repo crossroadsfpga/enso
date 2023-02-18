@@ -30,10 +30,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <norman/consts.h>
-#include <norman/helpers.h>
 #include <norman/pipe.h>
-#include <norman/socket.h>
 #include <pthread.h>
 #include <sched.h>
 #include <x86intrin.h>
@@ -77,7 +74,6 @@ int main(int argc, const char* argv[]) {
   std::thread socket_thread =
       std::thread([&recv_bytes, port, core_id, nb_queues, &nb_batches, &nb_pkts,
                    &nb_cycles] {
-        (void)recv_bytes;
         (void)port;
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -98,7 +94,7 @@ int main(int argc, const char* argv[]) {
         for (int i = 0; i < nb_queues; ++i) {
           RxTxPipe* pipe = dev->AllocateRxTxPipe();
           if (!pipe) {
-            std::cerr << "Problem creating RX pipe" << std::endl;
+            std::cerr << "Problem creating RX/TX pipe" << std::endl;
             exit(3);
           }
           pipes.push_back(pipe);
@@ -114,23 +110,19 @@ int main(int argc, const char* argv[]) {
               continue;
             }
 
-            uint32_t batch_length = 0;
             for (auto pkt : batch) {
-              uint16_t pkt_len = norman::get_pkt_len(pkt);
-              uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-              uint16_t pkt_aligned_len = nb_flits * 64;
-
-              recv_bytes += pkt_aligned_len;
-              batch_length += pkt_aligned_len;
-              ++nb_pkts;
-
               ++pkt[63];  // Increment payload.
 
               for (uint32_t i = 0; i < nb_cycles; ++i) {
                 asm("nop");
               }
+
+              ++nb_pkts;
             }
+            uint32_t batch_length = batch.processed_bytes();
+            recv_bytes += batch_length;
             ++nb_batches;
+
             pipe->Send(batch_length);
           }
         }
