@@ -48,7 +48,13 @@
 
 namespace enso {
 
+#ifdef MOCK
+uint64_t virt_to_phys(void *virt) {
+  return virt
+}
+#else
 uint64_t virt_to_phys(void* virt) {
+
   long page_size = sysconf(_SC_PAGESIZE);
   int fd = open("/proc/self/pagemap", O_RDONLY);
 
@@ -78,6 +84,7 @@ uint64_t virt_to_phys(void* virt) {
   return (uint64_t)((phy & 0x7fffffffffffffULL) * page_size +
                     ((uintptr_t)virt) % page_size);
 }
+#endif
 
 void* get_huge_page(const std::string& name, bool mirror) {
   int fd;

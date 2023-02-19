@@ -8,5 +8,5 @@ subdir('enso')
 subdir('syscall_api')
 
 project_sources += files(
-    'pcie.cpp'
+    'mock_pcie.cpp'
 )

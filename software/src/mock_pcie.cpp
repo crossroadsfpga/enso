@@ -58,6 +58,12 @@
 
 namespace norman {
 
+struct timeval ts;
+ts.tv_sec = 0;
+ts.tv_usec = 0;
+pcap_t* pd;
+pcap_dumper_t* pdumper;
+
 int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
                           volatile struct QueueRegs* notification_buf_pair_regs,
                           enso_pipe_id_t nb_queues,
@@ -69,7 +75,9 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id) {
-  return 0;
+    pd = pcap_open_dead(DLT_EN10MB, 65535);
+    pdumper = pcap_dump_open(pd, "mock_pcap.pcapng");
+    return 0;
 }
 
 int dma_init(intel_fpga_pcie_dev* dev,
@@ -137,20 +145,39 @@ uint64_t phys_to_virt(void* phys) {
 static norman_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
                 uint64_t phys_addr, uint32_t len) {
-  // should just 
+
 }
 
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len) {
-    uint64_t virt_addr = phys_to_virt(phys_addr);
-    std::string pcap_file(len, '*');
-    for (int i = 0; i < len; i++) {
-        pcap_file[i] = phys_addr[i];
+    // phys_addr is the virtual address in the mock
+
+    unsigned char buf[len];
+    memcpy(phys_addr, buf, len);
+    
+    int processed_bytes = 0;
+    uint8_t *pkt = buf;
+    
+    while (processed_bytes < len) {
+        // read header of each packet to get packet length
+        uint16_t pkt_len = norman::get_pkt_len(pkt);
+        // packets must be cache-aligned: so get aligned length
+        uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+        uint16_t pkt_aligned_len = nb_flits * 64;
+
+        // Save packet to file using pcap
+        struct pcap_pkthdr pkt_hdr;
+        pkt_hdr.ts = ts;
+        pkt_hdr.len = pkt_len;
+        pkt_hdr.caplen = pkt_len;
+        ++(ts.tv_usec);
+        pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
+
+        // moving packet forward by aligned length
+        pkt += pkt_aligned_len;
+        processed_bytes += pkt_aligned_len;
     }
 
-    // saving data from phys_addr to file
-    pcap_t* pd = pcap_open_dead(DLT_EN10MB, 65535);
-    pcap_dumper_t* pdumper = pcap_dump_open(pd, pcap_file.c_str());
     return 0;
 }
 
@@ -166,7 +193,8 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
 }
 
 void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe) {
-
+    pcap_dump_close(pdumper);
+    pcap_close(pd);
 }
 
 int dma_finish(struct SocketInternal* socket_entry) {
