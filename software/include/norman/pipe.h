@@ -49,7 +49,7 @@
 #include <vector>
 
 // Avoid exposing `intel_fpga_pcie_api.hpp` externally.
-class intel_fpga_pcie_dev;
+class IntelFpgaPcieDev;
 
 namespace norman {
 
@@ -179,7 +179,7 @@ class Device {
   const std::string kPcieAddr;
   const uint32_t kNbRxPipes;
 
-  intel_fpga_pcie_dev* fpga_dev_;
+  IntelFpgaPcieDev* fpga_dev_;
   struct NotificationBufPair notification_buf_pair_;
   int16_t core_id_;
   uint16_t bdf_;

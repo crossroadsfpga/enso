@@ -81,10 +81,24 @@ int linux_cfg_access(ssize_t fd, void *addr, T *data_ptr, bool is_read) {
   return result == 0;
 }
 
+IntelFpgaPcieDev *IntelFpgaPcieDev::Create(unsigned int bdf, int bar) noexcept {
+  IntelFpgaPcieDev *dev = new (std::nothrow) IntelFpgaPcieDev();
+  if (!dev) {
+    return nullptr;
+  }
+
+  if (dev->Init(bdf, bar)) {
+    delete dev;
+    return nullptr;
+  }
+
+  return dev;
+}
+
 /******************************************************************************
  * Intel FPGA PCIe device class methods
  *****************************************************************************/
-intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar) {
+int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
   ssize_t fd;
   int result;
   unsigned int u_bar;
@@ -92,10 +106,10 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar) {
   fd = open("/dev/intel_fpga_pcie_drv", O_RDWR | O_CLOEXEC);
 
   if (fd == -1) {
-    throw std::runtime_error(
-        "could not open character device; "
-        "ensure that Intel FPGA kernel driver "
-        "has been loaded");
+    std::cerr << "could not open character device; ensure that Intel FPGA "
+                 "kernel driver has been loaded"
+              << std::endl;
+    return -1;
   }
   m_dev_handle = fd;
 
@@ -104,16 +118,17 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar) {
     if (result != 0) {
       close(m_dev_handle);
       close(m_uio_dev_handle);
-      throw std::invalid_argument("could not select desired device");
+      std::cerr << "could not select desired device" << std::endl;
+      return -1;
     }
   } else {
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_GET_DEV, &bdf);
     if (result != 0) {
       close(m_dev_handle);
       close(m_uio_dev_handle);
-      throw std::runtime_error(
-          "could not retrieve the BDF of the "
-          "selected device");
+      std::cerr << "could not retrieve the BDF of the selected device"
+                << std::endl;
+      return -1;
     }
   }
 
@@ -123,21 +138,26 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar) {
     if (result != 0) {
       close(m_dev_handle);
       close(m_uio_dev_handle);
-      throw std::invalid_argument("could not select desired BAR");
+      std::cerr << "could not select desired BAR" << std::endl;
+      return -1;
     }
   } else {
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_GET_BAR, &u_bar);
     if (result != 0) {
       close(m_dev_handle);
       close(m_uio_dev_handle);
-      throw std::runtime_error("could not retrieve the selected BAR");
+      std::cerr << "could not retrieve the selected BAR" << std::endl;
+      return -1;
     }
     m_bar = u_bar;
   }
 
   char device_name[1000] = "/dev/";
   if (get_uio_dev_name(device_name + 5)) {
-    throw std::runtime_error("could not get uio device name");
+    close(m_dev_handle);
+    close(m_uio_dev_handle);
+    std::cerr << "could not get uio device name" << std::endl;
+    return -1;
   }
 
   std::cout << "Using UIO device: " << device_name << std::endl;
@@ -146,98 +166,97 @@ intel_fpga_pcie_dev::intel_fpga_pcie_dev(unsigned int bdf, int bar) {
 
   if (fd == -1) {
     close(m_dev_handle);
-    throw std::runtime_error(
-        "could not open uio character device; "
-        "ensure that Intel FPGA kernel driver "
-        "has been loaded");
+    close(m_uio_dev_handle);
+    std::cerr << "could not open uio character device; ensure that Intel FPGA "
+                 "kernel driver has been loaded"
+              << std::endl;
+    return -1;
   }
   m_uio_dev_handle = fd;
 
   m_bdf = bdf;
   m_kmem_size = 0;
+
+  return 0;
 }
 
-intel_fpga_pcie_dev::~intel_fpga_pcie_dev(void) {
+IntelFpgaPcieDev::~IntelFpgaPcieDev(void) {
   close(m_dev_handle);
   close(m_uio_dev_handle);
 }
 
-int intel_fpga_pcie_dev::read8(void *addr, uint8_t *data_ptr) {
+int IntelFpgaPcieDev::read8(void *addr, uint8_t *data_ptr) {
   return linux_read(m_dev_handle, addr, data_ptr);
 }
 
-int intel_fpga_pcie_dev::read16(void *addr, uint16_t *data_ptr) {
+int IntelFpgaPcieDev::read16(void *addr, uint16_t *data_ptr) {
   return linux_read(m_dev_handle, addr, data_ptr);
 }
 
-int intel_fpga_pcie_dev::read32(void *addr, uint32_t *data_ptr) {
+int IntelFpgaPcieDev::read32(void *addr, uint32_t *data_ptr) {
   return linux_read(m_dev_handle, addr, data_ptr);
 }
 
-int intel_fpga_pcie_dev::read64(void *addr, uint64_t *data_ptr) {
+int IntelFpgaPcieDev::read64(void *addr, uint64_t *data_ptr) {
   return linux_read(m_dev_handle, addr, data_ptr);
 }
 
-int intel_fpga_pcie_dev::write8(void *addr, uint8_t data) {
+int IntelFpgaPcieDev::write8(void *addr, uint8_t data) {
   return linux_write(m_dev_handle, addr, &data);
 }
 
-int intel_fpga_pcie_dev::write16(void *addr, uint16_t data) {
+int IntelFpgaPcieDev::write16(void *addr, uint16_t data) {
   return linux_write(m_dev_handle, addr, &data);
 }
 
-int intel_fpga_pcie_dev::write32(void *addr, uint32_t data) {
+int IntelFpgaPcieDev::write32(void *addr, uint32_t data) {
   return linux_write(m_dev_handle, addr, &data);
 }
 
-int intel_fpga_pcie_dev::write64(void *addr, uint64_t data) {
+int IntelFpgaPcieDev::write64(void *addr, uint64_t data) {
   return linux_write(m_dev_handle, addr, &data);
 }
 
-int intel_fpga_pcie_dev::read8(unsigned int bar, void *addr,
-                               uint8_t *data_ptr) {
+int IntelFpgaPcieDev::read8(unsigned int bar, void *addr, uint8_t *data_ptr) {
   return linux_bar_read(m_dev_handle, bar, addr, data_ptr);
 }
 
-int intel_fpga_pcie_dev::read16(unsigned int bar, void *addr,
-                                uint16_t *data_ptr) {
+int IntelFpgaPcieDev::read16(unsigned int bar, void *addr, uint16_t *data_ptr) {
   return linux_bar_read(m_dev_handle, bar, addr, data_ptr);
 }
 
-int intel_fpga_pcie_dev::read32(unsigned int bar, void *addr,
-                                uint32_t *data_ptr) {
+int IntelFpgaPcieDev::read32(unsigned int bar, void *addr, uint32_t *data_ptr) {
   return linux_bar_read(m_dev_handle, bar, addr, data_ptr);
 }
 
-int intel_fpga_pcie_dev::read64(unsigned int bar, void *addr,
-                                uint64_t *data_ptr) {
+int IntelFpgaPcieDev::read64(unsigned int bar, void *addr, uint64_t *data_ptr) {
   return linux_bar_read(m_dev_handle, bar, addr, data_ptr);
 }
 
-int intel_fpga_pcie_dev::write8(unsigned int bar, void *addr, uint8_t data) {
+int IntelFpgaPcieDev::write8(unsigned int bar, void *addr, uint8_t data) {
   return linux_bar_write(m_dev_handle, bar, addr, &data);
 }
 
-int intel_fpga_pcie_dev::write16(unsigned int bar, void *addr, uint16_t data) {
+int IntelFpgaPcieDev::write16(unsigned int bar, void *addr, uint16_t data) {
   return linux_bar_write(m_dev_handle, bar, addr, &data);
 }
 
-int intel_fpga_pcie_dev::write32(unsigned int bar, void *addr, uint32_t data) {
+int IntelFpgaPcieDev::write32(unsigned int bar, void *addr, uint32_t data) {
   return linux_bar_write(m_dev_handle, bar, addr, &data);
 }
 
-int intel_fpga_pcie_dev::write64(unsigned int bar, void *addr, uint64_t data) {
+int IntelFpgaPcieDev::write64(unsigned int bar, void *addr, uint64_t data) {
   return linux_bar_write(m_dev_handle, bar, addr, &data);
 }
 
-int intel_fpga_pcie_dev::read(void *src, ssize_t count, void *dst) {
+int IntelFpgaPcieDev::read(void *src, ssize_t count, void *dst) {
   ssize_t result;
   result = pread(m_dev_handle, dst, count, reinterpret_cast<off_t>(src));
   return result == count;
 }
 
-int intel_fpga_pcie_dev::read(unsigned int bar, void *src, ssize_t count,
-                              void *dst) {
+int IntelFpgaPcieDev::read(unsigned int bar, void *src, ssize_t count,
+                           void *dst) {
   ssize_t result;
   struct intel_fpga_pcie_cmd cmd;
 
@@ -248,14 +267,14 @@ int intel_fpga_pcie_dev::read(unsigned int bar, void *src, ssize_t count,
   return result == count;
 }
 
-int intel_fpga_pcie_dev::write(void *dst, ssize_t count, void *src) {
+int IntelFpgaPcieDev::write(void *dst, ssize_t count, void *src) {
   ssize_t result;
   result = pwrite(m_dev_handle, src, count, reinterpret_cast<off_t>(dst));
   return result == count;
 }
 
-int intel_fpga_pcie_dev::write(unsigned int bar, void *dst, ssize_t count,
-                               void *src) {
+int IntelFpgaPcieDev::write(unsigned int bar, void *dst, ssize_t count,
+                            void *src) {
   ssize_t result;
   struct intel_fpga_pcie_cmd cmd;
 
@@ -266,31 +285,31 @@ int intel_fpga_pcie_dev::write(unsigned int bar, void *dst, ssize_t count,
   return result == count;
 }
 
-int intel_fpga_pcie_dev::cfg_read8(void *addr, uint8_t *data_ptr) {
+int IntelFpgaPcieDev::cfg_read8(void *addr, uint8_t *data_ptr) {
   return linux_cfg_access(m_dev_handle, addr, data_ptr, true);
 }
 
-int intel_fpga_pcie_dev::cfg_read16(void *addr, uint16_t *data_ptr) {
+int IntelFpgaPcieDev::cfg_read16(void *addr, uint16_t *data_ptr) {
   return linux_cfg_access(m_dev_handle, addr, data_ptr, true);
 }
 
-int intel_fpga_pcie_dev::cfg_read32(void *addr, uint32_t *data_ptr) {
+int IntelFpgaPcieDev::cfg_read32(void *addr, uint32_t *data_ptr) {
   return linux_cfg_access(m_dev_handle, addr, data_ptr, true);
 }
 
-int intel_fpga_pcie_dev::cfg_write8(void *addr, uint8_t data) {
+int IntelFpgaPcieDev::cfg_write8(void *addr, uint8_t data) {
   return linux_cfg_access(m_dev_handle, addr, &data, false);
 }
 
-int intel_fpga_pcie_dev::cfg_write16(void *addr, uint16_t data) {
+int IntelFpgaPcieDev::cfg_write16(void *addr, uint16_t data) {
   return linux_cfg_access(m_dev_handle, addr, &data, false);
 }
 
-int intel_fpga_pcie_dev::cfg_write32(void *addr, uint32_t data) {
+int IntelFpgaPcieDev::cfg_write32(void *addr, uint32_t data) {
   return linux_cfg_access(m_dev_handle, addr, &data, false);
 }
 
-int intel_fpga_pcie_dev::sel_dev(unsigned int bdf) {
+int IntelFpgaPcieDev::sel_dev(unsigned int bdf) {
   int result;
   bdf &= 0xFFFFU;  // BDF is 16 bits.
   result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV, bdf);
@@ -300,9 +319,9 @@ int intel_fpga_pcie_dev::sel_dev(unsigned int bdf) {
   return result == 0;
 }
 
-unsigned int intel_fpga_pcie_dev::get_dev(void) { return m_bdf; }
+unsigned int IntelFpgaPcieDev::get_dev(void) { return m_bdf; }
 
-int intel_fpga_pcie_dev::sel_bar(unsigned int bar) {
+int IntelFpgaPcieDev::sel_bar(unsigned int bar) {
   int result;
   result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_SEL_BAR, bar);
   if (result == 0) {
@@ -311,23 +330,22 @@ int intel_fpga_pcie_dev::sel_bar(unsigned int bar) {
   return result == 0;
 }
 
-unsigned int intel_fpga_pcie_dev::get_bar(void) { return m_bar; }
+unsigned int IntelFpgaPcieDev::get_bar(void) { return m_bar; }
 
-int intel_fpga_pcie_dev::use_cmd(bool enable) {
+int IntelFpgaPcieDev::use_cmd(bool enable) {
   int result;
   result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_USE_CMD, enable);
   return result == 0;
 }
 
-int intel_fpga_pcie_dev::set_sriov_numvfs(unsigned int num_vfs) {
+int IntelFpgaPcieDev::set_sriov_numvfs(unsigned int num_vfs) {
   int result;
   result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SRIOV_NUMVFS, num_vfs);
   return result == 0;
 }
 
-int intel_fpga_pcie_dev::set_kmem_size(unsigned int rx_size,
-                                       unsigned int tx_size,
-                                       unsigned int app_id) {
+int IntelFpgaPcieDev::set_kmem_size(unsigned int rx_size, unsigned int tx_size,
+                                    unsigned int app_id) {
   int result;
   unsigned int page_size = sysconf(_SC_PAGESIZE);
 
@@ -352,7 +370,7 @@ int intel_fpga_pcie_dev::set_kmem_size(unsigned int rx_size,
   return result == 0;
 }
 
-void *intel_fpga_pcie_dev::kmem_mmap(unsigned int size, unsigned int offset) {
+void *IntelFpgaPcieDev::kmem_mmap(unsigned int size, unsigned int offset) {
   if ((size + offset) > m_kmem_size) {
     return MAP_FAILED;
   }
@@ -361,22 +379,22 @@ void *intel_fpga_pcie_dev::kmem_mmap(unsigned int size, unsigned int offset) {
               offset);
 }
 
-void *intel_fpga_pcie_dev::uio_mmap(size_t size, unsigned int mapping) {
+void *IntelFpgaPcieDev::uio_mmap(size_t size, unsigned int mapping) {
   unsigned int offset = mapping * getpagesize();
 
   return mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, m_uio_dev_handle,
               offset);
 }
 
-int intel_fpga_pcie_dev::kmem_munmap(void *addr, unsigned int size) {
+int IntelFpgaPcieDev::kmem_munmap(void *addr, unsigned int size) {
   int result;
   result = munmap(addr, size);
 
   return result == 0;
 }
 
-int intel_fpga_pcie_dev::dma_queue_read(uint64_t ep_offset, unsigned int size,
-                                        uint64_t kmem_offset) {
+int IntelFpgaPcieDev::dma_queue_read(uint64_t ep_offset, unsigned int size,
+                                     uint64_t kmem_offset) {
   int result;
   struct intel_fpga_pcie_arg arg;
 
@@ -389,8 +407,8 @@ int intel_fpga_pcie_dev::dma_queue_read(uint64_t ep_offset, unsigned int size,
   return result == 0;
 }
 
-int intel_fpga_pcie_dev::dma_queue_write(uint64_t ep_offset, unsigned int size,
-                                         uint64_t kmem_offset) {
+int IntelFpgaPcieDev::dma_queue_write(uint64_t ep_offset, unsigned int size,
+                                      uint64_t kmem_offset) {
   int result;
   struct intel_fpga_pcie_arg arg;
 
@@ -403,22 +421,22 @@ int intel_fpga_pcie_dev::dma_queue_write(uint64_t ep_offset, unsigned int size,
   return result == 0;
 }
 
-int intel_fpga_pcie_dev::dma_send_read(void) {
+int IntelFpgaPcieDev::dma_send_read(void) {
   int result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_DMA_SEND, 0x1U);
   return result == 0;
 }
 
-int intel_fpga_pcie_dev::dma_send_write(void) {
+int IntelFpgaPcieDev::dma_send_write(void) {
   int result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_DMA_SEND, 0x2U);
   return result == 0;
 }
 
-int intel_fpga_pcie_dev::dma_send_all(void) {
+int IntelFpgaPcieDev::dma_send_all(void) {
   int result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_DMA_SEND, 0x3U);
   return result == 0;
 }
 
-unsigned int intel_fpga_pcie_dev::get_ktimer(void) {
+unsigned int IntelFpgaPcieDev::get_ktimer(void) {
   int result;
   unsigned int timer_usec;
   result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_GET_KTIMER, &timer_usec);
@@ -430,7 +448,7 @@ unsigned int intel_fpga_pcie_dev::get_ktimer(void) {
   return timer_usec;
 }
 
-int intel_fpga_pcie_dev::get_uio_dev_name(char *uio_dev_name) {
+int IntelFpgaPcieDev::get_uio_dev_name(char *uio_dev_name) {
   return ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_GET_UIO_DEV_NAME,
                uio_dev_name);
 }

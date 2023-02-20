@@ -68,7 +68,7 @@ namespace norman {
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
-  intel_fpga_pcie_dev* dev;
+  IntelFpgaPcieDev* dev;
   struct RxEnsoPipeInternal enso_pipe;
 };
 
@@ -82,7 +82,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id);
 
-int dma_init(intel_fpga_pcie_dev* dev,
+int dma_init(IntelFpgaPcieDev* dev,
              struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
              unsigned nb_queues);
@@ -171,7 +171,7 @@ int dma_finish(struct SocketInternal* socket_entry);
 
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 
-void print_fpga_reg(intel_fpga_pcie_dev* dev, unsigned nb_regs);
+void print_fpga_reg(IntelFpgaPcieDev* dev, unsigned nb_regs);
 
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
 

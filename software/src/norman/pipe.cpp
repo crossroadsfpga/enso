@@ -233,10 +233,9 @@ int Device::Init() noexcept {
     }
   }
 
-  try {
-    int bar = -1;
-    fpga_dev_ = new intel_fpga_pcie_dev(bdf, bar);
-  } catch (const std::exception& ex) {
+  int bar = -1;
+  fpga_dev_ = IntelFpgaPcieDev::Create(bdf, bar);
+  if (unlikely(!fpga_dev_)) {
     // Failed to open device or allocate object.
     return 3;
   }

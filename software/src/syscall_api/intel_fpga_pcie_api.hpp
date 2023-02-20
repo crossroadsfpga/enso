@@ -68,13 +68,12 @@ typedef ssize_t INTEL_FPGA_PCIE_DEV_HANDLE;
  * For now, the different access methods cannot be interchanged without
  * explicit toggling of use_cmd().
  */
-class intel_fpga_pcie_dev {
+class IntelFpgaPcieDev {
  public:
   /**
-   * Creates a handle to some Intel FPGA PCIe device.
+   * Factory method to create a handle to some Intel FPGA PCIe device.
    * If a device with the desired BDF does not exist or it is not an
-   * Intel FPGA PCIe device, an exception is thrown. Also, if the desired
-   * BAR is not valid, an exception is thrown.
+   * Intel FPGA PCIe device, return nullptr.
    *
    * @param bdf   The BDF of the device to be selected. If set to 0,
    *              a device with the lowest BDF will be selected by
@@ -82,8 +81,9 @@ class intel_fpga_pcie_dev {
    * @param bar   The BAR region to access. If set to -1, the lowest
    *              valid BAR is selected by default.
    */
-  explicit intel_fpga_pcie_dev(unsigned int bdf = 0, int bar = -1);
-  ~intel_fpga_pcie_dev(void);
+  static IntelFpgaPcieDev *Create(unsigned int bdf = 0, int bar = -1) noexcept;
+
+  ~IntelFpgaPcieDev(void);
 
   //@{
   /**
@@ -327,6 +327,24 @@ class intel_fpga_pcie_dev {
   int get_uio_dev_name(char *name);
 
  private:
+  /**
+   * Class should be instantiated via the Create() factory method.
+   */
+  IntelFpgaPcieDev() noexcept = default;
+
+  /**
+   * Initializes the device handle.
+   *
+   * @param bdf   The BDF of the device to be selected. If set to 0,
+   *              a device with the lowest BDF will be selected by
+   *              default.
+   * @param bar   The BAR region to access. If set to -1, the lowest
+   *              valid BAR is selected by default.
+   *
+   * @return 0 on success and a non-zero error code on failure.
+   */
+  int Init(unsigned int bdf, int bar) noexcept;
+
   INTEL_FPGA_PCIE_DEV_HANDLE m_dev_handle;
   INTEL_FPGA_PCIE_DEV_HANDLE m_uio_dev_handle;
   unsigned int m_bdf;

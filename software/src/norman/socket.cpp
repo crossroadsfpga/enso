@@ -55,7 +55,7 @@ void set_bdf(uint16_t bdf_) { bdf = bdf_; }
 
 int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
            int nb_queues) noexcept {  // HACK(sadok) using protocol as nb_queues
-  intel_fpga_pcie_dev* dev;
+  IntelFpgaPcieDev* dev;
   int bar = -1;
   int result;
 
@@ -64,10 +64,9 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
     return -1;
   }
 
-  try {
-    dev = new intel_fpga_pcie_dev(bdf, bar);
-  } catch (const std::exception& ex) {
-    std::cerr << "Error initializing: " << ex.what() << std::endl;
+  dev = IntelFpgaPcieDev::Create(bdf, bar);
+  if (unlikely(dev == nullptr)) {
+    std::cerr << "Could not create device" << std::endl;
     return -1;
   }
 
@@ -229,7 +228,7 @@ int disable_device_rate_limit() {
 
 int shutdown(int sockfd, int how __attribute__((unused))) noexcept {
   int result;
-  intel_fpga_pcie_dev* dev = open_sockets[sockfd].dev;
+  IntelFpgaPcieDev* dev = open_sockets[sockfd].dev;
 
   result = dma_finish(&open_sockets[sockfd]);
   result = dev->use_cmd(false);

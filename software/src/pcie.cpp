@@ -208,7 +208,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   return 0;
 }
 
-int dma_init(intel_fpga_pcie_dev* dev,
+int dma_init(IntelFpgaPcieDev* dev,
              struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
              unsigned nb_queues) {
@@ -566,7 +566,7 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
          notification_buf_pair->enso_pipe_id_offset;
 }
 
-void print_fpga_reg(intel_fpga_pcie_dev* dev, unsigned nb_regs) {
+void print_fpga_reg(IntelFpgaPcieDev* dev, unsigned nb_regs) {
   uint32_t temp_r;
   for (unsigned int i = 0; i < nb_regs; ++i) {
     dev->read32(2, reinterpret_cast<void*>(0 + i * 4), &temp_r);
