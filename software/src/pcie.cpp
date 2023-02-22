@@ -342,7 +342,7 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
     return 0;
   }
 
-  _mm_prefetch(buf, _MM_HINT_T0);
+  // _mm_prefetch(buf, _MM_HINT_T0);
 
   uint32_t flit_aligned_size =
       ((enso_pipe_tail - enso_pipe_head) % ENSO_PIPE_SIZE) * 64;

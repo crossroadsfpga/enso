@@ -91,6 +91,7 @@ int main(int argc, const char* argv[]) {
     uint32_t tx_pr_head = 0;
     uint32_t tx_pr_tail = 0;
 #endif  // SEND_BACK
+    (void)nb_cycles;
     tx_pending_request_t* tx_pending_requests =
         new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
 
@@ -176,9 +177,9 @@ int main(int argc, const char* argv[]) {
 
             ++pkt[63];  // Increment payload.
 
-            for (uint32_t i = 0; i < nb_cycles; ++i) {
-              asm("nop");
-            }
+            // for (uint32_t i = 0; i < nb_cycles; ++i) {
+            //   asm("nop");
+            // }
 
 #ifdef SKIP_AHEAD
             uint64_t skip_ahead_offset = ((uint64_t)pkt & 0x700) >> 8;
@@ -187,7 +188,6 @@ int main(int argc, const char* argv[]) {
             uint16_t pkt_aligned_len = nb_flits * 64;
             pkt += pkt_aligned_len;
             processed_bytes += pkt_aligned_len;
-            recv_bytes += pkt_len;
             ++nb_pkts;
           }
 
@@ -196,6 +196,7 @@ int main(int argc, const char* argv[]) {
           recv_len = original_recv_len;
 #endif
 
+          recv_bytes += recv_len;
           ++nb_batches;
 
 #ifdef SEND_BACK
