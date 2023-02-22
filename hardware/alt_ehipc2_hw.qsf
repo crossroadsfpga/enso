@@ -20,7 +20,7 @@ set_location_assignment PIN_AH45 -to i_rx_serial_0[2]
 set_location_assignment PIN_AF45 -to i_rx_serial_0[3]
 set_location_assignment PIN_AJ43 -to i_clk_ref_0
 
-# Use Ethernet Port 1
+# Ethernet Port 1
 set_location_assignment PIN_AM3 -to o_tx_serial_1[0]
 set_location_assignment PIN_AL1 -to o_tx_serial_1[1]
 set_location_assignment PIN_AJ1 -to o_tx_serial_1[2]
