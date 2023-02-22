@@ -6,3 +6,5 @@ libraries/
 work/
 *.sof
 *.cspell
+.dvt
+dvt_build.log
