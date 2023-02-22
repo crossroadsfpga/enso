@@ -806,6 +806,7 @@ class TxPipe {
   }
 
   friend class Device;
+  friend RxTxPipe;  // FIXME(sadok): Should not need this.
 
   const enso_pipe_id_t kId;  ///< The ID of the pipe.
   Device* device_;
