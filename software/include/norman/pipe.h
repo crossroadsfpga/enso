@@ -285,19 +285,18 @@ class RxPipe {
 
   /**
    * Binds the pipe to a given flow entry. Can be called multiple times.
+   *
+   * Currently the hardware ignores the source IP and source port for UDP
+   * packets. You MUST set them to 0 when binding.
+   *
+   * @param dst_port Destination port.
+   * @param src_port Source port.
+   * @param dst_ip Destination IP.
+   * @param src_ip Source IP.
+   * @param protocol Protocol.
    */
-  int Bind() {
-    // TODO(sadok): Implement.
-    return 0;
-  }
-
-  /**
-   * Cleans all flow entries associated with queue.
-   */
-  int CleanBind() {
-    // TODO(sadok): Implement.
-    return 0;
-  }
+  int Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+           uint32_t src_ip, uint32_t protocol);
 
   /**
    * Receives a batch of bytes.
@@ -644,7 +643,7 @@ class TxPipe {
 
   friend class Device;
 
-  const uint32_t kId;
+  const enso_pipe_id_t kId;  ///< The ID of the pipe.
   Device* device_;
   uint8_t* buf_;
   bool internal_buf_;       // If true, the buffer is allocated internally.
@@ -721,12 +720,10 @@ class RxTxPipe {
   /**
    * @see `RxPipe::Bind`
    */
-  inline int Bind() { return rx_pipe_->Bind(); }
-
-  /**
-   * @see `RxPipe::CleanBind`
-   */
-  inline int CleanBind() { return rx_pipe_->CleanBind(); }
+  inline int Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+                  uint32_t src_ip, uint32_t protocol) {
+    return rx_pipe_->Bind(dst_port, src_port, dst_ip, src_ip, protocol);
+  }
 
   /**
    * @see `RxPipe::Recv`
@@ -772,15 +769,6 @@ class RxTxPipe {
       int32_t max_nb_pkts = -1) {
     return rx_pipe_->PeekRecvPkts(max_nb_pkts);
   }
-
-  // TODO(sadok): Implement Free for RxTxPipe. It is not trivial because we need
-  // to keep track of the number of bytes that we need to skip after a
-  // completion notification. Is there a way to implement this with no overhead
-  // for those that don't need it?
-  // void Free(uint32_t nb_bytes);
-
-  // TODO(sadok): Implement Clear for RxTxPipe.
-  // void Clear();
 
   /**
    * Prefetches the next batch of bytes to be received on the RxTxPipe.

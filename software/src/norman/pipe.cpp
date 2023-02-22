@@ -35,6 +35,7 @@
  *   Hugo Sadok <sadok@cmu.edu>
  */
 
+#include <norman/config.h>
 #include <norman/helpers.h>
 #include <norman/ixy_helpers.h>
 #include <norman/pipe.h>
@@ -56,6 +57,13 @@ uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
   return peek_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
+}
+
+int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+                 uint32_t src_ip, uint32_t protocol) {
+  insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip, src_ip,
+                    protocol, kId);
+  return 0;
 }
 
 uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
