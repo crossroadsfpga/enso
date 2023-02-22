@@ -116,6 +116,8 @@ int RxTxPipe::Init() noexcept {
     return -1;
   }
 
+  last_tx_pipe_capacity_ = tx_pipe_->capacity();
+
   return 0;
 }
 
@@ -311,8 +313,13 @@ void Device::Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
   uint32_t nb_pending_requests =
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
 
-  if (unlikely(nb_pending_requests >= (kMaxPendingTxRequests - 2))) {
+  // This will block until there is enough space to keep at least two requests.
+  // We need space for two requests because the request may be split into two
+  // if the bytes wrap around the end of the buffer.
+  while (unlikely(nb_pending_requests >= (kMaxPendingTxRequests - 2))) {
     ProcessCompletions();
+    nb_pending_requests =
+        (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
   }
 
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
@@ -328,6 +335,12 @@ void Device::ProcessCompletions() {
 
     TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
     pipe->NotifyCompletion(tx_req.nb_bytes);
+  }
+
+  // RxTx pipes need to be explicitly notified so that they can free space for
+  // more incoming packets.
+  for (RxTxPipe* pipe : rx_tx_pipes_) {
+    pipe->ProcessCompletions();
   }
 }
 

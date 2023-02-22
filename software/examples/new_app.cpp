@@ -75,6 +75,7 @@ int main(int argc, const char* argv[]) {
       std::thread([&recv_bytes, port, core_id, nb_queues, &nb_batches, &nb_pkts,
                    &nb_cycles] {
         (void)port;
+        (void)nb_cycles;
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -104,7 +105,7 @@ int main(int argc, const char* argv[]) {
 
         while (keep_running) {
           for (auto& pipe : pipes) {
-            auto batch = pipe->RecvPkts(1024);
+            auto batch = pipe->RecvPkts();
 
             if (unlikely(batch.kAvailableBytes == 0)) {
               continue;
@@ -113,9 +114,9 @@ int main(int argc, const char* argv[]) {
             for (auto pkt : batch) {
               ++pkt[63];  // Increment payload.
 
-              for (uint32_t i = 0; i < nb_cycles; ++i) {
-                asm("nop");
-              }
+              // for (uint32_t i = 0; i < nb_cycles; ++i) {
+              //   asm("nop");
+              // }
 
               ++nb_pkts;
             }

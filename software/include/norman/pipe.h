@@ -81,6 +81,8 @@ uint32_t external_peek_next_batch_from_queue(
  */
 class Device {
  public:
+  static constexpr uint32_t kMaxPendingTxRequests = MAX_PENDING_TX_REQUESTS;
+
   /**
    * Factory method to create a device.
    * @param nb_rx_pipes The number of RX Pipes to create. TODO(sadok): This
@@ -131,7 +133,10 @@ class Device {
    */
   RxPipe* NextPipeToRecv();  // TODO(sadok): Implement this.
 
-  static constexpr uint32_t kMaxPendingTxRequests = MAX_PENDING_TX_REQUESTS;
+  /**
+   * Process completions for all pipes associated with this device.
+   */
+  void ProcessCompletions();
 
  private:
   struct TxPendingRequest {
@@ -169,11 +174,6 @@ class Device {
    * @return The number of bytes sent.
    */
   void Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
-
-  /**
-   *
-   */
-  void ProcessCompletions();
 
   friend class RxPipe;
   friend class TxPipe;
@@ -250,7 +250,7 @@ class RxPipe {
     /**
      * Maximum number of messages in the batch.
      */
-    const uint32_t kMessageLimit;
+    const int32_t kMessageLimit;
 
     uint8_t* const kBuf;
 
@@ -265,7 +265,7 @@ class RxPipe {
      *                             bytes associated with each message.
      */
     constexpr MessageBatch(uint8_t* buf, uint32_t available_bytes,
-                           uint32_t message_limit, RxPipe* pipe)
+                           int32_t message_limit, RxPipe* pipe)
         : kAvailableBytes(available_bytes),
           kMessageLimit(message_limit),
           kBuf(buf),
@@ -305,7 +305,7 @@ class RxPipe {
    * @param buf A pointer that will be set to the start of the received bytes.
    * @param max_nb_bytes The maximum number of bytes to receive.
    *
-   * @return The number of bytes received or a negative error code.
+   * @return The number of bytes received.
    */
   uint32_t Recv(uint8_t** buf, uint32_t max_nb_bytes);
 
@@ -315,7 +315,7 @@ class RxPipe {
    * @param buf A pointer that will be set to the start of the received bytes.
    * @param max_nb_bytes The maximum number of bytes to receive.
    *
-   * @return The number of bytes received or a negative error code.
+   * @return The number of bytes received.
    */
   uint32_t PeekRecv(uint8_t** buf, uint32_t max_nb_bytes);
 
@@ -331,9 +331,21 @@ class RxPipe {
    * @param nb_bytes The number of bytes to confirm (must be a multiple of 64).
    */
   constexpr void ConfirmBytes(uint32_t nb_bytes) {
-    uint32_t enso_pipe_head = internal_rx_pipe_.rx_tail;
-    enso_pipe_head = (enso_pipe_head + nb_bytes / 64) % ENSO_PIPE_SIZE;
-    internal_rx_pipe_.rx_tail = enso_pipe_head;
+    uint32_t rx_tail = internal_rx_pipe_.rx_tail;
+    rx_tail = (rx_tail + nb_bytes / 64) % ENSO_PIPE_SIZE;
+    internal_rx_pipe_.rx_tail = rx_tail;
+  }
+
+  /**
+   * Returns the number of bytes allocated in the pipe, i.e., the number of
+   * bytes owned by the application.
+   *
+   * @return The number of bytes allocated in the pipe.
+   */
+  constexpr uint32_t capacity() const {
+    uint32_t rx_head = internal_rx_pipe_.rx_head;
+    uint32_t rx_tail = internal_rx_pipe_.rx_tail;
+    return ((rx_head - rx_tail) % ENSO_PIPE_SIZE) * 64;
   }
 
   /**
@@ -341,12 +353,13 @@ class RxPipe {
    *
    * @param T An iterator for the particular message type. Refer to
    *          `norman::PktIterator` for an example of a raw packet iterator.
-   * @param max_nb_messages The maximum number of messages to receive.
+   * @param max_nb_messages The maximum number of messages to receive. If set to
+   *                        -1, all messages in the queue will be received.
    * @return A MessageBatch object that can be used to iterate over the received
    *         messages.
    */
   template <typename T>
-  constexpr MessageBatch<T> RecvMessages(uint32_t max_nb_messages) {
+  constexpr MessageBatch<T> RecvMessages(int32_t max_nb_messages = -1) {
     void* buf = nullptr;
     uint32_t recv = external_peek_next_batch_from_queue(
         &internal_rx_pipe_, notification_buf_pair_, &buf);
@@ -356,22 +369,24 @@ class RxPipe {
   /**
    * Receives a batch of packets.
    *
-   * @param max_nb_pkts The maximum number of packets to receive.
+   * @param max_nb_pkts The maximum number of packets to receive. If set to -1,
+   *                    all packets in the queue will be received.
    * @return A MessageBatch object that can be used to iterate over the received
    *         packets.
    */
-  inline MessageBatch<PktIterator> RecvPkts(uint32_t max_nb_pkts) {
+  inline MessageBatch<PktIterator> RecvPkts(int32_t max_nb_pkts = -1) {
     return RecvMessages<PktIterator>(max_nb_pkts);
   }
 
   /**
    * Receives a batch of packets without removing them from the queue.
    *
-   * @param max_nb_pkts The maximum number of packets to receive.
+   * @param max_nb_pkts The maximum number of packets to receive. If set to -1,
+   *                    all packets in the queue will be received.
    * @return A MessageBatch object that can be used to iterate over the received
    *         packets.
    */
-  inline MessageBatch<PeekPktIterator> PeekRecvPkts(uint32_t max_nb_pkts) {
+  inline MessageBatch<PeekPktIterator> PeekRecvPkts(int32_t max_nb_pkts = -1) {
     return RecvMessages<PeekPktIterator>(max_nb_pkts);
   }
 
@@ -393,7 +408,9 @@ class RxPipe {
   void Clear();
 
   /**
+   * Returns the pipe's internal buffer.
    *
+   * @return A pointer to the start of the pipe's internal buffer.
    */
   inline uint8_t* buf() const { return (uint8_t*)internal_rx_pipe_.buf; }
 
@@ -489,18 +506,6 @@ class TxPipe {
   uint8_t* AllocateBuf() const { return buf_ + app_begin_; }
 
   /**
-   * Returns the allocated buffer's current available capacity.
-   *
-   * The buffer capacity can increase without notice but will never decrease.
-   * The user can use this function to check the current capacity.
-   *
-   * @return The capacity of the allocated buffer in bytes.
-   */
-  inline uint32_t capacity() const {
-    return (app_end_ - app_begin_ - 1) & kBufMask;
-  }
-
-  /**
    * Sends and deallocates a given number of bytes.
    *
    * After calling this function, the previous buffer address is no longer
@@ -569,6 +574,18 @@ class TxPipe {
   }
 
   /**
+   * Returns the allocated buffer's current available capacity.
+   *
+   * The buffer capacity can increase without notice but will never decrease.
+   * The user can use this function to check the current capacity.
+   *
+   * @return The capacity of the allocated buffer in bytes.
+   */
+  inline uint32_t capacity() const {
+    return (app_end_ - app_begin_ - 1) & kBufMask;
+  }
+
+  /**
    * Returns the number of bytes that are currently being transmitted.
    *
    * @return Number of bytes pending transmission.
@@ -626,7 +643,7 @@ class TxPipe {
   }
 
   friend class Device;
-  friend RxTxPipe;  // Should not need this.
+  friend RxTxPipe;  // FIXME(sadok): Should not need this.
 
   const uint32_t kId;
   Device* device_;
@@ -716,7 +733,6 @@ class RxTxPipe {
    * @see `RxPipe::Recv`
    */
   inline uint32_t Recv(uint8_t** buf, uint32_t max_nb_bytes) {
-    ProcessCompletions();
     return rx_pipe_->Recv(buf, max_nb_bytes);
   }
 
@@ -724,7 +740,6 @@ class RxTxPipe {
    * @see `RxPipe::PeekRecv`
    */
   inline uint32_t PeekRecv(uint8_t** buf, uint32_t max_nb_bytes) {
-    ProcessCompletions();
     return rx_pipe_->PeekRecv(buf, max_nb_bytes);
   }
 
@@ -739,16 +754,15 @@ class RxTxPipe {
    * @see `RxPipe::RecvMessages`
    */
   template <typename T>
-  inline RxPipe::MessageBatch<T> RecvMessages(uint32_t max_nb_messages) {
-    ProcessCompletions();
+  inline RxPipe::MessageBatch<T> RecvMessages(int32_t max_nb_messages = -1) {
     return rx_pipe_->RecvMessages<T>(max_nb_messages);
   }
 
   /**
    * @see `RxPipe::RecvPkts`
    */
-  inline RxPipe::MessageBatch<PktIterator> RecvPkts(uint32_t max_nb_pkts) {
-    ProcessCompletions();
+  inline RxPipe::MessageBatch<PktIterator> RecvPkts(int32_t max_nb_pkts = -1) {
+    device_->ProcessCompletions();
     return rx_pipe_->RecvPkts(max_nb_pkts);
   }
 
@@ -756,8 +770,7 @@ class RxTxPipe {
    * @see `RxPipe::PeekRecvPkts`
    */
   inline RxPipe::MessageBatch<PeekPktIterator> PeekRecvPkts(
-      uint32_t max_nb_pkts) {
-    ProcessCompletions();
+      int32_t max_nb_pkts = -1) {
     return rx_pipe_->PeekRecvPkts(max_nb_pkts);
   }
 
@@ -784,22 +797,32 @@ class RxTxPipe {
    *
    * @param nb_bytes The number of bytes to send.
    */
-  inline void Send(uint32_t nb_bytes) { tx_pipe_->SendAndFree(nb_bytes); }
+  inline void Send(uint32_t nb_bytes) {
+    tx_pipe_->SendAndFree(nb_bytes);
+    last_tx_pipe_capacity_ -= nb_bytes;
+  }
 
   /**
    * Process completions for this pipe, potentially freeing up space to receive
    * more data.
    */
   inline void ProcessCompletions() {
-    device_->ProcessCompletions();
-    if (tx_pipe_->app_end_ == last_app_end_) {
-      return;
+    uint32_t new_capacity = tx_pipe_->capacity();
+
+    // If the capacity has increased, we need to free up space in the RX pipe.
+    if (new_capacity > last_tx_pipe_capacity_) {
+      rx_pipe_->Free(new_capacity - last_tx_pipe_capacity_);
+      last_tx_pipe_capacity_ = new_capacity;
     }
-    rx_pipe_->Free((last_app_end_ - tx_pipe_->app_end_) & TxPipe::kBufMask);
-    last_app_end_ = tx_pipe_->app_end_;
   }
 
  private:
+  /**
+   * Threshold for processing completions. If the RX pipe's capacity is greater
+   * than this threshold, we process completions.
+   */
+  static constexpr uint32_t kCompletionsThreshold = ENSO_PIPE_SIZE * 64 / 2;
+
   /**
    * RxTxPipes can only be instantiated from a `Device` object, using the
    * `AllocateRxTxPipe()` method.
@@ -827,7 +850,7 @@ class RxTxPipe {
   Device* device_;
   RxPipe* rx_pipe_;
   TxPipe* tx_pipe_;
-  uint32_t last_app_end_ = 0;
+  uint32_t last_tx_pipe_capacity_;
 };
 
 /**
@@ -848,7 +871,7 @@ class PktIteratorBase {
    * range-based for loop.
    */
   constexpr bool operator!=(const PktIteratorBase& other) const {
-    return (missing_pkts_ > 0) && (next_addr_ <= other.addr_);
+    return (missing_pkts_ != 0) && (next_addr_ <= other.addr_);
   }
 
  protected:
@@ -859,7 +882,7 @@ class PktIteratorBase {
    * @param pkt_limit The maximum number of packets to receive.
    * @param batch The batch associated with this iterator.
    */
-  constexpr PktIteratorBase(uint8_t* addr, uint32_t pkt_limit,
+  constexpr PktIteratorBase(uint8_t* addr, int32_t pkt_limit,
                             RxPipe::MessageBatch<T>* batch)
       : addr_(addr),
         next_addr_(get_next_pkt(addr)),
@@ -912,7 +935,7 @@ class PktIterator : public PktIteratorBase<PktIterator> {
    *
    *  @see `PktIteratorBase::PktIteratorBase()`.
    */
-  constexpr PktIterator(uint8_t* addr, uint32_t pkt_limit,
+  constexpr PktIterator(uint8_t* addr, int32_t pkt_limit,
                         RxPipe::MessageBatch<PktIterator>* batch)
       : PktIteratorBase<PktIterator>(addr, pkt_limit, batch) {}
 
@@ -943,7 +966,7 @@ class PeekPktIterator : public PktIteratorBase<PeekPktIterator> {
    * @param pkt_limit The maximum number of packets to receive.
    * @param batch The batch associated with this iterator.
    */
-  constexpr PeekPktIterator(uint8_t* addr, uint32_t pkt_limit,
+  constexpr PeekPktIterator(uint8_t* addr, int32_t pkt_limit,
                             RxPipe::MessageBatch<PeekPktIterator>* batch)
       : PktIteratorBase<PeekPktIterator>(addr, pkt_limit, batch) {}
 
