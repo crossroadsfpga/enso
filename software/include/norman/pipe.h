@@ -32,6 +32,9 @@
  * Enso Pipe API. We define RX, TX, and RX/TX pipes as well as the Device class
  * that manages them. All of these classes are quite coupled, so we define them
  * all in this file.
+ *
+ * Authors:
+ *   Hugo Sadok <sadok@cmu.edu>
  */
 
 #ifndef SOFTWARE_INCLUDE_NORMAN_PIPE_H_

@@ -28,6 +28,11 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Functions to initialize and interface directly with the PCIe device.
+ *
+ * Authors:
+ *   Hugo Sadok <sadok@cmu.edu>
  */
 
 #ifndef SOFTWARE_SRC_PCIE_H_

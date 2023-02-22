@@ -28,6 +28,12 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Constants used throughout the codebase. Some of these constants need to be
+ * kept in sync with the hardware.
+ *
+ * Authors:
+ *   Hugo Sadok <sadok@cmu.edu>
  */
 
 #ifndef SOFTWARE_INCLUDE_NORMAN_CONSTS_H_
