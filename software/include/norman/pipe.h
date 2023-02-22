@@ -380,6 +380,11 @@ class RxPipe {
   void Free(uint32_t nb_bytes);
 
   /**
+   * Prefetches the next batch of bytes to be received on the RxPipe.
+   */
+  void Prefetch();
+
+  /**
    * Frees all bytes previously received on the RxPipe.
    */
   void Clear();
@@ -761,6 +766,11 @@ class RxTxPipe {
 
   // TODO(sadok): Implement Clear for RxTxPipe.
   // void Clear();
+
+  /**
+   * Prefetches the next batch of bytes to be received on the RxTxPipe.
+   */
+  inline void Prefetch() { rx_pipe_->Prefetch(); }
 
   /**
    * Sends a given number of bytes.

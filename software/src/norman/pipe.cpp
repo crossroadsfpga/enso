@@ -69,6 +69,8 @@ void RxPipe::Free(uint32_t nb_bytes) {
   advance_ring_buffer(&internal_rx_pipe_, nb_bytes);
 }
 
+void RxPipe::Prefetch() { advance_ring_buffer(&internal_rx_pipe_, 0); }
+
 void RxPipe::Clear() { fully_advance_ring_buffer(&internal_rx_pipe_); }
 
 RxPipe::~RxPipe() { enso_pipe_free(&internal_rx_pipe_); }
