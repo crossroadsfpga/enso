@@ -283,7 +283,7 @@ int dma_init(IntelFpgaPcieDev* dev,
                         enso_pipe_id);
 }
 
-static norman_always_inline uint16_t
+static _norman_always_inline uint16_t
 __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   struct RxNotification* notification_buf = notification_buf_pair->rx_buf;
   uint32_t notification_buf_head = notification_buf_pair->rx_head;
@@ -326,7 +326,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   return nb_consumed_notifications;
 }
 
-static norman_always_inline uint32_t
+static _norman_always_inline uint32_t
 __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
@@ -417,7 +417,7 @@ void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe) {
   enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 
-static norman_always_inline uint32_t
+static _norman_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
                 uint64_t phys_addr, uint32_t len) {
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
