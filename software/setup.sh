@@ -15,12 +15,12 @@ sudo ./install
 cd $SCRIPT_DIR
 
 # Using GCC
-# meson setup --native-file gcc.ini build-gcc
-# ln -sfn build-gcc build
+meson setup --native-file gcc.ini build-gcc
+ln -sfn build-gcc build
 
 # Using Clang
-meson setup --native-file llvm.ini build-clang
-ln -sfn build-clang build
+# meson setup --native-file llvm.ini build-clang
+# ln -sfn build-clang build
 
 cd build
 meson configure -Dnotification_buf_size=$1 -Denso_pipe_size=$2 -Dbatch_size=$3 \
