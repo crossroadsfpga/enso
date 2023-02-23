@@ -30,8 +30,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "app.h"
-
 #include <norman/consts.h>
 #include <norman/helpers.h>
 #include <norman/socket.h>
@@ -47,6 +45,8 @@
 #include <iostream>
 #include <string>
 #include <thread>
+
+#include "app.h"
 
 #define ZERO_COPY
 #define SEND_BACK
