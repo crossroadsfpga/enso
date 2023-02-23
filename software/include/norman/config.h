@@ -43,19 +43,20 @@
 namespace norman {
 
 /**
- * insert_flow_entry() - Insert flow entry in the data plane flow table.
- * @notification_buf_pair: Notification buffer to send configuration through.
- * @dst_port: Destination port number of the flow entry.
- * @src_port: Source port number of the flow entry.
- * @dst_ip: Destination IP address of the flow entry.
- * @src_ip: Source IP address of the flow entry.
- * @protocol: Protocol of the flow entry.
- * @enso_pipe_id: Enso Pipe ID that will be associated with the flow entry.
- *
- * Inserts a rule in the data plane flow table that will direct all packets
+ * Inserts flow entry in the data plane flow table that will direct all packets
  * matching the flow entry to the `enso_pipe_id`.
  *
- * Return: Return 0 if configuration was successful.
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @param dst_port Destination port number of the flow entry.
+ * @param src_port Source port number of the flow entry.
+ * @param dst_ip Destination IP address of the flow entry.
+ * @param src_ip Source IP address of the flow entry.
+ * @param protocol Protocol of the flow entry.
+ * @param enso_pipe_id Enso Pipe ID that will be associated with the flow entry.
+ *
+ *
+ * @return Return 0 if configuration was successful.
  */
 int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
                       uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
@@ -63,11 +64,13 @@ int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
                       uint32_t enso_pipe_id);
 
 /**
- * send_config() - Send configuration to the dataplane.
- * @notification_buf_pair: Notification buffer to send configuration through.
- * @config_notification: Configuration notification.
+ * Sends configuration to the dataplane.
  *
- * Return: Return 0 if configuration was successful.
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @param config_notification Configuration notification.
+ *
+ * @return Return 0 if configuration was successful.
  */
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification);

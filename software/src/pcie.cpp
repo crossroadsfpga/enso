@@ -358,39 +358,66 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
 uint32_t get_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
-  __get_new_tails(notification_buf_pair);
+  if (notification_buf_pair->pending_rx_ids == 0) {
+    __get_new_tails(notification_buf_pair);
+  }
   return __consume_queue(enso_pipe, notification_buf_pair, buf);
 }
 
 uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
-  __get_new_tails(notification_buf_pair);
+  if (notification_buf_pair->pending_rx_ids == 0) {
+    __get_new_tails(notification_buf_pair);
+  }
   return __consume_queue(enso_pipe, notification_buf_pair, buf, true);
+}
+
+static _norman_always_inline int32_t
+__get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
+  // Consume up to a batch of notifications at a time. If the number of consumed
+  // notifications is the same as the number of pending notifications, we are
+  // done processing the last batch and can get the next one. Using batches here
+  // performs **significantly** better compared to always fetching the latest
+  // notification.
+  uint16_t pending_rx_ids = notification_buf_pair->pending_rx_ids;
+  uint16_t consumed_rx_ids = notification_buf_pair->consumed_rx_ids;
+
+  if (pending_rx_ids == consumed_rx_ids) {
+    pending_rx_ids = __get_new_tails(notification_buf_pair);
+    notification_buf_pair->pending_rx_ids = pending_rx_ids;
+
+    consumed_rx_ids = 0;
+    notification_buf_pair->consumed_rx_ids = consumed_rx_ids;
+
+    if (unlikely(pending_rx_ids == 0)) {
+      return -1;
+    }
+  }
+
+  enso_pipe_id_t __enso_pipe_id =
+      notification_buf_pair->last_rx_ids[consumed_rx_ids];
+
+  ++(notification_buf_pair->consumed_rx_ids);
+
+  return __enso_pipe_id;
+}
+
+int32_t get_next_enso_pipe_id(
+    struct NotificationBufPair* notification_buf_pair) {
+  return __get_next_enso_pipe_id(notification_buf_pair);
 }
 
 // Return next batch among all open sockets.
 uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
                         struct SocketInternal* socket_entries,
                         int* enso_pipe_id, void** buf) {
-  // Consume up to a batch of notifications at a time. If the number of consumed
-  // notifications is the same as the number of pending notifications, we are
-  // done processing the last batch and can get the next one. Using batches here
-  // performs **significantly** better compared to always fetching the latest
-  // notification.
-  if (notification_buf_pair->pending_rx_ids ==
-      notification_buf_pair->consumed_rx_ids) {
-    notification_buf_pair->pending_rx_ids =
-        __get_new_tails(notification_buf_pair);
-    notification_buf_pair->consumed_rx_ids = 0;
-    if (unlikely(notification_buf_pair->pending_rx_ids == 0)) {
-      return 0;
-    }
+  int32_t __enso_pipe_id = __get_next_enso_pipe_id(notification_buf_pair);
+
+  if (unlikely(__enso_pipe_id == -1)) {
+    return 0;
   }
 
-  enso_pipe_id_t __enso_pipe_id =
-      notification_buf_pair
-          ->last_rx_ids[notification_buf_pair->consumed_rx_ids++];
   *enso_pipe_id = __enso_pipe_id;
 
   struct SocketInternal* socket_entry = &socket_entries[__enso_pipe_id];

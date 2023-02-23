@@ -100,6 +100,25 @@ uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
+/**
+ * Get next Enso Pipe with pending data.
+ *
+ * @param notification_buf_pair Notification buffer to get data from.
+ * @return ID for the next Enso Pipe that has data available, or -1 if no Enso
+ *         Pipe has data.
+ */
+int32_t get_next_enso_pipe_id(
+    struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * Get next batch of data from the next available Enso Pipe.
+ *
+ * @param notification_buf_pair Notification buffer to get data from.
+ * @param socket_entries Array of socket entries.
+ * @param enso_pipe_id ID of the Enso Pipe that the data came from.
+ * @param buf Pointer to the buffer where the data will be stored.
+ * @return Number of bytes received.
+ */
 uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
                         struct SocketInternal* socket_entries,
                         int* enso_pipe_id, void** buf);

@@ -129,9 +129,26 @@ class Device {
   RxTxPipe* AllocateRxTxPipe() noexcept;
 
   /**
+   * Gets the next RxPipe that has data pending.
    *
+   * **This function can only be used when there are no RxTx pipes.** Trying to
+   * use this function when there are RxTx pipes will result in undefined
+   * behavior.
+   *
+   * @return A pointer to the pipe. May be nullptr if no pipe has data pending.
    */
-  RxPipe* NextPipeToRecv();  // TODO(sadok): Implement this.
+  RxPipe* NextRxPipeToRecv();
+
+  /**
+   * Gets the next RxTxPipe that has data pending.
+   *
+   * **This function can only be used when there are only RxTx pipes.** Trying
+   * to use this function when there are Rx pipes will result in undefined
+   * behavior.
+   *
+   * @return A pointer to the pipe. May be nullptr if no pipe has data pending.
+   */
+  RxTxPipe* NextRxTxPipeToRecv();
 
   /**
    * Process completions for all pipes associated with this device.
@@ -221,8 +238,9 @@ class RxPipe {
   /**
    * A class that represents a batch of messages.
    *
-   * @param T An iterator for the particular message type. Refer to
-   *          `norman::PktIterator` for an example of a raw packet iterator.
+   * @param T An iterator for the particular message type.
+   *          @see `norman::PktIterator` for an example of a raw packet
+   *          iterator.
    */
   template <typename T>
   class MessageBatch {
@@ -316,16 +334,16 @@ class RxPipe {
    *
    * @return The number of bytes received.
    */
-  uint32_t PeekRecv(uint8_t** buf, uint32_t max_nb_bytes);
+  uint32_t Peek(uint8_t** buf, uint32_t max_nb_bytes);
 
   /**
    * Confirms a certain number of bytes have been received. This will make sure
-   * that the next call to `Recv` or `PeekRecv` will return a buffer that starts
+   * that the next call to `Recv` or `Peek` will return a buffer that starts
    * at the next byte after the last confirmed byte.
    *
    * When using `Recv`, this is not necessary, as `Recv` will automatically
    * confirm the bytes received. You may use this to confirm bytes received by
-   * `PeekRecv`.
+   * `Peek`.
    *
    * @param nb_bytes The number of bytes to confirm (must be a multiple of 64).
    */
@@ -350,10 +368,12 @@ class RxPipe {
   /**
    * Receives a batch of generic messages.
    *
-   * @param T An iterator for the particular message type. Refer to
-   *          `norman::PktIterator` for an example of a raw packet iterator.
+   * @param T An iterator for the particular message type. Refer
+   *          @see `norman::PktIterator` for an example of a raw packet
+   *          iterator.
    * @param max_nb_messages The maximum number of messages to receive. If set to
-   *                        -1, all messages in the queue will be received.
+   *                        -1, all messages in the pipe will be received.
+   *
    * @return A MessageBatch object that can be used to iterate over the received
    *         messages.
    */
@@ -369,7 +389,8 @@ class RxPipe {
    * Receives a batch of packets.
    *
    * @param max_nb_pkts The maximum number of packets to receive. If set to -1,
-   *                    all packets in the queue will be received.
+   *                    all packets in the pipe will be received.
+   *
    * @return A MessageBatch object that can be used to iterate over the received
    *         packets.
    */
@@ -381,11 +402,12 @@ class RxPipe {
    * Receives a batch of packets without removing them from the queue.
    *
    * @param max_nb_pkts The maximum number of packets to receive. If set to -1,
-   *                    all packets in the queue will be received.
+   *                    all packets in the pipe will be received.
+   *
    * @return A MessageBatch object that can be used to iterate over the received
    *         packets.
    */
-  inline MessageBatch<PeekPktIterator> PeekRecvPkts(int32_t max_nb_pkts = -1) {
+  inline MessageBatch<PeekPktIterator> PeekPkts(int32_t max_nb_pkts = -1) {
     return RecvMessages<PeekPktIterator>(max_nb_pkts);
   }
 
@@ -413,7 +435,12 @@ class RxPipe {
    */
   inline uint8_t* buf() const { return (uint8_t*)internal_rx_pipe_.buf; }
 
-  const enso_pipe_id_t kId;  ///< The ID of the pipe.
+  /**
+   * Returns the pipe's ID.
+   *
+   * @return The pipe's ID.
+   */
+  inline enso_pipe_id_t id() const { return kId; }
 
  private:
   /**
@@ -424,9 +451,7 @@ class RxPipe {
    * @param device The `Device` object that instantiated this pipe.
    */
   explicit RxPipe(enso_pipe_id_t id, Device* device) noexcept
-      : kId(id),
-        notification_buf_pair_(&(device->notification_buf_pair_)),
-        device_(device) {}
+      : kId(id), notification_buf_pair_(&(device->notification_buf_pair_)) {}
 
   /**
    * RxPipes cannot be deallocated from outside. The `Device` object is in
@@ -438,15 +463,16 @@ class RxPipe {
    * Initializes the RX pipe.
    *
    * @param enso_pipe_regs The Enso Pipe registers.
+   *
    * @return 0 on success and a non-zero error code on failure.
    */
   int Init(volatile struct QueueRegs* enso_pipe_regs) noexcept;
 
   friend class Device;
 
+  const enso_pipe_id_t kId;  ///< The ID of the pipe.
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
-  Device* device_;
 };
 
 /**
@@ -605,6 +631,13 @@ class TxPipe {
    */
   static constexpr uint32_t kMaxCapacity = ENSO_PIPE_SIZE * 64 - kQuantumSize;
 
+  /**
+   * Returns the pipe's ID.
+   *
+   * @return The pipe's ID.
+   */
+  inline enso_pipe_id_t id() const { return kId; }
+
  private:
   /**
    * TxPipes can only be instantiated from a `Device` object, using the
@@ -729,14 +762,16 @@ class RxTxPipe {
    * @see `RxPipe::Recv`
    */
   inline uint32_t Recv(uint8_t** buf, uint32_t max_nb_bytes) {
+    device_->ProcessCompletions();
     return rx_pipe_->Recv(buf, max_nb_bytes);
   }
 
   /**
-   * @see `RxPipe::PeekRecv`
+   * @see `RxPipe::Peek`
    */
-  inline uint32_t PeekRecv(uint8_t** buf, uint32_t max_nb_bytes) {
-    return rx_pipe_->PeekRecv(buf, max_nb_bytes);
+  inline uint32_t Peek(uint8_t** buf, uint32_t max_nb_bytes) {
+    device_->ProcessCompletions();
+    return rx_pipe_->Peek(buf, max_nb_bytes);
   }
 
   /**
@@ -751,6 +786,7 @@ class RxTxPipe {
    */
   template <typename T>
   inline RxPipe::MessageBatch<T> RecvMessages(int32_t max_nb_messages = -1) {
+    device_->ProcessCompletions();
     return rx_pipe_->RecvMessages<T>(max_nb_messages);
   }
 
@@ -763,11 +799,12 @@ class RxTxPipe {
   }
 
   /**
-   * @see `RxPipe::PeekRecvPkts`
+   * @see `RxPipe::PeekPkts`
    */
-  inline RxPipe::MessageBatch<PeekPktIterator> PeekRecvPkts(
+  inline RxPipe::MessageBatch<PeekPktIterator> PeekPkts(
       int32_t max_nb_pkts = -1) {
-    return rx_pipe_->PeekRecvPkts(max_nb_pkts);
+    device_->ProcessCompletions();
+    return rx_pipe_->PeekPkts(max_nb_pkts);
   }
 
   /**
@@ -779,7 +816,7 @@ class RxTxPipe {
    * Sends a given number of bytes.
    *
    * You can only send bytes that have been received and confirmed. Such as
-   * using `Recv` or a combination of `PeekRecv` and `ConfirmRecvBytes`, as well
+   * using `Recv` or a combination of `Peek` and `ConfirmRecvBytes`, as well
    * as the equivalent methods for messages.
    *
    * @param nb_bytes The number of bytes to send.
@@ -802,6 +839,16 @@ class RxTxPipe {
       last_tx_pipe_capacity_ = new_capacity;
     }
   }
+
+  /**
+   * @see `RxPipe::id`
+   */
+  inline enso_pipe_id_t rx_id() const { return rx_pipe_->id(); }
+
+  /**
+   * @see `TxPipe::id`
+   */
+  inline enso_pipe_id_t tx_id() const { return tx_pipe_->id(); }
 
  private:
   /**

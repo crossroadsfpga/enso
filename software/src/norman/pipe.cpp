@@ -67,12 +67,12 @@ int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
 }
 
 uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
-  uint32_t ret = PeekRecv(buf, max_nb_bytes);
+  uint32_t ret = Peek(buf, max_nb_bytes);
   ConfirmBytes(ret);
   return ret;
 }
 
-inline uint32_t RxPipe::PeekRecv(uint8_t** buf, uint32_t max_nb_bytes) {
+inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
   uint32_t ret = peek_next_batch_from_queue(
       &internal_rx_pipe_, notification_buf_pair_, (void**)buf);
   return std::min(ret, max_nb_bytes);
@@ -229,6 +229,27 @@ RxTxPipe* Device::AllocateRxTxPipe() noexcept {
   rx_tx_pipes_.push_back(pipe);
 
   return pipe;
+}
+
+RxPipe* Device::NextRxPipeToRecv() {
+  // This function can only be used when there are no RxTx pipes.
+  assert(rx_tx_pipes_.size() == 0);
+  int32_t id = get_next_enso_pipe_id(&notification_buf_pair_);
+  if (id < 0) {
+    return nullptr;
+  }
+  return rx_pipes_[id];
+}
+
+RxTxPipe* Device::NextRxTxPipeToRecv() {
+  // This function can only be used when there are only RxTx pipes.
+  assert(rx_pipes_.size() == rx_tx_pipes_.size());
+  ProcessCompletions();
+  int32_t id = get_next_enso_pipe_id(&notification_buf_pair_);
+  if (id < 0) {
+    return nullptr;
+  }
+  return rx_tx_pipes_[id];
 }
 
 int Device::Init() noexcept {
