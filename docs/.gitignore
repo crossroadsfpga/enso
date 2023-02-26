@@ -1,1 +1,4 @@
 doc_internal
+software
+__pycache__
+*.pyc

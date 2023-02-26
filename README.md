@@ -58,11 +58,6 @@ Start by cloning the norman repository, if you haven't already:
 git clone https://github.com/hsadok/norman
 ```
 
-Go to the `norman/software` directory:
-```bash
-cd norman/software
-```
-
 Prepare the compilation using meson and compile it with ninja.
 
 To use gcc:
@@ -114,7 +109,7 @@ git clone https://github.com/hsadok/norman
 To install the norman script run in the `norman` directory:
 ```bash
 cd norman
-pip3 install -e frontend
+python3 -m pip install -e frontend
 ```
 
 Refer to the [norman script documentation](frontend/README.md) for instructions on how to enable autocompletion or the dependencies you need to run Norman pktgen.
@@ -163,3 +158,17 @@ You can also specify other options to configure the dataplane, refer to `norman 
 * Synthesis
 
 -->
+
+## Building Documentation
+
+Install the requirements:
+```bash
+sudo apt update
+sudo apt install doxygen
+python3 -m pip install -r docs/requirements.txt
+```
+
+To build the documentation, run (from the build directory):
+```bash
+meson compile docs
+```

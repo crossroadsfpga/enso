@@ -8,3 +8,4 @@ work/
 *.cspell
 .dvt
 dvt_build.log
+site/

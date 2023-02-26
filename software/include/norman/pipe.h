@@ -28,13 +28,14 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/**
+ * @brief Enso Pipe API. We define RX, TX, and RX/TX pipes as well as the Device
+ * class that manages them. All of these classes are quite coupled, so we define
+ * them all in this file.
  *
- * Enso Pipe API. We define RX, TX, and RX/TX pipes as well as the Device class
- * that manages them. All of these classes are quite coupled, so we define them
- * all in this file.
- *
- * Authors:
- *   Hugo Sadok <sadok@cmu.edu>
+ * @author Hugo Sadok <sadok@cmu.edu>
  */
 
 #ifndef SOFTWARE_INCLUDE_NORMAN_PIPE_H_
@@ -68,23 +69,26 @@ uint32_t external_peek_next_batch_from_queue(
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
 /**
- * A class that represents a device.
+ * @brief A class that represents a device.
  *
  * Should be instantiated using the factory method `Create()`. Use separate
  * instances for each thread.
  *
  * Example:
+ * @code
  *    uint16_t core_id = 0;
  *    uint32_t nb_pipes = 4;
  *    std::string pcie_addr = "0000:01:00.0";
  *    auto device = Device::Create(core_id, nb_pipes, pcie_addr);
+ * @endcode
  */
 class Device {
  public:
   static constexpr uint32_t kMaxPendingTxRequests = MAX_PENDING_TX_REQUESTS;
 
   /**
-   * Factory method to create a device.
+   * @brief Factory method to create a device.
+   *
    * @param nb_rx_pipes The number of RX Pipes to create. TODO(sadok): This
    *                    should not be needed.
    * @param core_id The core ID of the thread that will access the device. If
@@ -106,14 +110,14 @@ class Device {
   ~Device();
 
   /**
-   * Allocates an RX pipe.
+   * @brief Allocates an RX pipe.
    *
    * @return A pointer to the pipe. May be null if the pipe cannot be created.
    */
   RxPipe* AllocateRxPipe() noexcept;
 
   /**
-   * Allocates a TX pipe.
+   * @brief Allocates a TX pipe.
    *
    * @param buf Buffer address to use for the pipe. It must be a pinned
    *            hugepage. If not specified, the buffer is allocated internally.
@@ -122,36 +126,36 @@ class Device {
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
 
   /**
-   * Allocates an RX/TX pipe.
+   * @brief Allocates an RX/TX pipe.
    *
    * @return A pointer to the pipe. May be null if the pipe cannot be created.
    */
   RxTxPipe* AllocateRxTxPipe() noexcept;
 
   /**
-   * Gets the next RxPipe that has data pending.
+   * @brief Gets the next RxPipe that has data pending.
    *
-   * **This function can only be used when there are no RxTx pipes.** Trying to
-   * use this function when there are RxTx pipes will result in undefined
-   * behavior.
+   * @warning This function can only be used when there are no RxTx pipes.
+   * Trying to use this function when there are RxTx pipes will result in
+   * undefined behavior.
    *
    * @return A pointer to the pipe. May be nullptr if no pipe has data pending.
    */
   RxPipe* NextRxPipeToRecv();
 
   /**
-   * Gets the next RxTxPipe that has data pending.
+   * @brief Gets the next RxTxPipe that has data pending.
    *
-   * **This function can only be used when there are only RxTx pipes.** Trying
-   * to use this function when there are Rx pipes will result in undefined
-   * behavior.
+   * @warning This function can only be used when there are no RxTx pipes.
+   * Trying to use this function when there are RxTx pipes will result in
+   * undefined behavior.
    *
    * @return A pointer to the pipe. May be nullptr if no pipe has data pending.
    */
   RxTxPipe* NextRxTxPipeToRecv();
 
   /**
-   * Process completions for all pipes associated with this device.
+   * @brief Process completions for all pipes associated with this device.
    */
   void ProcessCompletions();
 
@@ -175,15 +179,15 @@ class Device {
   }
 
   /**
-   * Initializes the device.
+   * @brief Initializes the device.
    *
    * @return 0 on success and a non-zero error code on failure.
    */
   int Init() noexcept;
 
   /**
-   * Sends a certain number of bytes to the device. This is designed to be used
-   * by a TxPipe object.
+   * @brief Sends a certain number of bytes to the device. This is designed to
+   * be used by a TxPipe object.
    *
    * @param tx_enso_pipe_id The ID of the TxPipe.
    * @param phys_addr The physical address of the buffer region to send.
@@ -218,29 +222,30 @@ class Device {
 };
 
 /**
- * A class that represents an RX Enso Pipe.
+ * @brief A class that represents an RX Enso Pipe.
  *
  * Should be instantiated using a Device object.
  *
  * Example:
- *    auto device = Device::Create(core_id, nb_pipes, pcie_addr);
+ * @code
+ *    Device* device = Device::Create(core_id, nb_pipes, pcie_addr);
  *    RxPipe* rx_pipe = device->AllocateRxPipe();
  *    rx_pipe->Bind(...);
  *
- *    auto batch = rx_pipe->RecvPkts(64);
+ *    auto batch = rx_pipe->RecvPkts();
  *    for (auto pkt : batch) {
  *      // Do something with the packet.
  *    }
  *    rx_pipe->Clear();
+ * @endcode
  */
 class RxPipe {
  public:
   /**
-   * A class that represents a batch of messages.
+   * @brief A class that represents a batch of messages.
    *
-   * @param T An iterator for the particular message type.
-   *          @see `norman::PktIterator` for an example of a raw packet
-   *          iterator.
+   * @param T An iterator for the particular message type. Refer to
+   *          `norman::PktIterator` for an example of a raw packet iterator.
    */
   template <typename T>
   class MessageBatch {
@@ -266,7 +271,7 @@ class RxPipe {
     const uint32_t kAvailableBytes;
 
     /**
-     * Maximum number of messages in the batch.
+     * @brief Maximum number of messages in the batch.
      */
     const int32_t kMessageLimit;
 
@@ -302,7 +307,7 @@ class RxPipe {
   RxPipe& operator=(RxPipe&&) = delete;
 
   /**
-   * Binds the pipe to a given flow entry. Can be called multiple times.
+   * @brief Binds the pipe to a given flow entry. Can be called multiple times.
    *
    * Currently the hardware ignores the source IP and source port for UDP
    * packets. You MUST set them to 0 when binding.
@@ -317,7 +322,7 @@ class RxPipe {
            uint32_t src_ip, uint32_t protocol);
 
   /**
-   * Receives a batch of bytes.
+   * @brief Receives a batch of bytes.
    *
    * @param buf A pointer that will be set to the start of the received bytes.
    * @param max_nb_bytes The maximum number of bytes to receive.
@@ -327,7 +332,7 @@ class RxPipe {
   uint32_t Recv(uint8_t** buf, uint32_t max_nb_bytes);
 
   /**
-   * Receives a batch of bytes without removing them from the queue.
+   * @brief Receives a batch of bytes without removing them from the queue.
    *
    * @param buf A pointer that will be set to the start of the received bytes.
    * @param max_nb_bytes The maximum number of bytes to receive.
@@ -337,9 +342,10 @@ class RxPipe {
   uint32_t Peek(uint8_t** buf, uint32_t max_nb_bytes);
 
   /**
-   * Confirms a certain number of bytes have been received. This will make sure
-   * that the next call to `Recv` or `Peek` will return a buffer that starts
-   * at the next byte after the last confirmed byte.
+   * @brief Confirms a certain number of bytes have been received.
+   *
+   * This will make sure that the next call to `Recv` or `Peek` will return a
+   * buffer that starts at the next byte after the last confirmed byte.
    *
    * When using `Recv`, this is not necessary, as `Recv` will automatically
    * confirm the bytes received. You may use this to confirm bytes received by
@@ -354,8 +360,8 @@ class RxPipe {
   }
 
   /**
-   * Returns the number of bytes allocated in the pipe, i.e., the number of
-   * bytes owned by the application.
+   * @brief Returns the number of bytes allocated in the pipe, i.e., the number
+   * of bytes owned by the application.
    *
    * @return The number of bytes allocated in the pipe.
    */
@@ -366,10 +372,10 @@ class RxPipe {
   }
 
   /**
-   * Receives a batch of generic messages.
+   * @brief Receives a batch of generic messages.
    *
-   * @param T An iterator for the particular message type. Refer
-   *          @see `norman::PktIterator` for an example of a raw packet
+   * @param T An iterator for the particular message type. Refer to
+   *          `norman::PktIterator` for an example of a raw packet
    *          iterator.
    * @param max_nb_messages The maximum number of messages to receive. If set to
    *                        -1, all messages in the pipe will be received.
@@ -386,7 +392,7 @@ class RxPipe {
   }
 
   /**
-   * Receives a batch of packets.
+   * @brief Receives a batch of packets.
    *
    * @param max_nb_pkts The maximum number of packets to receive. If set to -1,
    *                    all packets in the pipe will be received.
@@ -399,7 +405,7 @@ class RxPipe {
   }
 
   /**
-   * Receives a batch of packets without removing them from the queue.
+   * @brief Receives a batch of packets without removing them from the queue.
    *
    * @param max_nb_pkts The maximum number of packets to receive. If set to -1,
    *                    all packets in the pipe will be received.
@@ -412,31 +418,31 @@ class RxPipe {
   }
 
   /**
-   * Frees a given number of bytes previously received on the RxPipe.
+   * @brief Frees a given number of bytes previously received on the RxPipe.
    *
    * @param nb_bytes The number of bytes to free.
    */
   void Free(uint32_t nb_bytes);
 
   /**
-   * Prefetches the next batch of bytes to be received on the RxPipe.
+   * @brief Prefetches the next batch of bytes to be received on the RxPipe.
    */
   void Prefetch();
 
   /**
-   * Frees all bytes previously received on the RxPipe.
+   * @brief Frees all bytes previously received on the RxPipe.
    */
   void Clear();
 
   /**
-   * Returns the pipe's internal buffer.
+   * @brief Returns the pipe's internal buffer.
    *
    * @return A pointer to the start of the pipe's internal buffer.
    */
   inline uint8_t* buf() const { return (uint8_t*)internal_rx_pipe_.buf; }
 
   /**
-   * Returns the pipe's ID.
+   * @brief Returns the pipe's ID.
    *
    * @return The pipe's ID.
    */
@@ -460,7 +466,7 @@ class RxPipe {
   ~RxPipe();
 
   /**
-   * Initializes the RX pipe.
+   * @brief Initializes the RX pipe.
    *
    * @param enso_pipe_regs The Enso Pipe registers.
    *
@@ -476,13 +482,15 @@ class RxPipe {
 };
 
 /**
- * A class that represents a TX Enso Pipe.
+ * @brief A class that represents a TX Enso Pipe.
  *
  * Should be instantiated using a Device object.
  *
  * Example:
- *    auto device = Device::Create(core_id, nb_pipes, pcie_addr);
- *    TxPipe* tx_pipe = dev->AllocateTxPipe();
+ * @code
+ *    norman::Device* device = norman::Device::Create(core_id, nb_pipes,
+ *                                                    pcie_addr);
+ *    norman::TxPipe* tx_pipe = device->AllocateTxPipe();
  *    uint8_t* buf = tx_pipe->AllocateBuf();
  *
  *    // This will block until the buffer is large enough. Ensure that the
@@ -496,8 +504,9 @@ class RxPipe {
  *    [...]
  *
  *    // Send the data and retrieve a new buffer.
- *    tx_pipe.SendAndFree(data_size);
+ *    tx_pipe->SendAndFree(data_size);
  *    buf = tx_pipe.AllocateBuf();
+ * @endcode
  */
 class TxPipe {
  public:
@@ -507,7 +516,7 @@ class TxPipe {
   TxPipe& operator=(TxPipe&&) = delete;
 
   /**
-   * Allocate a buffer in the pipe.
+   * @brief Allocate a buffer in the pipe.
    *
    * There can only be a single buffer allocated at a time for a given Pipe.
    * Calling this function again when a buffer is already allocated will return
@@ -531,7 +540,7 @@ class TxPipe {
   uint8_t* AllocateBuf() const { return buf_ + app_begin_; }
 
   /**
-   * Sends and deallocates a given number of bytes.
+   * @brief Sends and deallocates a given number of bytes.
    *
    * After calling this function, the previous buffer address is no longer
    * valid. Accessing it will lead to undefined behavior. __The user must use
@@ -557,7 +566,7 @@ class TxPipe {
   }
 
   /**
-   * Explicitly request a best-effort buffer extension.
+   * @brief Explicitly requests a best-effort buffer extension.
    *
    * Will check for completed transmissions to try to extend the capacity of the
    * currently allocated buffer. After this, capacity will be at least as large
@@ -576,7 +585,7 @@ class TxPipe {
   }
 
   /**
-   * Explicitly request a buffer extension with a target capacity.
+   * @brief Explicitly requests a buffer extension with a target capacity.
    *
    * Different from `TryExtendBuf()`, this function will block until the
    * capacity is at least as large as the target capacity. Other than that the
@@ -599,7 +608,7 @@ class TxPipe {
   }
 
   /**
-   * Returns the allocated buffer's current available capacity.
+   * @brief Returns the allocated buffer's current available capacity.
    *
    * The buffer capacity can increase without notice but will never decrease.
    * The user can use this function to check the current capacity.
@@ -611,7 +620,7 @@ class TxPipe {
   }
 
   /**
-   * Returns the number of bytes that are currently being transmitted.
+   * @brief Returns the number of bytes that are currently being transmitted.
    *
    * @return Number of bytes pending transmission.
    */
@@ -632,7 +641,7 @@ class TxPipe {
   static constexpr uint32_t kMaxCapacity = ENSO_PIPE_SIZE * 64 - kQuantumSize;
 
   /**
-   * Returns the pipe's ID.
+   * @brief Returns the pipe's ID.
    *
    * @return The pipe's ID.
    */
@@ -658,15 +667,16 @@ class TxPipe {
   ~TxPipe();
 
   /**
-   * Initializes the TX pipe.
+   * @brief Initializes the TX pipe.
    *
    * @return 0 on success and a non-zero error code on failure.
    */
   int Init() noexcept;
 
   /**
-   * Notifies the Pipe that a given number of bytes have been sent. Should be
-   * used by the `Device` object only.
+   * @brief Notifies the Pipe that a given number of bytes have been sent.
+   *
+   * Should be used by the `Device` object only.
    *
    * @param nb_bytes The number of bytes that have been sent.
    */
@@ -721,27 +731,29 @@ class TxPipe {
 };
 
 /**
- * A class that represents an RX/TX Enso Pipe.
+ * @brief A class that represents an RX/TX Enso Pipe.
  *
  * This is suitable for applications that need to modify data in place and send
  * them back. Should be instantiated using a Device object.
  *
- * @see `RxPipe` for a description of the common methods for RX.
+ * @see RxPipe for a description of the common methods for RX.
  *
- * Different from a `TxPipe`, an `RxTxPipe` can only be used to send data that
- * has been received, after potentially modifying it in place. Therefore, it
- * lacks most of the methods that are available in `TxPipe`.
+ * Different from a TxPipe, an RxTxPipe can only be used to send data that has
+ * been received, after potentially modifying it in place. Therefore, it lacks
+ * most of the methods that are available in TxPipe.
  *
  * Example:
+ * @code
  *    auto device = Device::Create(core_id, nb_pipes, pcie_addr);
- *    RxTxPipe* rx_tx_pipe = device->AllocateRxTxPipe();
+ *    norman::RxTxPipe* rx_tx_pipe = device->AllocateRxTxPipe();
  *    rx_tx_pipe->Bind(...);
  *
- *    auto batch = rx_tx_pipe->RecvPkts(64);
+ *    auto batch = rx_tx_pipe->RecvPkts();
  *    for (auto pkt : batch) {
  *      // Do something with the packet.
  *    }
  *    rx_tx_pipe->Send(batch_length);
+ * @endcode
  */
 class RxTxPipe {
  public:
@@ -751,7 +763,7 @@ class RxTxPipe {
   RxTxPipe& operator=(RxTxPipe&&) = delete;
 
   /**
-   * @see `RxPipe::Bind`
+   * @copydoc RxPipe::Bind
    */
   inline int Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                   uint32_t src_ip, uint32_t protocol) {
@@ -759,7 +771,7 @@ class RxTxPipe {
   }
 
   /**
-   * @see `RxPipe::Recv`
+   * @copydoc RxPipe::Recv
    */
   inline uint32_t Recv(uint8_t** buf, uint32_t max_nb_bytes) {
     device_->ProcessCompletions();
@@ -767,7 +779,7 @@ class RxTxPipe {
   }
 
   /**
-   * @see `RxPipe::Peek`
+   * @copydoc RxPipe::Peek
    */
   inline uint32_t Peek(uint8_t** buf, uint32_t max_nb_bytes) {
     device_->ProcessCompletions();
@@ -775,14 +787,14 @@ class RxTxPipe {
   }
 
   /**
-   * @see `RxPipe::ConfirmBytes`
+   * @copydoc RxPipe::ConfirmBytes
    */
   inline void ConfirmBytes(uint32_t nb_bytes) {
     rx_pipe_->ConfirmBytes(nb_bytes);
   }
 
   /**
-   * @see `RxPipe::RecvMessages`
+   * @copydoc RxPipe::RecvMessages
    */
   template <typename T>
   inline RxPipe::MessageBatch<T> RecvMessages(int32_t max_nb_messages = -1) {
@@ -791,7 +803,7 @@ class RxTxPipe {
   }
 
   /**
-   * @see `RxPipe::RecvPkts`
+   * @copydoc RxPipe::RecvPkts
    */
   inline RxPipe::MessageBatch<PktIterator> RecvPkts(int32_t max_nb_pkts = -1) {
     device_->ProcessCompletions();
@@ -799,7 +811,7 @@ class RxTxPipe {
   }
 
   /**
-   * @see `RxPipe::PeekPkts`
+   * @copydoc RxPipe::PeekPkts
    */
   inline RxPipe::MessageBatch<PeekPktIterator> PeekPkts(
       int32_t max_nb_pkts = -1) {
@@ -808,16 +820,16 @@ class RxTxPipe {
   }
 
   /**
-   * Prefetches the next batch of bytes to be received on the RxTxPipe.
+   * @brief Prefetches the next batch of bytes to be received on the RxTxPipe.
    */
   inline void Prefetch() { rx_pipe_->Prefetch(); }
 
   /**
-   * Sends a given number of bytes.
+   * @brief Sends a given number of bytes.
    *
    * You can only send bytes that have been received and confirmed. Such as
-   * using `Recv` or a combination of `Peek` and `ConfirmRecvBytes`, as well
-   * as the equivalent methods for messages.
+   * using Recv or a combination of Peek and ConfirmRecvBytes, as well as the
+   * equivalent methods for messages.
    *
    * @param nb_bytes The number of bytes to send.
    */
@@ -827,8 +839,8 @@ class RxTxPipe {
   }
 
   /**
-   * Process completions for this pipe, potentially freeing up space to receive
-   * more data.
+   * @brief Process completions for this pipe, potentially freeing up space to
+   * receive more data.
    */
   inline void ProcessCompletions() {
     uint32_t new_capacity = tx_pipe_->capacity();
@@ -841,12 +853,12 @@ class RxTxPipe {
   }
 
   /**
-   * @see `RxPipe::id`
+   * @copydoc RxPipe::id
    */
   inline enso_pipe_id_t rx_id() const { return rx_pipe_->id(); }
 
   /**
-   * @see `TxPipe::id`
+   * @copydoc TxPipe::id
    */
   inline enso_pipe_id_t tx_id() const { return tx_pipe_->id(); }
 
@@ -858,7 +870,7 @@ class RxTxPipe {
   static constexpr uint32_t kCompletionsThreshold = ENSO_PIPE_SIZE * 64 / 2;
 
   /**
-   * RxTxPipes can only be instantiated from a `Device` object, using the
+   * RxTxPipes can only be instantiated from a Device object, using the
    * `AllocateRxTxPipe()` method.
    *
    * @param id The ID of the pipe.
@@ -873,7 +885,7 @@ class RxTxPipe {
   ~RxTxPipe() = default;
 
   /**
-   * Initializes the RX/TX pipe.
+   * @brief Initializes the RX/TX pipe.
    *
    * @return 0 on success and a non-zero error code on failure.
    */
@@ -888,9 +900,10 @@ class RxTxPipe {
 };
 
 /**
- * Base class to represent a packet within a batch. It is designed to be used as
- * an iterator. It tracks the number of missing packets such that `operator!=`
- * returns false whenever the limit is reached.
+ * @brief Base class to represent a packet within a batch.
+ *
+ * It is designed to be used as an iterator. It tracks the number of missing
+ * packets such that `operator!=` returns false whenever the limit is reached.
  *
  * `operator++` should be implemented by a derived class.
  */
@@ -924,7 +937,7 @@ class PktIteratorBase {
         batch_(batch) {}
 
   /**
-   * Advances the iterator to the next packet.
+   * @brief Advances the iterator to the next packet.
    *
    * @return The number of bytes that have been processed by this iterator.
    */
@@ -952,7 +965,9 @@ class PktIteratorBase {
 };
 
 /**
- * A class that represents a packet within a batch. @see `PktIteratorBase`.
+ * @brief A class that represents a packet within a batch.
+ *
+ * @see PktIteratorBase.
  */
 class PktIterator : public PktIteratorBase<PktIterator> {
  public:
@@ -967,7 +982,7 @@ class PktIterator : public PktIteratorBase<PktIterator> {
   /**
    * Only MessageBatch can instantiate a PktIterator object.
    *
-   *  @see `PktIteratorBase::PktIteratorBase()`.
+   * @see PktIteratorBase::PktIteratorBase().
    */
   constexpr PktIterator(uint8_t* addr, int32_t pkt_limit,
                         RxPipe::MessageBatch<PktIterator>* batch)
@@ -977,9 +992,10 @@ class PktIterator : public PktIteratorBase<PktIterator> {
 };
 
 /**
- * A class that represents a packet within a batch. It is designed to be used as
- * an iterator. It tracks the number of missing packets such that `operator!=`
- * returns false whenever the limit is reached.
+ * @brief A class that represents a packet within a batch.
+ *
+ * It is designed to be used as an iterator. It tracks the number of missing
+ * packets such that `operator!=` returns false whenever the limit is reached.
  *
  * The difference between this class and `PktIterator` is that this class does
  * not free the packets after they are iterated over.
