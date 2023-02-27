@@ -10,7 +10,7 @@ if [[ "$#" -ne 4 ]]; then
     exit 1
 fi
 
-cd $SCRIPT_DIR/kernel/linux/
+cd $SCRIPT_DIR/software/kernel/linux/
 sudo ./install
 cd $SCRIPT_DIR
 

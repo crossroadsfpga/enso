@@ -18,7 +18,6 @@ else
 endif
 
 doxygen = find_program('doxygen', required: false)
-mkdocs = find_program('mkdocs', required: false)
 
 generate_doc_markdown_sh = find_program(files('generate_doc_markdown.sh'),
                                         required: true)
@@ -26,24 +25,28 @@ generate_doc_markdown_sh = find_program(files('generate_doc_markdown.sh'),
 doxybook2_config_file = files('config-doxybook2.json')
 
 if doxygen.found()
-    doxyfile = configure_file(input: 'Doxyfile.in',
-                            output: 'Doxyfile',
-                            configuration: cdata,
-                            install: false)
+    doxyfile = configure_file(input: 'doxygen/Doxyfile.in',
+                              output: 'Doxyfile',
+                              configuration: cdata,
+                              install: false)
 
     html_target = custom_target('doxygen',
-                                input: doxyfile,
+                                input: [doxyfile, files([
+                                  'doxygen/doxygen-awesome.css',
+                                  'doxygen/doxygen-awesome-sidebar-only.css',
+                                  'doxygen/doxygen_header.html'
+                                ])],
                                 output: ['html', 'xml'],
                                 command: [doxygen, doxyfile],
                                 depends: [norman_lib],
                                 build_by_default: false)
 
-    markdown_target = custom_target('doxygen_markdown',
-                                    input: [doxyfile],
-                                    output: 'software',
-                                    command: [generate_doc_markdown_sh,
-                                              doxybook2_config_file],
-                                    depends: [html_target],
-                                    build_by_default: false,
-                                    build_always_stale: true)
+    # markdown_target = custom_target('doxygen_markdown',
+    #                                 input: [doxyfile],
+    #                                 output: 'software',
+    #                                 command: [generate_doc_markdown_sh,
+    #                                           doxybook2_config_file],
+    #                                 depends: [html_target],
+    #                                 build_by_default: false,
+    #                                 build_always_stale: true)
 endif

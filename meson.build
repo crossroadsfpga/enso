@@ -34,13 +34,15 @@ endif
 subdir('software')
 subdir('docs')
 
-if doxygen.found()
+mkdocs = find_program('mkdocs', required: false)
+
+if mkdocs.found()
     mkdocs_config_file = files('mkdocs.yml')
     mkdocs_docs = custom_target('mkdocs_docs',
                         input: [doc_sources, mkdocs_config_file],
                         output: 'site',
                         command: [mkdocs, 'build', '-f', mkdocs_config_file],
-                        depends: [norman_lib, markdown_target],
+                        depends: [norman_lib, html_target],
                         build_by_default: false)
     docs = alias_target('docs', mkdocs_docs)
 endif
