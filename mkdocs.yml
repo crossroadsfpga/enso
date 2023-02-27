@@ -58,14 +58,24 @@ markdown_extensions:
   - abbr
   - attr_list
   - md_in_html
+  - footnotes
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
 
+# Note that we are using the awesome-pages plugin, therefore nav is defined in
+# the .pages file present in each directory.
 # nav:
-#   - Home: index.md
-#   # - Python:
-#   # - C++:
-#   #   - Home: software/index.md
+
+plugins:
+  - search
+  - awesome-pages

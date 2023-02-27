@@ -1,4 +1,19 @@
-# Norman
+# Setup
+
+
+<!-- ## Requirements
+
+### Hardware
+
+### Software
+
+## Installation
+
+## Building
+
+## Configuring
+
+## Running -->
 
 ## System Requirements
 

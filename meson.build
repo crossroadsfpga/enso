@@ -34,15 +34,103 @@ endif
 subdir('software')
 subdir('docs')
 
+teroshdl_hdl_documenter = find_program('teroshdl-hdl-documenter',
+                                       required: false)
+
+hardware_path = join_paths(meson.source_root(), 'hardware/src')
+hdl_doc_path = join_paths(meson.source_root(), 'docs/hardware/modules')
+
+if teroshdl_hdl_documenter.found()
+    teroshdl_target = custom_target('teroshdl',
+            input: [doxyfile],
+            output: 'doc_internal',
+            command: [
+                teroshdl_hdl_documenter,
+                # '--recursive',
+                '--dep',
+                '--fsm',
+                '--signals', 'only_commented',
+                '--constants', 'only_commented',
+                '--process', 'only_commented',
+                '--functions', 'only_commented',
+                '--symbol_verilog', '/',
+                '--input', hardware_path,
+                '--out', 'markdown',
+                '--outpath', 'docs'
+            ],
+            build_by_default: false,
+            build_always_stale: true)
+
+    teroshdl_pcie_target = custom_target('teroshdl_pcie',
+            input: [doxyfile],
+            output: 'doc_internal_pcie',
+            command: [
+                teroshdl_hdl_documenter,
+                # '--recursive',
+                '--dep',
+                '--fsm',
+                '--signals', 'only_commented',
+                '--constants', 'only_commented',
+                '--process', 'only_commented',
+                '--functions', 'only_commented',
+                '--symbol_verilog', '/',
+                '--input', join_paths(hardware_path, 'pcie'),
+                '--out', 'markdown',
+                '--outpath', 'docs/pcie'
+            ],
+            build_by_default: false,
+            build_always_stale: true)
+
+    rm_hdl_doc_path = custom_target('rm_hdl_doc_path',
+            input: teroshdl_target,
+            output: 'rm_hdl_doc_path',
+            command: [
+                'rm', '-r', '-f', hdl_doc_path
+            ],
+            build_by_default: false,
+            build_always_stale: true)
+
+    cp_teroshdl_target = custom_target('cp_teroshdl',
+            input: teroshdl_target,
+            output: 'cp_teroshdl_target',
+            command: [
+                'cp',
+                '-r',
+                '-T',
+                'docs/doc_internal',
+                hdl_doc_path
+            ],
+            depends: [rm_hdl_doc_path, teroshdl_target, teroshdl_pcie_target],
+            build_by_default: false,
+            build_always_stale: true)
+
+    cp_teroshdl_pcie_target = custom_target('cp_teroshdl_pcie',
+            input: teroshdl_target,
+            output: 'cp_teroshdl_pcie_target',
+            command: [
+                'cp',
+                '-r',
+                '-T',
+                'docs/pcie/doc_internal',
+                join_paths(hdl_doc_path, 'pcie')
+            ],
+            depends: [rm_hdl_doc_path, teroshdl_pcie_target,
+                      cp_teroshdl_target],
+            build_by_default: false,
+            build_always_stale: true)
+endif
+
 mkdocs = find_program('mkdocs', required: false)
 
 if mkdocs.found()
     mkdocs_config_file = files('mkdocs.yml')
     mkdocs_docs = custom_target('mkdocs_docs',
-                        input: [doc_sources, mkdocs_config_file],
-                        output: 'site',
-                        command: [mkdocs, 'build', '-f', mkdocs_config_file],
-                        depends: [norman_lib, html_target],
-                        build_by_default: false)
+            input: [doc_sources, mkdocs_config_file],
+            output: 'site',
+            command: [mkdocs, 'build', '-f', mkdocs_config_file],
+            depends: [norman_lib, cp_html_target, cp_teroshdl_target,
+                      cp_teroshdl_pcie_target],
+            build_by_default: false)
+
     docs = alias_target('docs', mkdocs_docs)
 endif

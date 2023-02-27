@@ -1,0 +1,4 @@
+nav:
+    - FPGA Counters: counters.md
+    # - FPGA Memory Mapped Registers
+    - Hardware Modules: modules

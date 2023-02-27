@@ -4,9 +4,12 @@
 
 Ensō is a high-performance streaming interface for NIC-application communication.
 
-Ensō's design encompasses both *hardware* and *software*. The hardware component targets an FPGA-based NIC and implements the Ensō interface. The software component uses this interface and exposes a simple communication primitive called [Ensō Pipe](enso_pipe.md). Applications can use Ensō Pipes to send and receive data in different formats, such as raw packets, application-level messages, or TCP-like byte streams.
+Ensō's design encompasses both *hardware* and *software*. The hardware component targets an FPGA[^1] NIC[^2] and implements the Ensō interface. The software component uses this interface and exposes a simple communication primitive called [Ensō Pipe](enso_pipes). Applications can use Ensō Pipes to send and receive data in different formats, such as raw packets, application-level messages, or TCP-like byte streams.
 
-*[NIC]: Network Interface Card
+[^1]: FPGAs are reconfigurable hardware devices. They can be reconfigured to implement arbitrary hardware designs. Here we use an FPGA to implement a NIC with the Ensō interface but the same interface could also be implemented in a traditional ASIC.
+
+[^2]: Network Interface Cards (NICs) are the hardware devices that connect a computer to the network. They are responsible for transmitting data from the CPU to the network and vice versa.
+
 
 ## Why Ensō?
 
@@ -19,25 +22,8 @@ Traditionally, NICs expose a *packetized* interface that software (applications 
 
 Ensō implements a new paradigm for NIC-application communication that relies on a streaming abstraction. This abstraction allows a contiguous stream of bytes to be exchanged between the NIC and the application. These streams of bytes can be used to represent *arbitrary* data, including packets, application-level messages, or even a TCP-style bytestream.
 
-In Ensō, applications communicate directly with the NIC through [Ensō Pipes](enso_pipe.md).
+In Ensō, applications communicate directly with the NIC through [Ensō Pipes](enso_pipes).
 
 <!-- - We need something that shows the flexibility here. -->
 
-## Performance
-
-<!-- ## Getting Started
-
-
-- Getting started
-- Primitives
-- Examples
-- Developer Guide
-    - Development Environment
-    - Code Style
-- Software Reference
-- Hardware Reference
-    - FPGA Counters
-    - FPGA Registers
-    - FPGA Memory Mapped Registers
-    - Modules (automatically generated)
--->
+<!-- ## Performance -->

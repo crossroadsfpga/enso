@@ -1,0 +1,12 @@
+nav:
+  - Home: index.md
+  - Getting started:
+    - Setup: getting_started.md
+    - Performance Tuning: tuning.md
+  - Primitives: primitives
+  # - Examples: examples
+  # - Developer Guide:
+  #   - Development Environment
+  #   - Code Style
+  - Hardware Reference: hardware
+  - Software Reference: http://localhost:8000/software/" target="_blank

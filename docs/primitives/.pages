@@ -1,0 +1,5 @@
+nav:
+  - Device: device.md
+  - RX Ensō Pipe: rx_enso_pipe.md
+  - TX Ensō Pipe: tx_enso_pipe.md
+  - RX/TX Ensō Pipe: rx_tx_enso_pipe.md
