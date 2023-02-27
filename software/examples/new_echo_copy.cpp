@@ -144,8 +144,7 @@ int main(int argc, const char* argv[]) {
             ++nb_batches;
 
             auto& tx_pipe = tx_pipes[i];
-            uint8_t* tx_buf = tx_pipe->AllocateBuf();
-            tx_pipe->ExtendBufToTarget(batch_length);
+            uint8_t* tx_buf = tx_pipe->AllocateBuf(batch_length);
 
             memcpy(tx_buf, batch.kBuf, batch_length);
 

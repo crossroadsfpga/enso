@@ -491,14 +491,12 @@ class RxPipe {
  *    norman::Device* device = norman::Device::Create(core_id, nb_pipes,
  *                                                    pcie_addr);
  *    norman::TxPipe* tx_pipe = device->AllocateTxPipe();
- *    uint8_t* buf = tx_pipe->AllocateBuf();
+ *    uint8_t* buf = tx_pipe->AllocateBuf(data_size);
  *
- *    // This will block until the buffer is large enough. Ensure that the
- *    // applications is not TX bound to avoid this.
- *    tx_pipe->ExtendBufToTarget(data_size);
- *
- *    // Alternatively, one may use TryExtendBuf to avoid blocking, potentially
- *    // dropping data instead of waiting.
+ *    // AllocateBuf with a non-zero argument may block waiting for the capacity
+ *    // to be free. Alternatively, one may use AllocateBuf with data_size = 0
+ *    // and use and useTryExtendBuf to avoid blocking, potentially dropping
+ *    // data instead of waiting.
  *
  *    // Fill the buffer with data.
  *    [...]
@@ -535,16 +533,29 @@ class TxPipe {
    * address will still not be valid. But allocating a new buffer will return a
    * a buffers that starts with the remaining data.
    *
+   * @warning The capacity will never be go beyond `TxPipe::kMaxCapacity`.
+   *          Therefore, specifying a `target_capacity` larger than
+   *          `TxPipe::kMaxCapacity` will cause this function to block forever.
+   *
+   * @param target_capacity Target capacity of the buffer. It will block until
+   *                        the buffer is at least this big. May set it to 0 to
+   *                        avoid blocking.
+   *
    * @return The allocated buffer address.
    */
-  uint8_t* AllocateBuf() const { return buf_ + app_begin_; }
+  uint8_t* AllocateBuf(uint32_t target_capacity) {
+    ExtendBufToTarget(target_capacity);
+    return buf_ + app_begin_;
+  }
 
   /**
    * @brief Sends and deallocates a given number of bytes.
    *
    * After calling this function, the previous buffer address is no longer
-   * valid. Accessing it will lead to undefined behavior. __The user must use
-   * `AllocateBuf()` to allocate a new buffer after calling this function.__
+   * valid. Accessing it will lead to undefined behavior.
+   *
+   * @note The user must use `AllocateBuf()` to allocate a new buffer after
+   * calling this function.
    *
    * The pipe's capacity will also be reduced by the number of bytes sent. If
    * sending more bytes than the pipe's current capacity, the behavior is
