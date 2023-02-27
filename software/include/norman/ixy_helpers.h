@@ -27,9 +27,12 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *
- * The helper functions in this file are adapted from the ixy driver:
- * https://github.com/emmericp/ixy/blob/master/src/memory.c
+ */
+
+/**
+ * @file
+ * @brief Helper functions adapted from the
+ *        [ixy driver](https://github.com/emmericp/ixy/blob/master/src/memory.c)
  */
 
 #ifndef SOFTWARE_INCLUDE_NORMAN_IXY_HELPERS_H_

@@ -28,11 +28,13 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/**
+ * @file
+ * @brief Functions to initialize and interface directly with the PCIe device.
  *
- * Functions to initialize and interface directly with the PCIe device.
- *
- * Authors:
- *   Hugo Sadok <sadok@cmu.edu>
+ * @author Hugo Sadok <sadok@cmu.edu>
  */
 
 #include "pcie.h"

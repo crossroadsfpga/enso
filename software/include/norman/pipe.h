@@ -31,6 +31,7 @@
  */
 
 /**
+ * @file
  * @brief Enso Pipe API. We define RX, TX, and RX/TX pipes as well as the Device
  * class that manages them. All of these classes are quite coupled, so we define
  * them all in this file.
@@ -135,8 +136,8 @@ class Device {
   /**
    * @brief Gets the next RxPipe that has data pending.
    *
-   * @warning This function can only be used when there are no RxTx pipes.
-   * Trying to use this function when there are RxTx pipes will result in
+   * @warning This function can only be used when there are *only* RX pipes.
+   * Trying to use this function when there are RX/TX pipes will result in
    * undefined behavior.
    *
    * @return A pointer to the pipe. May be nullptr if no pipe has data pending.
@@ -146,9 +147,9 @@ class Device {
   /**
    * @brief Gets the next RxTxPipe that has data pending.
    *
-   * @warning This function can only be used when there are no RxTx pipes.
-   * Trying to use this function when there are RxTx pipes will result in
-   * undefined behavior.
+   * @warning This function can only be used when there are *only* RX/TX pipes.
+   * Trying to use this function when there are RX pipes allocated will result
+   * in undefined behavior.
    *
    * @return A pointer to the pipe. May be nullptr if no pipe has data pending.
    */
@@ -284,8 +285,7 @@ class RxPipe {
      * @param buf A pointer to the start of the batch.
      * @param available_bytes The number of bytes available in the batch.
      * @param message_limit The maximum number of messages in the batch.
-     * @param ConfirmBytesFunction A function that will be called to confirm the
-     *                             bytes associated with each message.
+     * @param pipe The pipe that created this batch.
      */
     constexpr MessageBatch(uint8_t* buf, uint32_t available_bytes,
                            int32_t message_limit, RxPipe* pipe)
@@ -505,7 +505,7 @@ class RxPipe {
  *
  *    // Send the data and retrieve a new buffer.
  *    tx_pipe->SendAndFree(data_size);
- *    buf = tx_pipe.AllocateBuf();
+ *    buf = tx_pipe.AllocateBuf(data_size);
  * @endcode
  */
 class TxPipe {
@@ -531,8 +531,8 @@ class TxPipe {
    * the buffer will be freed and a new one must be allocated by calling this
    * function again.
    *
-   * If SendAndFree() only partially sends the buffer, the previous buffer
-   * address will still not be valid but allocating a new buffer will return a
+   * If `SendAndFree()` only partially sends the buffer, the previous buffer
+   * address will still not be valid. But allocating a new buffer will return a
    * a buffers that starts with the remaining data.
    *
    * @return The allocated buffer address.
@@ -574,8 +574,9 @@ class TxPipe {
    * before.
    *
    * User may use `capacity()` to check the total number of available bytes
-   * after calling this function or simply use the return value. Note that the
-   * capacity will never be extended beyond kMaxCapacity.
+   * after calling this function or simply use the return value.
+   *
+   * @note The capacity will never be extended beyond `TxPipe::kMaxCapacity`.
    *
    * @return The new buffer capacity after extending.
    */
@@ -592,9 +593,11 @@ class TxPipe {
    * behavior is the same.
    *
    * User may use `capacity()` to check the total number of available bytes
-   * after calling this function or simply use the return value. Note that the
-   * capacity will never be extended beyond kMaxCapacity. Therefore, specifying
-   * a target capacity larger than kMaxCapacity will freeze forever.
+   * after calling this function or simply use the return value.
+   *
+   * @warning The capacity will never be extended beyond `TxPipe::kMaxCapacity`.
+   *          Therefore, specifying a target capacity larger than
+   *          `TxPipe::kMaxCapacity` will block forever.
    *
    * @return The new buffer capacity after extending.
    */
@@ -971,6 +974,11 @@ class PktIteratorBase {
  */
 class PktIterator : public PktIteratorBase<PktIterator> {
  public:
+  /**
+   * @brief Advances the iterator to the next packet.
+   *
+   * @return The iterator itself.
+   */
   constexpr PktIteratorBase& operator++() {
     uint32_t nb_bytes = AdvancePkt();
     batch_->processed_bytes_ += nb_bytes;
@@ -980,8 +988,7 @@ class PktIterator : public PktIteratorBase<PktIterator> {
 
  private:
   /**
-   * Only MessageBatch can instantiate a PktIterator object.
-   *
+   * @note Only MessageBatch can instantiate a PktIterator object.
    * @see PktIteratorBase::PktIteratorBase().
    */
   constexpr PktIterator(uint8_t* addr, int32_t pkt_limit,
