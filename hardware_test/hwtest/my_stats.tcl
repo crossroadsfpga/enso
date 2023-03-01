@@ -113,6 +113,16 @@ set log 0
 set cp 2.56
 set hist_size 1024
 
+proc h {} {
+    help
+}
+
+proc help {} {
+    puts "h, help:          Show this help."
+    puts "s, get_top_stats: Show stats."
+    puts "sw_rst:           Software reset."
+}
+
 proc set_up {} {
     #set_pkt_size 117
     #load_pkt
