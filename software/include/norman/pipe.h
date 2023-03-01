@@ -259,15 +259,27 @@ class RxPipe {
     }
 
     /**
-     * Number of bytes processed by the iterator.
+     * @brief Number of bytes processed by the iterator.
      */
     uint32_t processed_bytes() const { return processed_bytes_; }
 
     /**
-     * Number of bytes available in the batch. It may include more messages than
-     * `kMessageLimit`, in which case, iterating over the batch will result in
-     * fewer bytes. After iterating over the batch, the total number of bytes
-     * iterated over can be obtained by calling `processed_bytes()`.
+     * @brief Notifies the batch that a given number of bytes have been
+     *        processed.
+     *
+     * @param nb_bytes The number of bytes processed.
+     */
+    inline void NotifyProcessedBytes(uint32_t nb_bytes) {
+      processed_bytes_ += nb_bytes;
+    }
+
+    /**
+     * @brief Number of bytes available in the batch.
+     *
+     * @note It may include more messages than `kMessageLimit`, in which case,
+     * iterating over the batch will result in fewer bytes than kAvailableBytes.
+     * After iterating over the batch, the total number of bytes iterated over
+     * can be obtained by calling `processed_bytes()`.
      */
     const uint32_t kAvailableBytes;
 
@@ -276,6 +288,9 @@ class RxPipe {
      */
     const int32_t kMessageLimit;
 
+    /**
+     * @brief A pointer to the start of the batch.
+     */
     uint8_t* const kBuf;
 
    private:
@@ -307,10 +322,14 @@ class RxPipe {
   RxPipe& operator=(RxPipe&&) = delete;
 
   /**
-   * @brief Binds the pipe to a given flow entry. Can be called multiple times.
+   * @brief Binds the pipe to a given flow entry. Can be called multiple times
+   *        to bind to multiple flows.
    *
-   * Currently the hardware ignores the source IP and source port for UDP
-   * packets. You MUST set them to 0 when binding.
+   * @warning Currently the hardware ignores the source IP and source port for
+   *          UDP packets. You **must** set them to 0 when binding to UDP.
+   *
+   * @note Binding semantics depend on the functionality implemented on the NIC.
+   *       More flexible steering may require different kinds of bindings.
    *
    * @param dst_port Destination port.
    * @param src_port Source port.
@@ -418,19 +437,23 @@ class RxPipe {
   }
 
   /**
+   * @brief Prefetches the next batch of bytes to be received on the RxPipe.
+   */
+  void Prefetch();
+
+  /**
    * @brief Frees a given number of bytes previously received on the RxPipe.
+   *
+   * @see Clear()
    *
    * @param nb_bytes The number of bytes to free.
    */
   void Free(uint32_t nb_bytes);
 
   /**
-   * @brief Prefetches the next batch of bytes to be received on the RxPipe.
-   */
-  void Prefetch();
-
-  /**
    * @brief Frees all bytes previously received on the RxPipe.
+   *
+   * @see Free()
    */
   void Clear();
 
@@ -447,6 +470,18 @@ class RxPipe {
    * @return The pipe's ID.
    */
   inline enso_pipe_id_t id() const { return kId; }
+
+  /**
+   * The size of a "buffer quantum" in bytes. This is the minimum unit that can
+   * be sent at a time. Every transfer should be a multiple of this size.
+   */
+  static constexpr uint32_t kQuantumSize = 64;
+
+  /**
+   * Maximum capacity achievable by the pipe. There should always be at least
+   * one buffer quantum available.
+   */
+  static constexpr uint32_t kMaxCapacity = ENSO_PIPE_SIZE * 64 - kQuantumSize;
 
  private:
   /**
@@ -643,6 +678,13 @@ class TxPipe {
   }
 
   /**
+   * @brief Returns the pipe's ID.
+   *
+   * @return The pipe's ID.
+   */
+  inline enso_pipe_id_t id() const { return kId; }
+
+  /**
    * The size of a "buffer quantum" in bytes. This is the minimum unit that can
    * be sent at a time. Every transfer should be a multiple of this size.
    */
@@ -653,13 +695,6 @@ class TxPipe {
    * one buffer quantum available.
    */
   static constexpr uint32_t kMaxCapacity = ENSO_PIPE_SIZE * 64 - kQuantumSize;
-
-  /**
-   * @brief Returns the pipe's ID.
-   *
-   * @return The pipe's ID.
-   */
-  inline enso_pipe_id_t id() const { return kId; }
 
  private:
   /**
@@ -876,6 +911,21 @@ class RxTxPipe {
    */
   inline enso_pipe_id_t tx_id() const { return tx_pipe_->id(); }
 
+  /**
+   * @copydoc RxPipe::kQuantumSize
+   */
+  static constexpr uint32_t kQuantumSize = RxPipe::kQuantumSize;
+
+  /**
+   * @copydoc RxPipe::kMaxCapacity
+   */
+  static constexpr uint32_t kMaxCapacity = RxPipe::kMaxCapacity;
+
+  static_assert(RxPipe::kQuantumSize == TxPipe::kQuantumSize,
+                "Quantum size mismatch");
+  static_assert(RxPipe::kMaxCapacity == TxPipe::kMaxCapacity,
+                "Max capacity mismatch");
+
  private:
   /**
    * Threshold for processing completions. If the RX pipe's capacity is greater
@@ -922,123 +972,81 @@ class RxTxPipe {
  * `operator++` should be implemented by a derived class.
  */
 template <typename T>
-class PktIteratorBase {
+class MessageIteratorBase {
  public:
   constexpr uint8_t* operator*() { return addr_; }
 
   /**
-   * This is the only way to check if the iterator has reached the end of the
-   * batch. It is necessary because the iterator is designed to be used in a
-   * range-based for loop.
+   * This is a bit ugly but, as far as I know, there is no way to check for the
+   * end of a range-based for loop without overloading the != operator.
+   *
+   * The issue is that it does not work as expected for actual inequality check.
    */
-  constexpr bool operator!=(const PktIteratorBase& other) const {
-    return (missing_pkts_ != 0) && (next_addr_ <= other.addr_);
+  constexpr bool operator!=(const MessageIteratorBase& other) const {
+    return (missing_messages_ != 0) && (next_addr_ <= other.addr_);
   }
 
- protected:
-  /**
-   * Only MessageBatch can instantiate a PktIteratorBase object.
-   *
-   * @param addr The address of the first packet.
-   * @param pkt_limit The maximum number of packets to receive.
-   * @param batch The batch associated with this iterator.
-   */
-  constexpr PktIteratorBase(uint8_t* addr, int32_t pkt_limit,
-                            RxPipe::MessageBatch<T>* batch)
-      : addr_(addr),
-        next_addr_(get_next_pkt(addr)),
-        missing_pkts_(pkt_limit),
-        batch_(batch) {}
-
-  /**
-   * @brief Advances the iterator to the next packet.
-   *
-   * @return The number of bytes that have been processed by this iterator.
-   */
-  constexpr inline uint32_t AdvancePkt() {
-    // We need to retrieve the next packet before we expose the current one to
-    // the user. This prevents potential packet modifications from interfering
-    // with the iterator.
+  constexpr T& operator++() {
+    T* child = static_cast<T*>(this);
 
     uint32_t nb_bytes = next_addr_ - addr_;
 
     addr_ = next_addr_;
-    next_addr_ = get_next_pkt(addr_);
+    next_addr_ = child->GetNextMessage(addr_);
 
-    --missing_pkts_;
+    child->OnAdvanceMessage(nb_bytes);
 
-    return nb_bytes;
+    --missing_messages_;
+    batch_->NotifyProcessedBytes(nb_bytes);
+
+    return *child;
   }
 
-  friend class RxPipe::MessageBatch<T>;
-
-  uint8_t* addr_;
-  uint8_t* next_addr_;
-  int32_t missing_pkts_;
-  RxPipe::MessageBatch<T>* batch_;
-};
-
-/**
- * @brief A class that represents a packet within a batch.
- *
- * @see PktIteratorBase.
- */
-class PktIterator : public PktIteratorBase<PktIterator> {
- public:
+ protected:
   /**
-   * @brief Advances the iterator to the next packet.
-   *
-   * @return The iterator itself.
-   */
-  constexpr PktIteratorBase& operator++() {
-    uint32_t nb_bytes = AdvancePkt();
-    batch_->processed_bytes_ += nb_bytes;
-    batch_->pipe_->ConfirmBytes(nb_bytes);
-    return *this;
-  }
-
- private:
-  /**
-   * @note Only MessageBatch can instantiate a PktIterator object.
-   * @see PktIteratorBase::PktIteratorBase().
-   */
-  constexpr PktIterator(uint8_t* addr, int32_t pkt_limit,
-                        RxPipe::MessageBatch<PktIterator>* batch)
-      : PktIteratorBase<PktIterator>(addr, pkt_limit, batch) {}
-
-  friend class RxPipe::MessageBatch<PktIterator>;
-};
-
-/**
- * @brief A class that represents a packet within a batch.
- *
- * It is designed to be used as an iterator. It tracks the number of missing
- * packets such that `operator!=` returns false whenever the limit is reached.
- *
- * The difference between this class and `PktIterator` is that this class does
- * not free the packets after they are iterated over.
- */
-class PeekPktIterator : public PktIteratorBase<PeekPktIterator> {
- public:
-  constexpr PeekPktIterator& operator++() {
-    uint32_t nb_bytes = AdvancePkt();
-    batch_->processed_bytes_ += nb_bytes;
-    return *this;
-  }
-
- private:
-  /**
-   * Only MessageBatch can instantiate a PeekPktIterator object.
-   *
    * @param addr The address of the first packet.
-   * @param pkt_limit The maximum number of packets to receive.
+   * @param message_limit The maximum number of packets to receive.
    * @param batch The batch associated with this iterator.
    */
-  constexpr PeekPktIterator(uint8_t* addr, int32_t pkt_limit,
-                            RxPipe::MessageBatch<PeekPktIterator>* batch)
-      : PktIteratorBase<PeekPktIterator>(addr, pkt_limit, batch) {}
+  MessageIteratorBase(uint8_t* addr, int32_t message_limit,
+                      RxPipe::MessageBatch<T>* batch)
+      : addr_(addr),
+        missing_messages_(message_limit),
+        batch_(batch),
+        next_addr_(static_cast<T*>(this)->GetNextMessage(addr)) {}
 
-  friend class RxPipe::MessageBatch<PeekPktIterator>;
+  uint8_t* addr_;
+  int32_t missing_messages_;
+  RxPipe::MessageBatch<T>* batch_;
+  uint8_t* next_addr_;
+};
+
+class PktIterator : public MessageIteratorBase<PktIterator> {
+ public:
+  inline PktIterator(uint8_t* addr, int32_t message_limit,
+                     RxPipe::MessageBatch<PktIterator>* batch)
+      : MessageIteratorBase(addr, message_limit, batch) {}
+
+  constexpr inline uint8_t* GetNextMessage(uint8_t* current_message) {
+    return get_next_pkt(current_message);
+  }
+
+  constexpr inline void OnAdvanceMessage(uint32_t nb_bytes) {
+    batch_->pipe_->ConfirmBytes(nb_bytes);
+  }
+};
+
+class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
+ public:
+  inline PeekPktIterator(uint8_t* addr, int32_t message_limit,
+                         RxPipe::MessageBatch<PeekPktIterator>* batch)
+      : MessageIteratorBase(addr, message_limit, batch) {}
+
+  constexpr inline uint8_t* GetNextMessage(uint8_t* current_message) {
+    return get_next_pkt(current_message);
+  }
+
+  constexpr inline void OnAdvanceMessage([[maybe_unused]] uint32_t nb_bytes) {}
 };
 
 }  // namespace norman
