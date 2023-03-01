@@ -39,7 +39,7 @@ buf = tx_pipe.AllocateBuf(data_size2);
 
 ```
 
-1. :information_source: This is using a [Device](device.md) instance to allocate a TX EnsōPipe.
+1. :information_source: This is using a [Device](device.md) instance to allocate a TX Ensō Pipe.
 
 In the previous example, we knew the amount of data to be transmitted and we explicitly specified it as the target when calling `TxPipe::AllocateTxPipe()`. This works well for smaller transfers or when we know the pipe's capacity is large enough to hold the data. However, if the target is too large, it will cause `TxPipe::AllocateTxPipe()` to block waiting for enough free space in the TX Ensō Pipe. To avoid this, one may use the TxPipe in a different way. Instead of explicitly setting a target size when allocating the buffer, we can let the pipe dictate how much data that can be sent at a given time. For example:
 
