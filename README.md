@@ -182,4 +182,4 @@ While writing documentation, you can use the following command to automatically 
 mkdocs serve
 ```
 
-Note that this does not automatically rebuilds the hardware and software API reference. You need to rerun `meson compile docs` to do that.
+Note that this does not automatically rebuild the hardware and software API reference. You need to rerun `meson compile docs` to do that.
