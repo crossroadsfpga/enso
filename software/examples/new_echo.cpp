@@ -99,7 +99,7 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
       stats->recv_bytes += batch_length;
       ++(stats->nb_batches);
 
-      pipe->Send(batch_length);
+      pipe->SendAndFree(batch_length);
     }
   }
 }

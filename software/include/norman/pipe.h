@@ -801,7 +801,7 @@ class TxPipe {
  *    for (auto pkt : batch) {
  *      // Do something with the packet.
  *    }
- *    rx_tx_pipe->Send(batch_length);
+ *    rx_tx_pipe->SendAndFree(batch_length);
  * @endcode
  */
 class RxTxPipe {
@@ -874,15 +874,15 @@ class RxTxPipe {
   inline void Prefetch() { rx_pipe_->Prefetch(); }
 
   /**
-   * @brief Sends a given number of bytes.
+   * @brief Sends and deallocates a given number of bytes.
    *
    * You can only send bytes that have been received and confirmed. Such as
-   * using Recv or a combination of Peek and ConfirmRecvBytes, as well as the
-   * equivalent methods for messages.
+   * using `Recv` or a combination of `Peek` and `ConfirmBytes`, as well as the
+   * equivalent methods for raw packets and messages.
    *
    * @param nb_bytes The number of bytes to send.
    */
-  inline void Send(uint32_t nb_bytes) {
+  inline void SendAndFree(uint32_t nb_bytes) {
     tx_pipe_->SendAndFree(nb_bytes);
     last_tx_pipe_capacity_ -= nb_bytes;
   }
