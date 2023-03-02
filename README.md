@@ -161,7 +161,7 @@ You can also specify other options to configure the dataplane, refer to `norman 
 
 ## Building Documentation
 
-Install the requirements:
+Install the requirements, this assumes that you already have pip and npm installed:
 
 ```bash
 sudo apt update
