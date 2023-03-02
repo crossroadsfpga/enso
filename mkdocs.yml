@@ -50,6 +50,10 @@ theme:
   favicon: assets/enso-black.svg
   logo: assets/enso-white.svg
 
+extra:
+  version:
+    provider: mike
+
 extra_javascript:
   - https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js
   - javascripts/tablesort.js
