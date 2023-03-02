@@ -162,6 +162,7 @@ You can also specify other options to configure the dataplane, refer to `norman 
 ## Building Documentation
 
 Install the requirements:
+
 ```bash
 sudo apt update
 sudo apt install doxygen python3-pip npm
@@ -170,6 +171,15 @@ sudo npm install -g teroshdl
 ```
 
 To build the documentation, run (from the build directory):
+
 ```bash
 meson compile docs
 ```
+
+While writing documentation, you can use the following command to automatically rebuild the documentation when you make changes:
+
+```bash
+mkdocs serve
+```
+
+Note that this does not automatically rebuilds the hardware and software API reference. You need to rerun `meson compile docs` to do that.
