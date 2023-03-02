@@ -30,167 +30,125 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <norman/consts.h>
 #include <norman/helpers.h>
 #include <norman/pipe.h>
-#include <norman/socket.h>
-#include <pthread.h>
-#include <sched.h>
-#include <x86intrin.h>
 
-#include <cerrno>
 #include <chrono>
 #include <csignal>
-#include <cstdlib>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <memory>
-#include <string>
 #include <thread>
 
-#include "app.h"
+#include "example_helpers.h"
 
-static volatile int keep_running = 1;
-static volatile int setup_done = 0;
+static volatile bool keep_running = true;
+static volatile bool setup_done = false;
 
 void int_handler(int signal __attribute__((unused))) { keep_running = 0; }
 
-int main(int argc, const char* argv[]) {
-  int result;
-  uint64_t recv_bytes = 0;
-  uint64_t nb_batches = 0;
-  uint64_t nb_pkts = 0;
+void run_echo_copy(uint32_t nb_queues, uint32_t core_id,
+                   [[maybe_unused]] uint32_t nb_cycles, stats_t* stats) {
+  std::this_thread::sleep_for(std::chrono::seconds(1));
 
-  if (argc != 5) {
-    std::cerr << "Usage: " << argv[0] << " core port nb_queues nb_cycles"
+  std::cout << "Running on core " << sched_getcpu() << std::endl;
+
+  using norman::Device;
+  using norman::RxPipe;
+  using norman::TxPipe;
+
+  std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
+  std::vector<RxPipe*> rx_pipes;
+  std::vector<TxPipe*> tx_pipes;
+
+  if (!dev) {
+    std::cerr << "Problem creating device" << std::endl;
+    exit(2);
+  }
+
+  for (uint32_t i = 0; i < nb_queues; ++i) {
+    RxPipe* rx_pipe = dev->AllocateRxPipe();
+    if (!rx_pipe) {
+      std::cerr << "Problem creating RX pipe" << std::endl;
+      exit(3);
+    }
+
+    uint32_t dst_ip = kBaseIpAddress + i;
+    rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+
+    rx_pipes.push_back(rx_pipe);
+
+    TxPipe* tx_pipe = dev->AllocateTxPipe();
+    if (!tx_pipe) {
+      std::cerr << "Problem creating TX pipe" << std::endl;
+      exit(3);
+    }
+    tx_pipes.push_back(tx_pipe);
+  }
+
+  setup_done = true;
+
+  while (keep_running) {
+    for (uint32_t i = 0; i < nb_queues; ++i) {
+      auto& rx_pipe = rx_pipes[i];
+      auto batch = rx_pipe->RecvPkts();
+
+      if (unlikely(batch.kAvailableBytes == 0)) {
+        continue;
+      }
+
+      for (auto pkt : batch) {
+        ++pkt[63];  // Increment payload.
+
+        for (uint32_t i = 0; i < nb_cycles; ++i) {
+          asm("nop");
+        }
+
+        ++(stats->nb_pkts);
+      }
+      uint32_t batch_length = batch.processed_bytes();
+      stats->recv_bytes += batch_length;
+      ++(stats->nb_batches);
+
+      auto& tx_pipe = tx_pipes[i];
+      uint8_t* tx_buf = tx_pipe->AllocateBuf(batch_length);
+
+      memcpy(tx_buf, batch.kBuf, batch_length);
+
+      rx_pipe->Clear();
+
+      tx_pipe->SendAndFree(batch_length);
+    }
+  }
+}
+
+int main(int argc, const char* argv[]) {
+  stats_t stats = {};
+
+  if (argc != 4) {
+    std::cerr << "Usage: " << argv[0] << " core nb_queues nb_cycles"
               << std::endl;
     return 1;
   }
 
-  int core_id = atoi(argv[1]);
-  int port = atoi(argv[2]);
-  int nb_queues = atoi(argv[3]);
-  uint32_t nb_cycles = atoi(argv[4]);
+  uint32_t core_id = atoi(argv[1]);
+  uint32_t nb_queues = atoi(argv[2]);
+  uint32_t nb_cycles = atoi(argv[3]);
 
   signal(SIGINT, int_handler);
 
   std::thread socket_thread =
-      std::thread([&recv_bytes, port, core_id, nb_queues, &nb_batches, &nb_pkts,
-                   &nb_cycles] {
-        (void)recv_bytes;
-        (void)port;
+      std::thread(run_echo_copy, nb_queues, core_id, nb_cycles, &stats);
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
-
-        using norman::Device;
-        using norman::RxPipe;
-        using norman::TxPipe;
-
-        std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
-        std::vector<RxPipe*> rx_pipes;
-        std::vector<TxPipe*> tx_pipes;
-
-        if (!dev) {
-          std::cerr << "Problem creating device" << std::endl;
-          exit(2);
-        }
-
-        for (int i = 0; i < nb_queues; ++i) {
-          RxPipe* rx_pipe = dev->AllocateRxPipe();
-          if (!rx_pipe) {
-            std::cerr << "Problem creating RX pipe" << std::endl;
-            exit(3);
-          }
-          rx_pipes.push_back(rx_pipe);
-
-          TxPipe* tx_pipe = dev->AllocateTxPipe();
-          if (!tx_pipe) {
-            std::cerr << "Problem creating TX pipe" << std::endl;
-            exit(3);
-          }
-          tx_pipes.push_back(tx_pipe);
-        }
-
-        setup_done = 1;
-
-        while (keep_running) {
-          // for (auto& pipe : rx_pipes) {
-          for (int i = 0; i < nb_queues; ++i) {
-            auto& rx_pipe = rx_pipes[i];
-            auto batch = rx_pipe->RecvPkts(1024);
-
-            if (unlikely(batch.kAvailableBytes == 0)) {
-              continue;
-            }
-
-            uint32_t batch_length = 0;
-            for (auto pkt : batch) {
-              uint16_t pkt_len = norman::get_pkt_len(pkt);
-              uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-              uint16_t pkt_aligned_len = nb_flits * 64;
-
-              recv_bytes += pkt_aligned_len;
-              batch_length += pkt_aligned_len;
-              ++nb_pkts;
-
-              ++pkt[63];  // Increment payload.
-
-              for (uint32_t i = 0; i < nb_cycles; ++i) {
-                asm("nop");
-              }
-            }
-            ++nb_batches;
-
-            auto& tx_pipe = tx_pipes[i];
-            uint8_t* tx_buf = tx_pipe->AllocateBuf(batch_length);
-
-            memcpy(tx_buf, batch.kBuf, batch_length);
-
-            rx_pipe->Clear();
-
-            tx_pipe->SendAndFree(batch_length);
-          }
-        }
-      });
-
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  result = pthread_setaffinity_np(socket_thread.native_handle(), sizeof(cpuset),
-                                  &cpuset);
-  if (result < 0) {
+  if (set_core_id(socket_thread, core_id)) {
     std::cerr << "Error setting CPU affinity" << std::endl;
     return 6;
   }
 
-  while (!setup_done) continue;
+  while (!setup_done) continue;  // Wait for setup to be done.
 
-  std::cout << "Starting..." << std::endl;
-
-  while (keep_running) {
-    uint64_t recv_bytes_before = recv_bytes;
-    uint64_t nb_batches_before = nb_batches;
-    uint64_t nb_pkts_before = nb_pkts;
-
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    uint64_t delta_bytes = recv_bytes - recv_bytes_before;
-    uint64_t delta_pkts = nb_pkts - nb_pkts_before;
-    uint64_t delta_batches = nb_batches - nb_batches_before;
-    std::cout << std::dec << delta_bytes * 8. / 1e6 << " Mbps  "
-              << delta_pkts / 1e6 << " Mpps  " << recv_bytes << " B  "
-              << nb_batches << " batches  " << nb_pkts << " pkts";
-
-    if (delta_batches > 0) {
-      std::cout << "  " << delta_bytes / delta_batches << " B/batch";
-      std::cout << "  " << delta_pkts / delta_batches << " pkt/batch";
-    }
-    std::cout << std::endl;
-  }
-
-  std::cout << "Waiting for threads" << std::endl;
+  show_stats(&stats, &keep_running);
 
   socket_thread.join();
 
