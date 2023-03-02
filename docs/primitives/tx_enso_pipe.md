@@ -24,6 +24,7 @@ Here is an example of how to use a `TxPipe`:
 
 ```cpp
 norman::TxPipe* tx_pipe = device->AllocateTxPipe(); // (1)!
+assert(tx_pipe != nullptr);
 
 // Allocate a buffer.
 uint8_t* buf = tx_pipe->AllocateBuf(data_size);
@@ -39,12 +40,13 @@ buf = tx_pipe.AllocateBuf(data_size2);
 
 ```
 
-1. :information_source: This is using a [Device](device.md) instance to allocate a TX Ensō Pipe.
+1. :information_source: Note that you should use a [Device](device.md) instance to allocate a TX Ensō Pipe.
 
-In the previous example, we knew the amount of data to be transmitted and we explicitly specified it as the target when calling `TxPipe::AllocateTxPipe()`. This works well for smaller transfers or when we know the pipe's capacity is large enough to hold the data. However, if the target is too large, it will cause `TxPipe::AllocateTxPipe()` to block waiting for enough free space in the TX Ensō Pipe. To avoid this, one may use the TxPipe in a different way. Instead of explicitly setting a target size when allocating the buffer, we can let the pipe dictate how much data that can be sent at a given time. For example:
+In the previous example, we knew the amount of data to be transmitted and we explicitly specified it as the target when calling `TxPipe::AllocateBuf()`. This works well for smaller transfers or when we know the pipe's capacity is large enough to hold the data. However, if the target is too large, it will cause `TxPipe::AllocateBuf()` to block waiting for enough free space in the TX Ensō Pipe. To avoid this, one may use the TxPipe in a different way. Instead of explicitly setting a target size when allocating the buffer, we can let the pipe dictate how much data that can be sent at a given time. For example:
 
 ```cpp
 norman::TxPipe* tx_pipe = device->AllocateTxPipe();
+assert(tx_pipe != nullptr);
 
 // Allocate a buffer. Note that we request a buffer of size 0, this is
 // guaranteed to never block.
@@ -78,10 +80,16 @@ The following diagram illustrates this behavior. At step ①, the application al
 
 ## Extending a buffer
 
-Since the buffer size can implicitly increase at any point, the application can fetch the current buffer's capacity by calling `TxPipe::capacity()`. The application can also explicitly request a buffer extension by calling [`TxPipe::TryExtendBuf()`](/software/classnorman_1_1TxPipe.html#a5b9d26eb32f1c13d33f581dfb736437f){target=_blank} or [`TxPipe::ExtendBufToTarget()`](/software/classnorman_1_1TxPipe.html#ac556ecc4046b255f0f5547d3d3d3de98){target=_blank}. When calling `TxPipe::TryExtendBuf()`, the TX Ensō Pipe allocator will actively check for completions to try to extend the allocated buffer's capacity but it will not block. When calling `TxPipe::ExtendBufToTarget()`, the TX Ensō Pipe allocator will block until the requested capacity is available.
+Since the buffer size can implicitly increase at any point, the application can fetch the current buffer's capacity by calling `TxPipe::capacity()`. The application can also explicitly request a buffer extension by calling [`TxPipe::TryExtendBuf()`](/software/classnorman_1_1TxPipe.html#a5b9d26eb32f1c13d33f581dfb736437f){target=_blank} or [`TxPipe::ExtendBufToTarget()`](/software/classnorman_1_1TxPipe.html#ac556ecc4046b255f0f5547d3d3d3de98){target=_blank}. When calling `TxPipe::TryExtendBuf()`, the TX Ensō Pipe allocator will check for completions to try to extend the allocated buffer's capacity but it will not block. When calling `TxPipe::ExtendBufToTarget()`, the TX Ensō Pipe allocator will block until the requested capacity is available.
 
 Note that the previous buffer is not invalidated after calling `TxPipe::TryExtendBuf()` or `TxPipe::ExtendBufToTarget()`. Buffers only become invalid after calling `TxPipe::SendAndFree()`.
 
+
+## Examples
+
+The following examples use TX Ensō Pipes:
+
+- [`new_echo_copy.cpp`](https://github.com/hsadok/norman/blob/master/software/examples/new_echo_copy.cpp){target=_blank}
 
 ## Summary
 
