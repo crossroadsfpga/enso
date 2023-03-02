@@ -30,6 +30,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <norman/consts.h>
 #include <norman/socket.h>
 #include <pthread.h>
 #include <sched.h>
