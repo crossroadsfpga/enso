@@ -495,7 +495,7 @@ class RxPipe {
       : kId(id), notification_buf_pair_(&(device->notification_buf_pair_)) {}
 
   /**
-   * RxPipes cannot be deallocated from outside. The `Device` object is in
+   * @note RxPipes cannot be deallocated from outside. The `Device` object is in
    * charge of deallocating them.
    */
   ~RxPipe();
@@ -710,7 +710,7 @@ class TxPipe {
       : kId(id), device_(device), buf_(buf), internal_buf_(buf == nullptr) {}
 
   /**
-   * TxPipes cannot be deallocated from outside. The `Device` object is in
+   * @note TxPipes cannot be deallocated from outside. The `Device` object is in
    * charge of deallocating them.
    */
   ~TxPipe();
@@ -943,8 +943,8 @@ class RxTxPipe {
   explicit RxTxPipe(Device* device) noexcept : device_(device) {}
 
   /**
-   * RxTxPipes cannot be deallocated from outside. The `Device` object is in
-   * charge of deallocating them.
+   * @note RxTxPipes cannot be deallocated from outside. The `Device` object is
+   * in charge of deallocating them.
    */
   ~RxTxPipe() = default;
 
@@ -964,12 +964,10 @@ class RxTxPipe {
 };
 
 /**
- * @brief Base class to represent a packet within a batch.
+ * @brief Base class to represent a message within a batch.
  *
  * It is designed to be used as an iterator. It tracks the number of missing
- * packets such that `operator!=` returns false whenever the limit is reached.
- *
- * `operator++` should be implemented by a derived class.
+ * messages such that `operator!=` returns false whenever the limit is reached.
  */
 template <typename T>
 class MessageIteratorBase {
@@ -991,10 +989,10 @@ class MessageIteratorBase {
 
     uint32_t nb_bytes = next_addr_ - addr_;
 
+    child->OnAdvanceMessage(nb_bytes);
+
     addr_ = next_addr_;
     next_addr_ = child->GetNextMessage(addr_);
-
-    child->OnAdvanceMessage(nb_bytes);
 
     --missing_messages_;
     batch_->NotifyProcessedBytes(nb_bytes);
@@ -1004,12 +1002,12 @@ class MessageIteratorBase {
 
  protected:
   /**
-   * @param addr The address of the first packet.
-   * @param message_limit The maximum number of packets to receive.
+   * @param addr The address of the first message.
+   * @param message_limit The maximum number of messages to receive.
    * @param batch The batch associated with this iterator.
    */
-  MessageIteratorBase(uint8_t* addr, int32_t message_limit,
-                      RxPipe::MessageBatch<T>* batch)
+  inline MessageIteratorBase(uint8_t* addr, int32_t message_limit,
+                             RxPipe::MessageBatch<T>* batch)
       : addr_(addr),
         missing_messages_(message_limit),
         batch_(batch),
@@ -1023,14 +1021,29 @@ class MessageIteratorBase {
 
 class PktIterator : public MessageIteratorBase<PktIterator> {
  public:
+  /**
+   * @copydoc MessageIteratorBase::MessageIteratorBase
+   */
   inline PktIterator(uint8_t* addr, int32_t message_limit,
                      RxPipe::MessageBatch<PktIterator>* batch)
       : MessageIteratorBase(addr, message_limit, batch) {}
 
+  /**
+   * @brief Computes the next message address based on the current message.
+   *
+   * @param current_message The current message.
+   *
+   * @return The next message.
+   */
   constexpr inline uint8_t* GetNextMessage(uint8_t* current_message) {
     return get_next_pkt(current_message);
   }
 
+  /**
+   * @brief Called when the iterator is done processing a message.
+   *
+   * @param nb_bytes The number of bytes processed.
+   */
   constexpr inline void OnAdvanceMessage(uint32_t nb_bytes) {
     batch_->pipe_->ConfirmBytes(nb_bytes);
   }
@@ -1038,14 +1051,23 @@ class PktIterator : public MessageIteratorBase<PktIterator> {
 
 class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
  public:
+  /**
+   * @copydoc MessageIteratorBase::MessageIteratorBase
+   */
   inline PeekPktIterator(uint8_t* addr, int32_t message_limit,
                          RxPipe::MessageBatch<PeekPktIterator>* batch)
       : MessageIteratorBase(addr, message_limit, batch) {}
 
+  /**
+   * @copydoc PktIterator::GetNextMessage
+   */
   constexpr inline uint8_t* GetNextMessage(uint8_t* current_message) {
     return get_next_pkt(current_message);
   }
 
+  /**
+   * @copydoc PktIterator::OnAdvanceMessage
+   */
   constexpr inline void OnAdvanceMessage([[maybe_unused]] uint32_t nb_bytes) {}
 };
 
