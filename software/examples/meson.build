@@ -20,3 +20,6 @@ executable('new_echo_event', 'new_echo_event.cpp', dependencies: thread_dep,
            link_with: norman_lib, include_directories: inc)
 executable('new_echo_copy', 'new_echo_copy.cpp', dependencies: thread_dep,
            link_with: norman_lib, include_directories: inc)
+executable('new_capture', 'new_capture.cpp',
+           dependencies: [thread_dep, pcap_dep], link_with: norman_lib,
+           include_directories: inc)
