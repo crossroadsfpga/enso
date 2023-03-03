@@ -82,7 +82,7 @@ uint64_t virt_to_phys(void* virt) {
 void* get_huge_page(const std::string& name, bool mirror) {
   int fd;
   char huge_pages_path[128];
-  constexpr uint32_t kSize = BUF_PAGE_SIZE;
+  constexpr uint32_t kSize = kBufPageSize;
 
   snprintf(huge_pages_path, sizeof(huge_pages_path), "/mnt/huge/%s",
            name.c_str());

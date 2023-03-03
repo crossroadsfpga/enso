@@ -97,10 +97,10 @@ ssize_t send(int sockfd, uint64_t phys_addr, size_t len, int flags);
  * Return the number of transmission requests that were completed since the last
  * call to this function. Since transmissions are always completed in order, one
  * can figure out which transmissions were completed by keeping track of all the
- * calls to `send`. There can be only up to `MAX_PENDING_TX_REQUESTS` requests
+ * calls to `send`. There can be only up to `kMaxPendingTxRequests` requests
  * completed between two calls to `send`. However, if `send` is called multiple
  * times, without calling `get_completions` the number of completed requests can
- * surpass `MAX_PENDING_TX_REQUESTS`.
+ * surpass `kMaxPendingTxRequests`.
  */
 uint32_t get_completions(int ref_sockfd);
 

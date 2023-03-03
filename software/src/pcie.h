@@ -170,10 +170,10 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
  *
  * Since transmissions are always completed in order, one can figure out which
  * transmissions were completed by keeping track of all the calls to
- * `send_to_queue`. There can be only up to `MAX_PENDING_TX_REQUESTS` requests
+ * `send_to_queue`. There can be only up to `kMaxPendingTxRequests` requests
  * completed between two calls to `send_to_queue`. However, if `send` is called
  * multiple times, without calling `get_unreported_completions` the number of
- * completed requests can surpass `MAX_PENDING_TX_REQUESTS`.
+ * completed requests can surpass `kMaxPendingTxRequests`.
  *
  * @param notification_buf_pair Notification buffer to get completions from.
  * @return number of transmission requests that were completed since the last

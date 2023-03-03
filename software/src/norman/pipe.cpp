@@ -182,7 +182,7 @@ RxPipe* Device::AllocateRxPipe() noexcept {
 
   volatile struct QueueRegs* enso_pipe_regs =
       (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr_ +
-                          enso_pipe_id * MEMORY_SPACE_PER_QUEUE);
+                          enso_pipe_id * kMemorySpacePerQueue);
 
   if (pipe->Init(enso_pipe_regs)) {
     delete pipe;
@@ -297,7 +297,7 @@ int Device::Init() noexcept {
   // other buffer sizes by overlaying regular pages on top of the huge pages.
   // We might use those only for requests that overlap to avoid adding too
   // many entries to the TLB.
-  if (ENSO_PIPE_SIZE * 64 != BUF_PAGE_SIZE) {
+  if (ENSO_PIPE_SIZE * 64 != kBufPageSize) {
     // Unsupported buffer size.
     return 5;
   }
@@ -307,18 +307,18 @@ int Device::Init() noexcept {
   notification_buf_pair_.id = id;
 
   uio_mmap_bar2_addr_ =
-      fpga_dev_->uio_mmap((1 << 12) * (MAX_NB_FLOWS + MAX_NB_APPS), 2);
+      fpga_dev_->uio_mmap((1 << 12) * (kMaxNbFlows + kMaxNbApps), 2);
   if (uio_mmap_bar2_addr_ == MAP_FAILED) {
     // Could not get mmap uio memory.
     return 7;
   }
 
   // Register associated with the notification buffer. Notification buffer
-  // registers come after the enso pipe ones, that's why we use MAX_NB_FLOWS
+  // registers come after the enso pipe ones, that's why we use kMaxNbFlows
   // as an offset.
   volatile struct QueueRegs* notification_buf_pair_regs =
       (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr_ +
-                          (id + MAX_NB_FLOWS) * MEMORY_SPACE_PER_QUEUE);
+                          (id + kMaxNbFlows) * kMemorySpacePerQueue);
 
   // HACK(sadok): This only works because pkt queues for the same app are
   // currently placed back to back.

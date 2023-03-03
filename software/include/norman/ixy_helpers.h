@@ -54,7 +54,7 @@ uint64_t virt_to_phys(void* virt);
 /**
  * Allocates a huge page and returns a pointer to it.
  *
- * Huge pages are allocated to be `BUF_PAGE_SIZE` bytes in size.
+ * Huge pages are allocated to be `kBufPageSize` bytes in size.
  *
  * @param name A name to identify of the huge page to be allocated. Will be used
  *             to name the huge page file.

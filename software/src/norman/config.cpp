@@ -97,7 +97,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
   uint32_t tx_tail = notification_buf_pair->tx_tail;
   uint32_t free_slots =
-      (notification_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
+      (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
 
   // Make sure it's a config notification.
   if (config_notification->signal < 2) {
@@ -109,7 +109,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
     ++notification_buf_pair->tx_full_cnt;
     update_tx_head(notification_buf_pair);
     free_slots =
-        (notification_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
+        (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
   }
 
   struct TxNotification* tx_notification = tx_buf + tx_tail;
@@ -117,7 +117,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   _mm_clflushopt(tx_notification);
 
-  tx_tail = (tx_tail + 1) % NOTIFICATION_BUF_SIZE;
+  tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;
 
   _norman_compiler_memory_barrier();

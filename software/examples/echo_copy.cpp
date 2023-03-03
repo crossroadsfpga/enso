@@ -58,10 +58,10 @@
 #define HUGEPAGE_SIZE (2UL << 20)
 
 // Size of the buffer that we keep packets in.
-#define BUFFER_SIZE MAX_TRANSFER_LEN
+#define BUFFER_SIZE norman::kMaxTransferLen
 
 // Number of transfers required to send a buffer full of packets.
-#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / MAX_TRANSFER_LEN) + 1)
+#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / norman::kMaxTransferLen) + 1)
 
 // Adapted from ixy.
 static void* get_huge_page(size_t size) {
@@ -197,7 +197,7 @@ int main(int argc, const char* argv[]) {
         uint32_t tx_pr_head = 0;
         uint32_t tx_pr_tail = 0;
         tx_pending_request_t* tx_pending_requests =
-            new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
+            new tx_pending_request_t[norman::kMaxPendingTxRequests + 1];
         (void)nb_cycles;
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -319,7 +319,7 @@ int main(int argc, const char* argv[]) {
               recv_bytes += recv_len;
 
               constexpr uint32_t kBufFillThresh =
-                  NOTIFICATION_BUF_SIZE - TRANSFERS_PER_BUFFER - 1;
+                  norman::kNotificationBufSize - TRANSFERS_PER_BUFFER - 1;
 
               if (likely(bt->transmissions_pending < kBufFillThresh)) {
                 memcpy(bt->tx_buf + bt->tx_buf_offset, buf, transmission_len);
@@ -333,7 +333,8 @@ int main(int argc, const char* argv[]) {
                 // it's complete.
                 tx_pending_requests[tx_pr_tail].socket_fd = socket_fd;
                 tx_pending_requests[tx_pr_tail].length = transmission_len;
-                tx_pr_tail = (tx_pr_tail + 1) % (MAX_PENDING_TX_REQUESTS + 1);
+                tx_pr_tail =
+                    (tx_pr_tail + 1) % (norman::kMaxPendingTxRequests + 1);
 
                 norman::send(socket_fd, bt->phys_addr, transmission_len, 0);
               }
@@ -351,7 +352,7 @@ int main(int argc, const char* argv[]) {
             struct buf_tracker* bt = &buf_trackers[tx_req.socket_fd];
             bt->free_bytes += tx_req.length;
             bt->transmissions_pending -= 1;
-            tx_pr_head = (tx_pr_head + 1) % (MAX_PENDING_TX_REQUESTS + 1);
+            tx_pr_head = (tx_pr_head + 1) % (norman::kMaxPendingTxRequests + 1);
           }
         }
 

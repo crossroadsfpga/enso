@@ -41,6 +41,8 @@
 #ifndef SOFTWARE_INCLUDE_NORMAN_CONSTS_H_
 #define SOFTWARE_INCLUDE_NORMAN_CONSTS_H_
 
+#include <cstdint>
+
 namespace norman {
 
 // These determine the maximum number of notification buffers and enso pipes,
@@ -50,49 +52,65 @@ namespace norman {
 #define MAX_NB_APPS 1024
 #define MAX_NB_FLOWS 8192
 
-// TODO(sadok): Use constexpr instead of macros.
+constexpr uint32_t kMaxNbApps = MAX_NB_APPS;
+constexpr uint32_t kMaxNbFlows = MAX_NB_FLOWS;
 
-#define MAX_TRANSFER_LEN 131072
+constexpr uint32_t kMaxTransferLen = 131072;
 
 #ifndef BATCH_SIZE
 // Maximum number of packets to process in call to get_next_batch_from_queue
 #define BATCH_SIZE 64
 #endif
+constexpr uint32_t kBatchSize = BATCH_SIZE;
 
 #ifndef NOTIFICATION_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes).
 #define NOTIFICATION_BUF_SIZE 16384
 #endif
+constexpr uint32_t kNotificationBufSize = NOTIFICATION_BUF_SIZE;
 
 #ifndef ENSO_PIPE_SIZE
 // This should be the max buffer supported by the hardware, we may override this
 // value when compiling. It is defined in number of flits (64 bytes).
 #define ENSO_PIPE_SIZE 32768
 #endif
+constexpr uint32_t kEnsoPipeSize = ENSO_PIPE_SIZE;
 
-#define MAX_PENDING_TX_REQUESTS (NOTIFICATION_BUF_SIZE - 1)
+constexpr uint32_t kMaxPendingTxRequests = kNotificationBufSize - 1;
 
-#define BUF_PAGE_SIZE (1UL << 21)  // using 2MB huge pages (size in bytes)
+// Using 2MB huge pages (size in bytes).
+constexpr uint32_t kBufPageSize = 1UL << 21;
 
-// Sizes aligned to the huge page size, but if both buffers fit in a single
-// page, we may put them in the same page
-#define ALIGNED_DSC_BUF_PAIR_SIZE \
-  ((((NOTIFICATION_BUF_SIZE * 64 * 2 - 1) / BUF_PAGE_SIZE + 1) * BUF_PAGE_SIZE))
+/**
+ * Sizes aligned to the huge page size, but if both buffers fit in a single
+ * page, we may put them in the same page.
+ */
+constexpr uint32_t kAlignedDscBufPairSize =
+    ((kNotificationBufSize * 64 * 2 - 1) / kBufPageSize + 1) * kBufPageSize;
 
-// Assumes that the FPGA `clk_datamover` runs at 200MHz. If we change the clock,
-// we must also change this value.
-#define NS_PER_TIMESTAMP_CYCLE 5
+/**
+ * @brief The clock period of the timestamp module in nanoseconds.
+ *
+ * This assumes that the FPGA `clk_datamover` runs at 200MHz. If we change this
+ * clock, we must also change this value.
+ */
+constexpr uint32_t kNsPerTimestampCycle = 5;
 
-// Offset of the RTT when timestamp is enabled (in bytes).
-#define PACKET_RTT_OFFSET 18
+/**
+ * @brief Offset of the RTT when timestamp is enabled (in bytes).
+ */
+constexpr uint32_t kPacketRttOffset = 18;
 
-// The maximum number of flits (64 byte chunks) that the hardware can send per
-// second. This is simply the frequency of the `rate_limiter` module -- which is
-// currently 200MHz.
-#define MAX_HARDWARE_FLIT_RATE (200e6)
+/**
+ * @brief Maximum number of flits (64 byte chunks) that the hardware can send
+ *        per second.
+ *
+ * This is simply the clock frequency of the `rate_limiter` module.
+ */
+constexpr uint32_t kMaxHardwareFlitRate = 200e6;
 
-#define MEMORY_SPACE_PER_QUEUE (1 << 12)
+constexpr uint32_t kMemorySpacePerQueue = 1 << 12;
 
 }  // namespace norman
 

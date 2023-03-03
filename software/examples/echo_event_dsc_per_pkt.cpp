@@ -79,7 +79,7 @@ int main(int argc, const char* argv[]) {
     uint32_t tx_pr_head = 0;
     uint32_t tx_pr_tail = 0;
     tx_pending_request_t* tx_pending_requests =
-        new tx_pending_request_t[MAX_PENDING_TX_REQUESTS + 1];
+        new tx_pending_request_t[kMaxPendingTxRequests + 1];
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -159,7 +159,7 @@ int main(int argc, const char* argv[]) {
           // it's complete.
           tx_pending_requests[tx_pr_tail].socket_fd = socket_fd;
           tx_pending_requests[tx_pr_tail].length = pkt_len;
-          tx_pr_tail = (tx_pr_tail + 1) % (MAX_PENDING_TX_REQUESTS + 1);
+          tx_pr_tail = (tx_pr_tail + 1) % (kMaxPendingTxRequests + 1);
         }
 #else
         norman::free_enso_pipe(socket_fd, recv_len);
@@ -173,7 +173,7 @@ int main(int argc, const char* argv[]) {
       for (int i = 0; i < nb_tx_completions; ++i) {
         tx_pending_request_t tx_req = tx_pending_requests[tx_pr_head];
         norman::free_enso_pipe(tx_req.socket_fd, tx_req.length);
-        tx_pr_head = (tx_pr_head + 1) % (MAX_PENDING_TX_REQUESTS + 1);
+        tx_pr_head = (tx_pr_head + 1) % (kMaxPendingTxRequests + 1);
       }
 #endif
     }

@@ -101,10 +101,10 @@
 #define HUGEPAGE_SIZE (2UL << 20)
 
 // Size of the buffer that we keep packets in.
-#define BUFFER_SIZE MAX_TRANSFER_LEN
+#define BUFFER_SIZE norman::kMaxTransferLen
 
 // Number of transfers required to send a buffer full of packets.
-#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / MAX_TRANSFER_LEN) + 1)
+#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / norman::kMaxTransferLen) + 1)
 
 static volatile int keep_running = 1;
 static volatile int force_stop = 0;
@@ -554,7 +554,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
   // Avoid transmitting new data when the TX buffer is full.
   const uint32_t buf_fill_thresh =
-      NOTIFICATION_BUF_SIZE - TRANSFERS_PER_BUFFER - 1;
+      norman::kNotificationBufSize - TRANSFERS_PER_BUFFER - 1;
 
   if (likely(tx_args.transmissions_pending < buf_fill_thresh)) {
     uint32_t transmission_length = (uint32_t)std::min(
@@ -585,7 +585,7 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
   }
 
   // Reclaim TX notification buffer space.
-  if ((tx_args.transmissions_pending > (NOTIFICATION_BUF_SIZE / 4))) {
+  if ((tx_args.transmissions_pending > (norman::kNotificationBufSize / 4))) {
     if (tx_args.ignored_reclaims > TX_RECLAIM_DELAY) {
       tx_args.ignored_reclaims = 0;
       tx_args.transmissions_pending -=
@@ -951,7 +951,8 @@ int main(int argc, char** argv) {
     uint64_t last_rx_pkts = rx_stats.pkts;
     uint64_t last_tx_bytes = tx_stats.bytes;
     uint64_t last_tx_pkts = tx_stats.pkts;
-    uint64_t last_aggregated_rtt_ns = rx_stats.rtt_sum * NS_PER_TIMESTAMP_CYCLE;
+    uint64_t last_aggregated_rtt_ns =
+        rx_stats.rtt_sum * norman::kNsPerTimestampCycle;
 
 #ifdef SHOW_BATCH
     uint64_t last_rx_batches = rx_stats.nb_batches;
@@ -975,7 +976,7 @@ int main(int argc, char** argv) {
         (tx_bytes - last_tx_bytes) * 8. / (1e6 * interval_s);
     uint64_t tx_pkt_rate = (tx_pkts - last_tx_pkts) / interval_s;
     uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
-    uint64_t rtt_sum_ns = rx_stats.rtt_sum * NS_PER_TIMESTAMP_CYCLE;
+    uint64_t rtt_sum_ns = rx_stats.rtt_sum * norman::kNsPerTimestampCycle;
     uint64_t rtt_ns;
     if (rx_pkt_diff != 0) {
       rtt_ns = (rtt_sum_ns - last_aggregated_rtt_ns) / rx_pkt_diff;
@@ -1043,7 +1044,7 @@ int main(int argc, char** argv) {
     for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
       if (rx_stats.rtt_hist[rtt] != 0) {
         uint32_t corrected_rtt =
-            (rtt + parsed_args.rtt_hist_offset) * NS_PER_TIMESTAMP_CYCLE;
+            (rtt + parsed_args.rtt_hist_offset) * norman::kNsPerTimestampCycle;
         hist_file << corrected_rtt << "," << rx_stats.rtt_hist[rtt]
                   << std::endl;
       }
@@ -1053,7 +1054,7 @@ int main(int argc, char** argv) {
       std::cout << "Warning: " << rx_stats.backup_rtt_hist.size()
                 << " rtt hist entries in backup" << std::endl;
       for (auto const& i : rx_stats.backup_rtt_hist) {
-        hist_file << i.first * NS_PER_TIMESTAMP_CYCLE << "," << i.second
+        hist_file << i.first * norman::kNsPerTimestampCycle << "," << i.second
                   << std::endl;
       }
     }

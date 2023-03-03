@@ -71,19 +71,19 @@ namespace norman {
 #define _norman_always_inline __attribute__((always_inline)) inline
 
 /**
- * Returns RTT, in number of cycles, for a given packet.
+ * @brief Returns RTT, in number of cycles, for a given packet.
  *
  * This assumes that the packet has been timestamped by hardware. To enable
- * timestamping call the `enable_timestamp` function.
+ * timestamping call the `Device::EnableTimeStamping` method.
  *
- * To convert from number of cycles to ns. Do `cycles * NS_PER_TIMESTAMP_CYCLE`.
+ * To convert from number of cycles to ns. Do `cycles * kNsPerTimestampCycle`.
  *
  * @param pkt Packet to retrieve the RTT from.
  * @return Return RTT measure for the packet in nanoseconds. If timestamp is
  *         not enabled the value returned is undefined.
  */
 inline uint32_t get_pkt_rtt(uint8_t* pkt) {
-  uint32_t rtt = *((uint32_t*)(pkt + PACKET_RTT_OFFSET));
+  uint32_t rtt = *((uint32_t*)(pkt + kPacketRttOffset));
   return be32toh(rtt);
 }
 

@@ -85,8 +85,6 @@ uint32_t external_peek_next_batch_from_queue(
  */
 class Device {
  public:
-  static constexpr uint32_t kMaxPendingTxRequests = MAX_PENDING_TX_REQUESTS;
-
   /**
    * @brief Factory method to create a device.
    *
@@ -156,7 +154,7 @@ class Device {
   RxTxPipe* NextRxTxPipeToRecv();
 
   /**
-   * @brief Process completions for all pipes associated with this device.
+   * @brief Processes completions for all pipes associated with this device.
    */
   void ProcessCompletions();
 
@@ -380,7 +378,7 @@ class RxPipe {
 
   /**
    * @brief Returns the number of bytes allocated in the pipe, i.e., the number
-   * of bytes owned by the application.
+   *        of bytes owned by the application.
    *
    * @return The number of bytes allocated in the pipe.
    */
@@ -590,7 +588,7 @@ class TxPipe {
    * valid. Accessing it will lead to undefined behavior.
    *
    * @note The user must use `AllocateBuf()` to allocate a new buffer after
-   * calling this function.
+   *       calling this function.
    *
    * The pipe's capacity will also be reduced by the number of bytes sent. If
    * sending more bytes than the pipe's current capacity, the behavior is

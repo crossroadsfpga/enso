@@ -111,13 +111,13 @@ int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
  * @brief Enables hardware rate limit.
  *
  * Once rate limiting is enabled, packets from all queues are sent at a rate of
- * `num / den * MAX_HARDWARE_FLIT_RATE` flits per second (a flit is 64 bytes).
+ * `num / den * kMaxHardwareFlitRate` flits per second (a flit is 64 bytes).
  * Note that this is slightly different from how we typically define throughput
  * and you may need to take the packet sizes into account to set this properly.
  *
  * For example, suppose that you are sending 64-byte packets. Each packet
  * occupies exactly one flit. For this packet size, line rate at 100Gbps is
- * 148.8Mpps. So if `MAX_HARDWARE_FLIT_RATE` is 200MHz, line rate actually
+ * 148.8Mpps. So if `kMaxHardwareFlitRate` is 200MHz, line rate actually
  * corresponds to a 744/1000 rate. Therefore, if you want to send at 50Gbps (50%
  * of line rate), you can use a 372/1000 (or 93/250) rate.
  *
@@ -132,7 +132,7 @@ int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
  * You can find the maximum packet rate for any packet size by using the
  * expression: `line_rate / ((pkt_size + 20) * 8)`. So for 100Gbps and 128-byte
  * packets we have: `100e9 / ((128 + 20) * 8)` packets per second. Given that
- * each packet is two flits, for `MAX_HARDWARE_FLIT_RATE = 200e6`, the maximum
+ * each packet is two flits, for `kMaxHardwareFlitRate = 200e6`, the maximum
  * rate is `100e9 / ((128 + 20) * 8) * 2 / 200e6`, which is approximately
  * 125/148. Therefore, if you want to send packets at 20Gbps (20% of line rate),
  * you should use a 25/148 rate.

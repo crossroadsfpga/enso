@@ -85,7 +85,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   while (notification_buf_pair_regs->rx_head != 0) continue;
 
   char huge_page_name[128];
-  int id = notification_buf_pair->id + MAX_NB_FLOWS;
+  int id = notification_buf_pair->id + kMaxNbFlows;
   snprintf(huge_page_name, sizeof(huge_page_name), "norman_notif_buf:%i", id);
 
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
@@ -99,7 +99,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   // Use first half of the huge page for RX and second half for TX.
   notification_buf_pair->tx_buf =
       (struct TxNotification*)((uint64_t)notification_buf_pair->rx_buf +
-                               ALIGNED_DSC_BUF_PAIR_SIZE / 2);
+                               kAlignedDscBufPairSize / 2);
 
   uint64_t phys_addr = virt_to_phys(notification_buf_pair->rx_buf);
 
@@ -126,15 +126,15 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   memset(notification_buf_pair->pending_pkt_tails, 0, nb_queues);
 
   notification_buf_pair->wrap_tracker =
-      (uint8_t*)malloc(NOTIFICATION_BUF_SIZE / 8);
+      (uint8_t*)malloc(kNotificationBufSize / 8);
   if (notification_buf_pair->wrap_tracker == NULL) {
     std::cerr << "Could not allocate memory" << std::endl;
     return -1;
   }
-  memset(notification_buf_pair->wrap_tracker, 0, NOTIFICATION_BUF_SIZE / 8);
+  memset(notification_buf_pair->wrap_tracker, 0, kNotificationBufSize / 8);
 
   notification_buf_pair->last_rx_ids =
-      (enso_pipe_id_t*)malloc(NOTIFICATION_BUF_SIZE * sizeof(enso_pipe_id_t));
+      (enso_pipe_id_t*)malloc(kNotificationBufSize * sizeof(enso_pipe_id_t));
   if (notification_buf_pair->last_rx_ids == NULL) {
     std::cerr << "Could not allocate memory" << std::endl;
     return -1;
@@ -154,7 +154,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   _norman_compiler_memory_barrier();
   notification_buf_pair_regs->rx_mem_low = (uint32_t)phys_addr;
   notification_buf_pair_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
-  phys_addr += ALIGNED_DSC_BUF_PAIR_SIZE / 2;
+  phys_addr += kAlignedDscBufPairSize / 2;
   notification_buf_pair_regs->tx_mem_low = (uint32_t)phys_addr;
   notification_buf_pair_regs->tx_mem_high = (uint32_t)(phys_addr >> 32);
 
@@ -232,7 +232,7 @@ int dma_init(IntelFpgaPcieDev* dev,
   // other buffer sizes by overlaying regular pages on top of the huge pages.
   // We might use those only for requests that overlap to avoid adding too
   // many entries to the TLB.
-  assert(ENSO_PIPE_SIZE * 64 == BUF_PAGE_SIZE);
+  assert(ENSO_PIPE_SIZE * 64 == kBufPageSize);
 
   // FIXME(sadok) should find a better identifier than core id.
   int cpu_id = sched_getcpu();
@@ -244,8 +244,7 @@ int dma_init(IntelFpgaPcieDev* dev,
 
   enso_pipe_id = notification_buf_pair->id * nb_queues + socket_id;
 
-  uio_mmap_bar2_addr =
-      dev->uio_mmap((1 << 12) * (MAX_NB_FLOWS + MAX_NB_APPS), 2);
+  uio_mmap_bar2_addr = dev->uio_mmap((1 << 12) * (kMaxNbFlows + kMaxNbApps), 2);
   if (uio_mmap_bar2_addr == MAP_FAILED) {
     std::cerr << "Could not get mmap uio memory!" << std::endl;
     return -1;
@@ -255,12 +254,12 @@ int dma_init(IntelFpgaPcieDev* dev,
   // TODO(sadok): Support multiple notification buffers for the same process.
   if (notification_buf_pair->ref_cnt == 0) {
     // Register associated with the notification buffer. Notification buffer
-    // registers come after the enso pipe ones, that's why we use MAX_NB_FLOWS
+    // registers come after the enso pipe ones, that's why we use kMaxNbFlows
     // as an offset.
     volatile struct QueueRegs* notification_buf_pair_regs =
         (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
-                            (notification_buf_pair->id + MAX_NB_FLOWS) *
-                                MEMORY_SPACE_PER_QUEUE);
+                            (notification_buf_pair->id + kMaxNbFlows) *
+                                kMemorySpacePerQueue);
 
     // HACK(sadok): This only works because pkt queues for the same app are
     // currently placed back to back.
@@ -279,7 +278,7 @@ int dma_init(IntelFpgaPcieDev* dev,
   // Register associated with the enso pipe.
   volatile struct QueueRegs* enso_pipe_regs =
       (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
-                          enso_pipe_id * MEMORY_SPACE_PER_QUEUE);
+                          enso_pipe_id * kMemorySpacePerQueue);
 
   return enso_pipe_init(enso_pipe, enso_pipe_regs, notification_buf_pair,
                         enso_pipe_id);
@@ -301,7 +300,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     }
 
     cur_notification->signal = 0;
-    notification_buf_head = (notification_buf_head + 1) % NOTIFICATION_BUF_SIZE;
+    notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
 
     enso_pipe_id_t enso_pipe_id =
         cur_notification->queue_id - notification_buf_pair->enso_pipe_id_offset;
@@ -454,24 +453,24 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
   uint32_t missing_bytes = len;
 
   uint64_t transf_addr = phys_addr;
-  uint64_t hugepage_mask = ~((uint64_t)BUF_PAGE_SIZE - 1);
+  uint64_t hugepage_mask = ~((uint64_t)kBufPageSize - 1);
   uint64_t hugepage_base_addr = transf_addr & hugepage_mask;
-  uint64_t hugepage_boundary = hugepage_base_addr + BUF_PAGE_SIZE;
+  uint64_t hugepage_boundary = hugepage_base_addr + kBufPageSize;
 
   while (missing_bytes > 0) {
     uint32_t free_slots =
-        (notification_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
+        (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
 
     // Block until we can send.
     while (unlikely(free_slots == 0)) {
       ++notification_buf_pair->tx_full_cnt;
       update_tx_head(notification_buf_pair);
-      free_slots = (notification_buf_pair->tx_head - tx_tail - 1) %
-                   NOTIFICATION_BUF_SIZE;
+      free_slots =
+          (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
     }
 
     struct TxNotification* tx_notification = tx_buf + tx_tail;
-    uint32_t req_length = std::min(missing_bytes, (uint32_t)MAX_TRANSFER_LEN);
+    uint32_t req_length = std::min(missing_bytes, (uint32_t)kMaxTransferLen);
     uint32_t missing_bytes_in_page = hugepage_boundary - transf_addr;
     req_length = std::min(req_length, missing_bytes_in_page);
 
@@ -484,12 +483,12 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     tx_notification->signal = 1;
     tx_notification->phys_addr = transf_addr;
 
-    uint64_t huge_page_offset = (transf_addr + req_length) % BUF_PAGE_SIZE;
+    uint64_t huge_page_offset = (transf_addr + req_length) % kBufPageSize;
     transf_addr = hugepage_base_addr + huge_page_offset;
 
     _mm_clflushopt(tx_notification);
 
-    tx_tail = (tx_tail + 1) % NOTIFICATION_BUF_SIZE;
+    tx_tail = (tx_tail + 1) % kNotificationBufSize;
     missing_bytes -= req_length;
   }
 
@@ -549,7 +548,7 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
     notification_buf_pair->nb_unreported_completions += no_wrap;
     notification_buf_pair->wrap_tracker[head / 8] &= ~wrap_tracker_mask;
 
-    head = (head + 1) % NOTIFICATION_BUF_SIZE;
+    head = (head + 1) % kNotificationBufSize;
   }
 
   notification_buf_pair->tx_head = head;
@@ -564,7 +563,7 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
 
   notification_buf_pair->regs->tx_mem_low = 0;
   notification_buf_pair->regs->tx_mem_high = 0;
-  munmap(notification_buf_pair->rx_buf, ALIGNED_DSC_BUF_PAIR_SIZE);
+  munmap(notification_buf_pair->rx_buf, kAlignedDscBufPairSize);
   free(notification_buf_pair->pending_pkt_tails);
   free(notification_buf_pair->wrap_tracker);
   free(notification_buf_pair->last_rx_ids);
@@ -577,7 +576,7 @@ void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe) {
   enso_pipe->regs->rx_mem_high = 0;
 
   if (enso_pipe->buf) {
-    munmap(enso_pipe->buf, BUF_PAGE_SIZE);
+    munmap(enso_pipe->buf, kBufPageSize);
   }
 }
 
