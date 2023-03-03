@@ -1017,6 +1017,12 @@ class MessageIteratorBase {
   uint8_t* next_addr_;
 };
 
+/**
+ * @brief Packet iterator.
+ * @see RxPipe::RecvPkts
+ * @see RxTxPipe::RecvPkts
+ * @see PeekPktIterator
+ */
 class PktIterator : public MessageIteratorBase<PktIterator> {
  public:
   /**
@@ -1047,6 +1053,12 @@ class PktIterator : public MessageIteratorBase<PktIterator> {
   }
 };
 
+/**
+ * @brief Packet iterator that does not consume the packets from the pipe.
+ * @see RxPipe::PeekPkts
+ * @see RxTxPipe::PeekPkts
+ * @see PktIterator
+ */
 class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
  public:
   /**
