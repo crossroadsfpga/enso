@@ -375,4 +375,20 @@ void Device::ProcessCompletions() {
   }
 }
 
+int Device::EnableTimeStamping() {
+  return enable_timestamp(&notification_buf_pair_);
+}
+
+int Device::DisableTimeStamping() {
+  return disable_timestamp(&notification_buf_pair_);
+}
+
+int Device::EnableRateLimiting(uint16_t num, uint16_t den) {
+  return enable_rate_limit(&notification_buf_pair_, num, den);
+}
+
+int Device::DisableRateLimiting() {
+  return disable_rate_limit(&notification_buf_pair_);
+}
+
 }  // namespace norman
