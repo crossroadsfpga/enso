@@ -4,7 +4,7 @@
 
 SEEDS=${@:-1}
 
-QUARTUS_PROJECT_ROOT_DEFAULT="$HOME/norman_production"
+QUARTUS_PROJECT_ROOT_DEFAULT="$HOME/enso_production"
 
 CUR_DIR=$(pwd)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"

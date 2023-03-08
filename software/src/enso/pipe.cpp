@@ -37,10 +37,10 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#include <norman/config.h>
-#include <norman/helpers.h>
-#include <norman/ixy_helpers.h>
-#include <norman/pipe.h>
+#include <enso/config.h>
+#include <enso/helpers.h>
+#include <enso/ixy_helpers.h>
+#include <enso/pipe.h>
 #include <sched.h>
 
 #include <algorithm>
@@ -53,7 +53,7 @@
 #include "../pcie.h"
 #include "../syscall_api/intel_fpga_pcie_api.hpp"
 
-namespace norman {
+namespace enso {
 
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
@@ -103,7 +103,7 @@ TxPipe::~TxPipe() {
 
 int TxPipe::Init() noexcept {
   if (internal_buf_) {
-    std::string name = "norman:tx_pipe_" + std::to_string(kId);
+    std::string name = "enso:tx_pipe_" + std::to_string(kId);
     buf_ = (uint8_t*)get_huge_page(name, true);
     if (unlikely(!buf_)) {
       return -1;
@@ -391,4 +391,4 @@ int Device::DisableRateLimiting() {
   return disable_rate_limit(&notification_buf_pair_);
 }
 
-}  // namespace norman
+}  // namespace enso

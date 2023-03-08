@@ -37,12 +37,12 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_NORMAN_CONFIG_H_
-#define SOFTWARE_INCLUDE_NORMAN_CONFIG_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#define SOFTWARE_INCLUDE_ENSO_CONFIG_H_
 
-#include <norman/internals.h>
+#include <enso/internals.h>
 
-namespace norman {
+namespace enso {
 
 /**
  * @brief Inserts flow entry in the data plane flow table that will direct all
@@ -146,6 +146,6 @@ int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
 int enable_rate_limit(struct NotificationBufPair* notification_buf_pair,
                       uint16_t num, uint16_t den);
 
-}  // namespace norman
+}  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_NORMAN_CONFIG_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_CONFIG_H_

@@ -6,9 +6,9 @@ DEFAULT_ETH_PORT = 1  # Can be 0 or 1.
 DEFAULT_NB_FALLBACK_QUEUES = 0
 DEFAULT_BATCH_SIZE = 64
 
-# The following paths are relative to the norman path.
+# The following paths are relative to the enso path.
 SETUP_SW_CMD = "setup.sh"
-NORMAN_PKTGEN_CMD = "software/build/examples/pktgen"
+ENSO_PKTGEN_CMD = "software/build/examples/pktgen"
 PCAPS_DIR = "frontend/pcaps/"
 PCAP_GEN_CMD = "hardware/input_gen/generate_synthetic_trace.py"
 

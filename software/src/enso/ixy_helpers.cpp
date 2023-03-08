@@ -35,9 +35,9 @@
  *        [ixy driver](https://github.com/emmericp/ixy/blob/master/src/memory.c)
  */
 
+#include <enso/consts.h>
+#include <enso/ixy_helpers.h>
 #include <fcntl.h>
-#include <norman/consts.h>
-#include <norman/ixy_helpers.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -46,7 +46,7 @@
 #include <iostream>
 #include <string>
 
-namespace norman {
+namespace enso {
 
 uint64_t virt_to_phys(void* virt) {
   long page_size = sysconf(_SC_PAGESIZE);
@@ -144,4 +144,4 @@ void* get_huge_page(const std::string& name, bool mirror) {
   return virt_addr;
 }
 
-}  // namespace norman
+}  // namespace enso

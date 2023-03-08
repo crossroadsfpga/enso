@@ -40,10 +40,10 @@
 #include "pcie.h"
 
 #include <arpa/inet.h>
+#include <enso/consts.h>
+#include <enso/helpers.h>
+#include <enso/ixy_helpers.h>
 #include <immintrin.h>
-#include <norman/consts.h>
-#include <norman/helpers.h>
-#include <norman/ixy_helpers.h>
 #include <sched.h>
 #include <string.h>
 #include <time.h>
@@ -61,7 +61,7 @@
 
 #include "syscall_api/intel_fpga_pcie_api.hpp"
 
-namespace norman {
+namespace enso {
 
 int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
                           volatile struct QueueRegs* notification_buf_pair_regs,
@@ -70,23 +70,23 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   // Make sure the notification buffer is disabled.
   notification_buf_pair_regs->rx_mem_low = 0;
   notification_buf_pair_regs->rx_mem_high = 0;
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   while (notification_buf_pair_regs->rx_mem_low != 0 ||
          notification_buf_pair_regs->rx_mem_high != 0)
     continue;
 
   // Make sure head and tail start at zero.
   notification_buf_pair_regs->rx_tail = 0;
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   while (notification_buf_pair_regs->rx_tail != 0) continue;
 
   notification_buf_pair_regs->rx_head = 0;
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   while (notification_buf_pair_regs->rx_head != 0) continue;
 
   char huge_page_name[128];
   int id = notification_buf_pair->id + kMaxNbFlows;
-  snprintf(huge_page_name, sizeof(huge_page_name), "norman_notif_buf:%i", id);
+  snprintf(huge_page_name, sizeof(huge_page_name), "enso_notif_buf:%i", id);
 
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
@@ -113,7 +113,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   notification_buf_pair->tx_tail = notification_buf_pair_regs->tx_tail;
   notification_buf_pair->tx_head = notification_buf_pair->tx_tail;
 
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   notification_buf_pair_regs->tx_head = notification_buf_pair->tx_head;
 
   // HACK(sadok): assuming that we know the number of queues beforehand
@@ -151,7 +151,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
 
   // Setting the address enables the queue. Do this last.
   // Use first half of the huge page for RX and second half for TX.
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   notification_buf_pair_regs->rx_mem_low = (uint32_t)phys_addr;
   notification_buf_pair_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
   phys_addr += kAlignedDscBufPairSize / 2;
@@ -170,21 +170,21 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   // Make sure the queue is disabled.
   enso_pipe_regs->rx_mem_low = 0;
   enso_pipe_regs->rx_mem_high = 0;
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   while (enso_pipe_regs->rx_mem_low != 0 || enso_pipe_regs->rx_mem_high != 0)
     continue;
 
   // Make sure head and tail start at zero.
   enso_pipe_regs->rx_tail = 0;
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   while (enso_pipe_regs->rx_tail != 0) continue;
 
   enso_pipe_regs->rx_head = 0;
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   while (enso_pipe_regs->rx_head != 0) continue;
 
   char huge_page_name[128];
-  snprintf(huge_page_name, sizeof(huge_page_name), "norman_enso_pipe:%i",
+  snprintf(huge_page_name, sizeof(huge_page_name), "enso_enso_pipe:%i",
            enso_pipe_id);
 
   enso_pipe->buf = (uint32_t*)get_huge_page(huge_page_name, true);
@@ -208,7 +208,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   // Setting the address enables the queue. Do this last.
   // The least significant bits in rx_mem_low are used to keep the notification
   // buffer ID. Therefore we add `notification_buf_pair->id` to the address.
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   enso_pipe_regs->rx_mem_low = (uint32_t)phys_addr + notification_buf_pair->id;
   enso_pipe_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
 
@@ -284,7 +284,7 @@ int dma_init(IntelFpgaPcieDev* dev,
                         enso_pipe_id);
 }
 
-static _norman_always_inline uint16_t
+static _enso_always_inline uint16_t
 __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   struct RxNotification* notification_buf = notification_buf_pair->rx_buf;
   uint32_t notification_buf_head = notification_buf_pair->rx_head;
@@ -319,7 +319,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     // update notification buffer head
-    _norman_compiler_memory_barrier();
+    _enso_compiler_memory_barrier();
     *(notification_buf_pair->rx_head_ptr) = notification_buf_head;
     notification_buf_pair->rx_head = notification_buf_head;
   }
@@ -327,7 +327,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   return nb_consumed_notifications;
 }
 
-static _norman_always_inline uint32_t
+static _enso_always_inline uint32_t
 __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
@@ -374,7 +374,7 @@ uint32_t peek_next_batch_from_queue(
   return __consume_queue(enso_pipe, notification_buf_pair, buf, true);
 }
 
-static _norman_always_inline int32_t
+static _enso_always_inline int32_t
 __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
   // Consume up to a batch of notifications at a time. If the number of consumed
   // notifications is the same as the number of pending notifications, we are
@@ -432,20 +432,20 @@ void advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   *(enso_pipe->buf_head_ptr) = rx_pkt_head;
 
   enso_pipe->rx_head = rx_pkt_head;
 }
 
 void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe) {
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   *(enso_pipe->buf_head_ptr) = enso_pipe->rx_tail;
 
   enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 
-static _norman_always_inline uint32_t
+static _enso_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
                 uint64_t phys_addr, uint32_t len) {
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
@@ -494,7 +494,7 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
 
   notification_buf_pair->tx_tail = tx_tail;
 
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   *(notification_buf_pair->tx_tail_ptr) = tx_tail;
 
   return len;
@@ -623,4 +623,4 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global) {
   printf("Pkt RX head: %d\n", socket_entry->enso_pipe.rx_head);
 }
 
-}  // namespace norman
+}  // namespace enso

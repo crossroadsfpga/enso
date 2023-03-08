@@ -39,11 +39,11 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_NORMAN_PIPE_H_
-#define SOFTWARE_INCLUDE_NORMAN_PIPE_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#define SOFTWARE_INCLUDE_ENSO_PIPE_H_
 
-#include <norman/helpers.h>
-#include <norman/internals.h>
+#include <enso/helpers.h>
+#include <enso/internals.h>
 
 #include <array>
 #include <cassert>
@@ -56,7 +56,7 @@
 // Avoid exposing `intel_fpga_pcie_api.hpp` externally.
 class IntelFpgaPcieDev;
 
-namespace norman {
+namespace enso {
 
 class RxPipe;
 class TxPipe;
@@ -318,7 +318,7 @@ class RxPipe {
    * @brief A class that represents a batch of messages.
    *
    * @param T An iterator for the particular message type. Refer to
-   *          `norman::PktIterator` for an example of a raw packet iterator.
+   *          `enso::PktIterator` for an example of a raw packet iterator.
    */
   template <typename T>
   class MessageBatch {
@@ -466,7 +466,7 @@ class RxPipe {
    * @brief Receives a batch of generic messages.
    *
    * @param T An iterator for the particular message type. Refer to
-   *          `norman::PktIterator` for an example of a raw packet
+   *          `enso::PktIterator` for an example of a raw packet
    *          iterator.
    * @param max_nb_messages The maximum number of messages to receive. If set to
    *                        -1, all messages in the pipe will be received.
@@ -595,9 +595,9 @@ class RxPipe {
  *
  * Example:
  * @code
- *    norman::Device* device = norman::Device::Create(core_id, nb_pipes,
+ *    enso::Device* device = enso::Device::Create(core_id, nb_pipes,
  *                                                    pcie_addr);
- *    norman::TxPipe* tx_pipe = device->AllocateTxPipe();
+ *    enso::TxPipe* tx_pipe = device->AllocateTxPipe();
  *    uint8_t* buf = tx_pipe->AllocateBuf(data_size);
  *
  *    // AllocateBuf with a non-zero argument may block waiting for the capacity
@@ -866,7 +866,7 @@ class TxPipe {
  * Example:
  * @code
  *    auto device = Device::Create(core_id, nb_pipes, pcie_addr);
- *    norman::RxTxPipe* rx_tx_pipe = device->AllocateRxTxPipe();
+ *    enso::RxTxPipe* rx_tx_pipe = device->AllocateRxTxPipe();
  *    rx_tx_pipe->Bind(...);
  *
  *    auto batch = rx_tx_pipe->RecvPkts();
@@ -1155,6 +1155,6 @@ class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
   constexpr inline void OnAdvanceMessage([[maybe_unused]] uint32_t nb_bytes) {}
 };
 
-}  // namespace norman
+}  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_NORMAN_PIPE_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_PIPE_H_

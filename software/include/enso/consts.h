@@ -38,12 +38,12 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_NORMAN_CONSTS_H_
-#define SOFTWARE_INCLUDE_NORMAN_CONSTS_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#define SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 
 #include <cstdint>
 
-namespace norman {
+namespace enso {
 
 // These determine the maximum number of notification buffers and enso pipes,
 // these macros also exist in hardware and **must be kept in sync**. Update the
@@ -112,6 +112,6 @@ constexpr uint32_t kMaxHardwareFlitRate = 200e6;
 
 constexpr uint32_t kMemorySpacePerQueue = 1 << 12;
 
-}  // namespace norman
+}  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_NORMAN_CONSTS_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_CONSTS_H_

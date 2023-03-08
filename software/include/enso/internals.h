@@ -32,19 +32,19 @@
 
 /**
  * @file
- * @brief Definitions that are internal to Norman. They should not be exposed to
+ * @brief Definitions that are internal to Enso. They should not be exposed to
  * applications.
  *
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
 // TODO(sadok): Do not expose this header.
-#ifndef SOFTWARE_INCLUDE_NORMAN_INTERNALS_H_
-#define SOFTWARE_INCLUDE_NORMAN_INTERNALS_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#define SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
 
 #include <stdint.h>
 
-namespace norman {
+namespace enso {
 
 #if MAX_NB_FLOWS < 65536
 using enso_pipe_id_t = uint16_t;
@@ -121,6 +121,6 @@ struct RxEnsoPipeInternal {
   enso_pipe_id_t id;
 };
 
-}  // namespace norman
+}  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_NORMAN_INTERNALS_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_INTERNALS_H_

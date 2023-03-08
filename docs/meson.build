@@ -48,7 +48,7 @@ if doxygen.found()
                                 ])],
                                 output: ['html', 'xml'],
                                 command: [doxygen, doxyfile],
-                                depends: [norman_lib],
+                                depends: [enso_lib],
                                 build_by_default: false)
 
     rm_software_doc_path = custom_target('rm_software_doc_path',

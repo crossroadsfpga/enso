@@ -38,8 +38,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_NORMAN_SOCKET_H_
-#define SOFTWARE_INCLUDE_NORMAN_SOCKET_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_SOCKET_H_
+#define SOFTWARE_INCLUDE_ENSO_SOCKET_H_
 
 #include <arpa/inet.h>
 #include <linux/types.h>
@@ -47,7 +47,7 @@
 // TODO(sadok): Do not expose pcie.h here.
 // #include "pcie.h"
 
-namespace norman {
+namespace enso {
 
 typedef unsigned short sa_family_t;
 typedef unsigned int socklen_t;
@@ -131,6 +131,6 @@ void free_enso_pipe(int sockfd, size_t len);
 
 void print_sock_stats(int sockfd);
 
-}  // namespace norman
+}  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_NORMAN_SOCKET_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_SOCKET_H_

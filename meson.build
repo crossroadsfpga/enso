@@ -1,4 +1,4 @@
-project('norman', 'c', 'cpp', version: '0.2.0', license: 'BSD-3-Clause',
+project('enso', 'c', 'cpp', version: '0.2.0', license: 'BSD-3-Clause',
         meson_version: '>=0.58.0',
         default_options: [
             'prefix=/usr/local',
@@ -128,7 +128,7 @@ if mkdocs.found()
             input: [doc_sources, mkdocs_config_file],
             output: 'site',
             command: [mkdocs, 'build', '-f', mkdocs_config_file],
-            depends: [norman_lib, cp_html_target, cp_teroshdl_target,
+            depends: [enso_lib, cp_html_target, cp_teroshdl_target,
                       cp_teroshdl_pcie_target],
             build_by_default: false)
 

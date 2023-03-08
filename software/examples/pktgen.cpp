@@ -30,11 +30,11 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <enso/consts.h>
+#include <enso/helpers.h>
+#include <enso/socket.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <norman/consts.h>
-#include <norman/helpers.h>
-#include <norman/socket.h>
 #include <pcap/pcap.h>
 #include <pthread.h>
 #include <sched.h>
@@ -101,10 +101,10 @@
 #define HUGEPAGE_SIZE (2UL << 20)
 
 // Size of the buffer that we keep packets in.
-#define BUFFER_SIZE norman::kMaxTransferLen
+#define BUFFER_SIZE enso::kMaxTransferLen
 
 // Number of transfers required to send a buffer full of packets.
-#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / norman::kMaxTransferLen) + 1)
+#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / enso::kMaxTransferLen) + 1)
 
 static volatile int keep_running = 1;
 static volatile int force_stop = 0;
@@ -512,7 +512,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
   uint8_t* recv_buf;
   int socket_fd;
   int recv_len =
-      norman::recv_select(0, &socket_fd, (void**)&recv_buf, RECV_BUF_LEN, 0);
+      enso::recv_select(0, &socket_fd, (void**)&recv_buf, RECV_BUF_LEN, 0);
 
   if (unlikely(recv_len < 0)) {
     std::cerr << "Error receiving" << std::endl;
@@ -524,12 +524,12 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
     uint8_t* pkt = recv_buf;
 
     while (processed_bytes < recv_len) {
-      uint16_t pkt_len = norman::get_pkt_len(pkt);
+      uint16_t pkt_len = enso::get_pkt_len(pkt);
       uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
       uint16_t pkt_aligned_len = nb_flits * 64;
 
       if (rx_args.enable_rtt) {
-        uint32_t rtt = norman::get_pkt_rtt(pkt);
+        uint32_t rtt = enso::get_pkt_rtt(pkt);
         rx_stats.rtt_sum += rtt;
 
         if (rx_args.enable_rtt_history) {
@@ -545,7 +545,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
     rx_stats.pkts += nb_pkts;
     ++(rx_stats.nb_batches);
     rx_stats.bytes += recv_len;
-    norman::free_enso_pipe(socket_fd, recv_len);
+    enso::free_enso_pipe(socket_fd, recv_len);
   }
 #endif  // IGNORE_RX
   return nb_pkts;
@@ -554,7 +554,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
   // Avoid transmitting new data when the TX buffer is full.
   const uint32_t buf_fill_thresh =
-      norman::kNotificationBufSize - TRANSFERS_PER_BUFFER - 1;
+      enso::kNotificationBufSize - TRANSFERS_PER_BUFFER - 1;
 
   if (likely(tx_args.transmissions_pending < buf_fill_thresh)) {
     uint32_t transmission_length = (uint32_t)std::min(
@@ -564,7 +564,7 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
 
     uint64_t phys_addr = tx_args.current_enso_pipe->phys_addr;
 
-    norman::send(tx_args.socket_fd, phys_addr, transmission_length, 0);
+    enso::send(tx_args.socket_fd, phys_addr, transmission_length, 0);
     tx_stats.bytes += transmission_length;
     ++tx_args.transmissions_pending;
 
@@ -585,11 +585,10 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
   }
 
   // Reclaim TX notification buffer space.
-  if ((tx_args.transmissions_pending > (norman::kNotificationBufSize / 4))) {
+  if ((tx_args.transmissions_pending > (enso::kNotificationBufSize / 4))) {
     if (tx_args.ignored_reclaims > TX_RECLAIM_DELAY) {
       tx_args.ignored_reclaims = 0;
-      tx_args.transmissions_pending -=
-          norman::get_completions(tx_args.socket_fd);
+      tx_args.transmissions_pending -= enso::get_completions(tx_args.socket_fd);
     } else {
       ++tx_args.ignored_reclaims;
     }
@@ -598,7 +597,7 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
 
 inline void reclaim_all_buffers(struct TxArgs& tx_args) {
   while (tx_args.transmissions_pending) {
-    tx_args.transmissions_pending -= norman::get_completions(tx_args.socket_fd);
+    tx_args.transmissions_pending -= enso::get_completions(tx_args.socket_fd);
   }
 }
 
@@ -624,7 +623,7 @@ int main(int argc, char** argv) {
       return 1;
     }
     uint16_t bdf = (bus << 8) | (dev << 3) | (func & 0x7);
-    norman::set_bdf(bdf);
+    enso::set_bdf(bdf);
   }
 
   char errbuf[PCAP_ERRBUF_SIZE];
@@ -689,14 +688,14 @@ int main(int argc, char** argv) {
       if (nb_pkts_remaining < buffer.nb_pkts) {
         uint8_t* pkt = buffer.buf;
         while (nb_pkts_remaining > 0) {
-          uint16_t pkt_len = norman::get_pkt_len(pkt);
+          uint16_t pkt_len = enso::get_pkt_len(pkt);
           uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
 
           total_bytes_to_send += nb_flits * 64;
           --nb_pkts_remaining;
           ++pkts_in_last_buffer;
 
-          pkt = norman::get_next_pkt(pkt);
+          pkt = enso::get_next_pkt(pkt);
         }
         break;
       }
@@ -731,7 +730,7 @@ int main(int argc, char** argv) {
 
       for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
         int socket_fd =
-            norman::socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
+            enso::socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
 
         if (socket_fd == -1) {
           std::cerr << "Problem creating socket (" << errno
@@ -740,13 +739,13 @@ int main(int argc, char** argv) {
         }
       }
 
-      norman::enable_device_rate_limit(parsed_args.rate_num,
-                                       parsed_args.rate_den);
+      enso::enable_device_rate_limit(parsed_args.rate_num,
+                                     parsed_args.rate_den);
 
       if (parsed_args.enable_rtt) {
-        norman::enable_device_timestamp();
+        enso::enable_device_timestamp();
       } else {
-        norman::disable_device_timestamp();
+        enso::disable_device_timestamp();
       }
 
       RxArgs rx_args;
@@ -775,50 +774,49 @@ int main(int argc, char** argv) {
 
       rx_done = true;
 
-      // norman::disable_device_rate_limit();
+      // enso::disable_device_rate_limit();
 
       if (parsed_args.enable_rtt) {
-        norman::disable_device_timestamp();
+        enso::disable_device_timestamp();
       }
 
       for (uint32_t socket_fd = 0; socket_fd < parsed_args.nb_queues;
            ++socket_fd) {
-        // norman::print_sock_stats(socket_fd);
-        norman::shutdown(socket_fd, SHUT_RDWR);
+        // enso::print_sock_stats(socket_fd);
+        enso::shutdown(socket_fd, SHUT_RDWR);
       }
     });
 
-    std::thread tx_thread =
-        std::thread([total_bytes_to_send, pkts_in_last_buffer, &parsed_args,
-                     &enso_pipes, &tx_stats] {
-          std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::thread tx_thread = std::thread([total_bytes_to_send,
+                                         pkts_in_last_buffer, &parsed_args,
+                                         &enso_pipes, &tx_stats] {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
 
-          int socket_fd =
-              norman::socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
+      int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
 
-          if (socket_fd == -1) {
-            std::cerr << "Problem creating socket (" << errno
-                      << "): " << strerror(errno) << std::endl;
-            exit(2);
-          }
+      if (socket_fd == -1) {
+        std::cerr << "Problem creating socket (" << errno
+                  << "): " << strerror(errno) << std::endl;
+        exit(2);
+      }
 
-          while (!rx_ready) continue;
+      while (!rx_ready) continue;
 
-          std::cout << "Running TX on core " << sched_getcpu() << std::endl;
+      std::cout << "Running TX on core " << sched_getcpu() << std::endl;
 
-          TxArgs tx_args(enso_pipes, total_bytes_to_send, pkts_in_last_buffer,
-                         socket_fd);
+      TxArgs tx_args(enso_pipes, total_bytes_to_send, pkts_in_last_buffer,
+                     socket_fd);
 
-          while (keep_running) {
-            transmit_pkts(tx_args, tx_stats);
-          }
+      while (keep_running) {
+        transmit_pkts(tx_args, tx_stats);
+      }
 
-          tx_done = 1;
+      tx_done = 1;
 
-          while (!rx_done) continue;
+      while (!rx_done) continue;
 
-          reclaim_all_buffers(tx_args);
-        });
+      reclaim_all_buffers(tx_args);
+    });
 
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -851,7 +849,7 @@ int main(int argc, char** argv) {
 
           for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
             int socket_fd =
-                norman::socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
+                enso::socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
 
             if (socket_fd == -1) {
               std::cerr << "Problem creating socket (" << errno
@@ -860,11 +858,11 @@ int main(int argc, char** argv) {
             }
           }
 
-          norman::enable_device_rate_limit(parsed_args.rate_num,
-                                           parsed_args.rate_den);
+          enso::enable_device_rate_limit(parsed_args.rate_num,
+                                         parsed_args.rate_den);
 
           if (parsed_args.enable_rtt) {
-            norman::enable_device_timestamp();
+            enso::enable_device_timestamp();
           }
 
           std::cout << "Running RX and TX on core " << sched_getcpu()
@@ -903,15 +901,15 @@ int main(int argc, char** argv) {
 
           reclaim_all_buffers(tx_args);
 
-          // norman::disable_device_rate_limit();
+          // enso::disable_device_rate_limit();
 
           if (parsed_args.enable_rtt) {
-            norman::disable_device_timestamp();
+            enso::disable_device_timestamp();
           }
 
           for (uint32_t socket_fd = 0; socket_fd < parsed_args.nb_queues;
                ++socket_fd) {
-            norman::shutdown(socket_fd, SHUT_RDWR);
+            enso::shutdown(socket_fd, SHUT_RDWR);
           }
         });
 
@@ -952,7 +950,7 @@ int main(int argc, char** argv) {
     uint64_t last_tx_bytes = tx_stats.bytes;
     uint64_t last_tx_pkts = tx_stats.pkts;
     uint64_t last_aggregated_rtt_ns =
-        rx_stats.rtt_sum * norman::kNsPerTimestampCycle;
+        rx_stats.rtt_sum * enso::kNsPerTimestampCycle;
 
 #ifdef SHOW_BATCH
     uint64_t last_rx_batches = rx_stats.nb_batches;
@@ -976,7 +974,7 @@ int main(int argc, char** argv) {
         (tx_bytes - last_tx_bytes) * 8. / (1e6 * interval_s);
     uint64_t tx_pkt_rate = (tx_pkts - last_tx_pkts) / interval_s;
     uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
-    uint64_t rtt_sum_ns = rx_stats.rtt_sum * norman::kNsPerTimestampCycle;
+    uint64_t rtt_sum_ns = rx_stats.rtt_sum * enso::kNsPerTimestampCycle;
     uint64_t rtt_ns;
     if (rx_pkt_diff != 0) {
       rtt_ns = (rtt_sum_ns - last_aggregated_rtt_ns) / rx_pkt_diff;
@@ -1044,7 +1042,7 @@ int main(int argc, char** argv) {
     for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
       if (rx_stats.rtt_hist[rtt] != 0) {
         uint32_t corrected_rtt =
-            (rtt + parsed_args.rtt_hist_offset) * norman::kNsPerTimestampCycle;
+            (rtt + parsed_args.rtt_hist_offset) * enso::kNsPerTimestampCycle;
         hist_file << corrected_rtt << "," << rx_stats.rtt_hist[rtt]
                   << std::endl;
       }
@@ -1054,7 +1052,7 @@ int main(int argc, char** argv) {
       std::cout << "Warning: " << rx_stats.backup_rtt_hist.size()
                 << " rtt hist entries in backup" << std::endl;
       for (auto const& i : rx_stats.backup_rtt_hist) {
-        hist_file << i.first * norman::kNsPerTimestampCycle << "," << i.second
+        hist_file << i.first * enso::kNsPerTimestampCycle << "," << i.second
                   << std::endl;
       }
     }

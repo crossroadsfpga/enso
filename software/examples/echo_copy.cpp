@@ -30,10 +30,10 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <enso/consts.h>
+#include <enso/helpers.h>
+#include <enso/socket.h>
 #include <fcntl.h>
-#include <norman/consts.h>
-#include <norman/helpers.h>
-#include <norman/socket.h>
 #include <pthread.h>
 #include <sched.h>
 #include <sys/mman.h>
@@ -58,10 +58,10 @@
 #define HUGEPAGE_SIZE (2UL << 20)
 
 // Size of the buffer that we keep packets in.
-#define BUFFER_SIZE norman::kMaxTransferLen
+#define BUFFER_SIZE enso::kMaxTransferLen
 
 // Number of transfers required to send a buffer full of packets.
-#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / norman::kMaxTransferLen) + 1)
+#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / enso::kMaxTransferLen) + 1)
 
 // Adapted from ixy.
 static void* get_huge_page(size_t size) {
@@ -197,7 +197,7 @@ int main(int argc, const char* argv[]) {
         uint32_t tx_pr_head = 0;
         uint32_t tx_pr_tail = 0;
         tx_pending_request_t* tx_pending_requests =
-            new tx_pending_request_t[norman::kMaxPendingTxRequests + 1];
+            new tx_pending_request_t[enso::kMaxPendingTxRequests + 1];
         (void)nb_cycles;
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -219,7 +219,7 @@ int main(int argc, const char* argv[]) {
         for (int i = 0; i < nb_queues; ++i) {
           // TODO(sadok) can we make this a valid file descriptor?
           std::cout << "Creating queue " << i << std::endl;
-          int socket_fd = norman::socket(AF_INET, SOCK_DGRAM, nb_queues);
+          int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, nb_queues);
 
           if (socket_fd == -1) {
             std::cerr << "Problem creating socket (" << errno
@@ -237,7 +237,7 @@ int main(int argc, const char* argv[]) {
           addr.sin_addr.s_addr = htonl(ip_address);
           addr.sin_port = htons(port);
 
-          if (norman::bind(socket_fd, (struct sockaddr*)&addr, sizeof(addr))) {
+          if (enso::bind(socket_fd, (struct sockaddr*)&addr, sizeof(addr))) {
             std::cerr << "Problem binding socket (" << errno
                       << "): " << strerror(errno) << std::endl;
             exit(3);
@@ -271,9 +271,9 @@ int main(int argc, const char* argv[]) {
           // would not work with an actual file descriptor
           for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
 #ifdef ZERO_COPY
-            int recv_len = norman::recv_zc(socket_fd, (void**)&buf, BUF_LEN, 0);
+            int recv_len = enso::recv_zc(socket_fd, (void**)&buf, BUF_LEN, 0);
 #else
-            int recv_len = norman::recv(socket_fd, buf, BUF_LEN, 0);
+            int recv_len = enso::recv(socket_fd, buf, BUF_LEN, 0);
 #endif
             if (unlikely(recv_len < 0)) {
               std::cerr << "Error receiving" << std::endl;
@@ -285,14 +285,14 @@ int main(int argc, const char* argv[]) {
             if (likely(recv_len > 0)) {
 #ifdef LATENCY_OPT
               // Prefetch next queue.
-              norman::free_enso_pipe((socket_fd + 1) & (nb_queues - 1), 0);
+              enso::free_enso_pipe((socket_fd + 1) & (nb_queues - 1), 0);
 #endif
               int processed_bytes = 0;
               uint8_t* pkt = buf;
 
               int transmission_len = 0;
               while (processed_bytes < recv_len) {
-                uint16_t pkt_len = norman::get_pkt_len(pkt);
+                uint16_t pkt_len = enso::get_pkt_len(pkt);
                 uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
                 uint16_t pkt_aligned_len = nb_flits * 64;
 
@@ -319,7 +319,7 @@ int main(int argc, const char* argv[]) {
               recv_bytes += recv_len;
 
               constexpr uint32_t kBufFillThresh =
-                  norman::kNotificationBufSize - TRANSFERS_PER_BUFFER - 1;
+                  enso::kNotificationBufSize - TRANSFERS_PER_BUFFER - 1;
 
               if (likely(bt->transmissions_pending < kBufFillThresh)) {
                 memcpy(bt->tx_buf + bt->tx_buf_offset, buf, transmission_len);
@@ -334,17 +334,17 @@ int main(int argc, const char* argv[]) {
                 tx_pending_requests[tx_pr_tail].socket_fd = socket_fd;
                 tx_pending_requests[tx_pr_tail].length = transmission_len;
                 tx_pr_tail =
-                    (tx_pr_tail + 1) % (norman::kMaxPendingTxRequests + 1);
+                    (tx_pr_tail + 1) % (enso::kMaxPendingTxRequests + 1);
 
-                norman::send(socket_fd, bt->phys_addr, transmission_len, 0);
+                enso::send(socket_fd, bt->phys_addr, transmission_len, 0);
               }
 
               // Free all packets.
-              norman::free_enso_pipe(socket_fd, recv_len);
+              enso::free_enso_pipe(socket_fd, recv_len);
             }
           }
 
-          uint32_t nb_tx_completions = norman::get_completions(0);
+          uint32_t nb_tx_completions = enso::get_completions(0);
 
           // Free data that was already sent.
           for (uint32_t i = 0; i < nb_tx_completions; ++i) {
@@ -352,15 +352,15 @@ int main(int argc, const char* argv[]) {
             struct buf_tracker* bt = &buf_trackers[tx_req.socket_fd];
             bt->free_bytes += tx_req.length;
             bt->transmissions_pending -= 1;
-            tx_pr_head = (tx_pr_head + 1) % (norman::kMaxPendingTxRequests + 1);
+            tx_pr_head = (tx_pr_head + 1) % (enso::kMaxPendingTxRequests + 1);
           }
         }
 
         // TODO(sadok): it is also common to use the close() syscall to close a
         // UDP socket.
         for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-          norman::print_sock_stats(socket_fd);
-          norman::shutdown(socket_fd, SHUT_RDWR);
+          enso::print_sock_stats(socket_fd);
+          enso::shutdown(socket_fd, SHUT_RDWR);
         }
 
         delete[] tx_pending_requests;

@@ -30,8 +30,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <norman/helpers.h>
-#include <norman/pipe.h>
+#include <enso/helpers.h>
+#include <enso/pipe.h>
 #include <pcap/pcap.h>
 
 #include <chrono>
@@ -55,9 +55,9 @@ void capture_packets(uint32_t nb_queues, uint32_t core_id,
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
-  using norman::Device;
-  using norman::RxPipe;
-  using norman::TxPipe;
+  using enso::Device;
+  using enso::RxPipe;
+  using enso::TxPipe;
 
   std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
   std::vector<RxPipe*> rx_pipes;
@@ -97,7 +97,7 @@ void capture_packets(uint32_t nb_queues, uint32_t core_id,
     auto batch = pipe->RecvPkts();
 
     for (auto pkt : batch) {
-      uint16_t pkt_len = norman::get_pkt_len(pkt);
+      uint16_t pkt_len = enso::get_pkt_len(pkt);
 
       // Save packet to pcap
       struct pcap_pkthdr pkt_hdr;

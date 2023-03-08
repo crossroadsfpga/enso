@@ -37,17 +37,17 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
+#include <enso/config.h>
+#include <enso/consts.h>
+#include <enso/helpers.h>
+#include <enso/internals.h>
 #include <immintrin.h>
-#include <norman/config.h>
-#include <norman/consts.h>
-#include <norman/helpers.h>
-#include <norman/internals.h>
 
 #include <cstdio>
 
 #include "../pcie.h"
 
-namespace norman {
+namespace enso {
 
 enum ConfigId {
   FLOW_TABLE_CONFIG_ID = 1,
@@ -120,7 +120,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;
 
-  _norman_compiler_memory_barrier();
+  _enso_compiler_memory_barrier();
   *(notification_buf_pair->tx_tail_ptr) = tx_tail;
 
   // Wait for request to be consumed.
@@ -201,4 +201,4 @@ int disable_rate_limit(struct NotificationBufPair* notification_buf_pair) {
   return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }
 
-}  // namespace norman
+}  // namespace enso

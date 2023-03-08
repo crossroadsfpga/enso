@@ -2,7 +2,7 @@ from typing import TextIO, Union
 
 from netexp.helpers import RemoteIntelFpga, remote_command, watch_command
 
-from norman.consts import (
+from enso.consts import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DSC_BUF_SIZE,
     DEFAULT_ETH_PORT,
@@ -17,8 +17,8 @@ LOAD_BITSTREAM_CMD = "hardware_test/load_bitstream.sh"
 RUN_CONSOLE_CMD = "hardware_test/run_console.sh"
 
 
-class NormanDataplane(RemoteIntelFpga):
-    """Class to control the Norman dataplane.
+class EnsoDataplane(RemoteIntelFpga):
+    """Class to control the Ensō dataplane.
 
     This class can automatically load the bitstream, configure the dataplane
     using JTAG and recompile the library according to the specified parameters.
@@ -26,7 +26,7 @@ class NormanDataplane(RemoteIntelFpga):
     Attributes:
         fpga_id:
         host:
-        remote_norman_path:
+        remote_enso_path:
         load_bitstream:
         ensure_clean:
         setup_sw:
@@ -47,7 +47,7 @@ class NormanDataplane(RemoteIntelFpga):
         self,
         fpga_id: str,
         host: str,
-        remote_norman_path: str,
+        remote_enso_path: str,
         load_bitstream: bool = True,
         ensure_clean: bool = True,
         setup_sw: bool = True,
@@ -68,8 +68,8 @@ class NormanDataplane(RemoteIntelFpga):
         if load_bitstream and verbose:
             print("Loading bitstream, it might take a couple of seconds.")
 
-        load_bitstream_cmd = f"{remote_norman_path}/{LOAD_BITSTREAM_CMD}"
-        run_console_cmd = f"{remote_norman_path}/{RUN_CONSOLE_CMD}"
+        load_bitstream_cmd = f"{remote_enso_path}/{LOAD_BITSTREAM_CMD}"
+        run_console_cmd = f"{remote_enso_path}/{RUN_CONSOLE_CMD}"
 
         super().__init__(
             host,
@@ -80,7 +80,7 @@ class NormanDataplane(RemoteIntelFpga):
             log_file=log_file,
         )
 
-        self.remote_norman_path = remote_norman_path
+        self.remote_enso_path = remote_enso_path
 
         if ensure_clean and load_bitstream:
             output = self.run_jtag_commands("read_pcie")
@@ -126,7 +126,7 @@ class NormanDataplane(RemoteIntelFpga):
     def setup_sw(self):
         sw_setup = remote_command(
             self.ssh_client,
-            f"{self.remote_norman_path}/{SETUP_SW_CMD} {self.dsc_buf_size} "
+            f"{self.remote_enso_path}/{SETUP_SW_CMD} {self.dsc_buf_size} "
             f"{self.pkt_buf_size} {self.sw_batch_size} {self.latency_opt}",
             pty=True,
         )

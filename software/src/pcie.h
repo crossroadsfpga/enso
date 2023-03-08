@@ -41,13 +41,13 @@
 #define SOFTWARE_SRC_PCIE_H_
 
 #include <endian.h>
+#include <enso/internals.h>
 #include <netinet/ether.h>
 #include <netinet/ip.h>
-#include <norman/internals.h>
 
 #include "syscall_api/intel_fpga_pcie_api.hpp"
 
-namespace norman {
+namespace enso {
 
 #define RULE_ID_LINE_LEN 64  // bytes
 #define RULE_ID_SIZE 2       // bytes
@@ -201,6 +201,6 @@ void print_fpga_reg(IntelFpgaPcieDev* dev, unsigned nb_regs);
 
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
-}  // namespace norman
+}  // namespace enso
 
 #endif  // SOFTWARE_SRC_PCIE_H_

@@ -5,4 +5,4 @@ public_headers = files(
 
 install_headers(public_headers)
 
-subdir('norman')
+subdir('enso')

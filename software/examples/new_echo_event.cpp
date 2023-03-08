@@ -30,8 +30,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <norman/helpers.h>
-#include <norman/pipe.h>
+#include <enso/helpers.h>
+#include <enso/pipe.h>
 
 #include <chrono>
 #include <csignal>
@@ -53,8 +53,8 @@ void run_echo_event(uint32_t nb_queues, uint32_t core_id,
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
-  using norman::Device;
-  using norman::RxTxPipe;
+  using enso::Device;
+  using enso::RxTxPipe;
 
   std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
   std::vector<RxTxPipe*> pipes;

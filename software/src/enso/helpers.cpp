@@ -37,9 +37,9 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#include <norman/helpers.h>
+#include <enso/helpers.h>
 
-namespace norman {
+namespace enso {
 
 uint16_t get_bdf_from_pcie_addr(const std::string& pcie_addr) {
   uint32_t domain, bus, dev, func;
@@ -128,4 +128,4 @@ void print_pkt_header(uint8_t* pkt) {
   }
 }
 
-}  // namespace norman
+}  // namespace enso

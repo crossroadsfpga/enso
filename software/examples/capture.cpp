@@ -30,8 +30,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <norman/helpers.h>
-#include <norman/socket.h>
+#include <enso/helpers.h>
+#include <enso/socket.h>
 #include <pcap/pcap.h>
 #include <pthread.h>
 #include <sched.h>
@@ -79,106 +79,105 @@ int main(int argc, const char* argv[]) {
 
   signal(SIGINT, int_handler);
 
-  std::thread socket_thread =
-      std::thread([&recv_bytes, port, addr_offset, nb_queues, &nb_batches,
-                   &nb_pkts, &pcap_file] {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+  std::thread socket_thread = std::thread([&recv_bytes, port, addr_offset,
+                                           nb_queues, &nb_batches, &nb_pkts,
+                                           &pcap_file] {
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
+    std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
 
-        for (int i = 0; i < nb_queues; ++i) {
-          // TODO(sadok) can we make this a valid file descriptor?
-          std::cout << "Creating queue " << i << std::endl;
-          int socket_fd = norman::socket(AF_INET, SOCK_DGRAM, nb_queues);
+    for (int i = 0; i < nb_queues; ++i) {
+      // TODO(sadok) can we make this a valid file descriptor?
+      std::cout << "Creating queue " << i << std::endl;
+      int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, nb_queues);
 
-          if (socket_fd == -1) {
-            std::cerr << "Problem creating socket (" << errno
-                      << "): " << strerror(errno) << std::endl;
-            exit(2);
-          }
+      if (socket_fd == -1) {
+        std::cerr << "Problem creating socket (" << errno
+                  << "): " << strerror(errno) << std::endl;
+        exit(2);
+      }
 
-          struct sockaddr_in addr;
-          memset(&addr, 0, sizeof(addr));
+      struct sockaddr_in addr;
+      memset(&addr, 0, sizeof(addr));
 
-          uint32_t ip_address = ntohl(inet_addr("192.168.0.0"));
-          ip_address += addr_offset + i;
+      uint32_t ip_address = ntohl(inet_addr("192.168.0.0"));
+      ip_address += addr_offset + i;
 
-          addr.sin_family = AF_INET;
-          addr.sin_addr.s_addr = htonl(ip_address);
-          addr.sin_port = htons(port);
+      addr.sin_family = AF_INET;
+      addr.sin_addr.s_addr = htonl(ip_address);
+      addr.sin_port = htons(port);
 
-          if (norman::bind(socket_fd, (struct sockaddr*)&addr, sizeof(addr))) {
-            std::cerr << "Problem binding socket (" << errno
-                      << "): " << strerror(errno) << std::endl;
-            exit(3);
-          }
+      if (enso::bind(socket_fd, (struct sockaddr*)&addr, sizeof(addr))) {
+        std::cerr << "Problem binding socket (" << errno
+                  << "): " << strerror(errno) << std::endl;
+        exit(3);
+      }
 
-          std::cout << "Done creating queue " << i << std::endl;
+      std::cout << "Done creating queue " << i << std::endl;
+    }
+
+    pcap_t* pd;
+    pcap_dumper_t* pdumper;
+
+    pd = pcap_open_dead(DLT_EN10MB, 65535);
+    pdumper = pcap_dump_open(pd, pcap_file.c_str());
+    struct timeval ts;
+    ts.tv_sec = 0;
+    ts.tv_usec = 0;
+
+    setup_done = 1;
+
+    unsigned char* buf;
+
+    while (keep_running) {
+      int socket_fd;
+      int recv_len = enso::recv_select(0, &socket_fd, (void**)&buf, BUF_LEN, 0);
+
+      if (unlikely(recv_len < 0)) {
+        std::cerr << "Error receiving" << std::endl;
+        exit(4);
+      }
+
+      if (likely(recv_len > 0)) {
+        int processed_bytes = 0;
+        uint8_t* pkt = buf;
+
+        while (processed_bytes < recv_len) {
+          uint16_t pkt_len = enso::get_pkt_len(pkt);
+          uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+          uint16_t pkt_aligned_len = nb_flits * 64;
+
+          // Save packet to pcap
+          struct pcap_pkthdr pkt_hdr;
+          pkt_hdr.ts = ts;
+
+          pkt_hdr.len = pkt_len;
+          pkt_hdr.caplen = pkt_len;
+          ++(ts.tv_usec);
+          pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
+
+          pkt += pkt_aligned_len;
+          processed_bytes += pkt_aligned_len;
+          ++nb_pkts;
         }
 
-        pcap_t* pd;
-        pcap_dumper_t* pdumper;
+        ++nb_batches;
+        recv_bytes += recv_len;
 
-        pd = pcap_open_dead(DLT_EN10MB, 65535);
-        pdumper = pcap_dump_open(pd, pcap_file.c_str());
-        struct timeval ts;
-        ts.tv_sec = 0;
-        ts.tv_usec = 0;
+        enso::free_enso_pipe(socket_fd, recv_len);
+      }
+    }
 
-        setup_done = 1;
+    // TODO(sadok): it is also common to use the close() syscall to close a
+    // UDP socket.
+    for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
+      enso::print_sock_stats(socket_fd);
+      enso::shutdown(socket_fd, SHUT_RDWR);
+    }
 
-        unsigned char* buf;
-
-        while (keep_running) {
-          int socket_fd;
-          int recv_len =
-              norman::recv_select(0, &socket_fd, (void**)&buf, BUF_LEN, 0);
-
-          if (unlikely(recv_len < 0)) {
-            std::cerr << "Error receiving" << std::endl;
-            exit(4);
-          }
-
-          if (likely(recv_len > 0)) {
-            int processed_bytes = 0;
-            uint8_t* pkt = buf;
-
-            while (processed_bytes < recv_len) {
-              uint16_t pkt_len = norman::get_pkt_len(pkt);
-              uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-              uint16_t pkt_aligned_len = nb_flits * 64;
-
-              // Save packet to pcap
-              struct pcap_pkthdr pkt_hdr;
-              pkt_hdr.ts = ts;
-
-              pkt_hdr.len = pkt_len;
-              pkt_hdr.caplen = pkt_len;
-              ++(ts.tv_usec);
-              pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
-
-              pkt += pkt_aligned_len;
-              processed_bytes += pkt_aligned_len;
-              ++nb_pkts;
-            }
-
-            ++nb_batches;
-            recv_bytes += recv_len;
-
-            norman::free_enso_pipe(socket_fd, recv_len);
-          }
-        }
-
-        // TODO(sadok): it is also common to use the close() syscall to close a
-        // UDP socket.
-        for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-          norman::print_sock_stats(socket_fd);
-          norman::shutdown(socket_fd, SHUT_RDWR);
-        }
-
-        pcap_dump_close(pdumper);
-        pcap_close(pd);
-      });
+    pcap_dump_close(pdumper);
+    pcap_close(pd);
+  });
 
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);

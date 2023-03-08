@@ -38,10 +38,10 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#include "norman/socket.h"
+#include "enso/socket.h"
 
-#include <norman/config.h>
-#include <norman/helpers.h>
+#include <enso/config.h>
+#include <enso/helpers.h>
 
 #include <cstring>
 #include <iostream>
@@ -49,7 +49,7 @@
 #include "../pcie.h"
 #include "../syscall_api/intel_fpga_pcie_api.hpp"
 
-namespace norman {
+namespace enso {
 
 static struct NotificationBufPair notification_buf_pair[MAX_NB_CORES];
 
@@ -260,4 +260,4 @@ void print_sock_stats(int sockfd) {
   print_stats(socket, socket->enso_pipe.id == 0);
 }
 
-}  // namespace norman
+}  // namespace enso

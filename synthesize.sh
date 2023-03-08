@@ -3,7 +3,7 @@
 # If you do not specify the bitstream destination it will be saved to the
 # current directory.
 
-QUARTUS_PROJECT_ROOT_DEFAULT="$HOME/norman_production"
+QUARTUS_PROJECT_ROOT_DEFAULT="$HOME/enso_production"
 
 CUR_DIR=$(pwd)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"

@@ -1,6 +1,6 @@
 import click
 
-from norman.consts import (
+from enso.consts import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_DSC_BUF_SIZE,
     DEFAULT_ETH_PORT,
@@ -9,12 +9,12 @@ from norman.consts import (
     DEFAULT_NB_TX_CREDITS,
     DEFAULT_PKT_BUF_SIZE,
 )
-from norman.norman_dataplane import NormanDataplane
+from enso.enso_dataplane import EnsoDataplane
 
 
 @click.command()
 @click.argument("host")
-@click.argument("remote_norman_path")
+@click.argument("remote_enso_path")
 @click.option(
     "--fpga", default=DEFAULT_FPGA, show_default=True, help="Choose the FPGA."
 )
@@ -88,7 +88,7 @@ from norman.norman_dataplane import NormanDataplane
 )
 def main(
     host,
-    remote_norman_path,
+    remote_enso_path,
     fpga,
     dsc_buf_size,
     pkt_buf_size,
@@ -102,10 +102,10 @@ def main(
     load_bitstream,
 ):
 
-    norman_dp = NormanDataplane(
+    enso_dp = EnsoDataplane(
         fpga,
         host,
-        remote_norman_path,
+        remote_enso_path,
         load_bitstream=load_bitstream,
         ensure_clean=True,
         setup_sw=True,
@@ -122,7 +122,7 @@ def main(
         log_file=True,
     )
 
-    norman_dp.interactive_shell()
+    enso_dp.interactive_shell()
 
 
 if __name__ == "__main__":

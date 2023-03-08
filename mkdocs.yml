@@ -5,8 +5,8 @@ site_description: >-
   Ensō is a fast and flexible streaming interface for NIC-Application communication.
 
 # Repository
-repo_name: hsadok/norman
-repo_url: https://github.com/hsadok/norman
+repo_name: hsadok/enso
+repo_url: https://github.com/hsadok/enso
 
 # Copyright
 copyright: Copyright &copy; 2023 <a href=https://hsadok.com target="_blank">Hugo Sadok</a>

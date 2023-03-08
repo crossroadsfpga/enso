@@ -1,5 +1,5 @@
 
-norman_sources = files(
+enso_sources = files(
     'config.cpp',
     'helpers.cpp',
     'ixy_helpers.cpp',
@@ -7,4 +7,4 @@ norman_sources = files(
     'socket.cpp',
 )
 
-project_sources += norman_sources
+project_sources += enso_sources

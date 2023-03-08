@@ -30,9 +30,9 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <norman/consts.h>
-#include <norman/helpers.h>
-#include <norman/socket.h>
+#include <enso/consts.h>
+#include <enso/helpers.h>
+#include <enso/socket.h>
 #include <pthread.h>
 #include <sched.h>
 #include <x86intrin.h>
@@ -84,7 +84,7 @@ int main(int argc, const char* argv[]) {
     uint32_t tx_pr_tail = 0;
 #endif  // SEND_BACK
     tx_pending_request_t* tx_pending_requests =
-        new tx_pending_request_t[norman::kMaxPendingTxRequests + 1];
+        new tx_pending_request_t[enso::kMaxPendingTxRequests + 1];
     (void)nb_cycles;
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -94,7 +94,7 @@ int main(int argc, const char* argv[]) {
     for (int i = 0; i < nb_queues; ++i) {
       // TODO(sadok) can we make this a valid file descriptor?
       std::cout << "Creating queue " << i << std::endl;
-      int socket_fd = norman::socket(AF_INET, SOCK_DGRAM, nb_queues);
+      int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, nb_queues);
 
       if (socket_fd == -1) {
         std::cerr << "Problem creating socket (" << errno
@@ -112,7 +112,7 @@ int main(int argc, const char* argv[]) {
       addr.sin_addr.s_addr = htonl(ip_address);
       addr.sin_port = htons(port);
 
-      if (norman::bind(socket_fd, (struct sockaddr*)&addr, sizeof(addr))) {
+      if (enso::bind(socket_fd, (struct sockaddr*)&addr, sizeof(addr))) {
         std::cerr << "Problem binding socket (" << errno
                   << "): " << strerror(errno) << std::endl;
         exit(3);
@@ -127,8 +127,7 @@ int main(int argc, const char* argv[]) {
 
     while (keep_running) {
       int socket_fd;
-      int recv_len =
-          norman::recv_select(0, &socket_fd, (void**)&buf, BUF_LEN, 0);
+      int recv_len = enso::recv_select(0, &socket_fd, (void**)&buf, BUF_LEN, 0);
 
       if (unlikely(recv_len < 0)) {
         std::cerr << "Error receiving" << std::endl;
@@ -140,7 +139,7 @@ int main(int argc, const char* argv[]) {
         uint8_t* pkt = buf;
 
         while (processed_bytes < recv_len) {
-          uint16_t pkt_len = norman::get_pkt_len(pkt);
+          uint16_t pkt_len = enso::get_pkt_len(pkt);
           uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
           uint16_t pkt_aligned_len = nb_flits * 64;
 
@@ -159,28 +158,28 @@ int main(int argc, const char* argv[]) {
         recv_bytes += recv_len;
 
 #ifdef SEND_BACK
-        uint64_t phys_addr = norman::convert_buf_addr_to_phys(socket_fd, buf);
-        norman::send(socket_fd, phys_addr, recv_len, 0);
+        uint64_t phys_addr = enso::convert_buf_addr_to_phys(socket_fd, buf);
+        enso::send(socket_fd, phys_addr, recv_len, 0);
 
         // TODO(sadok): This should be transparent to the app.
         // Save transmission request so that we can free the buffer once
         // it's complete.
         tx_pending_requests[tx_pr_tail].socket_fd = socket_fd;
         tx_pending_requests[tx_pr_tail].length = recv_len;
-        tx_pr_tail = (tx_pr_tail + 1) % (norman::kMaxPendingTxRequests + 1);
+        tx_pr_tail = (tx_pr_tail + 1) % (enso::kMaxPendingTxRequests + 1);
 #else
-        norman::free_enso_pipe(socket_fd, recv_len);
+        enso::free_enso_pipe(socket_fd, recv_len);
 #endif
       }
 
 #ifdef SEND_BACK
-      uint32_t nb_tx_completions = norman::get_completions(0);
+      uint32_t nb_tx_completions = enso::get_completions(0);
 
       // Free data that was already sent.
       for (uint32_t i = 0; i < nb_tx_completions; ++i) {
         tx_pending_request_t tx_req = tx_pending_requests[tx_pr_head];
-        norman::free_enso_pipe(tx_req.socket_fd, tx_req.length);
-        tx_pr_head = (tx_pr_head + 1) % (norman::kMaxPendingTxRequests + 1);
+        enso::free_enso_pipe(tx_req.socket_fd, tx_req.length);
+        tx_pr_head = (tx_pr_head + 1) % (enso::kMaxPendingTxRequests + 1);
       }
 #endif
     }
@@ -188,8 +187,8 @@ int main(int argc, const char* argv[]) {
     // TODO(sadok): it is also common to use the close() syscall to close a
     // UDP socket.
     for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-      norman::print_sock_stats(socket_fd);
-      norman::shutdown(socket_fd, SHUT_RDWR);
+      enso::print_sock_stats(socket_fd);
+      enso::shutdown(socket_fd, SHUT_RDWR);
     }
 
     delete[] tx_pending_requests;

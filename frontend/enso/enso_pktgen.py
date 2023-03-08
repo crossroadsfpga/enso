@@ -11,19 +11,19 @@ from netexp.helpers import remote_command, watch_command, download_file
 from netexp.pcap import mean_pkt_size_remote_pcap
 from netexp.pktgen import Pktgen
 
-from norman.consts import (
+from enso.consts import (
     FPGA_RATELIMIT_CLOCK,
-    NORMAN_PKTGEN_CMD,
+    ENSO_PKTGEN_CMD,
     PCAP_GEN_CMD,
     PCAPS_DIR,
 )
-from norman.norman_dataplane import NormanDataplane
+from enso.enso_dataplane import EnsoDataplane
 
 
 ETHERNET_OVERHEAD = 20 + 4  # Includes CRC.
 
 
-class NormanPktgenStats:
+class EnsoPktgenStats:
     def __init__(self, file_name: str) -> None:
         self.stats = defaultdict(list)
         self.nb_samples = 0
@@ -78,12 +78,12 @@ class NormanPktgenStats:
         return summary
 
 
-class NormanPktgen(Pktgen):
-    """Python wrapper for Norman pktgen."""
+class EnsoGen(Pktgen):
+    """Python wrapper for the EnsōGen packet generator."""
 
     def __init__(
         self,
-        dataplane: NormanDataplane,
+        dataplane: EnsoDataplane,
         core_id: int = 0,
         queues: int = 4,
         multicore: bool = False,
@@ -135,7 +135,7 @@ class NormanPktgen(Pktgen):
 
         pcap_name = f"{nb_pkts}_{pkt_size}_{nb_src}_{nb_dst}.pcap"
 
-        remote_dir_path = Path(self.dataplane.remote_norman_path)
+        remote_dir_path = Path(self.dataplane.remote_enso_path)
         pcap_dst = remote_dir_path / Path(PCAPS_DIR) / Path(pcap_name)
         pcap_gen_cmd = remote_dir_path / Path(PCAP_GEN_CMD)
         pcap_gen_cmd = (
@@ -191,7 +191,7 @@ class NormanPktgen(Pktgen):
             )
 
         command = (
-            f"sudo {self.dataplane.remote_norman_path}/{NORMAN_PKTGEN_CMD}"
+            f"sudo {self.dataplane.remote_enso_path}/{ENSO_PKTGEN_CMD}"
             f" {self.pcap_path} {rate_frac.numerator} {rate_frac.denominator}"
             f" --count {nb_pkts}"
             f" --core {self.core_id}"
@@ -240,7 +240,7 @@ class NormanPktgen(Pktgen):
         )
         status = self.pktgen_cmd.recv_exit_status()
         if status != 0:
-            raise RuntimeError("Error running Norman Pktgen")
+            raise RuntimeError("Error running EnsōGen")
 
         self.update_stats()
 
@@ -259,7 +259,7 @@ class NormanPktgen(Pktgen):
         with tempfile.TemporaryDirectory() as tmp:
             local_stats = f"{tmp}/stats.csv"
             download_file(self.dataplane.host, self.stats_file, local_stats)
-            parsed_stats = NormanPktgenStats(local_stats)
+            parsed_stats = EnsoPktgenStats(local_stats)
 
             stats_summary = parsed_stats.get_summary(calculate_tx_mean)
 
@@ -346,7 +346,7 @@ class NormanPktgen(Pktgen):
         )
         status = self.pktgen_cmd.recv_exit_status()
         if status != 0:
-            raise RuntimeError("Error stopping Norman Pktgen")
+            raise RuntimeError("Error stopping EnsōGen")
 
         self.update_stats()
 

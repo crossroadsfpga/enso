@@ -82,7 +82,7 @@ localparam PCIE_TX_PKT_FIFO_ALM_FULL_THRESH =
 // MAX_NB_FLOWS determines the max number of packet queues.
 // Both MAX_NB_APPS and MAX_NB_FLOWS must be powers of two.
 // These **must be kept in sync** with the variables with the same name on
-// `hardware_test/hwtest/my_stats.tcl` and `software/include/norman/consts.h`.
+// `hardware_test/hwtest/my_stats.tcl` and `software/include/enso/consts.h`.
 // TODO(sadok): expose these values from JTAG so that software and the tcl
 // script can adapt to the bitstream that is loaded at a given moment.
 localparam MAX_NB_APPS = 1024;

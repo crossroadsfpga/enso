@@ -5,8 +5,8 @@ from setuptools import setup, find_packages
 with open("README.md", "r", encoding="utf-8") as readme_file:
     long_description = readme_file.read()
 
-package_name = "norman-dp"
-name = "norman"
+package_name = "enso-dp"
+name = "enso"
 
 
 # Hack to avoid having to define metadata twice. Instead define it in the
@@ -23,18 +23,18 @@ def find_meta(meta_name):
 setup(
     name=package_name,
     version=find_meta("__version__"),
-    description="Python frontend for the Norman dataplane.",
+    description="Python frontend for the Ensō dataplane.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(),
-    url="https://github.com/hsadok/norman",
-    download_url="https://github.com/hsadok/norman",
+    url="https://github.com/hsadok/enso",
+    download_url="https://github.com/hsadok/enso",
     license="BSD",
     author=find_meta("__author__"),
     author_email=find_meta("__email__"),
-    keywords=["network", "norman", "dataplane"],
-    python_requires=">=3.6",
-    entry_points={"console_scripts": ["norman=norman.__main__:main"]},
+    keywords=["network", "enso", "dataplane", "nic"],
+    python_requires=">=3.7",
+    entry_points={"console_scripts": ["enso=enso.__main__:main"]},
     include_package_data=True,
     install_requires=["click>=8.0", "netexp==0.1.12", "tqdm"],
     setup_requires=["pytest-runner"],
@@ -46,11 +46,11 @@ setup(
         "Natural Language :: English",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Topic :: System :: Networking",
         "Topic :: System :: Systems Administration",
     ],

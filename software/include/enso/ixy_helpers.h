@@ -35,13 +35,13 @@
  *        [ixy driver](https://github.com/emmericp/ixy/blob/master/src/memory.c)
  */
 
-#ifndef SOFTWARE_INCLUDE_NORMAN_IXY_HELPERS_H_
-#define SOFTWARE_INCLUDE_NORMAN_IXY_HELPERS_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_IXY_HELPERS_H_
+#define SOFTWARE_INCLUDE_ENSO_IXY_HELPERS_H_
 
 #include <cstdint>
 #include <string>
 
-namespace norman {
+namespace enso {
 
 /**
  * Converts a virtual address to a physical address.
@@ -66,6 +66,6 @@ uint64_t virt_to_phys(void* virt);
  */
 void* get_huge_page(const std::string& name, bool mirror = false);
 
-}  // namespace norman
+}  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_NORMAN_IXY_HELPERS_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_IXY_HELPERS_H_

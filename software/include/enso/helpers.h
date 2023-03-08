@@ -36,24 +36,24 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_NORMAN_HELPERS_H_
-#define SOFTWARE_INCLUDE_NORMAN_HELPERS_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#define SOFTWARE_INCLUDE_ENSO_HELPERS_H_
 
 #include <endian.h>
+#include <enso/consts.h>
+#include <enso/internals.h>
 #include <netinet/ether.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
-#include <norman/consts.h>
-#include <norman/internals.h>
 
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
 #include <string>
 
-namespace norman {
+namespace enso {
 
 #ifndef likely
 #define likely(x) __builtin_expect((x), 1)
@@ -63,12 +63,12 @@ namespace norman {
 #define unlikely(x) __builtin_expect((x), 0)
 #endif
 
-#define _norman_compiler_memory_barrier() \
-  do {                                    \
-    asm volatile("" : : : "memory");      \
+#define _enso_compiler_memory_barrier() \
+  do {                                  \
+    asm volatile("" : : : "memory");    \
   } while (0)
 
-#define _norman_always_inline __attribute__((always_inline)) inline
+#define _enso_always_inline __attribute__((always_inline)) inline
 
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
@@ -115,6 +115,6 @@ void print_pkt_header(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
 
-}  // namespace norman
+}  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_NORMAN_HELPERS_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_HELPERS_H_

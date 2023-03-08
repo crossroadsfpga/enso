@@ -1,4 +1,4 @@
-# Norman Python Frontend
+# Ensō Python Frontend
 
 ## Install
 
@@ -6,7 +6,7 @@ To install the frontend run in the current directory (`frontend`):
 ```bash
 pip3 install -e .
 ```
-To run Norman pktgen you also need to have the `capinfos` command installed in the machine you want to use to generate packets.
+To run the EnsōGen packet generator you also need to have the `capinfos` command installed in the machine you want to use to generate packets.
 
 On Ubuntu (or other Debian-based system) run:
 ```bash
@@ -19,7 +19,7 @@ For other distributions refer to the [wireshark docs](https://tshark.dev/setup/i
 
 For usage information run:
 ```bash
-norman --help
+enso --help
 ```
 
 ## Enable autocompletion (optional)
@@ -27,27 +27,27 @@ norman --help
 #### For Bash
 Run this:
 ```bash
-_NORMAN_COMPLETE=bash_source norman > ~/.norman-complete.bash
+_ENSO_COMPLETE=bash_source enso > ~/.enso-complete.bash
 ```
 
 Then add the following to your `.bashrc`:
 ```bash
-. ~/.norman-complete.bash
+. ~/.enso-complete.bash
 ```
 
 #### For Zsh
 Run this:
 ```zsh
-_NORMAN_COMPLETE=zsh_source norman > ~/.norman-complete.zsh
+_ENSO_COMPLETE=zsh_source enso > ~/.enso-complete.zsh
 ```
 
 Then add the following to your `.zshrc`:
 ```zsh
-. ~/.norman-complete.zsh
+. ~/.enso-complete.zsh
 ```
 
 #### For Fish
-Save the script to `~/.config/fish/completions/norman.fish`:
+Save the script to `~/.config/fish/completions/enso.fish`:
 ```fish
-_NORMAN_COMPLETE=fish_source norman > ~/.config/fish/completions/norman.fish
+_ENSO_COMPLETE=fish_source enso > ~/.config/fish/completions/enso.fish
 ```

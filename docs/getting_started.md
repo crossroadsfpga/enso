@@ -17,11 +17,11 @@
 
 ## System Requirements
 
-Norman currently requires an Intel Stratix 10 MX FPGA. Support for other boards might be added in the future.
+Ensō currently requires an Intel Stratix 10 MX FPGA. Support for other boards might be added in the future.
 
 ## Setup
 
-Here we describe the steps to compile and install Norman.
+Here we describe the steps to compile and install Ensō.
 
 ### Prepare system
 
@@ -42,7 +42,7 @@ done
 
 ### Dependencies
 
-Norman has the following dependencies:
+Ensō has the following dependencies:
 * Either gcc (>= 9.0) or clang (>= 8.0)
 * Python (>= 3.6)
 * pip
@@ -68,9 +68,9 @@ sudo pip3 install meson ninja
 
 ### Compilation
 
-Start by cloning the norman repository, if you haven't already:
+Start by cloning the enso repository, if you haven't already:
 ```bash
-git clone https://github.com/hsadok/norman
+git clone https://github.com/hsadok/enso
 ```
 
 Prepare the compilation using meson and compile it with ninja.
@@ -112,24 +112,24 @@ meson configure -Dbatch_size=64 -Dlatency_opt=true
 
 <!--- TODO(sadok): Describe how to synthesize hardware. -->
 
-### Installing norman script
+### Installing enso script
 
-To configure and load the norman dataplane you should install the norman script in your *local machine* (e.g., your laptop). This is different from the machine that you will run norman on.
+To configure and load the enso dataplane you should install the enso script in your *local machine* (e.g., your laptop). This is different from the machine that you will run enso on.
 
-If you haven't already, clone the norman repository in your *local machine*:
+If you haven't already, clone the enso repository in your *local machine*:
 ```bash
-git clone https://github.com/hsadok/norman
+git clone https://github.com/hsadok/enso
 ```
 
-To install the norman script run in the `norman` directory:
+To install the enso script run in the `enso` directory:
 ```bash
-cd norman
+cd enso
 python3 -m pip install -e frontend
 ```
 
-Refer to the [norman script documentation](frontend/README.md) for instructions on how to enable autocompletion or the dependencies you need to run Norman pktgen.
+Refer to the [enso script documentation](frontend/README.md) for instructions on how to enable autocompletion or the dependencies you need to run the EnsōGen packet generator.
 
-Before you can run the script. You must make sure that you have ssh access using a password-less key (e.g., using ssh-copy-id) to the machine you will run norman on. You should also have a `~/.ssh/config` configuration file set in your local machine with configuration to access the machine that you will run norman on.
+Before you can run the script. You must make sure that you have ssh access using a password-less key (e.g., using ssh-copy-id) to the machine you will run enso on. You should also have a `~/.ssh/config` configuration file set in your local machine with configuration to access the machine that you will run enso on.
 
 If you don't yet have a `~/.ssh/config` file, you can create one and add the following lines, replacing everything between `<>` with the correct values:
 ```bash
@@ -139,28 +139,28 @@ Host <machine_name>
   User <user_name>
 ```
 
-`machine_name` is a nickname to the machine. You will use this name to run the norman script.
+`machine_name` is a nickname to the machine. You will use this name to run the enso script.
 
-Next we will describe to use the script to load the bitstream and configure the dataplane but you can also use the norman script itself to obtain usage information:
+Next we will describe to use the script to load the bitstream and configure the dataplane but you can also use the enso script itself to obtain usage information:
 ```bash
-norman --help
+enso --help
 ```
 
 ### Loading the bitstream to the FPGA
 
 Before running any software you need to make sure that the FPGA is loaded with the latest bitstream. To do so, you must first place the bitstream file in the correct location. You can obtain the bitstream file from [here](https://drive.google.com/drive/folders/1J2YYTNXotdOOeKWvoj_5-heE5qE2dQAC?usp=sharing) or synthesize it from the source code as described in the [synthesis section](#synthesis).
 
-Copy the bitstream file (`alt_ehipc2_hw.sof`) to `norman/hardware_test/alt_ehipc2_hw.sof` in the machine with the FPGA, e.g.:
+Copy the bitstream file (`alt_ehipc2_hw.sof`) to `enso/hardware_test/alt_ehipc2_hw.sof` in the machine with the FPGA, e.g.:
 ```bash
-cp <bitstream_path>/alt_ehipc2_hw.sof <norman_path>/norman/hardware_test/alt_ehipc2_hw.sof
+cp <bitstream_path>/alt_ehipc2_hw.sof <enso_path>/enso/hardware_test/alt_ehipc2_hw.sof
 ```
 
-Run the `norman` script in the local machine to load the bitstream in the one with the FPGA:
+Run the `enso` script in the local machine to load the bitstream in the one with the FPGA:
 ```bash
-norman <host> <remote_norman_path> --load-bitstream
+enso <host> <remote_enso_path> --load-bitstream
 ```
 
-You can also specify other options to configure the dataplane, refer to `norman --help` for more information.
+You can also specify other options to configure the dataplane, refer to `enso --help` for more information.
 
 <!---
 ## Development Environment
