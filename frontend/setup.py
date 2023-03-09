@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 with open("README.md", "r", encoding="utf-8") as readme_file:
     long_description = readme_file.read()
 
-package_name = "enso-dp"
+package_name = "enso-nic"
 name = "enso"
 
 
