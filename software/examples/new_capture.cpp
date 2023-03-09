@@ -57,7 +57,6 @@ void capture_packets(uint32_t nb_queues, uint32_t core_id,
 
   using enso::Device;
   using enso::RxPipe;
-  using enso::TxPipe;
 
   std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
   std::vector<RxPipe*> rx_pipes;
