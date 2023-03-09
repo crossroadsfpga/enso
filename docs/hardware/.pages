@@ -1,5 +1,5 @@
 nav:
     # - Hardware Reference: index.md
-    - FPGA Counters: counters.md
+    - Hardware Counters: counters.md
     # - FPGA Memory Mapped Registers
     - Hardware Modules: modules

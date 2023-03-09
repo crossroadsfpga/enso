@@ -1,6 +1,6 @@
-# FPGA Counters
+# Hardware Counters
 
-| Counter                    | Description |
+| <div style="width:200px"></div> Counter | Description |
 | -------------------------- | ----------- |
 | `IN_PKT`                   | Number of packets that arrived at the Ethernet port. |
 | `OUT_PKT`                  | Number of packets that left the Ethernet port. |
