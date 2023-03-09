@@ -17,7 +17,6 @@
 //`define DISABLE_DRAM
 `define USE_BRAM
 module alt_ehipc2_hw (
-
     input clk50,
     input in_clk100,
 `ifndef USE_BRAM
@@ -942,4 +941,3 @@ esram_wrapper esram_pkt_buffer(
 `endif
 
 endmodule
-
