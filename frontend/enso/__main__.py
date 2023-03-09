@@ -9,7 +9,7 @@ from enso.consts import (
     DEFAULT_NB_TX_CREDITS,
     DEFAULT_PKT_BUF_SIZE,
 )
-from enso.enso_dataplane import EnsoDataplane
+from enso.enso_nic import EnsoNic
 
 
 @click.command()
@@ -102,7 +102,7 @@ def main(
     load_bitstream,
 ):
 
-    enso_dp = EnsoDataplane(
+    enso_dp = EnsoNic(
         fpga,
         host,
         remote_enso_path,

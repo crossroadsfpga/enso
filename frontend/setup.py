@@ -23,7 +23,7 @@ def find_meta(meta_name):
 setup(
     name=package_name,
     version=find_meta("__version__"),
-    description="Python frontend for the Ensō dataplane.",
+    description="Python frontend for the Ensō NIC.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(),
@@ -32,7 +32,7 @@ setup(
     license="BSD",
     author=find_meta("__author__"),
     author_email=find_meta("__email__"),
-    keywords=["network", "enso", "dataplane", "nic"],
+    keywords=["network", "enso", "nic"],
     python_requires=">=3.7",
     entry_points={"console_scripts": ["enso=enso.__main__:main"]},
     include_package_data=True,

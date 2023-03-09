@@ -114,7 +114,7 @@ meson configure -Dbatch_size=64 -Dlatency_opt=true
 
 ### Installing enso script
 
-To configure and load the enso dataplane you should install the enso script in your *local machine* (e.g., your laptop). This is different from the machine that you will run enso on.
+To configure and load the enso NIC you should install the enso script in your *local machine* (e.g., your laptop). This is different from the machine that you will run enso on.
 
 If you haven't already, clone the enso repository in your *local machine*:
 ```bash
@@ -141,7 +141,7 @@ Host <machine_name>
 
 `machine_name` is a nickname to the machine. You will use this name to run the enso script.
 
-Next we will describe to use the script to load the bitstream and configure the dataplane but you can also use the enso script itself to obtain usage information:
+Next we will describe to use the script to load the bitstream and configure the NIC but you can also use the enso script itself to obtain usage information:
 ```bash
 enso --help
 ```
@@ -160,7 +160,7 @@ Run the `enso` script in the local machine to load the bitstream in the one with
 enso <host> <remote_enso_path> --load-bitstream
 ```
 
-You can also specify other options to configure the dataplane, refer to `enso --help` for more information.
+You can also specify other options to configure the NIC, refer to `enso --help` for more information.
 
 <!---
 ## Development Environment

@@ -155,7 +155,7 @@ static void print_usage(const char* program_name) {
       "                  performance penalty.\n"
       "  --stats-delay: Delay between displayed stats in milliseconds\n"
       "                 (default: %d).\n"
-      "  --pcie-addr: Specify the PCIe address of the dataplane to use.\n",
+      "  --pcie-addr: Specify the PCIe address of the NIC to use.\n",
       program_name, DEFAULT_CORE_ID, DEFAULT_NB_QUEUES, DEFAULT_HIST_OFFSET,
       DEFAULT_HIST_LEN, DEFAULT_STATS_DELAY);
 }

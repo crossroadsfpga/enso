@@ -17,11 +17,11 @@ LOAD_BITSTREAM_CMD = "hardware_test/load_bitstream.sh"
 RUN_CONSOLE_CMD = "hardware_test/run_console.sh"
 
 
-class EnsoDataplane(RemoteIntelFpga):
-    """Class to control the Ensō dataplane.
+class EnsoNic(RemoteIntelFpga):
+    """Class to control the Ensō NIC.
 
-    This class can automatically load the bitstream, configure the dataplane
-    using JTAG and recompile the library according to the specified parameters.
+    This class can automatically load the bitstream, configure the NIC using
+    JTAG and recompile the library according to the specified parameters.
 
     Attributes:
         fpga_id:
