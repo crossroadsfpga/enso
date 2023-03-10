@@ -86,7 +86,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
 
   char huge_page_name[128];
   int id = notification_buf_pair->id + kMaxNbFlows;
-  snprintf(huge_page_name, sizeof(huge_page_name), "enso_notif_buf:%i", id);
+software/src/pcie.cpp  snprintf(huge_page_name, sizeof(huge_page_name), "enso_notif_buf:%i", id);
 
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
