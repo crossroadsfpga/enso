@@ -101,6 +101,9 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
     context->buf[pipe_packets_tail] = pkt;
 
     pipe_packets_tail += 1;
+    // if we hit the max num packets to read, break from loop
+    if (pipe_packets_tail == MAX_NUM_PACKETS)
+        pcap_breakloop(context->pcap);
 }
 
 int read_in_file() {
@@ -293,5 +296,4 @@ void print_fpga_reg(intel_fpga_pcie_dev* dev, unsigned nb_regs) {
 void print_stats(struct SocketInternal* socket_entry, bool print_global) {
   
 }
-
-}  // namespace norman
+ // namespace norman
