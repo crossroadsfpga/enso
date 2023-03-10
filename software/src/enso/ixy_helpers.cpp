@@ -50,7 +50,7 @@ namespace enso {
 
 #ifdef MOCK
 uint64_t virt_to_phys(void *virt) {
-  return virt
+  return virt;
 }
 #else
 uint64_t virt_to_phys(void* virt) {

@@ -58,11 +58,29 @@
 
 namespace norman {
 
+#define MAX_NUM_PACKETS 256;
+#define BATCH_SIZE 16;
+
+typedef struct packet {
+    const uchar *pkt_bytes;
+    uint32_t pkt_len;
+} packet_t;
+
+struct PcapHandlerContext {
+  void **buf;
+  int buf_position;
+  uint32_t hugepage_offset;
+  pcap_t* pcap;
+};
+
 struct timeval ts;
 ts.tv_sec = 0;
 ts.tv_usec = 0;
 pcap_t* pd;
-pcap_dumper_t* pdumper;
+pcap_dumper_t* pdumper_out;
+packet_t in_buf[MAX_NUM_PACKETS];
+uint32_t pipe_packets_head;
+uint32_t pipe_packets_tail;
 
 int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
                           volatile struct QueueRegs* notification_buf_pair_regs,
@@ -71,12 +89,55 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   return 0;
 }
 
+// called each time a packet is processed
+void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
+                      const u_char* pkt_bytes) {
+    struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
+    uint32_t len = pkt_hdr->len;
+
+    packet_t pkt;
+    pkt.pkt_bytes = pkt_bytes;
+    pkt.pkt_len = len;
+    context->buf[pipe_packets_tail] = pkt;
+
+    pipe_packets_tail += 1;
+}
+
+int read_in_file() {
+    // reading from in file and storing in a buffer
+    char errbuf[PCAP_ERRBUF_SIZE];
+    pcap_t* pcap = pcap_open_offline("in.pcap", errbuf);
+    if (pcap == NULL) {
+        std::cerr << "Error loading pcap file (" << errbuf << ")" << std::endl;
+        return 2;
+    }
+    struct PcapHandlerContext context;
+    context.hugepage_offset = HUGEPAGE_SIZE;
+    context.pcap = pcap;
+    context.buf = in_buf;
+    // read infinitely until packets are all consumed
+    if (pcap_loop(pcap, 0, pcap_pkt_handler, (u_char*)&context) < 0) {
+        std::cerr << "Error while reading pcap (" << pcap_geterr(pcap) << ")"
+                << std::endl;
+        return 3;
+    }
+    return 0;
+}
+
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id) {
+    pipe_packets_head = 0;
+    pipe_packets_tail = 0;
+
+    // opening files to dump packets to
     pd = pcap_open_dead(DLT_EN10MB, 65535);
-    pdumper = pcap_dump_open(pd, "mock_pcap.pcapng");
+    pdumper = pcap_dump_open(pd, "out.pcap");
+
+    if (read_in_file() < 0)  
+        return -1;
+
     return 0;
 }
 
@@ -99,20 +160,31 @@ static norman_always_inline uint32_t
 __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
-  return 0;
+    if (pipe_packets_head==pipe_packets_tail)
+        return 0;
+    
+    int index = 0;
+    int num_bytes_read = 0;
+    while (pipe_packets_head < std::min(pipe_packets_tail, pipe_packets_head + BATCH_SIZE))
+        packet_t pkt = in_buf[pipe_packets_head];
+        memcpy(*buf[index], pkt.pkt_bytes);
+        num_bytes_read += pkt.pkt_len;
+        index += 1;
+        pipe_packets_head += 1;
+    }
+
+    return num_bytes_read;
 }
 
 uint32_t get_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
-  __get_new_tails(notification_buf_pair);
     return 0;
 }
 
 uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
-  __get_new_tails(notification_buf_pair);
     return 0;
 }
 
@@ -151,7 +223,15 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len) {
     // phys_addr is the virtual address in the mock
+    // add number of times you want to send this set of packets using macros
+    // writing to file is like writing to network
+    // the file is the network, like an ethernet pipe
+    // set transmission bandwidth as a parameter, never allow
+    // more data in a certain period of time than the given bandwidth
+    // calculate number of packets per interval 
+    // can sleep until then OR loop using c++ function https://en.cppreference.com/w/cpp/thread/sleep_for
 
+    // to test, follow the README.md
     unsigned char buf[len];
     memcpy(phys_addr, buf, len);
     
@@ -177,11 +257,12 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
         pkt += pkt_aligned_len;
         processed_bytes += pkt_aligned_len;
     }
+    pipe_tail += processed_bytes;
 
     return 0;
 }
 
-uint32_t get_unreported_completions(
+uint32_t get_unreported_completions(){
     return 0;
 }
 
