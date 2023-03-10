@@ -86,7 +86,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
 
   char huge_page_name[128];
   int id = notification_buf_pair->id + kMaxNbFlows;
-software/src/pcie.cpp  snprintf(huge_page_name, sizeof(huge_page_name), "enso_notif_buf:%i", id);
+  snprintf(huge_page_name, sizeof(huge_page_name), "enso_notif_buf:%i", id);
 
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
@@ -459,7 +459,8 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
 
   // send all missing bytes
   while (missing_bytes > 0) {
-    // get free slots (i.e., slots in the enso pipe which do not currently have data)
+    // get free slots (i.e., slots in the enso pipe which do not currently have
+    // data)
     uint32_t free_slots =
         (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
 
@@ -467,7 +468,7 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     // on pipe's completion notifications
 
     // question--is this not a spinloop and would it not be better to set up
-    // a mechanism to sleep and then be awakened (like condition variables) once 
+    // a mechanism to sleep and then be awakened (like condition variables) once
     // a change has been made?
     while (unlikely(free_slots == 0)) {
       ++notification_buf_pair->tx_full_cnt;
@@ -477,7 +478,7 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
           (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
     }
 
-    // moving to notification 
+    // moving to notification
     struct TxNotification* tx_notification = tx_buf + tx_tail;
     uint32_t req_length = std::min(missing_bytes, (uint32_t)kMaxTransferLen);
     uint32_t missing_bytes_in_page = hugepage_boundary - transf_addr;
