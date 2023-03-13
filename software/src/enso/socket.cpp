@@ -218,11 +218,7 @@ int disable_device_rate_limit() {
 }
 
 int shutdown(int sockfd, int how __attribute__((unused))) noexcept {
-  int result = dma_finish(&open_sockets[sockfd]);
-  if (unlikely(result == 0)) {
-    std::cerr << "Could not switch to CMD use mode!\n";
-    return -1;
-  }
+  dma_finish(&open_sockets[sockfd]);
 
   // TODO(sadok): Remove entry from the NIC flow table.
 
