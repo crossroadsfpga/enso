@@ -18,6 +18,11 @@ repos:
     args: ["-style=Google"]
   - id: cpplint       # linter (or style-error checker) for Google C++ Style Guide
   - id: cppcheck      # static analyzer of C/C++ code
+- repo: https://github.com/charliermarsh/ruff-pre-commit
+  rev: 'v0.0.255'  # Ruff version.
+  hooks:
+    - id: ruff
+      args: [--fix, --exit-non-zero-on-fix]
 - repo: https://github.com/psf/black
   rev: 22.10.0
   hooks:

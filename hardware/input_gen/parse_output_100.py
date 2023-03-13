@@ -1,8 +1,5 @@
 #!/usr/bin/python
-import os
 import sys
-import csv
-import re
 
 
 def parse_line(line):
