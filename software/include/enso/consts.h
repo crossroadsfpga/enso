@@ -82,6 +82,14 @@ constexpr uint32_t kMaxPendingTxRequests = kNotificationBufSize - 1;
 // Using 2MB huge pages (size in bytes).
 constexpr uint32_t kBufPageSize = 1UL << 21;
 
+// We need this to allow the same huge page to be mapped to adjacent memory
+// regions.
+// TODO(sadok): support other buffer sizes. It may be possible to support
+// other buffer sizes by overlaying regular pages on top of the huge pages.
+// We might use those only for requests that overlap to avoid adding too
+// many entries to the TLB.
+static_assert(ENSO_PIPE_SIZE * 64 == kBufPageSize, "Unsupported buffer size");
+
 /**
  * Sizes aligned to the huge page size, but if both buffers fit in a single
  * page, we may put them in the same page.

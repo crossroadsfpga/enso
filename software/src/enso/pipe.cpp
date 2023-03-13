@@ -51,7 +51,6 @@
 #include <string>
 
 #include "../pcie.h"
-#include "../syscall_api/intel_fpga_pcie_api.hpp"
 
 namespace enso {
 
@@ -90,9 +89,8 @@ void RxPipe::Clear() { fully_advance_ring_buffer(&internal_rx_pipe_); }
 
 RxPipe::~RxPipe() { enso_pipe_free(&internal_rx_pipe_); }
 
-int RxPipe::Init(volatile struct QueueRegs* enso_pipe_regs) noexcept {
-  return enso_pipe_init(&internal_rx_pipe_, enso_pipe_regs,
-                        notification_buf_pair_, kId);
+int RxPipe::Init() noexcept {
+  return enso_pipe_init(&internal_rx_pipe_, notification_buf_pair_, kId);
 }
 
 TxPipe::~TxPipe() {
@@ -161,8 +159,6 @@ Device::~Device() {
   }
 
   notification_buf_free(&notification_buf_pair_);
-
-  delete fpga_dev_;
 }
 
 RxPipe* Device::AllocateRxPipe() noexcept {
@@ -180,11 +176,7 @@ RxPipe* Device::AllocateRxPipe() noexcept {
     return nullptr;
   }
 
-  volatile struct QueueRegs* enso_pipe_regs =
-      (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr_ +
-                          enso_pipe_id * kMemorySpacePerQueue);
-
-  if (pipe->Init(enso_pipe_regs)) {
+  if (pipe->Init()) {
     delete pipe;
     return nullptr;
   }
@@ -274,62 +266,24 @@ int Device::Init() noexcept {
   }
 
   int bar = -1;
-  fpga_dev_ = IntelFpgaPcieDev::Create(bdf, bar);
-  if (unlikely(!fpga_dev_)) {
-    // Failed to open device or allocate object.
-    return 3;
-  }
-
-  int result = fpga_dev_->use_cmd(true);
-  if (unlikely(result == 0)) {
-    // Could not switch to CMD use mode.
-    return 4;
-  }
 
   std::cerr << "Running with BATCH_SIZE: " << BATCH_SIZE << std::endl;
   std::cerr << "Running with NOTIFICATION_BUF_SIZE: " << NOTIFICATION_BUF_SIZE
             << std::endl;
   std::cerr << "Running with ENSO_PIPE_SIZE: " << ENSO_PIPE_SIZE << std::endl;
 
-  // We need this to allow the same huge page to be mapped to contiguous
-  // memory regions.
-  // TODO(sadok): support other buffer sizes. It may be possible to support
-  // other buffer sizes by overlaying regular pages on top of the huge pages.
-  // We might use those only for requests that overlap to avoid adding too
-  // many entries to the TLB.
-  if (ENSO_PIPE_SIZE * 64 != kBufPageSize) {
-    // Unsupported buffer size.
-    return 5;
-  }
-
   // FIXME(sadok) should find a better identifier than core id.
   uint32_t id = core_id_;
-  notification_buf_pair_.id = id;
-
-  uio_mmap_bar2_addr_ =
-      fpga_dev_->uio_mmap((1 << 12) * (kMaxNbFlows + kMaxNbApps), 2);
-  if (uio_mmap_bar2_addr_ == MAP_FAILED) {
-    // Could not get mmap uio memory.
-    return 7;
-  }
-
-  // Register associated with the notification buffer. Notification buffer
-  // registers come after the enso pipe ones, that's why we use kMaxNbFlows
-  // as an offset.
-  volatile struct QueueRegs* notification_buf_pair_regs =
-      (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr_ +
-                          (id + kMaxNbFlows) * kMemorySpacePerQueue);
 
   // HACK(sadok): This only works because pkt queues for the same app are
   // currently placed back to back.
   enso_pipe_id_t enso_pipe_id_offset = id * kNbRxPipes;
 
-  int ret =
-      notification_buf_init(&notification_buf_pair_, notification_buf_pair_regs,
-                            kNbRxPipes, enso_pipe_id_offset);
+  int ret = notification_buf_init(bdf, bar, id, &notification_buf_pair_,
+                                  kNbRxPipes, enso_pipe_id_offset);
   if (ret != 0) {
     // Could not initialize notification buffer.
-    return 8;
+    return 3;
   }
 
   return 0;

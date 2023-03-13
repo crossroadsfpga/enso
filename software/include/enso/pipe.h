@@ -276,11 +276,9 @@ class Device {
   const std::string kPcieAddr;
   const uint32_t kNbRxPipes;
 
-  IntelFpgaPcieDev* fpga_dev_;
   struct NotificationBufPair notification_buf_pair_;
   int16_t core_id_;
   uint16_t bdf_;
-  void* uio_mmap_bar2_addr_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -575,11 +573,9 @@ class RxPipe {
   /**
    * @brief Initializes the RX pipe.
    *
-   * @param enso_pipe_regs The Enso Pipe registers.
-   *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init(volatile struct QueueRegs* enso_pipe_regs) noexcept;
+  int Init() noexcept;
 
   friend class Device;
 

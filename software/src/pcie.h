@@ -75,24 +75,21 @@ namespace enso {
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
-  IntelFpgaPcieDev* dev;
   struct RxEnsoPipeInternal enso_pipe;
 };
 
-int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
-                          volatile struct QueueRegs* notification_buf_pair_regs,
+int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
+                          struct NotificationBufPair* notification_buf_pair,
                           enso_pipe_id_t nb_queues,
                           enso_pipe_id_t enso_pipe_id_offset);
 
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
-                   volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id);
 
-int dma_init(IntelFpgaPcieDev* dev,
-             struct NotificationBufPair* notification_buf_pair,
+int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
-             unsigned nb_queues);
+             unsigned nb_queues, uint32_t bdf, int32_t bar);
 
 uint32_t get_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,

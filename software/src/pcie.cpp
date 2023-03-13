@@ -63,10 +63,49 @@
 
 namespace enso {
 
-int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
-                          volatile struct QueueRegs* notification_buf_pair_regs,
+int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
+                          struct NotificationBufPair* notification_buf_pair,
                           enso_pipe_id_t nb_queues,
                           enso_pipe_id_t enso_pipe_id_offset) {
+  if (core_id < 0) {
+    core_id = sched_getcpu();
+    if (core_id < 0) {
+      std::cerr << "Could not get CPU id" << std::endl;
+      return -1;
+    }
+  }
+
+  notification_buf_pair->id = core_id;
+
+  IntelFpgaPcieDev* fpga_dev = IntelFpgaPcieDev::Create(bdf, bar);
+  if (unlikely(fpga_dev == nullptr)) {
+    std::cerr << "Could not create device" << std::endl;
+    return -1;
+  }
+
+  int result = fpga_dev->use_cmd(true);
+  if (unlikely(result == 0)) {
+    std::cerr << "Could not switch to CMD use mode" << std::endl;
+    return -2;
+  }
+  notification_buf_pair->fpga_dev = fpga_dev;
+
+  void* uio_mmap_bar2_addr =
+      fpga_dev->uio_mmap((1 << 12) * (kMaxNbFlows + kMaxNbApps), 2);
+  if (uio_mmap_bar2_addr == MAP_FAILED) {
+    std::cerr << "Could not get mmap uio memory!" << std::endl;
+    return -1;
+  }
+
+  notification_buf_pair->uio_mmap_bar2_addr = uio_mmap_bar2_addr;
+
+  // Register associated with the notification buffer. Notification buffer
+  // registers come after the enso pipe ones, that's why we use kMaxNbFlows
+  // as an offset.
+  volatile struct QueueRegs* notification_buf_pair_regs =
+      (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
+                          (core_id + kMaxNbFlows) * kMemorySpacePerQueue);
+
   // Make sure the notification buffer is disabled.
   notification_buf_pair_regs->rx_mem_low = 0;
   notification_buf_pair_regs->rx_mem_high = 0;
@@ -85,7 +124,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   while (notification_buf_pair_regs->rx_head != 0) continue;
 
   char huge_page_name[128];
-  int id = notification_buf_pair->id + kMaxNbFlows;
+  int id = core_id + kMaxNbFlows;
   snprintf(huge_page_name, sizeof(huge_page_name), "enso_notif_buf:%i", id);
 
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
@@ -144,9 +183,6 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   notification_buf_pair->consumed_rx_ids = 0;
   notification_buf_pair->tx_full_cnt = 0;
   notification_buf_pair->nb_unreported_completions = 0;
-
-  // HACK(sadok): This only works because enso pipes for the same app are
-  // currently placed back to back.
   notification_buf_pair->enso_pipe_id_offset = enso_pipe_id_offset;
 
   // Setting the address enables the queue. Do this last.
@@ -162,9 +198,14 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
 }
 
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
-                   volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id) {
+  void* uio_mmap_bar2_addr = notification_buf_pair->uio_mmap_bar2_addr;
+
+  // Register associated with the enso pipe.
+  volatile struct QueueRegs* enso_pipe_regs =
+      (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
+                          enso_pipe_id * kMemorySpacePerQueue);
   enso_pipe->regs = (struct QueueRegs*)enso_pipe_regs;
 
   // Make sure the queue is disabled.
@@ -215,59 +256,29 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   return 0;
 }
 
-int dma_init(IntelFpgaPcieDev* dev,
-             struct NotificationBufPair* notification_buf_pair,
+int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
-             unsigned nb_queues) {
-  void* uio_mmap_bar2_addr;
-  enso_pipe_id_t enso_pipe_id;
-
+             unsigned nb_queues, uint32_t bdf, int32_t bar) {
   printf("Running with BATCH_SIZE: %i\n", BATCH_SIZE);
   printf("Running with NOTIFICATION_BUF_SIZE: %i\n", NOTIFICATION_BUF_SIZE);
   printf("Running with ENSO_PIPE_SIZE: %i\n", ENSO_PIPE_SIZE);
 
-  // We need this to allow the same huge page to be mapped to contiguous
-  // memory regions.
-  // TODO(sadok): support other buffer sizes. It may be possible to support
-  // other buffer sizes by overlaying regular pages on top of the huge pages.
-  // We might use those only for requests that overlap to avoid adding too
-  // many entries to the TLB.
-  assert(ENSO_PIPE_SIZE * 64 == kBufPageSize);
-
-  // FIXME(sadok) should find a better identifier than core id.
-  int cpu_id = sched_getcpu();
-  if (cpu_id < 0) {
-    std::cerr << "Could not get cpu id" << std::endl;
-    return -1;
-  }
-  notification_buf_pair->id = cpu_id;
-
-  enso_pipe_id = notification_buf_pair->id * nb_queues + socket_id;
-
-  uio_mmap_bar2_addr = dev->uio_mmap((1 << 12) * (kMaxNbFlows + kMaxNbApps), 2);
-  if (uio_mmap_bar2_addr == MAP_FAILED) {
-    std::cerr << "Could not get mmap uio memory!" << std::endl;
+  int16_t core_id = sched_getcpu();
+  if (core_id < 0) {
+    std::cerr << "Could not get CPU id" << std::endl;
     return -1;
   }
 
-  // set notification buffer only for the first socket
-  // TODO(sadok): Support multiple notification buffers for the same process.
+  enso_pipe_id_t enso_pipe_id = core_id * nb_queues + socket_id;
+
+  // Set notification buffer only for the first socket.
   if (notification_buf_pair->ref_cnt == 0) {
-    // Register associated with the notification buffer. Notification buffer
-    // registers come after the enso pipe ones, that's why we use kMaxNbFlows
-    // as an offset.
-    volatile struct QueueRegs* notification_buf_pair_regs =
-        (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
-                            (notification_buf_pair->id + kMaxNbFlows) *
-                                kMemorySpacePerQueue);
-
-    // HACK(sadok): This only works because pkt queues for the same app are
+    // HACK(sadok): This only works because enso pipes for the same app are
     // currently placed back to back.
     enso_pipe_id_t enso_pipe_id_offset = enso_pipe_id;
 
-    int ret =
-        notification_buf_init(notification_buf_pair, notification_buf_pair_regs,
-                              nb_queues, enso_pipe_id_offset);
+    int ret = notification_buf_init(bdf, bar, core_id, notification_buf_pair,
+                                    nb_queues, enso_pipe_id_offset);
     if (ret != 0) {
       return ret;
     }
@@ -275,13 +286,7 @@ int dma_init(IntelFpgaPcieDev* dev,
 
   ++(notification_buf_pair->ref_cnt);
 
-  // Register associated with the enso pipe.
-  volatile struct QueueRegs* enso_pipe_regs =
-      (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
-                          enso_pipe_id * kMemorySpacePerQueue);
-
-  return enso_pipe_init(enso_pipe, enso_pipe_regs, notification_buf_pair,
-                        enso_pipe_id);
+  return enso_pipe_init(enso_pipe, notification_buf_pair, enso_pipe_id);
 }
 
 static _enso_always_inline uint16_t
@@ -567,6 +572,9 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   free(notification_buf_pair->pending_pkt_tails);
   free(notification_buf_pair->wrap_tracker);
   free(notification_buf_pair->last_rx_ids);
+
+  notification_buf_pair->fpga_dev->use_cmd(false);
+  delete notification_buf_pair->fpga_dev;
 
   --(notification_buf_pair->ref_cnt);
 }

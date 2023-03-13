@@ -117,7 +117,6 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV, bdf);
     if (result != 0) {
       close(m_dev_handle);
-      close(m_uio_dev_handle);
       std::cerr << "could not select desired device" << std::endl;
       return -1;
     }
@@ -125,7 +124,6 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_GET_DEV, &bdf);
     if (result != 0) {
       close(m_dev_handle);
-      close(m_uio_dev_handle);
       std::cerr << "could not retrieve the BDF of the selected device"
                 << std::endl;
       return -1;
@@ -137,7 +135,6 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_SEL_BAR, m_bar);
     if (result != 0) {
       close(m_dev_handle);
-      close(m_uio_dev_handle);
       std::cerr << "could not select desired BAR" << std::endl;
       return -1;
     }
@@ -145,7 +142,6 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
     result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_GET_BAR, &u_bar);
     if (result != 0) {
       close(m_dev_handle);
-      close(m_uio_dev_handle);
       std::cerr << "could not retrieve the selected BAR" << std::endl;
       return -1;
     }
@@ -155,7 +151,6 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
   char device_name[1000] = "/dev/";
   if (get_uio_dev_name(device_name + 5)) {
     close(m_dev_handle);
-    close(m_uio_dev_handle);
     std::cerr << "could not get uio device name" << std::endl;
     return -1;
   }
@@ -166,7 +161,6 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
 
   if (fd == -1) {
     close(m_dev_handle);
-    close(m_uio_dev_handle);
     std::cerr << "could not open uio character device; ensure that Intel FPGA "
                  "kernel driver has been loaded"
               << std::endl;

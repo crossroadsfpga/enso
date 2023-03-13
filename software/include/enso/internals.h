@@ -44,6 +44,9 @@
 
 #include <stdint.h>
 
+// Avoid exposing `intel_fpga_pcie_api.hpp` externally.
+class IntelFpgaPcieDev;
+
 namespace enso {
 
 #if MAX_NB_FLOWS < 65536
@@ -108,6 +111,9 @@ struct NotificationBufPair {
   // Another option is to get rid of the pending_pkt_tails array and instead
   // save the tails with `last_rx_ids`.
   uint32_t enso_pipe_id_offset;
+
+  IntelFpgaPcieDev* fpga_dev;
+  void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
 };
 
 struct RxEnsoPipeInternal {
