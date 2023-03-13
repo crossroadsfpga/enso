@@ -86,7 +86,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
   int result = fpga_dev->use_cmd(true);
   if (unlikely(result == 0)) {
     std::cerr << "Could not switch to CMD use mode" << std::endl;
-    return -2;
+    return -1;
   }
   notification_buf_pair->fpga_dev = fpga_dev;
 
