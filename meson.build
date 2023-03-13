@@ -37,8 +37,8 @@ subdir('docs')
 teroshdl_hdl_documenter = find_program('teroshdl-hdl-documenter',
                                        required: false)
 
-hardware_path = join_paths(meson.source_root(), 'hardware/src')
-hdl_doc_path = join_paths(meson.source_root(), 'docs/hardware/modules')
+hardware_path = join_paths(meson.project_source_root(), 'hardware/src')
+hdl_doc_path = join_paths(meson.project_source_root(), 'docs/hardware/modules')
 
 if teroshdl_hdl_documenter.found()
     teroshdl_target = custom_target('teroshdl',
