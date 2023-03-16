@@ -44,7 +44,7 @@ done
 
 Ensō has the following dependencies:
 * Either gcc (>= 9.0) or clang (>= 8.0)
-* Python (>= 3.6)
+* Python (>= 3.9)
 * pip
 * Meson (>= 0.58)
 * Ninja

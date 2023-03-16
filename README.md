@@ -29,7 +29,7 @@ done
 
 Ensō has the following dependencies:
 * Either gcc (>= 9.0) or clang (>= 8.0)
-* Python (>= 3.6)
+* Python (>= 3.9)
 * pip
 * Meson (>= 0.58)
 * Ninja
@@ -39,7 +39,7 @@ In Ubuntu 20.04 or other recent Debian-based distributions these dependencies ca
 ```bash
 sudo apt update
 sudo apt install \
-  python3 \
+  python3.9 \
   python3-pip \
   python3-setuptools \
   python3-wheel \
