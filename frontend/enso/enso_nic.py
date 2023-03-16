@@ -1,6 +1,6 @@
-from typing import TextIO, Union
+from typing import TextIO, Union, Optional
 
-from netexp.helpers import RemoteIntelFpga, remote_command, watch_command
+from netexp.helpers import IntelFpga
 
 from enso.consts import (
     DEFAULT_BATCH_SIZE,
@@ -17,7 +17,7 @@ LOAD_BITSTREAM_CMD = "hardware_test/load_bitstream.sh"
 RUN_CONSOLE_CMD = "hardware_test/run_console.sh"
 
 
-class EnsoNic(RemoteIntelFpga):
+class EnsoNic(IntelFpga):
     """Class to control the Ensō NIC.
 
     This class can automatically load the bitstream, configure the NIC using
@@ -25,8 +25,8 @@ class EnsoNic(RemoteIntelFpga):
 
     Attributes:
         fpga_id:
-        host:
-        remote_enso_path:
+        enso_path:
+        host_name:
         load_bitstream:
         ensure_clean:
         setup_sw:
@@ -46,8 +46,8 @@ class EnsoNic(RemoteIntelFpga):
     def __init__(
         self,
         fpga_id: str,
-        host: str,
-        remote_enso_path: str,
+        enso_path: str,
+        host_name: Optional[str] = None,
         load_bitstream: bool = True,
         ensure_clean: bool = True,
         setup_sw: bool = True,
@@ -68,19 +68,19 @@ class EnsoNic(RemoteIntelFpga):
         if load_bitstream and verbose:
             print("Loading bitstream, it might take a couple of seconds.")
 
-        load_bitstream_cmd = f"{remote_enso_path}/{LOAD_BITSTREAM_CMD}"
-        run_console_cmd = f"{remote_enso_path}/{RUN_CONSOLE_CMD}"
+        load_bitstream_cmd = f"{enso_path}/{LOAD_BITSTREAM_CMD}"
+        run_console_cmd = f"{enso_path}/{RUN_CONSOLE_CMD}"
 
         super().__init__(
-            host,
             fpga_id,
             run_console_cmd,
             load_bitstream_cmd,
+            host_name=host_name,
             load_bitstream=load_bitstream,
             log_file=log_file,
         )
 
-        self.remote_enso_path = remote_enso_path
+        self.enso_path = enso_path
 
         if ensure_clean and load_bitstream:
             output = self.run_jtag_commands("read_pcie")
@@ -124,14 +124,12 @@ class EnsoNic(RemoteIntelFpga):
             self.setup_sw()
 
     def setup_sw(self):
-        sw_setup = remote_command(
-            self.ssh_client,
-            f"{self.remote_enso_path}/{SETUP_SW_CMD} {self.dsc_buf_size} "
+        sw_setup = self.host.run_command(
+            f"{self.enso_path}/{SETUP_SW_CMD} {self.dsc_buf_size} "
             f"{self.pkt_buf_size} {self.sw_batch_size} {self.latency_opt}",
             pty=True,
         )
-        watch_command(
-            sw_setup,
+        sw_setup.watch(
             keyboard_int=lambda: sw_setup.send("\x03"),
             stdout=self.log_file,
             stderr=self.log_file,

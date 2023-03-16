@@ -23,7 +23,7 @@ from enso.enso_nic import EnsoNic
 ETHERNET_OVERHEAD = 20 + 4  # Includes CRC.
 
 
-class EnsoPktgenStats:
+class EnsoGenStats:
     def __init__(self, file_name: str) -> None:
         self.stats = defaultdict(list)
         self.nb_samples = 0
@@ -135,7 +135,7 @@ class EnsoGen(Pktgen):
 
         pcap_name = f"{nb_pkts}_{pkt_size}_{nb_src}_{nb_dst}.pcap"
 
-        remote_dir_path = Path(self.nic.remote_enso_path)
+        remote_dir_path = Path(self.nic.enso_path)
         pcap_dst = remote_dir_path / Path(PCAPS_DIR) / Path(pcap_name)
         pcap_gen_cmd = remote_dir_path / Path(PCAP_GEN_CMD)
         pcap_gen_cmd = (
@@ -191,7 +191,7 @@ class EnsoGen(Pktgen):
             )
 
         command = (
-            f"sudo {self.nic.remote_enso_path}/{ENSO_PKTGEN_CMD}"
+            f"sudo {self.nic.enso_path}/{ENSO_PKTGEN_CMD}"
             f" {self.pcap_path} {rate_frac.numerator} {rate_frac.denominator}"
             f" --count {nb_pkts}"
             f" --core {self.core_id}"
@@ -259,7 +259,7 @@ class EnsoGen(Pktgen):
         with tempfile.TemporaryDirectory() as tmp:
             local_stats = f"{tmp}/stats.csv"
             download_file(self.nic.host, self.stats_file, local_stats)
-            parsed_stats = EnsoPktgenStats(local_stats)
+            parsed_stats = EnsoGenStats(local_stats)
 
             stats_summary = parsed_stats.get_summary(calculate_tx_mean)
 

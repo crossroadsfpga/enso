@@ -13,8 +13,13 @@ from enso.enso_nic import EnsoNic
 
 
 @click.command()
-@click.argument("host")
-@click.argument("remote_enso_path")
+@click.argument("enso_path")
+@click.option(
+    "--host",
+    default="localhost",
+    show_default=True,
+    help="Host to connect to run Ensō on.",
+)
 @click.option(
     "--fpga", default=DEFAULT_FPGA, show_default=True, help="Choose the FPGA."
 )
@@ -88,7 +93,7 @@ from enso.enso_nic import EnsoNic
 )
 def main(
     host,
-    remote_enso_path,
+    enso_path,
     fpga,
     dsc_buf_size,
     pkt_buf_size,
@@ -102,10 +107,10 @@ def main(
     load_bitstream,
 ):
 
-    enso_dp = EnsoNic(
+    enso_nic = EnsoNic(
         fpga,
-        host,
-        remote_enso_path,
+        enso_path,
+        host_name=host,
         load_bitstream=load_bitstream,
         ensure_clean=True,
         setup_sw=True,
@@ -122,7 +127,7 @@ def main(
         log_file=True,
     )
 
-    enso_dp.interactive_shell()
+    enso_nic.interactive_shell()
 
 
 if __name__ == "__main__":

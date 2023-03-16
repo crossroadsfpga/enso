@@ -142,7 +142,7 @@ cp <bitstream_path>/alt_ehipc2_hw.sof <enso_path>/enso/hardware_test/alt_ehipc2_
 
 Run the `enso` script in the local machine to load the bitstream in the one with the FPGA:
 ```bash
-enso <host> <remote_enso_path> --load-bitstream
+enso <enso_path> --host <host> --load-bitstream
 ```
 
 You can also specify other options to configure the NIC, refer to `enso --help` for more information.
