@@ -121,31 +121,33 @@ void capture_packets(uint32_t nb_queues, uint32_t core_id,
 }
 
 int main(int argc, const char* argv[]) {
-  stats_t stats = {};
-
-  if (argc != 4) {
-    std::cerr << "Usage: " << argv[0] << " core nb_queues pcap_file"
+  if (argc != 3) {
+    std::cerr << "Usage: " << argv[0] << " NB_QUEUES PCAP_FILE" << std::endl
               << std::endl;
+    std::cerr << "NB_QUEUES: Number of queues to use." << std::endl;
+    std::cerr << "PCAP_FILE: Path to the pcap file to write to." << std::endl;
     return 1;
   }
 
-  uint32_t core_id = atoi(argv[1]);
-  uint32_t nb_queues = atoi(argv[2]);
-  std::string pcap_file = argv[3];
+  constexpr uint32_t kCoreId = 0;
+  uint32_t nb_queues = atoi(argv[1]);
+  std::string pcap_file = argv[2];
 
   signal(SIGINT, int_handler);
 
-  std::thread socket_thread =
-      std::thread(capture_packets, nb_queues, core_id, pcap_file, &stats);
+  std::vector<stats_t> thread_stats(1);
 
-  if (set_core_id(socket_thread, core_id)) {
+  std::thread socket_thread = std::thread(capture_packets, nb_queues, kCoreId,
+                                          pcap_file, &(thread_stats[0]));
+
+  if (set_core_id(socket_thread, kCoreId)) {
     std::cerr << "Error setting CPU affinity" << std::endl;
     return 6;
   }
 
   while (!setup_done) continue;  // Wait for setup to be done.
 
-  show_stats(&stats, &keep_running);
+  show_stats(thread_stats, &keep_running);
 
   socket_thread.join();
 

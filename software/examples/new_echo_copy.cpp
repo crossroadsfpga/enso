@@ -74,7 +74,7 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id,
       exit(3);
     }
 
-    uint32_t dst_ip = kBaseIpAddress + i;
+    uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
     rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
 
     rx_pipes.push_back(rx_pipe);
@@ -124,33 +124,44 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id,
 }
 
 int main(int argc, const char* argv[]) {
-  stats_t stats = {};
-
   if (argc != 4) {
-    std::cerr << "Usage: " << argv[0] << " core nb_queues nb_cycles"
+    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
+              << std::endl
+              << std::endl;
+    std::cerr << "NB_CORES: Number of cores to use." << std::endl;
+    std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
+    std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
+                 " packet."
               << std::endl;
     return 1;
   }
 
-  uint32_t core_id = atoi(argv[1]);
+  uint32_t nb_cores = atoi(argv[1]);
   uint32_t nb_queues = atoi(argv[2]);
   uint32_t nb_cycles = atoi(argv[3]);
 
   signal(SIGINT, int_handler);
 
-  std::thread socket_thread =
-      std::thread(run_echo_copy, nb_queues, core_id, nb_cycles, &stats);
+  std::vector<std::thread> threads;
+  std::vector<stats_t> thread_stats(nb_cores);
 
-  if (set_core_id(socket_thread, core_id)) {
-    std::cerr << "Error setting CPU affinity" << std::endl;
-    return 6;
+  for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
+    threads.emplace_back(run_echo_copy, nb_queues, core_id, nb_cycles,
+                         &(thread_stats[core_id]));
+    if (set_core_id(threads.back(), core_id)) {
+      std::cerr << "Error setting CPU affinity" << std::endl;
+      return 6;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   while (!setup_done) continue;  // Wait for setup to be done.
 
-  show_stats(&stats, &keep_running);
+  show_stats(thread_stats, &keep_running);
 
-  socket_thread.join();
+  for (auto& thread : threads) {
+    thread.join();
+  }
 
   return 0;
 }

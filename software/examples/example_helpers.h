@@ -60,32 +60,80 @@ int set_core_id(std::thread& thread, int core_id) {
                                 &cpuset);
 }
 
-inline void show_stats(struct stats_t* stats, volatile bool* keep_running) {
-  while (*keep_running) {
-    uint64_t recv_bytes_before = stats->recv_bytes;
-    uint64_t nb_batches_before = stats->nb_batches;
-    uint64_t nb_pkts_before = stats->nb_pkts;
+void print_stats_line(uint64_t recv_bytes, uint64_t nb_batches,
+                      uint64_t nb_pkts, uint64_t delta_bytes,
+                      uint64_t delta_pkts, uint64_t delta_batches) {
+  std::cout << std::dec << delta_bytes * 8. / 1e6 << " Mbps  "
+            << delta_pkts / 1e6 << " Mpps  " << recv_bytes << " B  "
+            << nb_batches << " batches  " << nb_pkts << " pkts";
 
-    _mm_clflushopt(stats);
+  if (delta_batches > 0) {
+    std::cout << "  " << delta_bytes / delta_batches << " B/batch";
+    std::cout << "  " << delta_pkts / delta_batches << " pkt/batch";
+  }
+  std::cout << std::endl;
+}
+
+void show_stats(const std::vector<stats_t>& thread_stats,
+                volatile bool* keep_running) {
+  while (*keep_running) {
+    std::vector<uint64_t> recv_bytes_before;
+    std::vector<uint64_t> nb_batches_before;
+    std::vector<uint64_t> nb_pkts_before;
+
+    recv_bytes_before.reserve(thread_stats.size());
+    nb_batches_before.reserve(thread_stats.size());
+    nb_pkts_before.reserve(thread_stats.size());
+
+    for (auto& stats : thread_stats) {
+      recv_bytes_before.push_back(stats.recv_bytes);
+      nb_batches_before.push_back(stats.nb_batches);
+      nb_pkts_before.push_back(stats.nb_pkts);
+    }
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    uint64_t recv_bytes = stats->recv_bytes;
-    uint64_t nb_batches = stats->nb_batches;
-    uint64_t nb_pkts = stats->nb_pkts;
+    uint64_t total_recv_bytes = 0;
+    uint64_t total_nb_batches = 0;
+    uint64_t total_nb_pkts = 0;
 
-    uint64_t delta_bytes = recv_bytes - recv_bytes_before;
-    uint64_t delta_pkts = nb_pkts - nb_pkts_before;
-    uint64_t delta_batches = nb_batches - nb_batches_before;
-    std::cout << std::dec << delta_bytes * 8. / 1e6 << " Mbps  "
-              << delta_pkts / 1e6 << " Mpps  " << recv_bytes << " B  "
-              << nb_batches << " batches  " << nb_pkts << " pkts";
+    uint64_t total_delta_bytes = 0;
+    uint64_t total_delta_pkts = 0;
+    uint64_t total_delta_batches = 0;
 
-    if (delta_batches > 0) {
-      std::cout << "  " << delta_bytes / delta_batches << " B/batch";
-      std::cout << "  " << delta_pkts / delta_batches << " pkt/batch";
+    for (uint16_t i = 0; i < thread_stats.size(); ++i) {
+      const stats_t& stats = thread_stats[i];
+
+      uint64_t recv_bytes = stats.recv_bytes;
+      uint64_t nb_batches = stats.nb_batches;
+      uint64_t nb_pkts = stats.nb_pkts;
+
+      total_recv_bytes += recv_bytes;
+      total_nb_batches += nb_batches;
+      total_nb_pkts += nb_pkts;
+
+      uint64_t delta_bytes = recv_bytes - recv_bytes_before[i];
+      uint64_t delta_pkts = nb_pkts - nb_pkts_before[i];
+      uint64_t delta_batches = nb_batches - nb_batches_before[i];
+
+      total_delta_bytes += delta_bytes;
+      total_delta_pkts += delta_pkts;
+      total_delta_batches += delta_batches;
+
+      // Only print per-thread stats if there are multiple threads.
+      if (thread_stats.size() > 1) {
+        std::cout << "  Thread " << i << ":" << std::endl;
+        std::cout << "    ";
+        print_stats_line(recv_bytes, nb_batches, nb_pkts, delta_bytes,
+                         delta_pkts, delta_batches);
+      }
     }
-    std::cout << std::endl;
+    print_stats_line(total_recv_bytes, total_nb_batches, total_nb_pkts,
+                     total_delta_bytes, total_delta_pkts, total_delta_batches);
+
+    if (thread_stats.size() > 1) {
+      std::cout << std::endl;
+    }
   }
 }
 
