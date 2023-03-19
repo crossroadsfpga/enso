@@ -56,16 +56,16 @@
 
 namespace enso {
 
-#define MAX_NUM_PACKETS 256
+#define MAX_NUM_PACKETS 512
 #define MOCK_BATCH_SIZE 16
 
 typedef struct packet {
-  const u_char* pkt_bytes;
+  u_char* pkt_bytes;
   uint32_t pkt_len;
 } packet_t;
 
 struct PcapHandlerContext {
-  packet_t* buf;
+  packet_t** buf;
   int buf_position;
   uint32_t hugepage_offset;
   pcap_t* pcap;
@@ -74,7 +74,7 @@ struct PcapHandlerContext {
 struct timeval ts;
 pcap_t* pd;
 pcap_dumper_t* pdumper_out;
-packet_t in_buf[MAX_NUM_PACKETS];
+packet_t* in_buf[MAX_NUM_PACKETS];
 uint32_t pipe_packets_head;
 uint32_t pipe_packets_tail;
 
@@ -92,12 +92,14 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
 // called each time a packet is processed
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
+  std::cout << "Pipe tail " << pipe_packets_tail << std::endl;
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
   uint32_t len = pkt_hdr->len;
 
-  packet_t pkt;
-  pkt.pkt_bytes = pkt_bytes;
-  pkt.pkt_len = len;
+  packet_t* pkt = new packet_t;
+  pkt->pkt_bytes = new u_char[len];
+  memcpy(pkt->pkt_bytes, pkt_bytes, len);
+  pkt->pkt_len = len;
   context->buf[pipe_packets_tail] = pkt;
 
   pipe_packets_tail += 1;
@@ -116,10 +118,12 @@ int read_in_file() {
   struct PcapHandlerContext context;
   context.pcap = pcap;
   context.buf = in_buf;
-  // read infinitely until packets are all consumed
-  if (pcap_loop(pcap, 0, pcap_pkt_handler, (u_char*)&context) < 0) {
+  // read up to 256 packets
+  int err;
+  if ((err = pcap_loop(pcap, 0, pcap_pkt_handler, (u_char*)&context)) < 0) {
     std::cerr << "Error while reading pcap (" << pcap_geterr(pcap) << ")"
               << std::endl;
+    std::cerr << "Error: " << err << std::endl;
     return 3;
   }
   return 0;
@@ -171,25 +175,64 @@ static _enso_always_inline uint32_t
 __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
-  (void)enso_pipe;
+  std::cout << "Consuming queue" << std::endl;
+  (void)(enso_pipe);
   (void)notification_buf_pair;
   (void)peek;
+
+  *buf = new u_char[0];
+
   if (pipe_packets_head == pipe_packets_tail) {
+    std::cout << "Nothing in queue" << std::endl;
     return 0;
   }
 
-  int index = 0;
-  int num_bytes_read = 0;
-  while (pipe_packets_head <
-         std::min(pipe_packets_tail, pipe_packets_head + MOCK_BATCH_SIZE)) {
-    packet_t pkt = in_buf[pipe_packets_head];
-    memcpy(((char*)*buf + num_bytes_read), pkt.pkt_bytes, pkt.pkt_len);
-    num_bytes_read += pkt.pkt_len;
+  uint32_t index = 0;
+  size_t num_bytes_read = 0;
+
+  uint32_t max_index =
+      std::min(pipe_packets_tail, pipe_packets_head + MOCK_BATCH_SIZE);
+  // use receive-side scaling or round robin
+  std::cout << "max index " << max_index << std::endl;
+
+  // getting total number of bytes to read
+  while (index < max_index) {
+    packet_t* pkt = in_buf[index];
+    uint32_t pkt_len = pkt->pkt_len;
+    // packets must be cache-aligned: so get aligned length
+    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+    uint16_t pkt_aligned_len = nb_flits * 64;
+
+    num_bytes_read += pkt_aligned_len;
+
     index += 1;
-    pipe_packets_head += 1;
   }
 
-  return num_bytes_read;
+  std::cout << "total num bytes to read " << num_bytes_read << std::endl;
+
+  u_char* my_buf = new u_char[num_bytes_read];
+  std::cout << "allocated my buf" << std::endl;
+  int bytes = 0;
+  // reading bytes
+  while (pipe_packets_head < max_index) {
+    packet_t* pkt = in_buf[pipe_packets_head];
+    memcpy(my_buf + bytes, pkt->pkt_bytes, pkt->pkt_len);
+    uint32_t pkt_len = pkt->pkt_len;
+    // packets must be cache-aligned: so get aligned length
+    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+    uint16_t pkt_aligned_len = nb_flits * 64;
+
+    bytes += pkt_aligned_len;
+
+    std::cout << "Copied index " << pipe_packets_head << std::endl;
+
+    pipe_packets_head += 1;
+  }
+  std::cout << "Finished memcpy" << std::endl;
+
+  *buf = my_buf;
+
+  return bytes;
 }
 
 uint32_t get_next_batch_from_queue(
@@ -204,10 +247,7 @@ uint32_t get_next_batch_from_queue(
 uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
-  (void)enso_pipe;
-  (void)notification_buf_pair;
-  (void)buf;
-  return 0;
+  return __consume_queue(enso_pipe, notification_buf_pair, buf, true);
 }
 
 // Return next batch among all open sockets.
@@ -253,6 +293,7 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
   // https://en.cppreference.com/w/cpp/thread/sleep_for
 
   // to test, follow the README.md
+  std::cout << "Sending to queue" << std::endl;
 
   (void)notification_buf_pair;
 
@@ -323,6 +364,23 @@ void print_fpga_reg(IntelFpgaPcieDev* dev, unsigned nb_regs) {
 void print_stats(struct SocketInternal* socket_entry, bool print_global) {
   (void)socket_entry;
   (void)print_global;
+}
+
+static _enso_always_inline int32_t
+__get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
+  // Consume up to a batch of notifications at a time. If the number of consumed
+  // notifications is the same as the number of pending notifications, we are
+  // done processing the last batch and can get the next one. Using batches here
+  // performs **significantly** better compared to always fetching the latest
+  // notification.
+  (void)notification_buf_pair;
+
+  return 0;
+}
+
+int32_t get_next_enso_pipe_id(
+    struct NotificationBufPair* notification_buf_pair) {
+  return __get_next_enso_pipe_id(notification_buf_pair);
 }
 
 }  // namespace enso
