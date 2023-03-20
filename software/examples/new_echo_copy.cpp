@@ -49,7 +49,7 @@ static volatile bool setup_done = false;
 void int_handler([[maybe_unused]] int signal) { keep_running = 0; }
 
 void run_echo_copy(uint32_t nb_queues, uint32_t core_id,
-                   [[maybe_unused]] uint32_t nb_cycles, stats_t* stats) {
+                   [[maybe_unused]] uint32_t nb_cycles, enso::stats_t* stats) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
@@ -143,12 +143,12 @@ int main(int argc, const char* argv[]) {
   signal(SIGINT, int_handler);
 
   std::vector<std::thread> threads;
-  std::vector<stats_t> thread_stats(nb_cores);
+  std::vector<enso::stats_t> thread_stats(nb_cores);
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
     threads.emplace_back(run_echo_copy, nb_queues, core_id, nb_cycles,
                          &(thread_stats[core_id]));
-    if (set_core_id(threads.back(), core_id)) {
+    if (enso::set_core_id(threads.back(), core_id)) {
       std::cerr << "Error setting CPU affinity" << std::endl;
       return 6;
     }

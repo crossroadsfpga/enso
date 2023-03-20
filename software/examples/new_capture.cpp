@@ -50,7 +50,7 @@ static volatile bool setup_done = false;
 void int_handler([[maybe_unused]] int signal) { keep_running = 0; }
 
 void capture_packets(uint32_t nb_queues, uint32_t core_id,
-                     const std::string& pcap_file, stats_t* stats) {
+                     const std::string& pcap_file, enso::stats_t* stats) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
@@ -135,12 +135,12 @@ int main(int argc, const char* argv[]) {
 
   signal(SIGINT, int_handler);
 
-  std::vector<stats_t> thread_stats(1);
+  std::vector<enso::stats_t> thread_stats(1);
 
   std::thread socket_thread = std::thread(capture_packets, nb_queues, kCoreId,
                                           pcap_file, &(thread_stats[0]));
 
-  if (set_core_id(socket_thread, kCoreId)) {
+  if (enso::set_core_id(socket_thread, kCoreId)) {
     std::cerr << "Error setting CPU affinity" << std::endl;
     return 6;
   }

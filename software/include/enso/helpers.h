@@ -47,11 +47,14 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <pthread.h>
 
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace enso {
 
@@ -69,6 +72,12 @@ namespace enso {
   } while (0)
 
 #define _enso_always_inline __attribute__((always_inline)) inline
+
+struct stats_t {
+  uint64_t recv_bytes;
+  uint64_t nb_batches;
+  uint64_t nb_pkts;
+} __attribute__((aligned(64)));
 
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
@@ -114,6 +123,11 @@ void print_pkt_ips(uint8_t* pkt);
 void print_pkt_header(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
+
+int set_core_id(std::thread& thread, int core_id);
+
+void show_stats(const std::vector<stats_t>& thread_stats,
+                volatile bool* keep_running);
 
 }  // namespace enso
 
