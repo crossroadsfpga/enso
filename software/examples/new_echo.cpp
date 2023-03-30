@@ -80,7 +80,7 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
 
   while (keep_running) {
     for (auto& pipe : pipes) {
-      auto batch = pipe->RecvPkts();
+      auto batch = pipe->PeekPkts();
 
       if (unlikely(batch.kAvailableBytes == 0)) {
         continue;
@@ -96,6 +96,8 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
         ++(stats->nb_pkts);
       }
       uint32_t batch_length = batch.processed_bytes();
+      pipe->ConfirmBytes(batch_length);
+
       stats->recv_bytes += batch_length;
       ++(stats->nb_batches);
 

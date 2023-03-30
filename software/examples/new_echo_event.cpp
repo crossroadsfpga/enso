@@ -85,7 +85,7 @@ void run_echo_event(uint32_t nb_queues, uint32_t core_id,
       continue;
     }
 
-    auto batch = pipe->RecvPkts();
+    auto batch = pipe->PeekPkts();
 
     for (auto pkt : batch) {
       ++pkt[63];  // Increment payload.
@@ -97,6 +97,8 @@ void run_echo_event(uint32_t nb_queues, uint32_t core_id,
       ++(stats->nb_pkts);
     }
     uint32_t batch_length = batch.processed_bytes();
+    pipe->ConfirmBytes(batch_length);
+
     stats->recv_bytes += batch_length;
     ++(stats->nb_batches);
 
