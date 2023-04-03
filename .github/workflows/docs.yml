@@ -18,10 +18,11 @@ jobs:
         with:
           key: ${{ github.ref }}
           path: .cache
-      - run: sudo apt-get install -y doxygen python3-pip npm gcc-9 g++-9 libpcap-dev
+      - run: sudo apt-get install -y doxygen python3-pip npm g++ libpcap-dev
       - run: python3 -m pip install meson ninja
       - run: python3 -m pip install -r docs/requirements.txt
       - run: sudo npm install -g teroshdl
-      - run: meson compile
-      - run: meson compile docs
+      - run: meson setup build
+      - run: meson compile -v -C build
+      - run: meson compile docs -v -C build
       - run: mkdocs gh-deploy --force
