@@ -18,7 +18,7 @@ jobs:
         with:
           key: ${{ github.ref }}
           path: .cache
-      - run: sudo apt-get install -y doxygen python3-pip npm g++ libpcap-dev
+      - run: sudo apt-get install -y doxygen python3-pip npm g++ libpcap-dev texlive-font-utils
       - run: python3 -m pip install meson ninja
       - run: python3 -m pip install -r docs/requirements.txt
       - run: sudo npm install -g teroshdl
