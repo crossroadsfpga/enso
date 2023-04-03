@@ -23,6 +23,5 @@ jobs:
       - run: python3 -m pip install -r docs/requirements.txt
       - run: sudo npm install -g teroshdl
       - run: meson setup build
-      - run: meson compile -v -C build
       - run: meson compile docs -v -C build
       - run: mkdocs gh-deploy --force
