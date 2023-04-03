@@ -4,7 +4,7 @@
 set -o xtrace
 
 # exit when error occurs
-set -e
+# set -e
 
 ORIGINAL_PWD=$(pwd)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -36,10 +36,14 @@ teroshdl-hdl-documenter $TEROS_HDL_COMMON_OPTS \
     --outpath $TEROS_HDL_OUTPUT_PATH \
     # --recursive
 
+echo $?
+
 # Build hardware PCIe docs.
 teroshdl-hdl-documenter $TEROS_HDL_COMMON_OPTS \
     --input "$HARDWARE_PATH/pcie" \
     --outpath "$TEROS_HDL_OUTPUT_PATH/pcie"
+
+echo $?
 
 mv "$TEROS_HDL_OUTPUT_PATH/doc_internal" "$REPO_DIR/docs/hardware/modules"
 mv "$TEROS_HDL_OUTPUT_PATH/pcie/doc_internal" "$REPO_DIR/docs/hardware/modules/pcie"
