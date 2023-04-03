@@ -5,9 +5,9 @@ RX Ensō Pipes are used to *receive* data from the NIC. They offer multiple opti
 
 ## Receiving byte streams
 
-The most generic way of receiving data in an RX Ensō Pipe is to use [`RxPipe::Recv()`](/software/classenso_1_1RxPipe.html#a1b36d0b5ac69f8a6c3fa3f588d557de7){target=_blank}. It will return the next chunk of bytes available in the pipe.
+The most generic way of receiving data in an RX Ensō Pipe is to use [`RxPipe::Recv()`](/enso/software/classenso_1_1RxPipe.html#a1b36d0b5ac69f8a6c3fa3f588d557de7){target=_blank}. It will return the next chunk of bytes available in the pipe.
 
-After calling `RxPipe::Recv()`, the application will own the data and is responsible for freeing it once it is done processing. To do so, the application should call [`RxPipe::Free()`](/software/classenso_1_1RxPipe.html#ad1d7968aff11c0b000b96b43077fc3ca){target=_blank} or [`RxPipe::Clear()`](/software/classenso_1_1RxPipe.html#a30310918982cc7f2b13357524f576407){target=_blank}. The difference between the two is that `RxPipe::Free()` takes as argument the number of bytes to free, while `RxPipe::Clear()` frees all the data currently owned by the application. Note that received data can only be freed sequentially.
+After calling `RxPipe::Recv()`, the application will own the data and is responsible for freeing it once it is done processing. To do so, the application should call [`RxPipe::Free()`](/enso/software/classenso_1_1RxPipe.html#ad1d7968aff11c0b000b96b43077fc3ca){target=_blank} or [`RxPipe::Clear()`](/enso/software/classenso_1_1RxPipe.html#a30310918982cc7f2b13357524f576407){target=_blank}. The difference between the two is that `RxPipe::Free()` takes as argument the number of bytes to free, while `RxPipe::Clear()` frees all the data currently owned by the application. Note that received data can only be freed sequentially.
 
 The following example shows how to use `RxPipe::Recv()` and `RxPipe::Clear()` to receive, process, and free data.
 
@@ -33,24 +33,24 @@ rx_pipe->Clear();
 
 ### Accumulating data
 
-Applications do not need to process all the data received at once. Instead, they may choose to accumulate data, calling `RxPipe::Recv()` multiple times before finally freeing it. At any point, the application can check the number of bytes that it currently owns by calling [`RxPipe::capacity()`](/software/classenso_1_1RxPipe.html#a8bc51cab4242da30e76a5e9588b697ac){target=_blank}.
+Applications do not need to process all the data received at once. Instead, they may choose to accumulate data, calling `RxPipe::Recv()` multiple times before finally freeing it. At any point, the application can check the number of bytes that it currently owns by calling [`RxPipe::capacity()`](/enso/software/classenso_1_1RxPipe.html#a8bc51cab4242da30e76a5e9588b697ac){target=_blank}.
 
 While applications are free to accumulate data, they should be careful not to accumulate too much. If the application does not free the data, it will eventually own the entire RX Ensō Pipe's buffer. This will prevent new data from being received from the NIC.
 
 !!! note
 
-    Applications cannot own more data than the RX Ensō Pipe's overall capacity ([`RxPipe::kMaxCapacity`](/software/classenso_1_1RxPipe.html#ae00dba3bc68910e35ce000e42adfcd7b){target=_blank}). As such, if `RxPipe::capacity()` is equal to `RxPipe::kMaxCapacity`, calling `RxPipe::Recv()` will always return 0. As a rule of thumb, try to prevent `RxPipe::capacity()` from exceeding `RxPipe::kMaxCapacity / 2`.
+    Applications cannot own more data than the RX Ensō Pipe's overall capacity ([`RxPipe::kMaxCapacity`](/enso/software/classenso_1_1RxPipe.html#ae00dba3bc68910e35ce000e42adfcd7b){target=_blank}). As such, if `RxPipe::capacity()` is equal to `RxPipe::kMaxCapacity`, calling `RxPipe::Recv()` will always return 0. As a rule of thumb, try to prevent `RxPipe::capacity()` from exceeding `RxPipe::kMaxCapacity / 2`.
 
 ### Peeking
 
-Sometimes, it is useful to be able to peek at the data without actually consuming it.[^1] This can be accomplished by using [`RxPipe::Peek()`](/software/classenso_1_1RxPipe.html#ac527f10cb5c5cd404a843216bc9ed52c){target=_blank}. `RxPipe::Peek()` works similarly to `RxPipe::Recv()`, except that it does not consume the data from the pipe. As such, a later call to `RxPipe::Peek()` or `RxPipe::Recv()` will return the same data. If desired, the application can call [`RxPipe::ConfirmBytes()`](/software/classenso_1_1RxPipe.html#a752680019a3704169877d38315eeaf9d){target=_blank} to explicitly consume the data after peeking.
+Sometimes, it is useful to be able to peek at the data without actually consuming it.[^1] This can be accomplished by using [`RxPipe::Peek()`](/enso/software/classenso_1_1RxPipe.html#ac527f10cb5c5cd404a843216bc9ed52c){target=_blank}. `RxPipe::Peek()` works similarly to `RxPipe::Recv()`, except that it does not consume the data from the pipe. As such, a later call to `RxPipe::Peek()` or `RxPipe::Recv()` will return the same data. If desired, the application can call [`RxPipe::ConfirmBytes()`](/enso/software/classenso_1_1RxPipe.html#a752680019a3704169877d38315eeaf9d){target=_blank} to explicitly consume the data after peeking.
 
 [^1]: This is analogous to the `MSG_PEEK` flag in the `recv(2)` system call.
 
 
 ## Receiving raw packets
 
-While `RxPipe::Recv()` can be used to receive generic data, RX Ensō Pipes also support a more convenient way of receiving raw packets. The [`RxPipe::RecvPkts()`](/software/classenso_1_1RxPipe.html#aa00ea76c885c426a0c528eb64dafd085){target=_blank} method returns a batch of packets that can be iterated over using a range-based for loop. The following example shows how to use `RxPipe::RecvPkts()` to receive and process packets.
+While `RxPipe::Recv()` can be used to receive generic data, RX Ensō Pipes also support a more convenient way of receiving raw packets. The [`RxPipe::RecvPkts()`](/enso/software/classenso_1_1RxPipe.html#aa00ea76c885c426a0c528eb64dafd085){target=_blank} method returns a batch of packets that can be iterated over using a range-based for loop. The following example shows how to use `RxPipe::RecvPkts()` to receive and process packets.
 
 ```cpp
 auto batch = rx_pipe->RecvPkts();
@@ -62,7 +62,7 @@ for (auto pkt : batch) {
 rx_pipe->Clear();
 ```
 
-In the example above, there is no limit to the batch of packets returned by `RxPipe::RecvPkts()`. If desired, you may also set a maximum batch size (in number of packets) when calling `RxPipe::RecvPkts()`. After iterating over a batch, you can retrieve the total number of bytes in the batch by calling [`RxPipe::MessageBatch::processed_bytes()`](/software/classenso_1_1RxPipe_1_1MessageBatch.html#a1ce9049b7dbb3038c1762269fbf538ff){target=_blank}. For example:
+In the example above, there is no limit to the batch of packets returned by `RxPipe::RecvPkts()`. If desired, you may also set a maximum batch size (in number of packets) when calling `RxPipe::RecvPkts()`. After iterating over a batch, you can retrieve the total number of bytes in the batch by calling [`RxPipe::MessageBatch::processed_bytes()`](/enso/software/classenso_1_1RxPipe_1_1MessageBatch.html#a1ce9049b7dbb3038c1762269fbf538ff){target=_blank}. For example:
 
 ```cpp
 RxPipe* rx_pipe = device->AllocateRxPipe();
@@ -87,13 +87,13 @@ std::cout << "Processed bytes: " << batch.processed_bytes() << std::endl;
 rx_pipe->Clear();
 ```
 
-In addition to `RxPipe::RecvPkts()`, RX Ensō Pipes also support peeking packets using [`RxPipe::PeekPkts()`](/software/classenso_1_1RxPipe.html#a5f2fd6bcf9ef154838c0811469ddc4ba){target=_blank}. Similar to `RxPipe::Peek()`, `RxPipe::PeekPkts()` does not consume the data from the pipe.
+In addition to `RxPipe::RecvPkts()`, RX Ensō Pipes also support peeking packets using [`RxPipe::PeekPkts()`](/enso/software/classenso_1_1RxPipe.html#a5f2fd6bcf9ef154838c0811469ddc4ba){target=_blank}. Similar to `RxPipe::Peek()`, `RxPipe::PeekPkts()` does not consume the data from the pipe.
 
 ## Receiving generic messages
 
-The third way of receiving data is by using [`RxPipe::RecvMessages()`](/software/classenso_1_1RxPipe.html#a092a3d063e43709b08ee52b9a533caa8){target=_blank}. `RxPipe::RecvMessages()` allows the application to use its own message format. In fact, `RxPipe::RecvPkts()` and `RxPipe::PeekPkts()` are just special cases of `RxPipe::RecvMessages()` for raw packets.
+The third way of receiving data is by using [`RxPipe::RecvMessages()`](/enso/software/classenso_1_1RxPipe.html#a092a3d063e43709b08ee52b9a533caa8){target=_blank}. `RxPipe::RecvMessages()` allows the application to use its own message format. In fact, `RxPipe::RecvPkts()` and `RxPipe::PeekPkts()` are just special cases of `RxPipe::RecvMessages()` for raw packets.
 
-To use `RxPipe::RecvMessages()` applications must supply an implementation of a message iterator. To do so, define a class that inherits from [`MessageIteratorBase`](/software/classenso_1_1MessageIteratorBase.html){target=_blank}. This class should implement two methods: `GetNextMessage()` and `OnAdvanceMessage()`:
+To use `RxPipe::RecvMessages()` applications must supply an implementation of a message iterator. To do so, define a class that inherits from [`MessageIteratorBase`](/enso/software/classenso_1_1MessageIteratorBase.html){target=_blank}. This class should implement two methods: `GetNextMessage()` and `OnAdvanceMessage()`:
 
 - `GetNextMessage()` takes as argument the current message in the batch. It should use this message to return the address of the next message.
 - `OnAdvanceMessage()` takes as argument the number of bytes from the last message and is called whenever the application has finished processing a message. It can be used, for instance, to call `ConfirmBytes()` on the pipe.
@@ -145,7 +145,7 @@ rx_pipe->Clear();
 
 The NIC is responsible for demultiplexing incoming data among the RX Ensō Pipes. The logic to demultiplex packets should depend on the offloads implemented on the NIC. For convenience, our hardware implementation includes two types of flow steering mechanisms: flow hashing and flow binding.
 
-Flow binding is implemented using a cuckoo hash table. This allows the application to map arbitrary flows to RX Ensō Pipes. We borrow from the socket API terminology and call this mapping between RX Ensō Pipes and flows *binding*. To bind an RX Ensō Pipe to a flow, you can use [`RxPipe::Bind()`](/software/classenso_1_1RxPipe.html#aa61037a3883e3908a51a730eb6017cac){target=_blank}, specifying the flow's five-tuple. You can call `RxPipe::Bind()` multiple times on the same pipe to bind it to multiple flows.
+Flow binding is implemented using a cuckoo hash table. This allows the application to map arbitrary flows to RX Ensō Pipes. We borrow from the socket API terminology and call this mapping between RX Ensō Pipes and flows *binding*. To bind an RX Ensō Pipe to a flow, you can use [`RxPipe::Bind()`](/enso/software/classenso_1_1RxPipe.html#aa61037a3883e3908a51a730eb6017cac){target=_blank}, specifying the flow's five-tuple. You can call `RxPipe::Bind()` multiple times on the same pipe to bind it to multiple flows.
 
 Packets that do not match any flow in the flow table are directed to fallback queues using a hash of the packet's 5-tuple. The number of fallback queues should be configured in the hardware. If the number of fallback queues is set to *n*, the first *n* RX Ensō Pipes are used as fallback queues.
 
