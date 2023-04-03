@@ -27,7 +27,6 @@ if doxygen.found()
                                 ])],
                                 output: ['html', 'xml'],
                                 command: [doxygen, doxyfile],
-                                depends: [enso_lib],
                                 build_by_default: false)
 
     rm_software_doc_path = custom_target('rm_software_doc_path',
@@ -63,7 +62,6 @@ if teroshdl_hdl_documenter.found() and mkdocs.found()
           input: [cp_doxygen_target],
           output: 'site',
           command: ['build_docs.sh'],
-          depends: [enso_lib],
           build_by_default: false,
           build_always_stale: true)
 
