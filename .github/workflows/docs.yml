@@ -1,0 +1,26 @@
+name: docs
+on:
+  push:
+    branches:
+      - master
+      - main
+permissions:
+  contents: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.x
+      - uses: actions/cache@v2
+        with:
+          key: ${{ github.ref }}
+          path: .cache
+      - run: sudo apt-get install -y doxygen python3-pip npm
+      - run: python3 -m pip install -r docs/requirements.txt
+      - run: sudo npm install -g teroshdl
+      - run: meson compile
+      - run: meson compile docs
+      - run: mkdocs gh-deploy --force
