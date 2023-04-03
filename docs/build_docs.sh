@@ -33,17 +33,19 @@ mkdir /tmp/teros_hdl_docs
 # Build hardware docs.
 teroshdl-hdl-documenter $TEROS_HDL_COMMON_OPTS \
     --input $HARDWARE_PATH \
-    --outpath $TEROS_HDL_OUTPUT_PATH \
+    --outpath $TEROS_HDL_OUTPUT_PATH &> /tmp/teros_hdl_docs/hardware.log
     # --recursive
 
 echo $?
+cat /tmp/teros_hdl_docs/hardware.log
 
 # Build hardware PCIe docs.
 teroshdl-hdl-documenter $TEROS_HDL_COMMON_OPTS \
     --input "$HARDWARE_PATH/pcie" \
-    --outpath "$TEROS_HDL_OUTPUT_PATH/pcie"
+    --outpath "$TEROS_HDL_OUTPUT_PATH/pcie" &> /tmp/teros_hdl_docs/pcie.log
 
 echo $?
+cat /tmp/teros_hdl_docs/pcie.log
 
 mv "$TEROS_HDL_OUTPUT_PATH/doc_internal" "$REPO_DIR/docs/hardware/modules"
 mv "$TEROS_HDL_OUTPUT_PATH/pcie/doc_internal" "$REPO_DIR/docs/hardware/modules/pcie"
