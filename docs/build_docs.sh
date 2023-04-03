@@ -28,19 +28,19 @@ rm -rf $HDL_DOC_PATH
 
 ls -al
 
-# # Build hardware docs.
-# teroshdl-hdl-documenter $TEROS_HDL_COMMON_OPTS \
-#     --input $HARDWARE_PATH \
-#     --outpath "$REPO_DIR/docs/out" \
-#     # --recursive
+# Build hardware docs.
+teroshdl-hdl-documenter $TEROS_HDL_COMMON_OPTS \
+    --input $HARDWARE_PATH \
+    --outpath "$REPO_DIR/docs/out" \
+    # --recursive
 
-# # Build hardware PCIe docs.
-# teroshdl-hdl-documenter $TEROS_HDL_COMMON_OPTS \
-#     --input "$HARDWARE_PATH/pcie" \
-#     --outpath "$REPO_DIR/docs/out/pcie"
+# Build hardware PCIe docs.
+teroshdl-hdl-documenter $TEROS_HDL_COMMON_OPTS \
+    --input "$HARDWARE_PATH/pcie" \
+    --outpath "$REPO_DIR/docs/out/pcie"
 
-# mv "$REPO_DIR/docs/out/doc_internal" "$REPO_DIR/docs/hardware/modules"
-# mv "$REPO_DIR/docs/out/pcie/doc_internal" "$REPO_DIR/docs/hardware/modules/pcie"
+mv "$REPO_DIR/docs/out/doc_internal" "$REPO_DIR/docs/hardware/modules"
+mv "$REPO_DIR/docs/out/pcie/doc_internal" "$REPO_DIR/docs/hardware/modules/pcie"
 
 cd $REPO_DIR
 mkdocs build -f mkdocs.yml
