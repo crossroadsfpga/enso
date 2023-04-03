@@ -156,8 +156,8 @@ Packets that do not match any flow in the flow table are directed to fallback qu
 
 The following examples use RX Ensō Pipes:
 
-- [`new_capture.cpp`](https://github.com/hsadok/enso/blob/master/software/examples/new_capture.cpp){target=_blank}
-- [`new_echo_copy.cpp`](https://github.com/hsadok/enso/blob/master/software/examples/new_echo_copy.cpp){target=_blank}
+- [`new_capture.cpp`](https://github.com/crossroadsfpga/enso/blob/master/software/examples/new_capture.cpp){target=_blank}
+- [`new_echo_copy.cpp`](https://github.com/crossroadsfpga/enso/blob/master/software/examples/new_echo_copy.cpp){target=_blank}
 
 
 ## Summary

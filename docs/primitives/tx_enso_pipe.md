@@ -89,7 +89,7 @@ Note that the previous buffer is not invalidated after calling `TxPipe::TryExten
 
 The following examples use TX Ensō Pipes:
 
-- [`new_echo_copy.cpp`](https://github.com/hsadok/enso/blob/master/software/examples/new_echo_copy.cpp){target=_blank}
+- [`new_echo_copy.cpp`](https://github.com/crossroadsfpga/enso/blob/master/software/examples/new_echo_copy.cpp){target=_blank}
 
 ## Summary
 

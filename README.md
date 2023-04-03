@@ -55,7 +55,7 @@ sudo pip3 install meson ninja
 
 Start by cloning the enso repository, if you haven't already:
 ```bash
-git clone https://github.com/hsadok/enso
+git clone https://github.com/crossroadsfpga/enso
 ```
 
 Prepare the compilation using meson and compile it with ninja.
@@ -103,7 +103,7 @@ To configure and load the enso NIC you should install the enso script in your *l
 
 If you haven't already, clone the enso repository in your *local machine*:
 ```bash
-git clone https://github.com/hsadok/enso
+git clone https://github.com/crossroadsfpga/enso
 ```
 
 To install the enso script run in the `enso` directory:
