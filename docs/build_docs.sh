@@ -26,7 +26,14 @@ TEROS_HDL_COMMON_OPTS="\
 
 rm -rf $HDL_DOC_PATH
 
-ls -al
+echo $TEROS_HDL_COMMON_OPTS
+ls $TEROS_HDL_COMMON_OPTS
+
+echo $HARDWARE_PATH
+ls $HARDWARE_PATH
+
+echo $REPO_DIR/docs/out
+ls $REPO_DIR/docs/out
 
 # Build hardware docs.
 teroshdl-hdl-documenter $TEROS_HDL_COMMON_OPTS \
