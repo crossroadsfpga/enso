@@ -1,5 +1,7 @@
 # Ensō
 
+[![docs](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml/badge.svg)](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml)
+
 ## System Requirements
 
 Ensō currently requires an Intel Stratix 10 MX FPGA. Support for other boards might be added in the future.
