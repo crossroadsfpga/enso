@@ -21,4 +21,4 @@ Traditionally, NICs expose a *packetized* interface that software (applications 
 
 - [Setup](getting_started.md)
 - Understanding the primitives: [RX Ensō Pipe](primitives/rx_enso_pipe.md), [TX Ensō Pipe](primitives/tx_enso_pipe.md), [RX/TX Ensō Pipe](primitives/rx_tx_enso_pipe.md)
-- API References: [Software](/software), [Hardware](/hardware)
+- API References: [Software](software), [Hardware](hardware)
