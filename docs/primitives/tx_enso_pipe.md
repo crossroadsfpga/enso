@@ -74,7 +74,7 @@ Things get more interesting when the part of the buffer that was not sent needs 
 The following diagram illustrates this behavior. At step ①, the application allocates Buffer 1 using `TxPipe::AllocateBuf()`. At step ②, the application partially fills the buffer with data but sends only a portion of it using `TxPipe::SendAndFree()`. At step ③, the application allocates Buffer 2 using `TxPipe::AllocateBuf()`. The new buffer starts with the unsent data from the previous buffer.
 
 <figure markdown>
-  ![TX Ensō Pipe partial transfer](/assets/tx_pipe_partial_sent.svg){ width="550" }
+  ![TX Ensō Pipe partial transfer](/enso/assets/tx_pipe_partial_sent.svg){ width="550" }
   <figcaption>Example of a partial transfer. The unsent data is available in the next buffer returned by TxPipe::AllocateBuf().</figcaption>
 </figure>
 
