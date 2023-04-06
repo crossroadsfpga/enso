@@ -18,6 +18,7 @@ jobs:
         with:
           key: ${{ github.ref }}
           path: .cache
+      - run: sudo apt-get update
       - run: sudo apt-get install -y python3-pip npm g++ libpcap-dev texlive-font-utils
       - run: wget https://www.doxygen.nl/files/doxygen-1.9.6.linux.bin.tar.gz
       - run: tar xzvf doxygen-1.9.6.linux.bin.tar.gz
