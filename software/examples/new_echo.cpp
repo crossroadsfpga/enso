@@ -45,7 +45,7 @@
 static volatile bool keep_running = true;
 static volatile bool setup_done = false;
 
-void int_handler([[maybe_unused]] int signal) { keep_running = 0; }
+void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
 void run_echo(uint32_t nb_queues, uint32_t core_id,
               [[maybe_unused]] uint32_t nb_cycles, enso::stats_t* stats) {

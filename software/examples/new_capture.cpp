@@ -47,7 +47,7 @@
 static volatile bool keep_running = true;
 static volatile bool setup_done = false;
 
-void int_handler([[maybe_unused]] int signal) { keep_running = 0; }
+void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
 void capture_packets(uint32_t nb_queues, uint32_t core_id,
                      const std::string& pcap_file, enso::stats_t* stats) {
