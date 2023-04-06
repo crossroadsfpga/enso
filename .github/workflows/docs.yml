@@ -25,7 +25,8 @@ jobs:
       - run: cp doxygen-1.9.6/bin/* /usr/local/bin/
       - run: python3 -m pip install meson ninja
       - run: python3 -m pip install -r docs/requirements.txt
-      - run: sudo npm install -g teroshdl
+      - run: sudo npm install -g git://github.com/TerosTechnology/colibri.git#master
+        shell: bash
       - run: meson setup build
       - run: meson compile docs -v -C build
       - run: mkdocs gh-deploy --force
