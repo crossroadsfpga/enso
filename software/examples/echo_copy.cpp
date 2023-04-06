@@ -69,7 +69,8 @@ static void* get_huge_page(size_t size) {
   int fd;
   char huge_pages_path[128];
 
-  snprintf(huge_pages_path, sizeof(huge_pages_path), "/mnt/huge/pktgen:%i", id);
+  snprintf(huge_pages_path, sizeof(huge_pages_path), "/mnt/huge/echo_copy:%i",
+           id);
   ++id;
 
   fd = open(huge_pages_path, O_CREAT | O_RDWR, S_IRWXU);
