@@ -11,7 +11,7 @@ endif
 
 doxygen = find_program('doxygen', required: false)
 
-sw_doc_path = join_paths(meson.source_root(), 'docs/software')
+sw_doc_path = join_paths(meson.project_source_root(), 'docs/software')
 
 if doxygen.found()
     doxyfile = configure_file(input: 'doxygen/Doxyfile.in',
