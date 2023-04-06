@@ -7,8 +7,8 @@ from csv import DictReader
 from fractions import Fraction
 from typing import Optional, TextIO, Union
 
-from netexp.helpers import remote_command, watch_command, download_file
-from netexp.pcap import mean_pkt_size_remote_pcap
+from netexp.helpers import download_file
+from netexp.pcap import mean_pkt_size_pcap
 from netexp.pktgen import Pktgen
 
 from enso.consts import (
@@ -95,7 +95,6 @@ class EnsoGen(Pktgen):
         hist_file: Optional[str] = None,
         stats_delay: Optional[int] = None,
         pcie_addr: Optional[str] = None,
-        verbose: bool = False,
         log_file: Union[bool, TextIO] = False,
         check_tx_rate=False,
     ) -> None:
@@ -122,7 +121,6 @@ class EnsoGen(Pktgen):
         self.stats_file = stats_file or "stats.csv"
         self.hist_file = hist_file or "hist.csv"
 
-        self.verbose = verbose
         self.log_file = log_file
         self.check_tx_rate = check_tx_rate
 
@@ -142,10 +140,11 @@ class EnsoGen(Pktgen):
             f"{pcap_gen_cmd} {nb_pkts} {pkt_size} {nb_src} {nb_dst} {pcap_dst}"
         )
 
-        pcap_gen_cmd = remote_command(
-            self.nic.ssh_client, pcap_gen_cmd, print_command=self.verbose
+        pcap_gen_cmd = self.nic.host.run_command(
+            pcap_gen_cmd, print_command=self.log_file
         )
-        watch_command(pcap_gen_cmd, stdout=self.log_file, stderr=self.log_file)
+        pcap_gen_cmd.watch(stdout=self.log_file, stderr=self.log_file)
+
         status = pcap_gen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError("Error generating pcap")
@@ -176,15 +175,12 @@ class EnsoGen(Pktgen):
         self.expected_tx_duration = nb_pkts / pkts_per_sec
 
         # Make sure remote stats file does not exist.
-        remote_stats_file = remote_command(
-            self.nic.ssh_client,
+        remove_stats_file = self.nic.host.run_command(
             f"rm -f {self.stats_file}",
             print_command=False,
         )
-        watch_command(
-            remote_stats_file, stdout=self.log_file, stderr=self.log_file
-        )
-        status = remote_stats_file.recv_exit_status()
+        remove_stats_file.watch(stdout=self.log_file, stderr=self.log_file)
+        status = remove_stats_file.recv_exit_status()
         if status != 0:
             raise RuntimeError(
                 f"Error removing remote stats file ({self.stats_file})"
@@ -220,25 +216,25 @@ class EnsoGen(Pktgen):
         if self.pcie_addr is not None:
             command += f" --pcie-addr {self.pcie_addr}"
 
-        self.pktgen_cmd = remote_command(
-            self.nic.ssh_client,
+        self.pktgen_cmd = self.nic.host.run_command(
             command,
-            print_command=self.verbose,
+            print_command=self.log_file,
             pty=True,
         )
 
     def wait_transmission_done(self) -> None:
-        if self.pktgen_cmd is None:
+        pktgen_cmd = self.pktgen_cmd
+
+        if pktgen_cmd is None:
             # Pktgen is not running.
             return
 
-        watch_command(
-            self.pktgen_cmd,
+        pktgen_cmd.watch(
             stdout=self.log_file,
             stderr=self.log_file,
-            keyboard_int=lambda: self.pktgen_cmd.send(b"\x03"),
+            keyboard_int=lambda: pktgen_cmd.send(b"\x03"),
         )
-        status = self.pktgen_cmd.recv_exit_status()
+        status = pktgen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError("Error running EnsōGen")
 
@@ -258,7 +254,7 @@ class EnsoGen(Pktgen):
         # Retrieve the latest stats.
         with tempfile.TemporaryDirectory() as tmp:
             local_stats = f"{tmp}/stats.csv"
-            download_file(self.nic.host, self.stats_file, local_stats)
+            download_file(self.nic.host_name, self.stats_file, local_stats)
             parsed_stats = EnsoGenStats(local_stats)
 
             stats_summary = parsed_stats.get_summary(calculate_tx_mean)
@@ -297,10 +293,7 @@ class EnsoGen(Pktgen):
 
     @pcap_path.setter
     def pcap_path(self, pcap_path) -> None:
-        self.mean_pcap_pkt_size = mean_pkt_size_remote_pcap(
-            self.nic.ssh_client, pcap_path
-        )
-
+        self.mean_pcap_pkt_size = mean_pkt_size_pcap(self.nic.host, pcap_path)
         self._pcap_path = pcap_path
 
     @property
@@ -339,16 +332,21 @@ class EnsoGen(Pktgen):
             # Pktgen is not running.
             return
 
+        if self.pktgen_cmd.exit_status_ready():
+            # Pktgen has already exited.
+            self.pktgen_cmd = None
+            return
+
         self.pktgen_cmd.send(b"\x03")
 
-        watch_command(
-            self.pktgen_cmd, stdout=self.log_file, stderr=self.log_file
-        )
+        self.pktgen_cmd.watch(stdout=self.log_file, stderr=self.log_file)
         status = self.pktgen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError("Error stopping EnsōGen")
 
         self.update_stats()
+
+        self.pktgen_cmd = None
 
     def close(self) -> None:
         # No need to close here.
