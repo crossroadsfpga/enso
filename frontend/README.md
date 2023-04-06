@@ -4,7 +4,7 @@
 
 To install the frontend run in the current directory (`frontend`):
 ```bash
-pip3 install -e .
+python3 -m pip install -e .
 ```
 To run the EnsōGen packet generator you also need to have the `capinfos` command installed in the machine you want to use to generate packets.
 
