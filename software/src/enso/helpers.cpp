@@ -143,9 +143,9 @@ int set_core_id(std::thread& thread, int core_id) {
 static void print_stats_line(uint64_t recv_bytes, uint64_t nb_batches,
                              uint64_t nb_pkts, uint64_t delta_bytes,
                              uint64_t delta_pkts, uint64_t delta_batches) {
-  std::cout << std::dec << delta_bytes * 8. / 1e6 << " Mbps  "
-            << delta_pkts / 1e6 << " Mpps  " << recv_bytes << " B  "
-            << nb_batches << " batches  " << nb_pkts << " pkts";
+  std::cout << std::dec << (delta_bytes + delta_pkts * 20) * 8. / 1e6
+            << " Mbps  " << delta_pkts / 1e6 << " Mpps  " << recv_bytes
+            << " B  " << nb_batches << " batches  " << nb_pkts << " pkts";
 
   if (delta_batches > 0) {
     std::cout << "  " << delta_bytes / delta_batches << " B/batch";
@@ -161,9 +161,17 @@ void show_stats(const std::vector<stats_t>& thread_stats,
     std::vector<uint64_t> nb_batches_before;
     std::vector<uint64_t> nb_pkts_before;
 
+    std::vector<uint64_t> recv_bytes_after;
+    std::vector<uint64_t> nb_batches_after;
+    std::vector<uint64_t> nb_pkts_after;
+
     recv_bytes_before.reserve(thread_stats.size());
     nb_batches_before.reserve(thread_stats.size());
     nb_pkts_before.reserve(thread_stats.size());
+
+    recv_bytes_after.reserve(thread_stats.size());
+    nb_batches_after.reserve(thread_stats.size());
+    nb_pkts_after.reserve(thread_stats.size());
 
     for (auto& stats : thread_stats) {
       recv_bytes_before.push_back(stats.recv_bytes);
@@ -172,6 +180,12 @@ void show_stats(const std::vector<stats_t>& thread_stats,
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    for (auto& stats : thread_stats) {
+      recv_bytes_after.push_back(stats.recv_bytes);
+      nb_batches_after.push_back(stats.nb_batches);
+      nb_pkts_after.push_back(stats.nb_pkts);
+    }
 
     uint64_t total_recv_bytes = 0;
     uint64_t total_nb_batches = 0;
@@ -182,11 +196,9 @@ void show_stats(const std::vector<stats_t>& thread_stats,
     uint64_t total_delta_batches = 0;
 
     for (uint16_t i = 0; i < thread_stats.size(); ++i) {
-      const stats_t& stats = thread_stats[i];
-
-      uint64_t recv_bytes = stats.recv_bytes;
-      uint64_t nb_batches = stats.nb_batches;
-      uint64_t nb_pkts = stats.nb_pkts;
+      uint64_t recv_bytes = recv_bytes_after[i];
+      uint64_t nb_batches = nb_batches_after[i];
+      uint64_t nb_pkts = nb_pkts_after[i];
 
       total_recv_bytes += recv_bytes;
       total_nb_batches += nb_batches;

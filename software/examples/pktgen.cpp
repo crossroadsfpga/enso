@@ -927,8 +927,9 @@ int main(int argc, char** argv) {
   if (parsed_args.save) {
     std::ofstream save_file;
     save_file.open(parsed_args.save_file);
-    save_file << "rx_goodput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
-                 "tx_goodput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
+    save_file
+        << "rx_goodput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
+           "tx_goodput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
     if (parsed_args.enable_rtt) {
       save_file << ",mean_rtt_ns";
     }
@@ -942,6 +943,8 @@ int main(int argc, char** argv) {
 
   // Continuously print statistics.
   while (!rx_done) {
+    // auto last_time = std::chrono::high_resolution_clock::now();
+    _enso_compiler_memory_barrier();
     uint64_t last_rx_bytes = rx_stats.bytes;
     uint64_t last_rx_pkts = rx_stats.pkts;
     uint64_t last_tx_bytes = tx_stats.bytes;
@@ -952,21 +955,29 @@ int main(int argc, char** argv) {
     std::this_thread::sleep_for(
         std::chrono::milliseconds(parsed_args.stats_delay));
 
-    double interval_s = parsed_args.stats_delay / 1000.;
-
     uint64_t rx_bytes = rx_stats.bytes;
     uint64_t rx_pkts = rx_stats.pkts;
     uint64_t tx_bytes = tx_stats.bytes;
     uint64_t tx_pkts = tx_stats.pkts;
+
+    double interval_s = parsed_args.stats_delay / 1000.;
+
+    uint64_t rx_pkt_diff = rx_pkts - last_rx_pkts;
     uint64_t rx_goodput_mbps =
         (rx_bytes - last_rx_bytes) * 8. / (1e6 * interval_s);
-    uint64_t rx_pkt_diff = rx_pkts - last_rx_pkts;
-    uint64_t rx_pkt_rate = rx_pkt_diff / interval_s;
+    uint64_t rx_tput_mbps =
+        (rx_bytes - last_rx_bytes + rx_pkt_diff * 20) * 8. / (1e6 * interval_s);
+    uint64_t rx_pkt_rate = (rx_pkt_diff / interval_s);
     uint64_t rx_pkt_rate_kpps = rx_pkt_rate / 1e3;
+
+    uint64_t tx_pkt_diff = tx_pkts - last_tx_pkts;
     uint64_t tx_goodput_mbps =
         (tx_bytes - last_tx_bytes) * 8. / (1e6 * interval_s);
-    uint64_t tx_pkt_rate = (tx_pkts - last_tx_pkts) / interval_s;
+    uint64_t tx_tput_mbps =
+        (tx_bytes - last_tx_bytes + tx_pkt_diff * 20) * 8. / (1e6 * interval_s);
+    uint64_t tx_pkt_rate = (tx_pkt_diff / interval_s);
     uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
+
     uint64_t rtt_sum_ns = rx_stats.rtt_sum * enso::kNsPerTimestampCycle;
     uint64_t rtt_ns;
     if (rx_pkt_diff != 0) {
@@ -978,13 +989,13 @@ int main(int argc, char** argv) {
     // TODO(sadok): don't print metrics that are unreliable before the first
     // two samples.
 
-    std::cout << std::dec << "      RX: Goodput: " << rx_goodput_mbps << " Mbps"
+    std::cout << std::dec << "      RX: Throughput: " << rx_tput_mbps << " Mbps"
               << "  Rate: " << rx_pkt_rate_kpps << " kpps" << std::endl
 
               << "          #bytes: " << rx_bytes << "  #packets: " << rx_pkts
               << std::endl;
 
-    std::cout << "      TX: Goodput: " << tx_goodput_mbps << " Mbps"
+    std::cout << "      TX: Throughput: " << tx_tput_mbps << " Mbps"
               << "  Rate: " << tx_pkt_rate_kpps << " kpps" << std::endl
 
               << "          #bytes: " << tx_bytes << "  #packets: " << tx_pkts
@@ -997,9 +1008,10 @@ int main(int argc, char** argv) {
     if (parsed_args.save) {
       std::ofstream save_file;
       save_file.open(parsed_args.save_file, std::ios_base::app);
-      save_file << rx_goodput_mbps << "," << rx_pkt_rate_kpps << "," << rx_bytes
-                << "," << rx_pkts << "," << tx_goodput_mbps << ","
-                << tx_pkt_rate_kpps << "," << tx_bytes << "," << tx_pkts;
+      save_file << rx_goodput_mbps << "," << rx_tput_mbps << ","
+                << rx_pkt_rate_kpps << "," << rx_bytes << "," << rx_pkts << ","
+                << tx_goodput_mbps << "," << tx_pkt_rate_kpps << ","
+                << tx_tput_mbps << "," << tx_bytes << "," << tx_pkts;
       if (parsed_args.enable_rtt) {
         save_file << "," << rtt_ns;
       }
