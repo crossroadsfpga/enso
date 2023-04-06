@@ -13,7 +13,7 @@ from netexp.pktgen import Pktgen
 
 from enso.consts import (
     FPGA_RATELIMIT_CLOCK,
-    ENSO_PKTGEN_CMD,
+    ENSOGEN_CMD,
     PCAP_GEN_CMD,
     PCAPS_DIR,
 )
@@ -191,7 +191,7 @@ class EnsoGen(Pktgen):
             )
 
         command = (
-            f"sudo {self.nic.enso_path}/{ENSO_PKTGEN_CMD}"
+            f"sudo {self.nic.enso_path}/{ENSOGEN_CMD}"
             f" {self.pcap_path} {rate_frac.numerator} {rate_frac.denominator}"
             f" --count {nb_pkts}"
             f" --core {self.core_id}"
