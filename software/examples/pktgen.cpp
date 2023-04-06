@@ -67,9 +67,6 @@
 // If defined, ignore received packets.
 // #define IGNORE_RX
 
-// If defined, show mean number of packets in all received batches.
-// #define SHOW_BATCH
-
 // When we are done transmitting. The RX thread still tries to receive all
 // packets. The following defines the maximum number of times that we can try to
 // receive packets in a row while getting no packet back. Once this happens we
@@ -952,10 +949,6 @@ int main(int argc, char** argv) {
     uint64_t last_aggregated_rtt_ns =
         rx_stats.rtt_sum * enso::kNsPerTimestampCycle;
 
-#ifdef SHOW_BATCH
-    uint64_t last_rx_batches = rx_stats.nb_batches;
-#endif  // SHOW_BATCH
-
     std::this_thread::sleep_for(
         std::chrono::milliseconds(parsed_args.stats_delay));
 
@@ -990,18 +983,6 @@ int main(int argc, char** argv) {
 
               << "          #bytes: " << rx_bytes << "  #packets: " << rx_pkts
               << std::endl;
-
-#ifdef SHOW_BATCH
-    uint64_t rx_nb_batches = rx_stats.nb_batches - last_rx_batches;
-    uint64_t mean_pkt_per_batch;
-    if (rx_nb_batches) {
-      mean_pkt_per_batch = rx_pkt_rate / rx_nb_batches;
-    } else {
-      mean_pkt_per_batch = 0;
-    }
-    std::cout << "          Mean #packets/batch: " << mean_pkt_per_batch
-              << std::endl;
-#endif  // SHOW_BATCH
 
     std::cout << "      TX: Goodput: " << tx_goodput_mbps << " Mbps"
               << "  Rate: " << tx_pkt_rate_kpps << " kpps" << std::endl
