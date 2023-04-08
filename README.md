@@ -30,6 +30,7 @@ done
 ### Dependencies
 
 Ensō has the following dependencies:
+
 * Either gcc (>= 9.0) or clang (>= 8.0)
 * Python (>= 3.9)
 * pip
@@ -53,6 +54,33 @@ sudo apt install \
 sudo pip3 install meson ninja
 ```
 
+To be able to load or synthesize the hardware, you also need to install [Intel Quartus 19.3](https://fpgasoftware.intel.com/19.3/?edition=pro) as well as the Stratix 10 device support (same link).
+
+You should also make sure that `quartus` and its tools are in your `PATH`. You may do so by adding the following lines to your `~/.bashrc` file:
+
+```bash
+# Make sure this points to the Quartus installation directory.
+export quartus_dir=
+
+export INTELFPGAOCLSDKROOT="$quartus_dir/19.3/hld"
+export QUARTUS_ROOTDIR="$quartus_dir/19.3/quartus"
+export QSYS_ROOTDIR="$quartus_dir/19.3/qsys/bin"
+export IP_ROOTDIR="$quartus_dir/19.3/ip/"
+export PATH=$quartus_dir/19.3/quartus/bin:$PATH
+export PATH=$quartus_dir/19.3/modelsim_ase/linuxaloem:$PATH
+export PATH=$quartus_dir/19.3/quartus/sopc_builder/bin:$PATH
+```
+
+**Note.** Some distributions (e.g., Ubuntu) include code in the `.bashrc` file to prevent it from running in non-interactive environments. This might prevent the above lines from running in some settings. Consider commenting out the following lines in the `.bashrc` file:
+
+```bash
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+```
+
 ### Compilation
 
 Start by cloning the enso repository, if you haven't already:
@@ -62,23 +90,18 @@ git clone https://github.com/crossroadsfpga/enso
 
 Prepare the compilation using meson and compile it with ninja.
 
-To use gcc:
+Setup to use gcc:
 ```bash
 meson setup --native-file gcc.ini build-gcc
 ```
 
-To use clang:
+Compile:
 ```bash
-meson setup --native-file llvm.ini build-clang
-```
-
-To compile:
-```bash
-cd build-*
+cd build-gcc
 ninja
 ```
 
-### Compilation options
+### [Optional] Compilation options
 
 There are a few compile-time options that you may set. You can see all the options with:
 ```bash
@@ -101,9 +124,9 @@ meson configure -Dbatch_size=64 -Dlatency_opt=true
 
 ### Installing enso script
 
-To configure and load the enso NIC you should install the enso script in your *local machine* (e.g., your laptop). This is different from the machine that you will run enso on.
+To configure and load the enso NIC you should install the enso script. This can even be done in your local machine (e.g., your laptop). It may or may not be the machine you want to run Ensō on.
 
-If you haven't already, clone the enso repository in your *local machine*:
+If you haven't already, clone the enso repository the machine you want to install the script on:
 ```bash
 git clone https://github.com/crossroadsfpga/enso
 ```
@@ -111,12 +134,16 @@ git clone https://github.com/crossroadsfpga/enso
 To install the enso script run in the `enso` directory:
 ```bash
 cd enso
+
+# Make sure this python3 is version 3.9 or higher.
 python3 -m pip install -e frontend
 ```
 
 Refer to the [enso script documentation](frontend/README.md) for instructions on how to enable autocompletion or the dependencies you need to run the EnsōGen packet generator.
 
-Before you can run the script. You must make sure that you have ssh access using a password-less key (e.g., using ssh-copy-id) to the machine you will run enso on. You should also have a `~/.ssh/config` configuration file set in your local machine with configuration to access the machine that you will run enso on.
+### [Optional] Running the enso script in a different machine
+
+If running the enso script in a different machine from the one you will run Ensō, you must make sure that you have ssh access using a password-less key (e.g., using ssh-copy-id) to the machine you will run enso on. You should also have an `~/.ssh/config` configuration file set with configuration to access the machine that you will run enso on.
 
 If you don't yet have a `~/.ssh/config` file, you can create one and add the following lines, replacing everything between `<>` with the correct values:
 ```bash
@@ -135,14 +162,14 @@ enso --help
 
 ### Loading the bitstream to the FPGA
 
-Before running any software you need to make sure that the FPGA is loaded with the latest bitstream. To do so, you must first place the bitstream file in the correct location. You can obtain the bitstream file from [here](https://drive.google.com/drive/folders/1J2YYTNXotdOOeKWvoj_5-heE5qE2dQAC?usp=sharing) or synthesize it from the source code as described in the [synthesis section](#synthesis).
+Before running any software you need to make sure that the FPGA is loaded with the latest bitstream. To do so, you must first place the bitstream file in the correct location. You can obtain the latest bitstream file from [here](https://github.com/crossroadsfpga/enso/releases/latest/download/intel_stratix10mx_bitstream.sof) or synthesize it from the source code as described in the [synthesis section](#synthesis).
 
 Copy the bitstream file (`alt_ehipc2_hw.sof`) to `enso/hardware_test/alt_ehipc2_hw.sof` in the machine with the FPGA, e.g.:
 ```bash
 cp <bitstream_path>/alt_ehipc2_hw.sof <enso_path>/enso/hardware_test/alt_ehipc2_hw.sof
 ```
 
-Run the `enso` script in the local machine to load the bitstream in the one with the FPGA:
+Run the `enso` script to load the bitstream. If running in a different machine, specify the machine name you configured in the `~/.ssh/config` file using the `--host` option.
 ```bash
 enso <enso_path> --host <host> --load-bitstream
 ```
@@ -161,7 +188,9 @@ You can also specify other options to configure the NIC, refer to `enso --help` 
 
 -->
 
-## Building Documentation
+## [Optional] Building Documentation
+
+You can access Ensō's documentation at [https://crossroadsfpga.github.io/enso/](https://crossroadsfpga.github.io/enso/). But if you would like to contribute to the documentation, you may choose to also build it locally.
 
 Install the requirements, this assumes that you already have pip and npm installed:
 
