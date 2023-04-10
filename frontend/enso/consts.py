@@ -10,6 +10,6 @@ DEFAULT_BATCH_SIZE = 64
 SETUP_SW_CMD = "setup_sw.sh"
 ENSOGEN_CMD = "build/software/examples/ensogen"
 PCAPS_DIR = "frontend/pcaps/"
-PCAP_GEN_CMD = "hardware/input_gen/generate_synthetic_trace.py"
+PCAP_GEN_CMD = "build/hardware/input_gen/generate_synthetic_trace"
 
 FPGA_RATELIMIT_CLOCK = 200e6  # Hz
