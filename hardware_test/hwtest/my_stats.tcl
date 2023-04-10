@@ -118,9 +118,15 @@ proc h {} {
 }
 
 proc help {} {
-    puts "h, help:          Show this help."
-    puts "s, get_top_stats: Show stats."
-    puts "sw_rst:           Software reset."
+    puts "h, help:                Show this help."
+    puts "s, get_top_stats:       Show stats."
+    puts "sw_rst:                 Software reset."
+    puts "chkmac_stats:           Check stats from Ethernet core."
+    puts "set_nb_fallback_queues: Set number of fallback queues."
+    puts "enable_desc_per_pkt:    Enable sending a descriptors per packet."
+    puts "disable_desc_per_pkt:   Disable sending a descriptors per packet."
+    puts "enable_rr:              Enable round-robin of packets among RX queues."
+    puts "disable_rr:             Disable round-robin of packets among RX queues."
 }
 
 proc set_up {} {
