@@ -12,7 +12,7 @@ FPGA_NB=${1:-"1-13"}
 sudo taskset -c 0-$((`nproc --all` - 2)) chrt -r 1 $(which quartus_pgm) \
     -c "Intel Stratix 10 MX FPGA Development Kit [$FPGA_NB]" ./load.cdf
 
-# remove device and force rescan, this will trigger the driver's probe function
+# Remove device and force rescan, this will trigger the driver's probe function.
 DEVICE_ADDRS=$(lspci -nn | grep ${VENDOR_ID}:${DEVICE_ID} | grep Ethernet | \
     awk '{print $1}')
 
