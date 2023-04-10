@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 
 import binascii
 import ipaddress
@@ -8,7 +8,6 @@ import warnings
 
 from itertools import cycle
 
-from tqdm import tqdm
 from scapy.all import IP, UDP, Ether, Raw, bytes_encode, PcapWriter, DLT_EN10MB
 
 
@@ -47,7 +46,7 @@ def generate_pcap(nb_pkts, out_pcap, pkt_size, nb_src, nb_dest, batch_size):
                 yield pkt
 
     def pkt_gen():
-        for _, pkt in zip(tqdm(range(nb_pkts)), cycle_batches()):
+        for _, pkt in zip(range(nb_pkts)), cycle_batches():
             yield pkt
 
     wrpcap(out_pcap, pkt_gen())
