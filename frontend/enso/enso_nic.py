@@ -146,6 +146,9 @@ class EnsoNic(IntelFpga):
         for row in output.split("\r\n"):
             if row.startswith("% "):
                 break
+
+            if ":" not in row:
+                continue
             key, value = row.split(": ")
             stats[key] = int(value)
         return stats
