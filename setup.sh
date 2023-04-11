@@ -28,10 +28,14 @@ if [ -f $SETUP_DONE_PATH ]; then
     exit 0
 fi
 
-# Check if apt-get is available.
+# Check if apt-get is available. If yes, install dependencies.
 if command -v apt-get &> /dev/null; then
-    # Install dependencies.
-    sudo apt-get update -y
+    # Update if more than a month has passed since last update.
+    last_update=$(stat -c %Y /var/cache/apt/pkgcache.bin)
+    now=$(date +%s)
+    if [ $((now - last_update)) -gt 2592000 ]; then
+        sudo apt-get update -y
+    fi
     sudo apt-get install -y \
     python3-pip \
     python3-setuptools \
