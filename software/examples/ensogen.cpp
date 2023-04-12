@@ -58,8 +58,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "app.h"
-
 // Number of loop iterations to wait before probing the TX notification buffer
 // again when reclaiming buffer space.
 #define TX_RECLAIM_DELAY 1024
