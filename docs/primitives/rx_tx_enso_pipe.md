@@ -39,5 +39,5 @@ In this example we poll the RX/TX Ensō Pipe for new packets. If there are no pa
 
 The following examples use RX/TX Ensō Pipes:
 
-- [`new_echo.cpp`](https://github.com/crossroadsfpga/enso/blob/master/software/examples/new_echo.cpp){target=_blank}
-- [`new_echo_event.cpp`](https://github.com/crossroadsfpga/enso/blob/master/software/examples/new_echo_event.cpp){target=_blank}
+- [`echo.cpp`](https://github.com/crossroadsfpga/enso/blob/master/software/examples/echo.cpp){target=_blank}
+- [`echo_event.cpp`](https://github.com/crossroadsfpga/enso/blob/master/software/examples/echo_event.cpp){target=_blank}
