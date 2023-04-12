@@ -129,9 +129,8 @@ int main(int argc, char const *argv[])
 
       l3_hdr->tot_len = htons(mss + sizeof(*l3_hdr) + sizeof(*l4_hdr));
 
-      pkt_hdr.caplen = sizeof(*l2_hdr) + sizeof(*l3_hdr) + sizeof(*l4_hdr) +
-                       mss;
-      pkt_hdr.len = pkt_hdr.caplen + 4;
+      pkt_hdr.len = sizeof(*l2_hdr) + sizeof(*l3_hdr) + sizeof(*l4_hdr) + mss;
+      pkt_hdr.caplen = pkt_hdr.len;
 
       l4_hdr->dest = htons(80);
       l4_hdr->source = htons(8080);
