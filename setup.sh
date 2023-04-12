@@ -21,7 +21,6 @@ if ! command -v quartus_pgm &> /dev/null; then
 fi
 
 # if .setup_done exists, then setup has already been run.
-
 if [ -f $SETUP_DONE_PATH ]; then
     echo "Setup has already been run. If you want to re-run the setup, delete" \
          "$SETUP_DONE_PATH and run this script again."
