@@ -36,7 +36,7 @@ setup(
     python_requires=">=3.9",
     entry_points={"console_scripts": ["enso=enso.__main__:main"]},
     include_package_data=True,
-    install_requires=["click>=8.0", "netexp==0.1.16", "scapy"],
+    install_requires=["click>=8.0", "netexp==0.1.17", "scapy"],
     # setup_requires=["pytest-runner"],
     # tests_require=["pytest"],
     classifiers=[
