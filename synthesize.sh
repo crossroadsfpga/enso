@@ -9,6 +9,11 @@ CUR_DIR=$(pwd)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 BITSTREAM_DESTINATION=${1:-$CUR_DIR}
 
+if [[ $# -gt 1 ]]; then
+  echo "Usage: ./synthesize.sh [bistream_destination]"
+  exit 1
+fi
+
 echo "BITSTREAM_DESTINATION: $BITSTREAM_DESTINATION"
 QUARTUS_STA_LOG_FILE="quartus_sta.log"
 
