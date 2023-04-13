@@ -171,9 +171,9 @@ enso --help
 
 Before running any software you need to make sure that the FPGA is loaded with the latest bitstream. To do so, you must first place the bitstream file in the correct location. You can obtain the latest bitstream file from [here](https://github.com/crossroadsfpga/enso/releases/latest/download/intel_stratix10mx_bitstream.sof) or synthesize it from the source code as described in the [synthesis section](#synthesis).
 
-Copy the bitstream file (`alt_ehipc2_hw.sof`) to `enso/hardware_test/alt_ehipc2_hw.sof` in the machine with the FPGA, e.g.:
+Copy the bitstream file (`alt_ehipc2_hw.sof`) to `enso/scripts/alt_ehipc2_hw.sof` in the machine with the FPGA, e.g.:
 ```bash
-cp <bitstream_path>/alt_ehipc2_hw.sof <enso_path>/enso/hardware_test/alt_ehipc2_hw.sof
+cp <bitstream_path>/alt_ehipc2_hw.sof <enso_path>/enso/scripts/alt_ehipc2_hw.sof
 ```
 
 Run the `enso` script to load the bitstream. If running in a different machine, specify the machine name you configured in the `~/.ssh/config` file using the `--host` option.

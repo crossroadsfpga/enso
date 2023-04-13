@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 set -e
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 VENDOR_ID="1172"
 DEVICE_ID="0000"
 
 FPGA_NB=${1:-"1-13"}
+
+cd $SCRIPT_DIR
 
 # We use taskset and chrt to benefit from multiple cores even when they are
 # isolated from the linux scheduler. This significantly speeds up loading the

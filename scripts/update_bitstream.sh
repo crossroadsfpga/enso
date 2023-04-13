@@ -34,7 +34,7 @@ if [ "$1" == "download" ]; then
     echo "Downloading bitstream file from: $BITSTREAM_URL"
 
     wget $BITSTREAM_URL
-    mv $BITSTREAM_NAME hardware_test/alt_ehipc2_hw.sof
+    mv $BITSTREAM_NAME scripts/alt_ehipc2_hw.sof
 else 
     BITSTREAM_FILE=$1
 
@@ -44,6 +44,6 @@ else
         exit 1
     fi
 
-    # Copy bitstream file to hardware_test directory.
-    cp $BITSTREAM_FILE hardware_test/alt_ehipc2_hw.sof
+    # Copy bitstream file to the scripts directory.
+    cp $BITSTREAM_FILE scripts/alt_ehipc2_hw.sof
 fi

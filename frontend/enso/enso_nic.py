@@ -13,8 +13,8 @@ from enso.consts import (
 )
 
 
-LOAD_BITSTREAM_CMD = "hardware_test/load_bitstream.sh"
-RUN_CONSOLE_CMD = "hardware_test/run_console.sh"
+LOAD_BITSTREAM_CMD = "scripts/load_bitstream.sh"
+RUN_CONSOLE_CMD = "scripts/run_console.sh"
 
 
 class EnsoNic(IntelFpga):
