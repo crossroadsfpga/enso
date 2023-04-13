@@ -267,7 +267,6 @@ int Device::Init() noexcept {
 
   int bar = -1;
 
-  std::cerr << "Running with BATCH_SIZE: " << BATCH_SIZE << std::endl;
   std::cerr << "Running with NOTIFICATION_BUF_SIZE: " << NOTIFICATION_BUF_SIZE
             << std::endl;
   std::cerr << "Running with ENSO_PIPE_SIZE: " << ENSO_PIPE_SIZE << std::endl;
