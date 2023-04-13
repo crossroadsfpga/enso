@@ -1,7 +1,6 @@
 import click
 
 from enso.consts import (
-    DEFAULT_BATCH_SIZE,
     DEFAULT_DSC_BUF_SIZE,
     DEFAULT_ETH_PORT,
     DEFAULT_FPGA,
@@ -73,13 +72,6 @@ from enso.enso_nic import EnsoNic
     help="Enable/Disable packet round robin to fallback queues.",
 )
 @click.option(
-    "--batch-size",
-    default=DEFAULT_BATCH_SIZE,
-    show_default=True,
-    type=int,
-    help="Number of packets in a batch.",
-)
-@click.option(
     "--latency-opt/--throughput-opt",
     default=False,
     show_default=True,
@@ -102,7 +94,6 @@ def main(
     fallback_queues,
     desc_per_pkt,
     enable_rr,
-    batch_size,
     latency_opt,
     load_bitstream,
 ):
@@ -121,7 +112,6 @@ def main(
         fallback_queues=fallback_queues,
         desc_per_pkt=desc_per_pkt,
         enable_rr=enable_rr,
-        sw_batch_size=batch_size,
         latency_opt=latency_opt,
         verbose=True,
         log_file=True,

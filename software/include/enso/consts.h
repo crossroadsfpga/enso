@@ -57,11 +57,8 @@ constexpr uint32_t kMaxNbFlows = MAX_NB_FLOWS;
 
 constexpr uint32_t kMaxTransferLen = 131072;
 
-#ifndef BATCH_SIZE
-// Maximum number of packets to process in call to get_next_batch_from_queue
-#define BATCH_SIZE 64
-#endif
-constexpr uint32_t kBatchSize = BATCH_SIZE;
+// Maximum number of tails to process at once.
+constexpr uint32_t kBatchSize = 64;
 
 #ifndef NOTIFICATION_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this

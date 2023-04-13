@@ -105,9 +105,9 @@ To change one of the options run:
 meson configure -D<option_name>=<value>
 ```
 
-For instance, to change the batch size and enable latency optimization:
+For instance, to enable latency optimization:
 ```bash
-meson configure -Dbatch_size=64 -Dlatency_opt=true
+meson configure -Dlatency_opt=true
 ```
 
 <!--- TODO(sadok): Describe how to synthesize hardware. -->

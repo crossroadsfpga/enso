@@ -62,7 +62,7 @@ else
 fi
 
 # Setup the software.
-./scripts/sw_setup.sh 16384 32768 64 false
+./scripts/sw_setup.sh 16384 32768 false
 return_code=$?
 
 if [ $return_code -ne 0 ]; then

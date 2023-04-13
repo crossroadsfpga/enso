@@ -295,7 +295,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   uint32_t notification_buf_head = notification_buf_pair->rx_head;
   uint16_t nb_consumed_notifications = 0;
 
-  for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
+  for (uint16_t i = 0; i < kBatchSize; ++i) {
     struct RxNotification* cur_notification =
         notification_buf + notification_buf_head;
 
@@ -530,7 +530,7 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
   }
 
   // Advance pointer for pkt queues that were already sent.
-  for (uint16_t i = 0; i < BATCH_SIZE; ++i) {
+  for (uint16_t i = 0; i < kBatchSize; ++i) {
     if (head == tail) {
       break;
     }

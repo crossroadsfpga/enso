@@ -6,8 +6,8 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 REPO_DIR=$SCRIPT_DIR/..
 
-if [[ "$#" -ne 4 ]]; then
-    echo "Syntax: ./sw_setup.sh NOTIFICATION_BUF_SIZE ENSO_PIPE_SIZE BATCH_SIZE LATENCY_OPT"
+if [[ "$#" -ne 3 ]]; then
+    echo "Syntax: ./sw_setup.sh NOTIFICATION_BUF_SIZE ENSO_PIPE_SIZE LATENCY_OPT"
     exit 1
 fi
 
@@ -41,7 +41,6 @@ ln -sfn build-gcc build
 # ln -sfn build-clang build
 
 cd build
-meson configure -Dnotification_buf_size=$1 -Denso_pipe_size=$2 -Dbatch_size=$3 \
-    -Dlatency_opt=$4
+meson configure -Dnotification_buf_size=$1 -Denso_pipe_size=$2 -Dlatency_opt=$3
 ninja -v
 sudo ninja install

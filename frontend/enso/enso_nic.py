@@ -3,7 +3,6 @@ from typing import TextIO, Union, Optional
 from netexp.helpers import IntelFpga
 
 from enso.consts import (
-    DEFAULT_BATCH_SIZE,
     DEFAULT_DSC_BUF_SIZE,
     DEFAULT_ETH_PORT,
     DEFAULT_NB_FALLBACK_QUEUES,
@@ -37,7 +36,6 @@ class EnsoNic(IntelFpga):
         fallback_queues:
         desc_per_pkt:
         enable_rr:
-        sw_batch_size:
         skip_config:
         verbose:
         log_file:
@@ -59,7 +57,6 @@ class EnsoNic(IntelFpga):
         fallback_queues: int = DEFAULT_NB_FALLBACK_QUEUES,
         desc_per_pkt: bool = False,
         enable_rr: bool = False,
-        sw_batch_size: int = DEFAULT_BATCH_SIZE,
         latency_opt: bool = False,
         skip_config: bool = False,
         verbose: bool = False,
@@ -117,7 +114,6 @@ class EnsoNic(IntelFpga):
             else:
                 self.disable_rr()
 
-        self.sw_batch_size = sw_batch_size
         self.latency_opt = latency_opt
 
         if setup_sw:
@@ -126,7 +122,7 @@ class EnsoNic(IntelFpga):
     def setup_sw(self):
         sw_setup = self.host.run_command(
             f"{self.enso_path}/{SETUP_SW_CMD} {self.dsc_buf_size} "
-            f"{self.pkt_buf_size} {self.sw_batch_size} {self.latency_opt}",
+            f"{self.pkt_buf_size} {self.latency_opt}",
             pty=True,
         )
         sw_setup.watch(
