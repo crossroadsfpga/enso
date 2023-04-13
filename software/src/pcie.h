@@ -91,6 +91,14 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
              unsigned nb_queues, uint32_t bdf, int32_t bar);
 
+/**
+ * Get latest tails for the pipes associated with the given notification buffer.
+ * 
+ * @param notification_buf_pair Notification buffer to get data from.
+ * @return Number of notifications received.
+ */
+uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair);
+
 uint32_t get_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
@@ -130,7 +138,7 @@ uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
  * @param enso_pipe Enso pipe to advance.
  * @param len Number of bytes to free.
  */
-void advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe, size_t len);
+void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len);
 
 /**
  * Frees all the received bytes in the buffer associated with the `socket_entry`
@@ -138,7 +146,14 @@ void advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe, size_t len);
  *
  * @param enso_pipe Enso pipe to advance.
  */
-void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe);
+void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe);
+
+/**
+ * Prefetches a given Enso Pipe.
+ * 
+ * @param enso_pipe Enso pipe to prefetch.
+ */
+void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
 
 /**
  * Sends data through a given queue.

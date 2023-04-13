@@ -137,6 +137,8 @@ ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
   struct NotificationBufPair* notification_buf_pair =
       socket->notification_buf_pair;
 
+  get_new_tails(notification_buf_pair);
+
   ssize_t bytes_received =
       get_next_batch_from_queue(enso_pipe, notification_buf_pair, &ring_buf);
 
@@ -146,7 +148,7 @@ ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
 
   memcpy(buf, ring_buf, bytes_received);
 
-  advance_ring_buffer(enso_pipe, bytes_received);
+  advance_pipe(enso_pipe, bytes_received);
 
   return bytes_received;
 }
@@ -159,6 +161,8 @@ ssize_t recv_zc(int sockfd, void** buf, size_t len, int flags) {
   struct RxEnsoPipeInternal* enso_pipe = &socket->enso_pipe;
   struct NotificationBufPair* notification_buf_pair =
       socket->notification_buf_pair;
+
+  get_new_tails(notification_buf_pair);
 
   return get_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
 }
@@ -186,7 +190,7 @@ uint32_t get_completions(int ref_sockfd) {
 }
 
 void free_enso_pipe(int sockfd, size_t len) {
-  advance_ring_buffer(&(open_sockets[sockfd].enso_pipe), len);
+  advance_pipe(&(open_sockets[sockfd].enso_pipe), len);
 }
 
 int enable_device_timestamp() {

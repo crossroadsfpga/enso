@@ -74,18 +74,23 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
+  if (!next_pipe_) {
+    get_new_tails(notification_buf_pair_);
+  }
   uint32_t ret = peek_next_batch_from_queue(
       &internal_rx_pipe_, notification_buf_pair_, (void**)buf);
   return std::min(ret, max_nb_bytes);
 }
 
 void RxPipe::Free(uint32_t nb_bytes) {
-  advance_ring_buffer(&internal_rx_pipe_, nb_bytes);
+  advance_pipe(&internal_rx_pipe_, nb_bytes);
 }
 
-void RxPipe::Prefetch() { advance_ring_buffer(&internal_rx_pipe_, 0); }
+void RxPipe::Prefetch() {
+  prefetch_pipe(&internal_rx_pipe_);
+}
 
-void RxPipe::Clear() { fully_advance_ring_buffer(&internal_rx_pipe_); }
+void RxPipe::Clear() { fully_advance_pipe(&internal_rx_pipe_); }
 
 RxPipe::~RxPipe() { enso_pipe_free(&internal_rx_pipe_); }
 
@@ -225,25 +230,79 @@ RxTxPipe* Device::AllocateRxTxPipe() noexcept {
   return pipe;
 }
 
+// TODO(sadok): DRY this code.
 RxPipe* Device::NextRxPipeToRecv() {
-  // This function can only be used when there are no RxTx pipes.
+  // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);
-  int32_t id = get_next_enso_pipe_id(&notification_buf_pair_);
+
+  int32_t id;
+
+#ifdef LATENCY_OPT
+  // When LATENCY_OPT is enabled, we always prefetch the next pipe.
+  id = get_next_enso_pipe_id(&notification_buf_pair_);
+
+  while (id >= 0) {
+    RxEnsoPipeInternal& pipe = rx_pipes_[id]->internal_rx_pipe_;
+    uint32_t enso_pipe_head = pipe.rx_tail;
+    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
+
+    if (enso_pipe_head != enso_pipe_tail) {
+      rx_tx_pipes_[id]->Prefetch();
+      break;
+    }
+
+    id = get_next_enso_pipe_id(&notification_buf_pair_);
+  }
+
+#else  // !LATENCY_OPT
+  id = get_next_enso_pipe_id(&notification_buf_pair_);
+
+#endif  // LATENCY_OPT
+
   if (id < 0) {
     return nullptr;
   }
-  return rx_pipes_[id];
+
+  RxPipe* pipe = rx_pipes_[id];
+  pipe->SetAsNextPipe();
+  return pipe;
 }
 
 RxTxPipe* Device::NextRxTxPipeToRecv() {
+  ProcessCompletions();
   // This function can only be used when there are only RxTx pipes.
   assert(rx_pipes_.size() == rx_tx_pipes_.size());
-  ProcessCompletions();
-  int32_t id = get_next_enso_pipe_id(&notification_buf_pair_);
+  int32_t id;
+
+#ifdef LATENCY_OPT
+  // When LATENCY_OPT is enabled, we always prefetch the next pipe.
+  id = get_next_enso_pipe_id(&notification_buf_pair_);
+
+  while (id >= 0) {
+    RxEnsoPipeInternal& pipe = rx_tx_pipes_[id]->rx_pipe_->internal_rx_pipe_;
+    uint32_t enso_pipe_head = pipe.rx_tail;
+    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
+
+    if (enso_pipe_head != enso_pipe_tail) {
+      rx_tx_pipes_[id]->Prefetch();
+      break;
+    }
+
+    id = get_next_enso_pipe_id(&notification_buf_pair_);
+  }
+
+#else  // !LATENCY_OPT
+  id = get_next_enso_pipe_id(&notification_buf_pair_);
+
+#endif  // LATENCY_OPT
+
   if (id < 0) {
     return nullptr;
   }
-  return rx_tx_pipes_[id];
+
+  RxTxPipe* pipe = rx_tx_pipes_[id];
+  pipe->rx_pipe_->SetAsNextPipe();
+  return pipe;
 }
 
 int Device::Init() noexcept {

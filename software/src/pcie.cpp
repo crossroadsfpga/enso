@@ -156,13 +156,13 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
   notification_buf_pair_regs->tx_head = notification_buf_pair->tx_head;
 
   // HACK(sadok): assuming that we know the number of queues beforehand
-  notification_buf_pair->pending_pkt_tails = (uint32_t*)malloc(
-      sizeof(*(notification_buf_pair->pending_pkt_tails)) * nb_queues);
-  if (notification_buf_pair->pending_pkt_tails == NULL) {
+  notification_buf_pair->pending_rx_pipe_tails = (uint32_t*)malloc(
+      sizeof(*(notification_buf_pair->pending_rx_pipe_tails)) * nb_queues);
+  if (notification_buf_pair->pending_rx_pipe_tails == NULL) {
     std::cerr << "Could not allocate memory" << std::endl;
     return -1;
   }
-  memset(notification_buf_pair->pending_pkt_tails, 0, nb_queues);
+  memset(notification_buf_pair->pending_rx_pipe_tails, 0, nb_queues);
 
   notification_buf_pair->wrap_tracker =
       (uint8_t*)malloc(kNotificationBufSize / 8);
@@ -172,15 +172,15 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
   }
   memset(notification_buf_pair->wrap_tracker, 0, kNotificationBufSize / 8);
 
-  notification_buf_pair->last_rx_ids =
+  notification_buf_pair->next_rx_pipe_ids =
       (enso_pipe_id_t*)malloc(kNotificationBufSize * sizeof(enso_pipe_id_t));
-  if (notification_buf_pair->last_rx_ids == NULL) {
+  if (notification_buf_pair->next_rx_pipe_ids == NULL) {
     std::cerr << "Could not allocate memory" << std::endl;
     return -1;
   }
 
-  notification_buf_pair->pending_rx_ids = 0;
-  notification_buf_pair->consumed_rx_ids = 0;
+  notification_buf_pair->last_rx_ids_head = 0;
+  notification_buf_pair->last_rx_ids_tail = 0;
   notification_buf_pair->tx_full_cnt = 0;
   notification_buf_pair->nb_unreported_completions = 0;
   notification_buf_pair->enso_pipe_id_offset = enso_pipe_id_offset;
@@ -243,8 +243,9 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   enso_pipe->rx_head = 0;
   enso_pipe->rx_tail = 0;
 
-  // make sure the last tail matches the current head
-  notification_buf_pair->pending_pkt_tails[enso_pipe->id] = enso_pipe->rx_head;
+  // Make sure the last tail matches the current head.
+  notification_buf_pair->pending_rx_pipe_tails[enso_pipe->id] =
+      enso_pipe->rx_head;
 
   // Setting the address enables the queue. Do this last.
   // The least significant bits in rx_mem_low are used to keep the notification
@@ -259,7 +260,6 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
 int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
              unsigned nb_queues, uint32_t bdf, int32_t bar) {
-  printf("Running with BATCH_SIZE: %i\n", BATCH_SIZE);
   printf("Running with NOTIFICATION_BUF_SIZE: %i\n", NOTIFICATION_BUF_SIZE);
   printf("Running with ENSO_PIPE_SIZE: %i\n", ENSO_PIPE_SIZE);
 
@@ -295,11 +295,13 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   uint32_t notification_buf_head = notification_buf_pair->rx_head;
   uint16_t nb_consumed_notifications = 0;
 
+  uint16_t last_rx_ids_tail = notification_buf_pair->last_rx_ids_tail;
+
   for (uint16_t i = 0; i < kBatchSize; ++i) {
     struct RxNotification* cur_notification =
         notification_buf + notification_buf_head;
 
-    // check if the next notification was updated by the FPGA
+    // Check if the next notification was updated by the NIC.
     if (cur_notification->signal == 0) {
       break;
     }
@@ -309,27 +311,30 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
     enso_pipe_id_t enso_pipe_id =
         cur_notification->queue_id - notification_buf_pair->enso_pipe_id_offset;
-    notification_buf_pair->pending_pkt_tails[enso_pipe_id] =
+    notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id] =
         (uint32_t)cur_notification->tail;
-    notification_buf_pair->last_rx_ids[nb_consumed_notifications] =
-        enso_pipe_id;
+
+    notification_buf_pair->next_rx_pipe_ids[last_rx_ids_tail] = enso_pipe_id;
+    last_rx_ids_tail = (last_rx_ids_tail + 1) % kNotificationBufSize;
 
     ++nb_consumed_notifications;
-
-    // TODO(sadok) consider prefetching. Two options to consider:
-    // (1) prefetch all the packets;
-    // (2) pass the current queue as argument and prefetch packets for it,
-    //     including potentially old packets.
   }
 
+  notification_buf_pair->last_rx_ids_tail = last_rx_ids_tail;
+
   if (likely(nb_consumed_notifications > 0)) {
-    // update notification buffer head
+    // Update notification buffer head.
     _enso_compiler_memory_barrier();
     *(notification_buf_pair->rx_head_ptr) = notification_buf_head;
     notification_buf_pair->rx_head = notification_buf_head;
   }
 
   return nb_consumed_notifications;
+}
+
+
+uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair) {
+  return __get_new_tails(notification_buf_pair);
 }
 
 static _enso_always_inline uint32_t
@@ -342,13 +347,12 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
 
   *buf = &enso_pipe_buf[enso_pipe_head * 16];
 
-  uint32_t enso_pipe_tail = notification_buf_pair->pending_pkt_tails[queue_id];
+  uint32_t enso_pipe_tail =
+      notification_buf_pair->pending_rx_pipe_tails[queue_id];
 
   if (enso_pipe_tail == enso_pipe_head) {
     return 0;
   }
-
-  // _mm_prefetch(buf, _MM_HINT_T0);
 
   uint32_t flit_aligned_size =
       ((enso_pipe_tail - enso_pipe_head) % ENSO_PIPE_SIZE) * 64;
@@ -364,18 +368,12 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
 uint32_t get_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
-  if (notification_buf_pair->pending_rx_ids == 0) {
-    __get_new_tails(notification_buf_pair);
-  }
   return __consume_queue(enso_pipe, notification_buf_pair, buf);
 }
 
 uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
-  if (notification_buf_pair->pending_rx_ids == 0) {
-    __get_new_tails(notification_buf_pair);
-  }
   return __consume_queue(enso_pipe, notification_buf_pair, buf, true);
 }
 
@@ -386,27 +384,23 @@ __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
   // done processing the last batch and can get the next one. Using batches here
   // performs **significantly** better compared to always fetching the latest
   // notification.
-  uint16_t pending_rx_ids = notification_buf_pair->pending_rx_ids;
-  uint16_t consumed_rx_ids = notification_buf_pair->consumed_rx_ids;
+  uint16_t last_rx_ids_head = notification_buf_pair->last_rx_ids_head;
+  uint16_t last_rx_ids_tail = notification_buf_pair->last_rx_ids_tail;
 
-  if (pending_rx_ids == consumed_rx_ids) {
-    pending_rx_ids = __get_new_tails(notification_buf_pair);
-    notification_buf_pair->pending_rx_ids = pending_rx_ids;
-
-    consumed_rx_ids = 0;
-    notification_buf_pair->consumed_rx_ids = consumed_rx_ids;
-
-    if (unlikely(pending_rx_ids == 0)) {
+  if (last_rx_ids_head == last_rx_ids_tail) {
+    uint16_t nb_consumed_notifications = __get_new_tails(notification_buf_pair);
+    if (unlikely(nb_consumed_notifications == 0)) {
       return -1;
     }
   }
 
-  enso_pipe_id_t __enso_pipe_id =
-      notification_buf_pair->last_rx_ids[consumed_rx_ids];
+  enso_pipe_id_t enso_pipe_id =
+      notification_buf_pair->next_rx_pipe_ids[last_rx_ids_head];
 
-  ++(notification_buf_pair->consumed_rx_ids);
+  notification_buf_pair->last_rx_ids_head =
+      (last_rx_ids_head + 1) % kNotificationBufSize;
 
-  return __enso_pipe_id;
+  return enso_pipe_id;
 }
 
 int32_t get_next_enso_pipe_id(
@@ -432,7 +426,7 @@ uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
   return __consume_queue(enso_pipe, notification_buf_pair, buf);
 }
 
-void advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
+void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t rx_pkt_head = enso_pipe->rx_head;
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
@@ -443,11 +437,16 @@ void advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   enso_pipe->rx_head = rx_pkt_head;
 }
 
-void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe) {
+void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
   _enso_compiler_memory_barrier();
   *(enso_pipe->buf_head_ptr) = enso_pipe->rx_tail;
 
   enso_pipe->rx_head = enso_pipe->rx_tail;
+}
+
+void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
+  _enso_compiler_memory_barrier();
+  *(enso_pipe->buf_head_ptr) = enso_pipe->rx_head;
 }
 
 static _enso_always_inline uint32_t
@@ -569,9 +568,9 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   notification_buf_pair->regs->tx_mem_low = 0;
   notification_buf_pair->regs->tx_mem_high = 0;
   munmap(notification_buf_pair->rx_buf, kAlignedDscBufPairSize);
-  free(notification_buf_pair->pending_pkt_tails);
+  free(notification_buf_pair->pending_rx_pipe_tails);
   free(notification_buf_pair->wrap_tracker);
-  free(notification_buf_pair->last_rx_ids);
+  free(notification_buf_pair->next_rx_pipe_ids);
 
   notification_buf_pair->fpga_dev->use_cmd(false);
   delete notification_buf_pair->fpga_dev;
