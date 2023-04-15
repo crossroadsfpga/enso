@@ -372,12 +372,13 @@ static uint64_t virt_to_phys(void* virt) {
 }
 
 struct EnsoPipe {
-  EnsoPipe(uint8_t* buf, uint32_t length, uint32_t nb_pkts)
-      : buf(buf), length(length), nb_pkts(nb_pkts) {
+  EnsoPipe(uint8_t* buf, uint32_t length, uint32_t good_bytes, uint32_t nb_pkts)
+      : buf(buf), length(length), good_bytes(good_bytes), nb_pkts(nb_pkts) {
     phys_addr = virt_to_phys(buf);
   }
   uint8_t* buf;
   uint32_t length;
+  uint32_t good_bytes;
   uint32_t nb_pkts;
   uint64_t phys_addr;
 };
@@ -446,9 +447,11 @@ struct TxStats {
 
 struct TxArgs {
   TxArgs(std::vector<EnsoPipe>& enso_pipes, uint64_t total_bytes_to_send,
-         uint64_t pkts_in_last_buffer, int socket_fd)
+         uint64_t total_good_bytes_to_send, uint64_t pkts_in_last_buffer,
+         int socket_fd)
       : ignored_reclaims(0),
         total_remaining_bytes(total_bytes_to_send),
+        total_remaining_good_bytes(total_good_bytes_to_send),
         transmissions_pending(0),
         pkts_in_last_buffer(pkts_in_last_buffer),
         enso_pipes(enso_pipes),
@@ -456,6 +459,7 @@ struct TxArgs {
         socket_fd(socket_fd) {}
   uint64_t ignored_reclaims;
   uint64_t total_remaining_bytes;
+  uint64_t total_remaining_good_bytes;
   uint32_t transmissions_pending;
   uint64_t pkts_in_last_buffer;
   std::vector<EnsoPipe>& enso_pipes;
@@ -465,8 +469,9 @@ struct TxArgs {
 
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
+  (void)pkt_hdr;
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
-  uint32_t len = pkt_hdr->len;
+  uint32_t len = enso::get_pkt_len(pkt_bytes);
   uint32_t nb_flits = (len - 1) / 64 + 1;
 
   if (nb_flits > context->free_flits) {
@@ -484,7 +489,7 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
       buf = enso_pipe.buf + BUFFER_SIZE;
       context->hugepage_offset += BUFFER_SIZE;
     }
-    context->enso_pipes.emplace_back(buf, 0, 0);
+    context->enso_pipes.emplace_back(buf, 0, 0, 0);
     context->free_flits = BUFFER_SIZE / 64;
   }
 
@@ -494,6 +499,7 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   memcpy(dest, pkt_bytes, len);
 
   enso_pipe.length += nb_flits * 64;  // Packets must be cache aligned.
+  enso_pipe.good_bytes += len;
   ++(enso_pipe.nb_pkts);
   context->free_flits -= nb_flits;
 }
@@ -517,6 +523,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 
   if (likely(recv_len > 0)) {
     int processed_bytes = 0;
+    uint64_t recv_bytes = 0;
     uint8_t* pkt = recv_buf;
 
     while (processed_bytes < recv_len) {
@@ -535,12 +542,13 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 
       pkt += pkt_aligned_len;
       processed_bytes += pkt_aligned_len;
+      recv_bytes += pkt_len;
       ++nb_pkts;
     }
 
     rx_stats.pkts += nb_pkts;
     ++(rx_stats.nb_batches);
-    rx_stats.bytes += recv_len;
+    rx_stats.bytes += recv_bytes;
     enso::free_enso_pipe(socket_fd, recv_len);
   }
 #endif  // IGNORE_RX
@@ -558,13 +566,18 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
     transmission_length =
         std::min(transmission_length, tx_args.current_enso_pipe->length);
 
+    uint32_t good_transmission_length = (uint32_t)std::min(
+        tx_args.total_remaining_good_bytes,
+        (uint64_t)tx_args.current_enso_pipe->good_bytes);
+
     uint64_t phys_addr = tx_args.current_enso_pipe->phys_addr;
 
     enso::send(tx_args.socket_fd, phys_addr, transmission_length, 0);
-    tx_stats.bytes += transmission_length;
+    tx_stats.bytes += good_transmission_length;
     ++tx_args.transmissions_pending;
 
     tx_args.total_remaining_bytes -= transmission_length;
+    tx_args.total_remaining_good_bytes -= good_transmission_length;
 
     if (unlikely(tx_args.total_remaining_bytes == 0)) {
       tx_stats.pkts += tx_args.pkts_in_last_buffer;
@@ -650,12 +663,23 @@ int main(int argc, char** argv) {
       (enso_pipes.front().length < BUFFER_SIZE / 2)) {
     EnsoPipe& buffer = enso_pipes.front();
     uint32_t original_buf_length = buffer.length;
+    uint32_t original_good_bytes = buffer.good_bytes;
     uint32_t original_nb_pkts = buffer.nb_pkts;
     while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
       memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
       buffer.length += original_buf_length;
+      buffer.good_bytes += original_good_bytes;
       buffer.nb_pkts += original_nb_pkts;
     }
+  }
+
+  uint64_t total_pkts_in_buffers = 0;
+  uint64_t total_bytes_in_buffers = 0;
+  uint64_t total_good_bytes_in_buffers = 0;
+  for (auto& buffer : enso_pipes) {
+    total_pkts_in_buffers += buffer.nb_pkts;
+    total_bytes_in_buffers += buffer.length;
+    total_good_bytes_in_buffers += buffer.good_bytes;
   }
 
   // To restrict the number of packets, we track the total number of bytes.
@@ -663,19 +687,14 @@ int main(int argc, char** argv) {
   // number bytes to send in the very last buffer. But to be able to do this,
   // we need to compute the total number of bytes that we have to send.
   uint64_t total_bytes_to_send;
+  uint64_t total_good_bytes_to_send;
   uint64_t pkts_in_last_buffer = 0;
   if (parsed_args.nb_pkts > 0) {
-    uint64_t total_pkts_in_buffers = 0;
-    uint64_t total_bytes_in_buffers = 0;
-    for (auto& buffer : enso_pipes) {
-      total_pkts_in_buffers += buffer.nb_pkts;
-      total_bytes_in_buffers += buffer.length;
-    }
-
     uint64_t nb_pkts_remaining = parsed_args.nb_pkts % total_pkts_in_buffers;
     uint64_t nb_full_iters = parsed_args.nb_pkts / total_pkts_in_buffers;
 
     total_bytes_to_send = nb_full_iters * total_bytes_in_buffers;
+    total_good_bytes_to_send = nb_full_iters * total_good_bytes_in_buffers;
 
     if (nb_pkts_remaining == 0) {
       pkts_in_last_buffer = enso_pipes.back().nb_pkts;
@@ -703,6 +722,7 @@ int main(int argc, char** argv) {
     // Treat nb_pkts == 0 as unbounded. The following value should be enough
     // to send 64-byte packets for around 400 years using Tb Ethernet.
     total_bytes_to_send = 0xffffffffffffffff;
+    total_good_bytes_to_send = 0xffffffffffffffff;
   }
 
   uint32_t rtt_hist_len = 0;
@@ -785,6 +805,7 @@ int main(int argc, char** argv) {
     });
 
     std::thread tx_thread = std::thread([total_bytes_to_send,
+                                         total_good_bytes_to_send,
                                          pkts_in_last_buffer, &parsed_args,
                                          &enso_pipes, &tx_stats] {
       std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -801,8 +822,8 @@ int main(int argc, char** argv) {
 
       std::cout << "Running TX on core " << sched_getcpu() << std::endl;
 
-      TxArgs tx_args(enso_pipes, total_bytes_to_send, pkts_in_last_buffer,
-                     socket_fd);
+      TxArgs tx_args(enso_pipes, total_bytes_to_send, total_good_bytes_to_send,
+                     pkts_in_last_buffer, socket_fd);
 
       while (keep_running) {
         transmit_pkts(tx_args, tx_stats);
@@ -841,7 +862,8 @@ int main(int argc, char** argv) {
     // Send and receive packets within the same thread.
     std::thread rx_tx_thread =
         std::thread([&parsed_args, &rx_stats, total_bytes_to_send,
-                     pkts_in_last_buffer, &enso_pipes, &tx_stats] {
+                     total_good_bytes_to_send, pkts_in_last_buffer, &enso_pipes,
+                     &tx_stats] {
           std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
           for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
@@ -870,7 +892,8 @@ int main(int argc, char** argv) {
           rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
 
           int socket_fd = 0;  // Using first socket to transmit.
-          TxArgs tx_args(enso_pipes, total_bytes_to_send, pkts_in_last_buffer,
+          TxArgs tx_args(enso_pipes, total_bytes_to_send,
+                         total_good_bytes_to_send, pkts_in_last_buffer,
                          socket_fd);
 
           rx_ready = 1;
@@ -965,16 +988,15 @@ int main(int argc, char** argv) {
     uint64_t rx_pkt_diff = rx_pkts - last_rx_pkts;
     uint64_t rx_goodput_mbps =
         (rx_bytes - last_rx_bytes) * 8. / (1e6 * interval_s);
-    uint64_t rx_tput_mbps =
-        (rx_bytes - last_rx_bytes + rx_pkt_diff * 20) * 8. / (1e6 * interval_s);
     uint64_t rx_pkt_rate = (rx_pkt_diff / interval_s);
     uint64_t rx_pkt_rate_kpps = rx_pkt_rate / 1e3;
+    uint64_t rx_tput_mbps = rx_goodput_mbps + 24 * 8 * rx_pkt_rate / 1e6;
 
     uint64_t tx_pkt_diff = tx_pkts - last_tx_pkts;
     uint64_t tx_goodput_mbps =
         (tx_bytes - last_tx_bytes) * 8. / (1e6 * interval_s);
     uint64_t tx_tput_mbps =
-        (tx_bytes - last_tx_bytes + tx_pkt_diff * 20) * 8. / (1e6 * interval_s);
+        (tx_bytes - last_tx_bytes + tx_pkt_diff * 24) * 8. / (1e6 * interval_s);
     uint64_t tx_pkt_rate = (tx_pkt_diff / interval_s);
     uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
 

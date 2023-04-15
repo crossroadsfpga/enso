@@ -312,10 +312,10 @@ class EnsoGen(Pktgen):
         return self.nb_tx_pkts
 
     def get_rx_throughput(self) -> int:
-        return self.mean_rx_goodput + self.mean_rx_rate * 20 * 8
+        return self.mean_rx_goodput + self.mean_rx_rate * 24 * 8
 
     def get_tx_throughput(self) -> int:
-        return self.mean_tx_goodput + self.mean_tx_rate * 20 * 8
+        return self.mean_tx_goodput + self.mean_tx_rate * 24 * 8
 
     def clean_stats(self) -> None:
         self.nb_rx_pkts = 0
