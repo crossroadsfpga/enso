@@ -91,19 +91,19 @@ struct stats_t {
  * @return Return RTT measure for the packet in nanoseconds. If timestamp is
  *         not enabled the value returned is undefined.
  */
-inline uint32_t get_pkt_rtt(uint8_t* pkt) {
+inline uint32_t get_pkt_rtt(const uint8_t* pkt) {
   uint32_t rtt = *((uint32_t*)(pkt + kPacketRttOffset));
   return be32toh(rtt);
 }
 
-constexpr uint16_t be_to_le_16(uint16_t le) {
+constexpr uint16_t be_to_le_16(const uint16_t le) {
   return ((le & (uint16_t)0x00ff) << 8) | ((le & (uint16_t)0xff00) >> 8);
 }
 
-constexpr uint16_t get_pkt_len(uint8_t* addr) {
-  struct ether_header* l2_hdr = (struct ether_header*)addr;
-  struct iphdr* l3_hdr = (struct iphdr*)(l2_hdr + 1);
-  uint16_t total_len = be_to_le_16(l3_hdr->tot_len) + sizeof(*l2_hdr);
+constexpr uint16_t get_pkt_len(const uint8_t* addr) {
+  const struct ether_header* l2_hdr = (struct ether_header*)addr;
+  const struct iphdr* l3_hdr = (struct iphdr*)(l2_hdr + 1);
+  const uint16_t total_len = be_to_le_16(l3_hdr->tot_len) + sizeof(*l2_hdr);
 
   return total_len;
 }
