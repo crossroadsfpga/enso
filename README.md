@@ -38,6 +38,7 @@ Ensō has the following dependencies:
 - Ninja
 - libpcap
 - wget
+- capinfos (for EnsōGen)
 
 There are also python dependencies listed in `requirements.txt` that can be installed with `pip`.
 
@@ -51,7 +52,8 @@ sudo apt install \
   python3-wheel \
   gcc-9 \
   g++-9 \
-  libpcap-dev
+  libpcap-dev \
+  tshark
 
 python3 -m pip install meson ninja
 python3 -m pip install -r requirements.txt
