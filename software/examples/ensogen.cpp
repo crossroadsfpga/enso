@@ -608,15 +608,16 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // Parse the PCI address in format 0000:00:00.0
+  // Parse the PCI address in format 0000:00:00.0 or 00:00.0.
   if (parsed_args.pcie_addr != "") {
     uint32_t domain, bus, dev, func;
     if (sscanf(parsed_args.pcie_addr.c_str(), "%x:%x:%x.%x", &domain, &bus,
                &dev, &func) != 4) {
-      std::cerr << "Invalid PCI address: " << parsed_args.pcie_addr
-                << std::endl;
-      std::cerr << "Use format 0000:00:00.0" << std::endl;
-      return 1;
+      if (sscanf(parsed_args.pcie_addr.c_str(), "%x:%x.%x", &bus, &dev,
+                 &func) != 3) {
+        std::cerr << "Invalid PCI address" << std::endl;
+        return 1;
+      }
     }
     uint16_t bdf = (bus << 8) | (dev << 3) | (func & 0x7);
     enso::set_bdf(bdf);
