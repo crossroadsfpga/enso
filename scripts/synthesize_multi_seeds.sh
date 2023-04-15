@@ -41,7 +41,7 @@ cd $quartus_project_root/hardware_test_design
 
 # Enable/disable signal tap.
 # quartus_stp alt_ehipc2_hw --stp_file stp1.stp --enable
-quartus_stp alt_ehipc2_hw --stp_file stp1.stp --disable
+# quartus_stp alt_ehipc2_hw --stp_file stp1.stp --disable
 quartus_syn --read_settings_files=on --write_settings_files=off alt_ehipc2_hw \
   -c alt_ehipc2_hw
 
