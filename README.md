@@ -59,7 +59,7 @@ python3 -m pip install -r requirements.txt
 
 <!--- TODO(sadok): Instruction with both setup script as well as manual configuration -->
 
-<!--- TODO(sadok): Describe how to load the bitstream and the need for rebooting the machine if it does not show up as a device. (may use scripts/check_pcie.sh for that) -->
+<!--- TODO(sadok): Describe how to load the bitstream and the need for rebooting the machine if it does not show up as a device. (may use scripts/list_enso_nics.sh for that) -->
 
 To be able to load or synthesize the hardware, you also need to install [Intel Quartus 19.3](https://fpgasoftware.intel.com/19.3/?edition=pro) as well as the Stratix 10 device support (same link).
 
