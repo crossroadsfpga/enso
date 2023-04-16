@@ -59,18 +59,6 @@ namespace enso {
 #define MAX_NUM_PACKETS 512
 #define MOCK_BATCH_SIZE 16
 
-typedef struct packet {
-  u_char* pkt_bytes;
-  uint32_t pkt_len;
-} packet_t;
-
-struct PcapHandlerContext {
-  packet_t** buf;
-  int buf_position;
-  uint32_t hugepage_offset;
-  pcap_t* pcap;
-};
-
 struct timeval ts;
 pcap_t* pd;
 pcap_dumper_t* pdumper_out;
@@ -227,7 +215,7 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
   (void)notification_buf_pair;
 
   u_char* addr_buf = new u_char[len];
-  memcpy((uint8_t*)phys_addr, addr_buf, len);
+  memcpy(addr_buf, (uint8_t*)phys_addr, len);
 
   uint32_t processed_bytes = 0;
   uint8_t* pkt = addr_buf;
@@ -362,6 +350,8 @@ __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
   // done processing the last batch and can get the next one. Using batches here
   // performs **significantly** better compared to always fetching the latest
   // notification.
+
+  // get hash of five-tuple from
   (void)notification_buf_pair;
   if (pipe_packets_head == pipe_packets_tail) return -1;
   return 0;
