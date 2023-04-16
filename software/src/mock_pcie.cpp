@@ -89,7 +89,14 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   return 0;
 }
 
-// called each time a packet is processed
+/**
+ * @brief Handler for managing receiving packets in the mock. Adds read
+ *        pakcets to in_buf up to MAX_NUM_PACKETS.
+ *
+ * @param user Not used here.
+ * @param pkt_hdr Header for packet, includes information on the length.
+ * @param pkt_bytes Actual packet bytes to store.
+ */
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
   std::cout << "Pipe tail " << pipe_packets_tail << std::endl;
@@ -107,13 +114,19 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   if (pipe_packets_tail == MAX_NUM_PACKETS) pcap_breakloop(context->pcap);
 }
 
+/**
+ * @brief Reads from the in.pcap file up to MAX_NUM_PACKETS and stores in
+ * in_buf.
+ *
+ * @return 0 on success, negative on failure.
+ */
 int read_in_file() {
   // reading from in file and storing in a buffer
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_t* pcap = pcap_open_offline("in.pcap", errbuf);
   if (pcap == NULL) {
     std::cerr << "Error loading pcap file (" << errbuf << ")" << std::endl;
-    return 2;
+    return -1;
   }
   struct PcapHandlerContext context;
   context.pcap = pcap;
@@ -124,11 +137,21 @@ int read_in_file() {
     std::cerr << "Error while reading pcap (" << pcap_geterr(pcap) << ")"
               << std::endl;
     std::cerr << "Error: " << err << std::endl;
-    return 3;
+    return -2;
   }
   return 0;
 }
 
+/**
+ * @brief Initializes mock enso pipe: reads from the in_file and initializes
+ * global variables.
+ *
+ * @param enso_pipe
+ * @param enso_pipe_regs
+ * @param notification_buf_pair
+ * @param enso_pipe_id
+ * @return 0 on success, negative on failure.
+ */
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
@@ -148,6 +171,8 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   pd = pcap_open_dead(DLT_EN10MB, 65535);
   pdumper_out = pcap_dump_open(pd, "out.pcap");
 
+  // read from in_file: this is what will be read when reading from the enso
+  // pipes.
   if (read_in_file() < 0) return -1;
 
   return 0;
