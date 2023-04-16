@@ -94,7 +94,6 @@ void capture_packets(uint32_t nb_queues, uint32_t core_id,
     }
 
     auto batch = pipe->RecvPkts();
-
     for (auto pkt : batch) {
       uint16_t pkt_len = enso::get_pkt_len(pkt);
 
@@ -114,6 +113,7 @@ void capture_packets(uint32_t nb_queues, uint32_t core_id,
     ++(stats->nb_batches);
 
     pipe->Clear();
+    // keep_running = 0;
   }
 
   pcap_dump_close(pdumper);

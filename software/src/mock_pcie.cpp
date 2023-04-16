@@ -153,6 +153,110 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   return 0;
 }
 
+static _enso_always_inline uint32_t
+__consume_queue(struct RxEnsoPipeInternal* enso_pipe,
+                struct NotificationBufPair* notification_buf_pair, void** buf,
+                bool peek = false) {
+  (void)(enso_pipe);
+  (void)notification_buf_pair;
+  (void)peek;
+
+  *buf = new u_char[0];
+
+  if (pipe_packets_head == pipe_packets_tail) {
+    std::cout << "Nothing in queue" << std::endl;
+    return 0;
+  }
+
+  uint32_t index = 0;
+  size_t num_bytes_read = 0;
+
+  uint32_t max_index =
+      std::min(pipe_packets_tail, pipe_packets_head + MOCK_BATCH_SIZE);
+  // use receive-side scaling or round robin
+
+  // getting total number of bytes to read
+  while (index < max_index) {
+    packet_t* pkt = in_buf[index];
+    uint32_t pkt_len = pkt->pkt_len;
+    // packets must be cache-aligned: so get aligned length
+    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+    uint16_t pkt_aligned_len = nb_flits * 64;
+
+    num_bytes_read += pkt_aligned_len;
+
+    index += 1;
+  }
+
+  // malloc a buffer the c++ way
+  u_char* my_buf = new u_char[num_bytes_read];
+  num_bytes_read = 0;
+  // reading bytes
+  while (pipe_packets_head < max_index) {
+    packet_t* pkt = in_buf[pipe_packets_head];
+    memcpy(my_buf + num_bytes_read, pkt->pkt_bytes, pkt->pkt_len);
+    uint32_t pkt_len = pkt->pkt_len;
+    // packets must be cache-aligned: so get aligned length
+    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+    uint16_t pkt_aligned_len = nb_flits * 64;
+
+    num_bytes_read += pkt_aligned_len;
+
+    pipe_packets_head += 1;
+  }
+
+  // give the buffer to the caller
+  *buf = my_buf;
+
+  return num_bytes_read;
+}
+
+uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
+                       uint64_t phys_addr, uint32_t len) {
+  // phys_addr is the virtual address in the mock
+  // add number of times you want to send this set of packets using macros
+  // writing to file is like writing to network
+  // the file is the network, like an ethernet pipe
+  // set transmission bandwidth as a parameter, never allow
+  // more data in a certain period of time than the given bandwidth
+  // calculate number of packets per interval
+  // can sleep until then OR loop using c++ function
+  // https://en.cppreference.com/w/cpp/thread/sleep_for
+
+  std::cout << "Sending to queue" << std::endl;
+
+  (void)notification_buf_pair;
+
+  u_char* addr_buf = new u_char[len];
+  memcpy((uint8_t*)phys_addr, addr_buf, len);
+
+  uint32_t processed_bytes = 0;
+  uint8_t* pkt = addr_buf;
+
+  while (processed_bytes < len) {
+    // read header of each packet to get packet length
+    uint16_t pkt_len = enso::get_pkt_len(pkt);
+    // packets must be cache-aligned: so get aligned length
+    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+    uint16_t pkt_aligned_len = nb_flits * 64;
+
+    // Save packet to file using pcap
+    struct pcap_pkthdr pkt_hdr;
+    pkt_hdr.ts = ts;
+    pkt_hdr.len = pkt_len;
+    pkt_hdr.caplen = pkt_len;
+    ++(ts.tv_usec);
+    pcap_dump((u_char*)pdumper_out, &pkt_hdr, pkt);
+
+    // moving packet forward by aligned length
+    pkt += pkt_aligned_len;
+    processed_bytes += pkt_aligned_len;
+  }
+  pipe_packets_tail += processed_bytes;
+
+  return 0;
+}
+
 int dma_init(IntelFpgaPcieDev* dev,
              struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
@@ -171,77 +275,10 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   return 0;
 }
 
-static _enso_always_inline uint32_t
-__consume_queue(struct RxEnsoPipeInternal* enso_pipe,
-                struct NotificationBufPair* notification_buf_pair, void** buf,
-                bool peek = false) {
-  std::cout << "Consuming queue" << std::endl;
-  (void)(enso_pipe);
-  (void)notification_buf_pair;
-  (void)peek;
-
-  *buf = new u_char[0];
-
-  if (pipe_packets_head == pipe_packets_tail) {
-    std::cout << "Nothing in queue" << std::endl;
-    return 0;
-  }
-
-  uint32_t index = 0;
-  size_t num_bytes_read = 0;
-
-  uint32_t max_index =
-      std::min(pipe_packets_tail, pipe_packets_head + MOCK_BATCH_SIZE);
-  // use receive-side scaling or round robin
-  std::cout << "max index " << max_index << std::endl;
-
-  // getting total number of bytes to read
-  while (index < max_index) {
-    packet_t* pkt = in_buf[index];
-    uint32_t pkt_len = pkt->pkt_len;
-    // packets must be cache-aligned: so get aligned length
-    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-    uint16_t pkt_aligned_len = nb_flits * 64;
-
-    num_bytes_read += pkt_aligned_len;
-
-    index += 1;
-  }
-
-  std::cout << "total num bytes to read " << num_bytes_read << std::endl;
-
-  u_char* my_buf = new u_char[num_bytes_read];
-  std::cout << "allocated my buf" << std::endl;
-  int bytes = 0;
-  // reading bytes
-  while (pipe_packets_head < max_index) {
-    packet_t* pkt = in_buf[pipe_packets_head];
-    memcpy(my_buf + bytes, pkt->pkt_bytes, pkt->pkt_len);
-    uint32_t pkt_len = pkt->pkt_len;
-    // packets must be cache-aligned: so get aligned length
-    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-    uint16_t pkt_aligned_len = nb_flits * 64;
-
-    bytes += pkt_aligned_len;
-
-    std::cout << "Copied index " << pipe_packets_head << std::endl;
-
-    pipe_packets_head += 1;
-  }
-  std::cout << "Finished memcpy" << std::endl;
-
-  *buf = my_buf;
-
-  return bytes;
-}
-
 uint32_t get_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
-  (void)enso_pipe;
-  (void)notification_buf_pair;
-  (void)buf;
-  return 0;
+  return __consume_queue(enso_pipe, notification_buf_pair, buf);
 }
 
 uint32_t peek_next_batch_from_queue(
@@ -277,53 +314,6 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
   (void)phys_addr;
   (void)notification_buf_pair;
   (void)len;
-  return 0;
-}
-
-uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len) {
-  // phys_addr is the virtual address in the mock
-  // add number of times you want to send this set of packets using macros
-  // writing to file is like writing to network
-  // the file is the network, like an ethernet pipe
-  // set transmission bandwidth as a parameter, never allow
-  // more data in a certain period of time than the given bandwidth
-  // calculate number of packets per interval
-  // can sleep until then OR loop using c++ function
-  // https://en.cppreference.com/w/cpp/thread/sleep_for
-
-  // to test, follow the README.md
-  std::cout << "Sending to queue" << std::endl;
-
-  (void)notification_buf_pair;
-
-  u_char* addr_buf = new u_char[len];
-  memcpy((uint8_t*)phys_addr, addr_buf, len);
-
-  uint32_t processed_bytes = 0;
-  uint8_t* pkt = addr_buf;
-
-  while (processed_bytes < len) {
-    // read header of each packet to get packet length
-    uint16_t pkt_len = enso::get_pkt_len(pkt);
-    // packets must be cache-aligned: so get aligned length
-    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-    uint16_t pkt_aligned_len = nb_flits * 64;
-
-    // Save packet to file using pcap
-    struct pcap_pkthdr pkt_hdr;
-    pkt_hdr.ts = ts;
-    pkt_hdr.len = pkt_len;
-    pkt_hdr.caplen = pkt_len;
-    ++(ts.tv_usec);
-    pcap_dump((u_char*)pdumper_out, &pkt_hdr, pkt);
-
-    // moving packet forward by aligned length
-    pkt += pkt_aligned_len;
-    processed_bytes += pkt_aligned_len;
-  }
-  pipe_packets_tail += processed_bytes;
-
   return 0;
 }
 
@@ -374,7 +364,11 @@ __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
   // performs **significantly** better compared to always fetching the latest
   // notification.
   (void)notification_buf_pair;
+<<<<<<< HEAD
 
+=======
+  if (pipe_packets_head == pipe_packets_tail) return -1;
+>>>>>>> 3b569a0 (going to start rss)
   return 0;
 }
 
