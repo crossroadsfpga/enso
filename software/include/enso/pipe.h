@@ -275,16 +275,17 @@ class Device {
 
   const std::string kPcieAddr;
   const uint32_t kNbRxPipes;
+  const uint32_t kPipeIdMask = kNbRxPipes - 1;
 
-  IntelFpgaPcieDev* fpga_dev_;
   struct NotificationBufPair notification_buf_pair_;
   int16_t core_id_;
   uint16_t bdf_;
-  void* uio_mmap_bar2_addr_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
   std::vector<RxTxPipe*> rx_tx_pipes_;
+
+  int32_t next_pipe_id_ = -1;
 
   uint32_t tx_pr_head_ = 0;
   uint32_t tx_pr_tail_ = 0;
@@ -476,9 +477,8 @@ class RxPipe {
    */
   template <typename T>
   constexpr MessageBatch<T> RecvMessages(int32_t max_nb_messages = -1) {
-    void* buf = nullptr;
-    uint32_t recv = external_peek_next_batch_from_queue(
-        &internal_rx_pipe_, notification_buf_pair_, &buf);
+    uint8_t* buf = nullptr;
+    uint32_t recv = Peek(&buf, ~0);
     return MessageBatch<T>((uint8_t*)buf, recv, max_nb_messages, this);
   }
 
@@ -510,6 +510,11 @@ class RxPipe {
 
   /**
    * @brief Prefetches the next batch of bytes to be received on the RxPipe.
+   * 
+   * @warning Explicit prefetching from the application cannot be used in
+   *          conjunction with the `NextRxPipeToRecv` and `NextRxTxPipeToRecv`
+   *          functions. To use prefetching with these functions, compile the
+   *          library with `-Dlatency_opt=true`.
    */
   void Prefetch();
 
@@ -575,14 +580,17 @@ class RxPipe {
   /**
    * @brief Initializes the RX pipe.
    *
-   * @param enso_pipe_regs The Enso Pipe registers.
-   *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init(volatile struct QueueRegs* enso_pipe_regs) noexcept;
+  int Init() noexcept;
+
+  void SetAsNextPipe() noexcept { next_pipe_ = true; }
 
   friend class Device;
 
+  bool next_pipe_ = false;  ///< Whether this pipe is the next pipe to be
+                            ///< processed by the device. This is used in
+                            ///< conjunction with NextRxPipe().
   const enso_pipe_id_t kId;  ///< The ID of the pipe.
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
@@ -621,7 +629,7 @@ class TxPipe {
   TxPipe& operator=(TxPipe&&) = delete;
 
   /**
-   * @brief Allocate a buffer in the pipe.
+   * @brief Allocates a buffer in the pipe.
    *
    * There can only be a single buffer allocated at a time for a given Pipe.
    * Calling this function again when a buffer is already allocated will return
@@ -748,6 +756,13 @@ class TxPipe {
   inline uint32_t pending_transmission() const {
     return kMaxCapacity - ((app_end_ - app_begin_) & kBufMask);
   }
+
+  /**
+   * @brief Returns the pipe's internal buffer.
+   *
+   * @return A pointer to the start of the pipe's internal buffer.
+   */
+  inline uint8_t* buf() const { return buf_; }
 
   /**
    * @brief Returns the pipe's ID.
@@ -974,6 +989,13 @@ class RxTxPipe {
       last_tx_pipe_capacity_ = new_capacity;
     }
   }
+
+  /**
+   * @brief Returns the pipe's internal buffer.
+   *
+   * @return A pointer to the start of the pipe's internal buffer.
+   */
+  inline uint8_t* buf() const { return rx_pipe_->buf(); }
 
   /**
    * @copydoc RxPipe::id

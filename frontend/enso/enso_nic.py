@@ -1,9 +1,8 @@
-from typing import TextIO, Union
+from typing import TextIO, Union, Optional
 
-from netexp.helpers import RemoteIntelFpga, remote_command, watch_command
+from netexp.helpers import IntelFpga
 
 from enso.consts import (
-    DEFAULT_BATCH_SIZE,
     DEFAULT_DSC_BUF_SIZE,
     DEFAULT_ETH_PORT,
     DEFAULT_NB_FALLBACK_QUEUES,
@@ -13,20 +12,20 @@ from enso.consts import (
 )
 
 
-LOAD_BITSTREAM_CMD = "hardware_test/load_bitstream.sh"
-RUN_CONSOLE_CMD = "hardware_test/run_console.sh"
+LOAD_BITSTREAM_CMD = "scripts/load_bitstream.sh"
+RUN_CONSOLE_CMD = "scripts/run_console.sh"
 
 
-class EnsoDataplane(RemoteIntelFpga):
-    """Class to control the Ensō dataplane.
+class EnsoNic(IntelFpga):
+    """Class to control the Ensō NIC.
 
-    This class can automatically load the bitstream, configure the dataplane
-    using JTAG and recompile the library according to the specified parameters.
+    This class can automatically load the bitstream, configure the NIC using
+    JTAG and recompile the library according to the specified parameters.
 
     Attributes:
         fpga_id:
-        host:
-        remote_enso_path:
+        enso_path:
+        host_name:
         load_bitstream:
         ensure_clean:
         setup_sw:
@@ -37,7 +36,6 @@ class EnsoDataplane(RemoteIntelFpga):
         fallback_queues:
         desc_per_pkt:
         enable_rr:
-        sw_batch_size:
         skip_config:
         verbose:
         log_file:
@@ -46,8 +44,8 @@ class EnsoDataplane(RemoteIntelFpga):
     def __init__(
         self,
         fpga_id: str,
-        host: str,
-        remote_enso_path: str,
+        enso_path: str,
+        host_name: Optional[str] = None,
         load_bitstream: bool = True,
         ensure_clean: bool = True,
         setup_sw: bool = True,
@@ -59,7 +57,6 @@ class EnsoDataplane(RemoteIntelFpga):
         fallback_queues: int = DEFAULT_NB_FALLBACK_QUEUES,
         desc_per_pkt: bool = False,
         enable_rr: bool = False,
-        sw_batch_size: int = DEFAULT_BATCH_SIZE,
         latency_opt: bool = False,
         skip_config: bool = False,
         verbose: bool = False,
@@ -68,19 +65,19 @@ class EnsoDataplane(RemoteIntelFpga):
         if load_bitstream and verbose:
             print("Loading bitstream, it might take a couple of seconds.")
 
-        load_bitstream_cmd = f"{remote_enso_path}/{LOAD_BITSTREAM_CMD}"
-        run_console_cmd = f"{remote_enso_path}/{RUN_CONSOLE_CMD}"
+        load_bitstream_cmd = f"{enso_path}/{LOAD_BITSTREAM_CMD}"
+        run_console_cmd = f"{enso_path}/{RUN_CONSOLE_CMD}"
 
         super().__init__(
-            host,
             fpga_id,
             run_console_cmd,
             load_bitstream_cmd,
+            host_name=host_name,
             load_bitstream=load_bitstream,
             log_file=log_file,
         )
 
-        self.remote_enso_path = remote_enso_path
+        self.enso_path = enso_path
 
         if ensure_clean and load_bitstream:
             output = self.run_jtag_commands("read_pcie")
@@ -117,21 +114,18 @@ class EnsoDataplane(RemoteIntelFpga):
             else:
                 self.disable_rr()
 
-        self.sw_batch_size = sw_batch_size
         self.latency_opt = latency_opt
 
         if setup_sw:
             self.setup_sw()
 
     def setup_sw(self):
-        sw_setup = remote_command(
-            self.ssh_client,
-            f"{self.remote_enso_path}/{SETUP_SW_CMD} {self.dsc_buf_size} "
-            f"{self.pkt_buf_size} {self.sw_batch_size} {self.latency_opt}",
+        sw_setup = self.host.run_command(
+            f"{self.enso_path}/{SETUP_SW_CMD} {self.dsc_buf_size} "
+            f"{self.pkt_buf_size} {self.latency_opt}",
             pty=True,
         )
-        watch_command(
-            sw_setup,
+        sw_setup.watch(
             keyboard_int=lambda: sw_setup.send("\x03"),
             stdout=self.log_file,
             stderr=self.log_file,
@@ -148,6 +142,9 @@ class EnsoDataplane(RemoteIntelFpga):
         for row in output.split("\r\n"):
             if row.startswith("% "):
                 break
+
+            if ":" not in row:
+                continue
             key, value = row.split(": ")
             stats[key] = int(value)
         return stats

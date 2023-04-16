@@ -58,17 +58,12 @@
 #include <unordered_map>
 #include <vector>
 
-#include "app.h"
-
 // Number of loop iterations to wait before probing the TX notification buffer
 // again when reclaiming buffer space.
 #define TX_RECLAIM_DELAY 1024
 
 // If defined, ignore received packets.
 // #define IGNORE_RX
-
-// If defined, show mean number of packets in all received batches.
-// #define SHOW_BATCH
 
 // When we are done transmitting. The RX thread still tries to receive all
 // packets. The following defines the maximum number of times that we can try to
@@ -155,7 +150,7 @@ static void print_usage(const char* program_name) {
       "                  performance penalty.\n"
       "  --stats-delay: Delay between displayed stats in milliseconds\n"
       "                 (default: %d).\n"
-      "  --pcie-addr: Specify the PCIe address of the dataplane to use.\n",
+      "  --pcie-addr: Specify the PCIe address of the NIC to use.\n",
       program_name, DEFAULT_CORE_ID, DEFAULT_NB_QUEUES, DEFAULT_HIST_OFFSET,
       DEFAULT_HIST_LEN, DEFAULT_STATS_DELAY);
 }
@@ -303,7 +298,8 @@ static void* get_huge_page(size_t size) {
   int fd;
   char huge_pages_path[128];
 
-  snprintf(huge_pages_path, sizeof(huge_pages_path), "/mnt/huge/pktgen:%i", id);
+  snprintf(huge_pages_path, sizeof(huge_pages_path), "/mnt/huge/ensogen:%i",
+           id);
   ++id;
 
   fd = open(huge_pages_path, O_CREAT | O_RDWR, S_IRWXU);
@@ -930,8 +926,9 @@ int main(int argc, char** argv) {
   if (parsed_args.save) {
     std::ofstream save_file;
     save_file.open(parsed_args.save_file);
-    save_file << "rx_goodput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
-                 "tx_goodput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
+    save_file
+        << "rx_goodput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
+           "tx_goodput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
     if (parsed_args.enable_rtt) {
       save_file << ",mean_rtt_ns";
     }
@@ -945,6 +942,8 @@ int main(int argc, char** argv) {
 
   // Continuously print statistics.
   while (!rx_done) {
+    // auto last_time = std::chrono::high_resolution_clock::now();
+    _enso_compiler_memory_barrier();
     uint64_t last_rx_bytes = rx_stats.bytes;
     uint64_t last_rx_pkts = rx_stats.pkts;
     uint64_t last_tx_bytes = tx_stats.bytes;
@@ -952,28 +951,32 @@ int main(int argc, char** argv) {
     uint64_t last_aggregated_rtt_ns =
         rx_stats.rtt_sum * enso::kNsPerTimestampCycle;
 
-#ifdef SHOW_BATCH
-    uint64_t last_rx_batches = rx_stats.nb_batches;
-#endif  // SHOW_BATCH
-
     std::this_thread::sleep_for(
         std::chrono::milliseconds(parsed_args.stats_delay));
-
-    double interval_s = parsed_args.stats_delay / 1000.;
 
     uint64_t rx_bytes = rx_stats.bytes;
     uint64_t rx_pkts = rx_stats.pkts;
     uint64_t tx_bytes = tx_stats.bytes;
     uint64_t tx_pkts = tx_stats.pkts;
+
+    double interval_s = parsed_args.stats_delay / 1000.;
+
+    uint64_t rx_pkt_diff = rx_pkts - last_rx_pkts;
     uint64_t rx_goodput_mbps =
         (rx_bytes - last_rx_bytes) * 8. / (1e6 * interval_s);
-    uint64_t rx_pkt_diff = rx_pkts - last_rx_pkts;
-    uint64_t rx_pkt_rate = rx_pkt_diff / interval_s;
+    uint64_t rx_tput_mbps =
+        (rx_bytes - last_rx_bytes + rx_pkt_diff * 20) * 8. / (1e6 * interval_s);
+    uint64_t rx_pkt_rate = (rx_pkt_diff / interval_s);
     uint64_t rx_pkt_rate_kpps = rx_pkt_rate / 1e3;
+
+    uint64_t tx_pkt_diff = tx_pkts - last_tx_pkts;
     uint64_t tx_goodput_mbps =
         (tx_bytes - last_tx_bytes) * 8. / (1e6 * interval_s);
-    uint64_t tx_pkt_rate = (tx_pkts - last_tx_pkts) / interval_s;
+    uint64_t tx_tput_mbps =
+        (tx_bytes - last_tx_bytes + tx_pkt_diff * 20) * 8. / (1e6 * interval_s);
+    uint64_t tx_pkt_rate = (tx_pkt_diff / interval_s);
     uint64_t tx_pkt_rate_kpps = tx_pkt_rate / 1e3;
+
     uint64_t rtt_sum_ns = rx_stats.rtt_sum * enso::kNsPerTimestampCycle;
     uint64_t rtt_ns;
     if (rx_pkt_diff != 0) {
@@ -985,25 +988,13 @@ int main(int argc, char** argv) {
     // TODO(sadok): don't print metrics that are unreliable before the first
     // two samples.
 
-    std::cout << std::dec << "      RX: Goodput: " << rx_goodput_mbps << " Mbps"
+    std::cout << std::dec << "      RX: Throughput: " << rx_tput_mbps << " Mbps"
               << "  Rate: " << rx_pkt_rate_kpps << " kpps" << std::endl
 
               << "          #bytes: " << rx_bytes << "  #packets: " << rx_pkts
               << std::endl;
 
-#ifdef SHOW_BATCH
-    uint64_t rx_nb_batches = rx_stats.nb_batches - last_rx_batches;
-    uint64_t mean_pkt_per_batch;
-    if (rx_nb_batches) {
-      mean_pkt_per_batch = rx_pkt_rate / rx_nb_batches;
-    } else {
-      mean_pkt_per_batch = 0;
-    }
-    std::cout << "          Mean #packets/batch: " << mean_pkt_per_batch
-              << std::endl;
-#endif  // SHOW_BATCH
-
-    std::cout << "      TX: Goodput: " << tx_goodput_mbps << " Mbps"
+    std::cout << "      TX: Throughput: " << tx_tput_mbps << " Mbps"
               << "  Rate: " << tx_pkt_rate_kpps << " kpps" << std::endl
 
               << "          #bytes: " << tx_bytes << "  #packets: " << tx_pkts
@@ -1016,9 +1007,10 @@ int main(int argc, char** argv) {
     if (parsed_args.save) {
       std::ofstream save_file;
       save_file.open(parsed_args.save_file, std::ios_base::app);
-      save_file << rx_goodput_mbps << "," << rx_pkt_rate_kpps << "," << rx_bytes
-                << "," << rx_pkts << "," << tx_goodput_mbps << ","
-                << tx_pkt_rate_kpps << "," << tx_bytes << "," << tx_pkts;
+      save_file << rx_goodput_mbps << "," << rx_tput_mbps << ","
+                << rx_pkt_rate_kpps << "," << rx_bytes << "," << rx_pkts << ","
+                << tx_goodput_mbps << "," << tx_pkt_rate_kpps << ","
+                << tx_tput_mbps << "," << tx_bytes << "," << tx_pkts;
       if (parsed_args.enable_rtt) {
         save_file << "," << rtt_ns;
       }

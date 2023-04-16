@@ -32,12 +32,10 @@
 
 #include <enso/helpers.h>
 #include <enso/pipe.h>
-#include <pcap/pcap.h>
 
 #include <chrono>
 #include <csignal>
 #include <cstdint>
-#include <cstring>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -47,19 +45,19 @@
 static volatile bool keep_running = true;
 static volatile bool setup_done = false;
 
-void int_handler([[maybe_unused]] int signal) { keep_running = 0; }
+void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void capture_packets(uint32_t nb_queues, uint32_t core_id,
-                     const std::string& pcap_file, stats_t* stats) {
+void run_echo(uint32_t nb_queues, uint32_t core_id,
+              [[maybe_unused]] uint32_t nb_cycles, enso::stats_t* stats) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
   using enso::Device;
-  using enso::RxPipe;
+  using enso::RxTxPipe;
 
   std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
-  std::vector<RxPipe*> rx_pipes;
+  std::vector<RxTxPipe*> pipes;
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -67,87 +65,97 @@ void capture_packets(uint32_t nb_queues, uint32_t core_id,
   }
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    RxPipe* rx_pipe = dev->AllocateRxPipe();
-    if (!rx_pipe) {
-      std::cerr << "Problem creating RX pipe" << std::endl;
+    RxTxPipe* pipe = dev->AllocateRxTxPipe();
+    if (!pipe) {
+      std::cerr << "Problem creating RX/TX pipe" << std::endl;
       exit(3);
     }
-    rx_pipes.push_back(rx_pipe);
+    uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
+    pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+
+    pipes.push_back(pipe);
   }
-
-  pcap_t* pd;
-  pcap_dumper_t* pdumper;
-
-  pd = pcap_open_dead(DLT_EN10MB, 65535);
-  pdumper = pcap_dump_open(pd, pcap_file.c_str());
-  struct timeval ts;
-  ts.tv_sec = 0;
-  ts.tv_usec = 0;
 
   setup_done = true;
+  const uint32_t queue_mask = nb_queues - 1;
 
   while (keep_running) {
-    RxPipe* pipe = dev->NextRxPipeToRecv();
+    for (uint32_t i = 0; i < nb_queues; ++i) {
+      auto& pipe = pipes[i];
+      auto batch = pipe->PeekPkts();
 
-    if (unlikely(pipe == nullptr)) {
-      continue;
+      if (unlikely(batch.kAvailableBytes == 0)) {
+        continue;
+      }
+
+      // Prefetch next pipe.
+      pipes[(i + 1) & queue_mask]->Prefetch();
+
+      for (auto pkt : batch) {
+        ++pkt[63];  // Increment payload.
+
+        for (uint32_t i = 0; i < nb_cycles; ++i) {
+          asm("nop");
+        }
+
+        ++(stats->nb_pkts);
+      }
+      uint32_t batch_length = batch.processed_bytes();
+      pipe->ConfirmBytes(batch_length);
+
+      stats->recv_bytes += batch_length;
+      ++(stats->nb_batches);
+
+      pipe->SendAndFree(batch_length);
     }
-
-    auto batch = pipe->RecvPkts();
-    for (auto pkt : batch) {
-      uint16_t pkt_len = enso::get_pkt_len(pkt);
-
-      // Save packet to pcap
-      struct pcap_pkthdr pkt_hdr;
-      pkt_hdr.ts = ts;
-
-      pkt_hdr.len = pkt_len;
-      pkt_hdr.caplen = pkt_len;
-      ++(ts.tv_usec);
-      pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
-
-      ++(stats->nb_pkts);
-    }
-    uint32_t batch_length = batch.processed_bytes();
-    stats->recv_bytes += batch_length;
-    ++(stats->nb_batches);
-
-    pipe->Clear();
-    // keep_running = 0;
   }
-
-  pcap_dump_close(pdumper);
-  pcap_close(pd);
 }
 
 int main(int argc, const char* argv[]) {
-  stats_t stats = {};
-
   if (argc != 4) {
-    std::cerr << "Usage: " << argv[0] << " core nb_queues pcap_file"
+    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
+              << std::endl
+              << std::endl;
+    std::cerr << "NB_CORES: Number of cores to use." << std::endl;
+    std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
+    std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
+                 " packet."
               << std::endl;
     return 1;
   }
 
-  uint32_t core_id = atoi(argv[1]);
+  uint32_t nb_cores = atoi(argv[1]);
   uint32_t nb_queues = atoi(argv[2]);
-  std::string pcap_file = argv[3];
+  uint32_t nb_cycles = atoi(argv[3]);
+
+  // For this application, nb_queues must be a power of 2.
+  if ((nb_queues & (nb_queues - 1)) != 0) {
+    std::cerr << "NB_QUEUES must be a power of 2." << std::endl;
+    return 2;
+  }
 
   signal(SIGINT, int_handler);
 
-  std::thread socket_thread =
-      std::thread(capture_packets, nb_queues, core_id, pcap_file, &stats);
+  std::vector<std::thread> threads;
+  std::vector<enso::stats_t> thread_stats(nb_cores);
 
-  if (set_core_id(socket_thread, core_id)) {
-    std::cerr << "Error setting CPU affinity" << std::endl;
-    return 6;
+  for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
+    threads.emplace_back(run_echo, nb_queues, core_id, nb_cycles,
+                         &(thread_stats[core_id]));
+    if (enso::set_core_id(threads.back(), core_id)) {
+      std::cerr << "Error setting CPU affinity" << std::endl;
+      return 6;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   while (!setup_done) continue;  // Wait for setup to be done.
 
-  show_stats(&stats, &keep_running);
+  show_stats(thread_stats, &keep_running);
 
-  socket_thread.join();
+  for (auto& thread : threads) {
+    thread.join();
+  }
 
   return 0;
 }

@@ -44,7 +44,7 @@ done
 
 Ensō has the following dependencies:
 * Either gcc (>= 9.0) or clang (>= 8.0)
-* Python (>= 3.6)
+* Python (>= 3.9)
 * pip
 * Meson (>= 0.58)
 * Ninja
@@ -70,7 +70,7 @@ sudo pip3 install meson ninja
 
 Start by cloning the enso repository, if you haven't already:
 ```bash
-git clone https://github.com/hsadok/enso
+git clone https://github.com/crossroadsfpga/enso
 ```
 
 Prepare the compilation using meson and compile it with ninja.
@@ -105,20 +105,20 @@ To change one of the options run:
 meson configure -D<option_name>=<value>
 ```
 
-For instance, to change the batch size and enable latency optimization:
+For instance, to enable latency optimization:
 ```bash
-meson configure -Dbatch_size=64 -Dlatency_opt=true
+meson configure -Dlatency_opt=true
 ```
 
 <!--- TODO(sadok): Describe how to synthesize hardware. -->
 
 ### Installing enso script
 
-To configure and load the enso dataplane you should install the enso script in your *local machine* (e.g., your laptop). This is different from the machine that you will run enso on.
+To configure and load the enso NIC you should install the enso script in your *local machine* (e.g., your laptop). This is different from the machine that you will run enso on.
 
 If you haven't already, clone the enso repository in your *local machine*:
 ```bash
-git clone https://github.com/hsadok/enso
+git clone https://github.com/crossroadsfpga/enso
 ```
 
 To install the enso script run in the `enso` directory:
@@ -141,7 +141,7 @@ Host <machine_name>
 
 `machine_name` is a nickname to the machine. You will use this name to run the enso script.
 
-Next we will describe to use the script to load the bitstream and configure the dataplane but you can also use the enso script itself to obtain usage information:
+Next we will describe to use the script to load the bitstream and configure the NIC but you can also use the enso script itself to obtain usage information:
 ```bash
 enso --help
 ```
@@ -150,17 +150,17 @@ enso --help
 
 Before running any software you need to make sure that the FPGA is loaded with the latest bitstream. To do so, you must first place the bitstream file in the correct location. You can obtain the bitstream file from [here](https://drive.google.com/drive/folders/1J2YYTNXotdOOeKWvoj_5-heE5qE2dQAC?usp=sharing) or synthesize it from the source code as described in the [synthesis section](#synthesis).
 
-Copy the bitstream file (`alt_ehipc2_hw.sof`) to `enso/hardware_test/alt_ehipc2_hw.sof` in the machine with the FPGA, e.g.:
+Copy the bitstream file (`alt_ehipc2_hw.sof`) to `enso/scripts/alt_ehipc2_hw.sof` in the machine with the FPGA, e.g.:
 ```bash
-cp <bitstream_path>/alt_ehipc2_hw.sof <enso_path>/enso/hardware_test/alt_ehipc2_hw.sof
+cp <bitstream_path>/alt_ehipc2_hw.sof <enso_path>/enso/scripts/alt_ehipc2_hw.sof
 ```
 
 Run the `enso` script in the local machine to load the bitstream in the one with the FPGA:
 ```bash
-enso <host> <remote_enso_path> --load-bitstream
+enso <enso_path> --host <host> --load-bitstream
 ```
 
-You can also specify other options to configure the dataplane, refer to `enso --help` for more information.
+You can also specify other options to configure the NIC, refer to `enso --help` for more information.
 
 <!---
 ## Development Environment

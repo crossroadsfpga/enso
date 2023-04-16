@@ -1,7 +1,6 @@
 import click
 
 from enso.consts import (
-    DEFAULT_BATCH_SIZE,
     DEFAULT_DSC_BUF_SIZE,
     DEFAULT_ETH_PORT,
     DEFAULT_FPGA,
@@ -9,12 +8,17 @@ from enso.consts import (
     DEFAULT_NB_TX_CREDITS,
     DEFAULT_PKT_BUF_SIZE,
 )
-from enso.enso_dataplane import EnsoDataplane
+from enso.enso_nic import EnsoNic
 
 
 @click.command()
-@click.argument("host")
-@click.argument("remote_enso_path")
+@click.argument("enso_path")
+@click.option(
+    "--host",
+    default="localhost",
+    show_default=True,
+    help="Host to connect to run Ensō on.",
+)
 @click.option(
     "--fpga", default=DEFAULT_FPGA, show_default=True, help="Choose the FPGA."
 )
@@ -68,13 +72,6 @@ from enso.enso_dataplane import EnsoDataplane
     help="Enable/Disable packet round robin to fallback queues.",
 )
 @click.option(
-    "--batch-size",
-    default=DEFAULT_BATCH_SIZE,
-    show_default=True,
-    type=int,
-    help="Number of packets in a batch.",
-)
-@click.option(
     "--latency-opt/--throughput-opt",
     default=False,
     show_default=True,
@@ -88,7 +85,7 @@ from enso.enso_dataplane import EnsoDataplane
 )
 def main(
     host,
-    remote_enso_path,
+    enso_path,
     fpga,
     dsc_buf_size,
     pkt_buf_size,
@@ -97,15 +94,14 @@ def main(
     fallback_queues,
     desc_per_pkt,
     enable_rr,
-    batch_size,
     latency_opt,
     load_bitstream,
 ):
 
-    enso_dp = EnsoDataplane(
+    enso_nic = EnsoNic(
         fpga,
-        host,
-        remote_enso_path,
+        enso_path,
+        host_name=host,
         load_bitstream=load_bitstream,
         ensure_clean=True,
         setup_sw=True,
@@ -116,13 +112,12 @@ def main(
         fallback_queues=fallback_queues,
         desc_per_pkt=desc_per_pkt,
         enable_rr=enable_rr,
-        sw_batch_size=batch_size,
         latency_opt=latency_opt,
         verbose=True,
         log_file=True,
     )
 
-    enso_dp.interactive_shell()
+    enso_nic.interactive_shell()
 
 
 if __name__ == "__main__":

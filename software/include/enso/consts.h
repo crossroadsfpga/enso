@@ -48,7 +48,7 @@ namespace enso {
 // These determine the maximum number of notification buffers and enso pipes,
 // these macros also exist in hardware and **must be kept in sync**. Update the
 // variables with the same name on `hardware/src/constants.sv` and
-// `hardware_test/hwtest/my_stats.tcl`.
+// `scripts/hwtest/my_stats.tcl`.
 #define MAX_NB_APPS 1024
 #define MAX_NB_FLOWS 8192
 
@@ -57,11 +57,8 @@ constexpr uint32_t kMaxNbFlows = MAX_NB_FLOWS;
 
 constexpr uint32_t kMaxTransferLen = 131072;
 
-#ifndef BATCH_SIZE
-// Maximum number of packets to process in call to get_next_batch_from_queue
-#define BATCH_SIZE 64
-#endif
-constexpr uint32_t kBatchSize = BATCH_SIZE;
+// Maximum number of tails to process at once.
+constexpr uint32_t kBatchSize = 64;
 
 #ifndef NOTIFICATION_BUF_SIZE
 // This should be the max buffer supported by the hardware, we may override this
@@ -81,6 +78,14 @@ constexpr uint32_t kMaxPendingTxRequests = kNotificationBufSize - 1;
 
 // Using 2MB huge pages (size in bytes).
 constexpr uint32_t kBufPageSize = 1UL << 21;
+
+// We need this to allow the same huge page to be mapped to adjacent memory
+// regions.
+// TODO(sadok): support other buffer sizes. It may be possible to support
+// other buffer sizes by overlaying regular pages on top of the huge pages.
+// We might use those only for requests that overlap to avoid adding too
+// many entries to the TLB.
+static_assert(ENSO_PIPE_SIZE * 64 == kBufPageSize, "Unsupported buffer size");
 
 /**
  * Sizes aligned to the huge page size, but if both buffers fit in a single

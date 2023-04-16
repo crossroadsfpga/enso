@@ -3,6 +3,7 @@ public_enso_headers = files(
     'consts.h',
     'helpers.h',
     'internals.h',
+    'pipe.h',
     'socket.h',
 )
 

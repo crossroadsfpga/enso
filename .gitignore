@@ -10,3 +10,4 @@ work/
 dvt_build.log
 site/
 build*
+.setup_done

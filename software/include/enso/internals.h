@@ -44,6 +44,9 @@
 
 #include <stdint.h>
 
+// Avoid exposing `intel_fpga_pcie_api.hpp` externally.
+class IntelFpgaPcieDev;
+
 namespace enso {
 
 #if MAX_NB_FLOWS < 65536
@@ -81,15 +84,15 @@ struct __attribute__((__packed__)) TxNotification {
 struct NotificationBufPair {
   // First cache line:
   struct RxNotification* rx_buf;
-  enso_pipe_id_t* last_rx_ids;  // Last queue ids consumed from rx_buf.
+  enso_pipe_id_t* next_rx_pipe_ids;  // Next pipe ids to consume from rx_buf.
   struct TxNotification* tx_buf;
   uint32_t* rx_head_ptr;
   uint32_t* tx_tail_ptr;
   uint32_t rx_head;
   uint32_t tx_head;
   uint32_t tx_tail;
-  uint16_t pending_rx_ids;
-  uint16_t consumed_rx_ids;
+  uint16_t last_rx_ids_head;
+  uint16_t last_rx_ids_tail;
   uint32_t nb_unreported_completions;
   uint32_t id;
 
@@ -99,15 +102,16 @@ struct NotificationBufPair {
   uint32_t ref_cnt;
 
   uint8_t* wrap_tracker;
-  uint32_t* pending_pkt_tails;
+  uint32_t* pending_rx_pipe_tails;
 
-  // HACK(sadok): This is used to decrement the enso pipe id and use it as
-  // an index to the pending_pkt_tails array. This only works because enso pipes
-  // for the same app are contiguous. This will no longer hold in the future.
-  // How bad would it be to use a hash table to keep `pending_pkt_tails`?
-  // Another option is to get rid of the pending_pkt_tails array and instead
-  // save the tails with `last_rx_ids`.
+  // FIXME(sadok): This is used to decrement the enso pipe id and use it as an
+  // index to the pending_rx_pipe_tails array. This only works because pipes for
+  // the same app are contiguous. To fix this, we need to make the NIC aware of
+  // the pipe ids used by the app.
   uint32_t enso_pipe_id_offset;
+
+  IntelFpgaPcieDev* fpga_dev;
+  void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
 };
 
 struct RxEnsoPipeInternal {

@@ -150,10 +150,13 @@ int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
   config.protocol = protocol;
   config.enso_pipe_id = enso_pipe_id;
 
-  printf(
-      "Inserting flow entry: dst_port=%u, src_port=%u, dst_ip=%u, src_ip=%u,"
-      "protocol=%u, enso_pipe_id=%u)\n",
-      dst_port, src_port, dst_ip, src_ip, protocol, enso_pipe_id);
+  std::cout << "Inserting flow entry: dst_port=" << dst_port
+            << ", src_port=" << src_port << ", dst_ip=";
+  print_ip(htonl(dst_ip));
+  std::cout << ", src_ip=";
+  print_ip(htonl(src_ip));
+  std::cout << ", protocol=" << protocol << ", enso_pipe_id=" << enso_pipe_id
+            << ")" << std::endl;
 
   return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }

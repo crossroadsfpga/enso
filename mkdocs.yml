@@ -1,12 +1,12 @@
 site_name: Ensō
-# site_url:
+site_url: https://crossroadsfpga.github.io/enso/
 site_author: Hugo Sadok
 site_description: >-
   Ensō is a fast and flexible streaming interface for NIC-Application communication.
 
 # Repository
-repo_name: hsadok/enso
-repo_url: https://github.com/hsadok/enso
+repo_name: crossroadsfpga/enso
+repo_url: https://github.com/crossroadsfpga/enso
 
 # Copyright
 copyright: Copyright &copy; 2023 <a href=https://hsadok.com target="_blank">Hugo Sadok</a>
@@ -53,6 +53,9 @@ theme:
 extra:
   version:
     provider: mike
+  analytics:
+    provider: google
+    property: G-7WKNV89H63
 
 extra_javascript:
   - https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js

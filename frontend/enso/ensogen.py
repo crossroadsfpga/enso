@@ -7,23 +7,23 @@ from csv import DictReader
 from fractions import Fraction
 from typing import Optional, TextIO, Union
 
-from netexp.helpers import remote_command, watch_command, download_file
-from netexp.pcap import mean_pkt_size_remote_pcap
+from netexp.helpers import download_file
+from netexp.pcap import mean_pkt_size_pcap
 from netexp.pktgen import Pktgen
 
 from enso.consts import (
     FPGA_RATELIMIT_CLOCK,
-    ENSO_PKTGEN_CMD,
+    ENSOGEN_CMD,
     PCAP_GEN_CMD,
     PCAPS_DIR,
 )
-from enso.enso_dataplane import EnsoDataplane
+from enso.enso_nic import EnsoNic
 
 
 ETHERNET_OVERHEAD = 20 + 4  # Includes CRC.
 
 
-class EnsoPktgenStats:
+class EnsoGenStats:
     def __init__(self, file_name: str) -> None:
         self.stats = defaultdict(list)
         self.nb_samples = 0
@@ -83,7 +83,7 @@ class EnsoGen(Pktgen):
 
     def __init__(
         self,
-        dataplane: EnsoDataplane,
+        nic: EnsoNic,
         core_id: int = 0,
         queues: int = 4,
         multicore: bool = False,
@@ -95,15 +95,14 @@ class EnsoGen(Pktgen):
         hist_file: Optional[str] = None,
         stats_delay: Optional[int] = None,
         pcie_addr: Optional[str] = None,
-        verbose: bool = False,
         log_file: Union[bool, TextIO] = False,
         check_tx_rate=False,
     ) -> None:
         super().__init__()
 
-        self.dataplane = dataplane
-        self.dataplane.enable_rr()
-        self.dataplane.fallback_queues = queues
+        self.nic = nic
+        self.nic.enable_rr()
+        self.nic.fallback_queues = queues
 
         self._pcap_path = None
 
@@ -122,7 +121,6 @@ class EnsoGen(Pktgen):
         self.stats_file = stats_file or "stats.csv"
         self.hist_file = hist_file or "hist.csv"
 
-        self.verbose = verbose
         self.log_file = log_file
         self.check_tx_rate = check_tx_rate
 
@@ -135,17 +133,18 @@ class EnsoGen(Pktgen):
 
         pcap_name = f"{nb_pkts}_{pkt_size}_{nb_src}_{nb_dst}.pcap"
 
-        remote_dir_path = Path(self.dataplane.remote_enso_path)
+        remote_dir_path = Path(self.nic.enso_path)
         pcap_dst = remote_dir_path / Path(PCAPS_DIR) / Path(pcap_name)
         pcap_gen_cmd = remote_dir_path / Path(PCAP_GEN_CMD)
         pcap_gen_cmd = (
             f"{pcap_gen_cmd} {nb_pkts} {pkt_size} {nb_src} {nb_dst} {pcap_dst}"
         )
 
-        pcap_gen_cmd = remote_command(
-            self.dataplane.ssh_client, pcap_gen_cmd, print_command=self.verbose
+        pcap_gen_cmd = self.nic.host.run_command(
+            pcap_gen_cmd, print_command=self.log_file
         )
-        watch_command(pcap_gen_cmd, stdout=self.log_file, stderr=self.log_file)
+        pcap_gen_cmd.watch(stdout=self.log_file, stderr=self.log_file)
+
         status = pcap_gen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError("Error generating pcap")
@@ -176,22 +175,19 @@ class EnsoGen(Pktgen):
         self.expected_tx_duration = nb_pkts / pkts_per_sec
 
         # Make sure remote stats file does not exist.
-        remote_stats_file = remote_command(
-            self.dataplane.ssh_client,
+        remove_stats_file = self.nic.host.run_command(
             f"rm -f {self.stats_file}",
             print_command=False,
         )
-        watch_command(
-            remote_stats_file, stdout=self.log_file, stderr=self.log_file
-        )
-        status = remote_stats_file.recv_exit_status()
+        remove_stats_file.watch(stdout=self.log_file, stderr=self.log_file)
+        status = remove_stats_file.recv_exit_status()
         if status != 0:
             raise RuntimeError(
                 f"Error removing remote stats file ({self.stats_file})"
             )
 
         command = (
-            f"sudo {self.dataplane.remote_enso_path}/{ENSO_PKTGEN_CMD}"
+            f"sudo {self.nic.enso_path}/{ENSOGEN_CMD}"
             f" {self.pcap_path} {rate_frac.numerator} {rate_frac.denominator}"
             f" --count {nb_pkts}"
             f" --core {self.core_id}"
@@ -220,25 +216,25 @@ class EnsoGen(Pktgen):
         if self.pcie_addr is not None:
             command += f" --pcie-addr {self.pcie_addr}"
 
-        self.pktgen_cmd = remote_command(
-            self.dataplane.ssh_client,
+        self.pktgen_cmd = self.nic.host.run_command(
             command,
-            print_command=self.verbose,
+            print_command=self.log_file,
             pty=True,
         )
 
     def wait_transmission_done(self) -> None:
-        if self.pktgen_cmd is None:
+        pktgen_cmd = self.pktgen_cmd
+
+        if pktgen_cmd is None:
             # Pktgen is not running.
             return
 
-        watch_command(
-            self.pktgen_cmd,
+        pktgen_cmd.watch(
             stdout=self.log_file,
             stderr=self.log_file,
-            keyboard_int=lambda: self.pktgen_cmd.send(b"\x03"),
+            keyboard_int=lambda: pktgen_cmd.send(b"\x03"),
         )
-        status = self.pktgen_cmd.recv_exit_status()
+        status = pktgen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError("Error running EnsōGen")
 
@@ -258,8 +254,9 @@ class EnsoGen(Pktgen):
         # Retrieve the latest stats.
         with tempfile.TemporaryDirectory() as tmp:
             local_stats = f"{tmp}/stats.csv"
-            download_file(self.dataplane.host, self.stats_file, local_stats)
-            parsed_stats = EnsoPktgenStats(local_stats)
+            download_file(self.nic.host_name, self.stats_file, local_stats,
+                          self.log_file)
+            parsed_stats = EnsoGenStats(local_stats)
 
             stats_summary = parsed_stats.get_summary(calculate_tx_mean)
 
@@ -297,19 +294,16 @@ class EnsoGen(Pktgen):
 
     @pcap_path.setter
     def pcap_path(self, pcap_path) -> None:
-        self.mean_pcap_pkt_size = mean_pkt_size_remote_pcap(
-            self.dataplane.ssh_client, pcap_path
-        )
-
+        self.mean_pcap_pkt_size = mean_pkt_size_pcap(self.nic.host, pcap_path)
         self._pcap_path = pcap_path
 
     @property
     def queues(self) -> int:
-        return self.dataplane.fallback_queues
+        return self.nic.fallback_queues
 
     @queues.setter
     def queues(self, queues) -> None:
-        self.dataplane.fallback_queues = queues
+        self.nic.fallback_queues = queues
 
     def get_nb_rx_pkts(self) -> int:
         return self.nb_rx_pkts
@@ -339,16 +333,21 @@ class EnsoGen(Pktgen):
             # Pktgen is not running.
             return
 
+        if self.pktgen_cmd.exit_status_ready():
+            # Pktgen has already exited.
+            self.pktgen_cmd = None
+            return
+
         self.pktgen_cmd.send(b"\x03")
 
-        watch_command(
-            self.pktgen_cmd, stdout=self.log_file, stderr=self.log_file
-        )
+        self.pktgen_cmd.watch(stdout=self.log_file, stderr=self.log_file)
         status = self.pktgen_cmd.recv_exit_status()
         if status != 0:
             raise RuntimeError("Error stopping EnsōGen")
 
         self.update_stats()
+
+        self.pktgen_cmd = None
 
     def close(self) -> None:
         # No need to close here.

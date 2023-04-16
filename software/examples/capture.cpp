@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Carnegie Mellon University
+ * Copyright (c) 2023, Carnegie Mellon University
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the disclaimer
@@ -31,189 +31,123 @@
  */
 
 #include <enso/helpers.h>
-#include <enso/socket.h>
+#include <enso/pipe.h>
 #include <pcap/pcap.h>
-#include <pthread.h>
-#include <sched.h>
-#include <x86intrin.h>
 
-#include <cerrno>
 #include <chrono>
 #include <csignal>
-#include <cstdlib>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
-#include <string>
+#include <memory>
 #include <thread>
 
-#include "app.h"
+#include "example_helpers.h"
 
-static volatile int keep_running = 1;
-static volatile int setup_done = 0;
+static volatile bool keep_running = true;
+static volatile bool setup_done = false;
 
-void int_handler(int signal __attribute__((unused))) { keep_running = 0; }
+void int_handler([[maybe_unused]] int signal) { keep_running = false; }
+
+void capture_packets(uint32_t nb_queues, uint32_t core_id,
+                     const std::string& pcap_file, enso::stats_t* stats) {
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+
+  std::cout << "Running on core " << sched_getcpu() << std::endl;
+
+  using enso::Device;
+  using enso::RxPipe;
+
+  std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
+  std::vector<RxPipe*> rx_pipes;
+
+  if (!dev) {
+    std::cerr << "Problem creating device" << std::endl;
+    exit(2);
+  }
+
+  for (uint32_t i = 0; i < nb_queues; ++i) {
+    RxPipe* rx_pipe = dev->AllocateRxPipe();
+    if (!rx_pipe) {
+      std::cerr << "Problem creating RX pipe" << std::endl;
+      exit(3);
+    }
+    rx_pipes.push_back(rx_pipe);
+  }
+
+  pcap_t* pd;
+  pcap_dumper_t* pdumper;
+
+  pd = pcap_open_dead(DLT_EN10MB, 65535);
+  pdumper = pcap_dump_open(pd, pcap_file.c_str());
+  struct timeval ts;
+  ts.tv_sec = 0;
+  ts.tv_usec = 0;
+
+  setup_done = true;
+
+  while (keep_running) {
+    RxPipe* pipe = dev->NextRxPipeToRecv();
+
+    if (unlikely(pipe == nullptr)) {
+      continue;
+    }
+
+    auto batch = pipe->RecvPkts();
+
+    for (auto pkt : batch) {
+      uint16_t pkt_len = enso::get_pkt_len(pkt);
+
+      // Save packet to pcap
+      struct pcap_pkthdr pkt_hdr;
+      pkt_hdr.ts = ts;
+
+      pkt_hdr.len = pkt_len;
+      pkt_hdr.caplen = pkt_len;
+      ++(ts.tv_usec);
+      pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
+
+      ++(stats->nb_pkts);
+    }
+    uint32_t batch_length = batch.processed_bytes();
+    stats->recv_bytes += batch_length;
+    ++(stats->nb_batches);
+
+    pipe->Clear();
+  }
+
+  pcap_dump_close(pdumper);
+  pcap_close(pd);
+}
 
 int main(int argc, const char* argv[]) {
-  int result;
-  uint64_t recv_bytes = 0;
-  uint64_t nb_batches = 0;
-  uint64_t nb_pkts = 0;
-
-  if (argc != 5) {
-    std::cerr << "Usage: " << argv[0] << " core port nb_queues pcap_file"
+  if (argc != 3) {
+    std::cerr << "Usage: " << argv[0] << " NB_QUEUES PCAP_FILE" << std::endl
               << std::endl;
+    std::cerr << "NB_QUEUES: Number of queues to use." << std::endl;
+    std::cerr << "PCAP_FILE: Path to the pcap file to write to." << std::endl;
     return 1;
   }
 
-  int core_id = atoi(argv[1]);
-  int port = atoi(argv[2]);
-  int nb_queues = atoi(argv[3]);
-  std::string pcap_file = argv[4];
-
-  if (nb_queues != 1) {
-    std::cerr << "Only 1 queue is supported for now" << std::endl;
-    return 1;
-  }
-
-  uint32_t addr_offset = core_id * nb_queues;
+  constexpr uint32_t kCoreId = 0;
+  uint32_t nb_queues = atoi(argv[1]);
+  std::string pcap_file = argv[2];
 
   signal(SIGINT, int_handler);
 
-  std::thread socket_thread = std::thread([&recv_bytes, port, addr_offset,
-                                           nb_queues, &nb_batches, &nb_pkts,
-                                           &pcap_file] {
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+  std::vector<enso::stats_t> thread_stats(1);
 
-    std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
+  std::thread socket_thread = std::thread(capture_packets, nb_queues, kCoreId,
+                                          pcap_file, &(thread_stats[0]));
 
-    for (int i = 0; i < nb_queues; ++i) {
-      // TODO(sadok) can we make this a valid file descriptor?
-      std::cout << "Creating queue " << i << std::endl;
-      int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, nb_queues);
-
-      if (socket_fd == -1) {
-        std::cerr << "Problem creating socket (" << errno
-                  << "): " << strerror(errno) << std::endl;
-        exit(2);
-      }
-
-      struct sockaddr_in addr;
-      memset(&addr, 0, sizeof(addr));
-
-      uint32_t ip_address = ntohl(inet_addr("192.168.0.0"));
-      ip_address += addr_offset + i;
-
-      addr.sin_family = AF_INET;
-      addr.sin_addr.s_addr = htonl(ip_address);
-      addr.sin_port = htons(port);
-
-      if (enso::bind(socket_fd, (struct sockaddr*)&addr, sizeof(addr))) {
-        std::cerr << "Problem binding socket (" << errno
-                  << "): " << strerror(errno) << std::endl;
-        exit(3);
-      }
-
-      std::cout << "Done creating queue " << i << std::endl;
-    }
-
-    pcap_t* pd;
-    pcap_dumper_t* pdumper;
-
-    pd = pcap_open_dead(DLT_EN10MB, 65535);
-    pdumper = pcap_dump_open(pd, pcap_file.c_str());
-    struct timeval ts;
-    ts.tv_sec = 0;
-    ts.tv_usec = 0;
-
-    setup_done = 1;
-
-    unsigned char* buf;
-
-    while (keep_running) {
-      int socket_fd;
-      int recv_len = enso::recv_select(0, &socket_fd, (void**)&buf, BUF_LEN, 0);
-
-      if (unlikely(recv_len < 0)) {
-        std::cerr << "Error receiving" << std::endl;
-        exit(4);
-      }
-
-      if (likely(recv_len > 0)) {
-        int processed_bytes = 0;
-        uint8_t* pkt = buf;
-
-        while (processed_bytes < recv_len) {
-          uint16_t pkt_len = enso::get_pkt_len(pkt);
-          uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-          uint16_t pkt_aligned_len = nb_flits * 64;
-
-          // Save packet to pcap
-          struct pcap_pkthdr pkt_hdr;
-          pkt_hdr.ts = ts;
-
-          pkt_hdr.len = pkt_len;
-          pkt_hdr.caplen = pkt_len;
-          ++(ts.tv_usec);
-          pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
-
-          pkt += pkt_aligned_len;
-          processed_bytes += pkt_aligned_len;
-          ++nb_pkts;
-        }
-
-        ++nb_batches;
-        recv_bytes += recv_len;
-
-        enso::free_enso_pipe(socket_fd, recv_len);
-      }
-    }
-
-    // TODO(sadok): it is also common to use the close() syscall to close a
-    // UDP socket.
-    for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-      enso::print_sock_stats(socket_fd);
-      enso::shutdown(socket_fd, SHUT_RDWR);
-    }
-
-    pcap_dump_close(pdumper);
-    pcap_close(pd);
-  });
-
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  result = pthread_setaffinity_np(socket_thread.native_handle(), sizeof(cpuset),
-                                  &cpuset);
-  if (result < 0) {
+  if (enso::set_core_id(socket_thread, kCoreId)) {
     std::cerr << "Error setting CPU affinity" << std::endl;
     return 6;
   }
 
-  while (!setup_done) continue;
+  while (!setup_done) continue;  // Wait for setup to be done.
 
-  std::cout << "Starting..." << std::endl;
-
-  while (keep_running) {
-    uint64_t recv_bytes_before = recv_bytes;
-    uint64_t nb_batches_before = nb_batches;
-    uint64_t nb_pkts_before = nb_pkts;
-
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    uint64_t delta_bytes = recv_bytes - recv_bytes_before;
-    uint64_t delta_pkts = nb_pkts - nb_pkts_before;
-    uint64_t delta_batches = nb_batches - nb_batches_before;
-    std::cout << std::dec << delta_bytes * 8. / 1e6 << " Mbps  " << recv_bytes
-              << " B  " << nb_batches << " batches  " << nb_pkts << " pkts";
-
-    if (delta_batches > 0) {
-      std::cout << "  " << delta_bytes / delta_batches << " B/batch";
-      std::cout << "  " << delta_pkts / delta_batches << " pkt/batch";
-    }
-    std::cout << std::endl;
-  }
-
-  std::cout << "Waiting for threads" << std::endl;
+  show_stats(thread_stats, &keep_running);
 
   socket_thread.join();
 
