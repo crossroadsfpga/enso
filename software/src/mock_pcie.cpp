@@ -78,12 +78,14 @@ packet_t* in_buf[MAX_NUM_PACKETS];
 uint32_t pipe_packets_head;
 uint32_t pipe_packets_tail;
 
-int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
-                          volatile struct QueueRegs* notification_buf_pair_regs,
+int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
+                          struct NotificationBufPair* notification_buf_pair,
                           enso_pipe_id_t nb_queues,
                           enso_pipe_id_t enso_pipe_id_offset) {
+  (void)bdf;
+  (void)bar;
+  (void)core_id;
   (void)notification_buf_pair;
-  (void)notification_buf_pair_regs;
   (void)nb_queues;
   (void)enso_pipe_id_offset;
   return 0;
@@ -147,17 +149,14 @@ int read_in_file() {
  * global variables.
  *
  * @param enso_pipe
- * @param enso_pipe_regs
  * @param notification_buf_pair
  * @param enso_pipe_id
  * @return 0 on success, negative on failure.
  */
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
-                   volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id) {
   (void)enso_pipe;
-  (void)enso_pipe_regs;
   (void)notification_buf_pair;
   (void)enso_pipe_id;
 
@@ -185,6 +184,8 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
   (void)(enso_pipe);
   (void)notification_buf_pair;
   (void)peek;
+
+  std::cout << "Consuming from queue" << std::endl;
 
   *buf = new u_char[0];
 
@@ -253,7 +254,7 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
   (void)notification_buf_pair;
 
   u_char* addr_buf = new u_char[len];
-  memcpy((uint8_t*)phys_addr, addr_buf, len);
+  memcpy(addr_buf, (uint8_t*)phys_addr, len);
 
   uint32_t processed_bytes = 0;
   uint8_t* pkt = addr_buf;
@@ -282,15 +283,15 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
   return 0;
 }
 
-int dma_init(IntelFpgaPcieDev* dev,
-             struct NotificationBufPair* notification_buf_pair,
+int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
-             unsigned nb_queues) {
-  (void)dev;
+             unsigned nb_queues, uint32_t bdf, int32_t bar) {
   (void)notification_buf_pair;
   (void)enso_pipe;
   (void)socket_id;
   (void)nb_queues;
+  (void)bdf;
+  (void)bar;
   return 0;
 }
 
@@ -389,17 +390,22 @@ __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
   // performs **significantly** better compared to always fetching the latest
   // notification.
   (void)notification_buf_pair;
-<<<<<<< HEAD
-
-=======
   if (pipe_packets_head == pipe_packets_tail) return -1;
->>>>>>> 3b569a0 (going to start rss)
   return 0;
 }
 
 int32_t get_next_enso_pipe_id(
     struct NotificationBufPair* notification_buf_pair) {
   return __get_next_enso_pipe_id(notification_buf_pair);
+}
+
+void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
+  (void)enso_pipe;
+  (void)len;
+}
+
+void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
+  (void)enso_pipe;
 }
 
 }  // namespace enso
