@@ -1,6 +1,6 @@
 # Ensō
 
-![Ensō](assets/enso-black.svg){ align=right width="200" }
+<img align="right" width="200" src="./assets/enso-black.svg">
 
 Ensō is a high-performance streaming interface for NIC-application communication.
 
