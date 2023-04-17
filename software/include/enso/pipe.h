@@ -549,6 +549,31 @@ class RxPipe {
   inline enso_pipe_id_t id() const { return kId; }
 
   /**
+   * @brief Returns the context associated with the pipe.
+   * 
+   * Applications can use context to associate arbitrary pointers with a given
+   * pipe that can later be retrieved in a different point. For instance, when
+   * using Device::NextRxPipeToRecv(), the application may use the context to
+   * retrieve application data associated with the returned pipe.
+   * 
+   * @see RxPipe::set_context()
+   *
+   * @return The context associated with the pipe.
+   */
+  inline void* context() const {
+    return context_;
+  }
+
+  /**
+   * @brief Sets the context associated with the pipe.
+   * 
+   * @see RxPipe::context()
+   */
+  inline void set_context(void* new_context) {
+    context_ = new_context;
+  }
+
+  /**
    * The size of a "buffer quantum" in bytes. This is the minimum unit that can
    * be sent at a time. Every transfer should be a multiple of this size.
    */
@@ -592,6 +617,7 @@ class RxPipe {
                             ///< processed by the device. This is used in
                             ///< conjunction with NextRxPipe().
   const enso_pipe_id_t kId;  ///< The ID of the pipe.
+  void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
 };
@@ -772,6 +798,29 @@ class TxPipe {
   inline enso_pipe_id_t id() const { return kId; }
 
   /**
+   * @brief Returns the context associated with the pipe.
+   * 
+   * Applications can use context to associate arbitrary pointers with a given
+   * pipe that can later be retrieved in a different point.
+   * 
+   * @see TxPipe::set_context()
+   *
+   * @return The context associated with the pipe.
+   */
+  inline void* context() const {
+    return context_;
+  }
+
+  /**
+   * @brief Sets the context associated with the pipe.
+   * 
+   * @see TxPipe::context()
+   */
+  inline void set_context(void* new_context) {
+    context_ = new_context;
+  }
+
+  /**
    * The size of a "buffer quantum" in bytes. This is the minimum unit that can
    * be sent at a time. Every transfer should be a multiple of this size.
    */
@@ -823,6 +872,7 @@ class TxPipe {
   friend class Device;
 
   const enso_pipe_id_t kId;  ///< The ID of the pipe.
+  void* context_;
   Device* device_;
   uint8_t* buf_;
   bool internal_buf_;       // If true, the buffer is allocated internally.
@@ -1004,6 +1054,29 @@ class RxTxPipe {
    * @copydoc TxPipe::id
    */
   inline enso_pipe_id_t tx_id() const { return tx_pipe_->id(); }
+
+  /**
+   * @brief Returns the context associated with the pipe.
+   * 
+   * Applications can use context to associate arbitrary pointers with a given
+   * pipe that can later be retrieved in a different point. For instance, when
+   * using Device::NextRxTxPipeToRecv(), the application may use the context to
+   * retrieve application data associated with the returned pipe.
+   * 
+   * @see RxTxPipe::set_context()
+   *
+   * @return The context associated with the pipe.
+   */
+  inline void* context() const { return rx_pipe_->context(); }
+
+  /**
+   * @brief Sets the context associated with the pipe.
+   * 
+   * @see RxTxPipe::context()
+   */
+  inline void set_context(void* new_context) {
+    rx_pipe_->set_context(new_context);
+  }
 
   /**
    * @copydoc RxPipe::kQuantumSize
