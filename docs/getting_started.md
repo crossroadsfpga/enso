@@ -4,34 +4,15 @@ To use Ensō, you first need to make sure that your system meets the requirement
 
 ## System Requirements
 
-Ensō currently requires an Intel Stratix 10 MX FPGA. Support for other boards might be added in the future.
+Ensō currently requires an Intel Stratix 10 MX FPGA. Support for other boards might be added in the future. Ensō's codebase also assumes an x86-64 architecture. Ensō was extensively tested on Ubuntu 16.04, but it should work on other Linux distributions as well.
 
-### Setup
+In what follows, we describe how to setup the software and install the required dependencies.
 
-Here we describe the steps to compile and install Ensō.
-
-#### Prepare system
-
-Setup hugepages:
-
-```bash
-mkdir -p /mnt/huge
-(mount | grep /mnt/huge) > /dev/null || mount -t hugetlbfs hugetlbfs /mnt/huge
-for i in /sys/devices/system/node/node[0-9]*
-do
-	echo 16384 > "$i"/hugepages/hugepages-2048kB/nr_hugepages
-done
-```
-
-<!-- TODO(sadok): Make hugepage allocation permanent. -->
-
-<!-- TODO(sadok): Describe how to setup quartus project. -->
-
-#### Dependencies
+### Dependencies
 
 Ensō has the following dependencies:
 
-- Either gcc (>= 9.0)
+- GCC (>= 9.0)
 - Python (>= 3.9)
 - pip
 - Meson (>= 0.58)
@@ -42,7 +23,13 @@ Ensō has the following dependencies:
 
 There are also python dependencies listed in `requirements.txt` that can be installed with `pip`.
 
-In Ubuntu 20.04 or other recent Debian-based distributions these dependencies can be obtained with the following commands:
+If you are using Ubuntu 20.04 or other recent Debian-based distribution, you may be able to use the `setup.sh` script to install all the dependencies. The script is located at the root of the [Ensō repository](https://github.com/crossroadsfpga/enso). To run it, simply execute:
+
+```bash
+./setup.sh
+```
+
+In Ubuntu 20.04 or other recent Debian-based distributions these dependencies can also be manually installed with the following commands:
 ```bash
 sudo apt update
 sudo apt install \
@@ -55,13 +42,24 @@ sudo apt install \
   libpcap-dev \
   tshark
 
-python3 -m pip install meson ninja
+sudo python3 -m pip install meson ninja  # Installing system-wide.
 python3 -m pip install -r requirements.txt
 ```
 
-<!--- TODO(sadok): Instruction with both setup script as well as manual configuration -->
+### Huge Pages
 
-<!--- TODO(sadok): Describe how to load the bitstream and the need for rebooting the machine if it does not show up as a device. (may use scripts/list_enso_nics.sh for that) -->
+Ensō requires 2MB huge pages to be allocated in the system. You may use the following snippet adapted from [ixy](https://github.com/emmericp/ixy/blob/master/setup-hugetlbfs.sh) to allocate them. In this example, we allocate 2,048 2MB huge pages per NUMA node.
+
+```bash
+mkdir -p /mnt/huge
+(mount | grep /mnt/huge) > /dev/null || mount -t hugetlbfs hugetlbfs /mnt/huge
+for i in /sys/devices/system/node/node[0-9]*
+do
+	echo 2048 > "$i"/hugepages/hugepages-2048kB/nr_hugepages
+done
+```
+
+### Quartus
 
 To be able to load or synthesize the hardware, you also need to install [Intel Quartus 19.3](https://fpgasoftware.intel.com/19.3/?edition=pro) as well as the Stratix 10 device support (same link).
 
@@ -80,7 +78,7 @@ export PATH=$quartus_dir/19.3/modelsim_ase/linuxaloem:$PATH
 export PATH=$quartus_dir/19.3/quartus/sopc_builder/bin:$PATH
 ```
 
-**Note.** Some distributions (e.g., Ubuntu) include code in the `.bashrc` file to prevent it from running in non-interactive environments. This might prevent the above lines from running in some settings. Consider commenting out the following lines in the `.bashrc` file:
+Some distributions (e.g., Ubuntu) include code in the `.bashrc` file to prevent it from running in non-interactive environments. This might prevent the above lines from running in some settings. Comment out the following lines in the `.bashrc` file:
 
 ```bash
 # If not running interactively, don't do anything
