@@ -2,7 +2,10 @@
 
 [![docs](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml/badge.svg)](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml)
 
-<img align="right" width="200" src="./docs/assets/enso-black.svg">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/enso-white.svg">
+  <img align="right" width="200" alt="Enso" src="./docs/assets/enso-black.svg">
+</picture>
 
 Ensō is a high-performance streaming interface for NIC-application communication.
 
