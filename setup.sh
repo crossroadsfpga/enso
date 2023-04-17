@@ -47,9 +47,10 @@ else
     echo "apt-get not found. Please install dependencies manually."
 fi
 
-echo "Using python3 from $(which python3)"
 
-python3 -m pip install meson ninja
+sudo python3 -m pip install meson ninja
+
+echo "Using python3 from $(which python3)"
 
 cd $SCRIPT_DIR
 python3 -m pip install -r requirements.txt
