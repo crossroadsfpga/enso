@@ -5,6 +5,7 @@ nav:
     - Compiling Software: compiling_software.md
     - Compiling Hardware: compiling_hardware.md
     - Running: running.md
+    - EnsōGen: ensogen.md
   - Primitives: primitives
   # - Examples: examples
   # - Developer Guide:
