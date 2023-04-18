@@ -26,4 +26,5 @@ Traditionally, NICs expose a *packetized* interface that software (applications 
 
 - [Setup](https://crossroadsfpga.github.io/enso/getting_started/)
 - Understanding the primitives: [RX Ensō Pipe](https://crossroadsfpga.github.io/enso/primitives/rx_enso_pipe/), [TX Ensō Pipe](https://crossroadsfpga.github.io/enso/primitives/tx_enso_pipe/), [RX/TX Ensō Pipe](https://crossroadsfpga.github.io/enso/primitives/rx_tx_enso_pipe/)
+- Examples: [echo server](https://github.com/crossroadsfpga/enso/blob/master/software/examples/echo.cpp), [packet capture](https://github.com/crossroadsfpga/enso/blob/master/software/examples/capture.cpp), [EnsōGen Packet Generator](https://github.com/crossroadsfpga/enso/blob/master/software/examples/ensogen.cpp)
 - API References: [Software](https://crossroadsfpga.github.io/enso/software/), [Hardware](https://crossroadsfpga.github.io/enso/hardware/)
