@@ -4,9 +4,9 @@ EnsōGen is a software packet generator built on top of the Ensō NIC interface.
 
 ## Running
 
-EnsōGen is built as part of Ensō. Make sure to follow the instructions in [Compiling Software](compiling_software.md) to build Ensō and that you have the [enso script](running.md#installing-enso-script) installed.
+EnsōGen is built as part of Ensō. Make sure to follow the instructions in [Compiling Software](compiling_software.md) to build Ensō and that you have the [`enso` command](running.md#installing-enso-script) installed.
 
-To run EnsōGen, you first need to setup the NIC with the right parameters. By default, you should run the enso script as follows:
+To run EnsōGen, you first need to setup the NIC with the right parameters. By default, you should run the `enso` command as follows:
     
 ```bash
 enso <path to enso repo> --fpga <fpga ID> --fallback-queues 4 --enable-rr
@@ -21,7 +21,7 @@ cd <path to enso repo>
 ./scripts/ensogen.sh <path to pcap file> <rate in Gbps> --pcie-addr <pcie address> --count <number of packets>
 ```
 
-Both `<pcie address>` and `<number of packets>` are optional but it's recommended to specify `<pcie address>` if you have more than one NIC in your system. If `<number of packets>` is not specified, EnsōGen will send packets indefinitely until you stop it with Ctrl+C.
+Both `<pcie address>` and `<number of packets>` are optional but it's recommended to specify `<pcie address>` if you have more than one NIC in your system. If `<number of packets>` is not specified, EnsōGen will send packets indefinitely until you stop it with ++ctrl+c++.
 
 Recall that you may obtain the PCIe address of all Ensō NICs in your system by running `scripts/list_enso_nics.sh`.
 
@@ -36,7 +36,7 @@ sudo ./build/software/examples/ensogen --help
 
 All these options are also available through the `scripts/ensogen.sh` script.
 
-## Other Features
+## Other features
 
 - **Save:** You can save the statistics EnsōGen collects to a file by using the `--save SAVE_FILE` option. This will save the statistics in a csv file called `SAVE_FILE`.
 - **RTT:** You can also use EnsōGen to measure RTT. It uses hardware timestamping and can keep track of RTTs with 5ns precision. To enable RTT measurement, run EnsōGen with the `--rtt` flag.

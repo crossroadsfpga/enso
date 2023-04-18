@@ -77,7 +77,7 @@ link_libraries(enso)
 
 
 
-## Building Documentation
+## Building the documentation
 
 You can access Ensō's documentation at [https://crossroadsfpga.github.io/enso/](https://crossroadsfpga.github.io/enso/). But if you would like to contribute to the documentation, you may choose to also build it locally.
 

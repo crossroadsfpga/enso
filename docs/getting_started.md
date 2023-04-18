@@ -2,7 +2,7 @@
 
 To use Ensō, you first need to make sure that your system meets the requirements in terms of hardware and software.
 
-## System Requirements
+## System requirements
 
 Ensō currently requires an Intel Stratix 10 MX FPGA. Support for other boards might be added in the future. Ensō's codebase also assumes an x86-64 architecture. Ensō was extensively tested on Ubuntu 16.04, but it should work on other Linux distributions as well.
 
@@ -46,7 +46,7 @@ sudo python3 -m pip install meson ninja  # Installing system-wide.
 python3 -m pip install -r requirements.txt
 ```
 
-### Huge Pages
+### Huge pages
 
 Ensō requires 2MB huge pages to be allocated in the system. You may use the following snippet adapted from [ixy](https://github.com/emmericp/ixy/blob/master/setup-hugetlbfs.sh) to allocate them. In this example, we allocate 2,048 2MB huge pages per NUMA node.
 
@@ -78,12 +78,14 @@ export PATH=$quartus_dir/19.3/modelsim_ase/linuxaloem:$PATH
 export PATH=$quartus_dir/19.3/quartus/sopc_builder/bin:$PATH
 ```
 
-Some distributions (e.g., Ubuntu) include code in the `.bashrc` file to prevent it from running in non-interactive environments. This might prevent the above lines from running in some settings. Comment out the following lines in the `.bashrc` file:
+!!! note
 
-```bash
-# If not running interactively, don't do anything
-case $- in
-    *i*) ;;
-      *) return;;
-esac
-```
+    Some distributions (e.g., Ubuntu) include code in the `.bashrc` file to prevent it from running in non-interactive environments. This might prevent the above lines from running in some settings. You should remove or comment out the following lines in the `.bashrc` file:
+
+    ```bash
+    # If not running interactively, don't do anything
+    case $- in
+        *i*) ;;
+          *) return;;
+    esac
+    ```

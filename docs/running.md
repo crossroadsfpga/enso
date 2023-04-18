@@ -1,69 +1,70 @@
 # Running
 
-Running an application with Ensō requires first loading the bitstream to the FPGA and configuring the NIC. This can be done using the `enso` script.
+Running an application with Ensō requires first loading the bitstream to the FPGA and configuring the NIC. This can be done using the [Ensō CLI tool](enso_cli.md).
 
-
-## Installing the `enso` script
-
-To configure and load the Ensō NIC you should install the `enso` script. If you haven't already, clone the enso repository the machine you want to install the script on:
-```bash
-git clone https://github.com/crossroadsfpga/enso
-```
-
-To install the `enso` script run:
-```bash
-cd <root of enso repository>
-python3 -m pip install -e frontend  # Make sure this python is version >=3.9.
-```
-
-Refer to the [enso script documentation](https://github.com/crossroadsfpga/enso/blob/master/frontend/README.md) for instructions on how to enable autocompletion.
-
-Next we will describe how to use the script to load the bitstream and configure the NIC but you can also use the `enso` script itself to obtain usage information:
-```bash
-enso --help
-```
-
-If after installing the `enso` script you still get an error saying that the `enso` command is not found, you may need to add the `bin` directory of the python installation to your `PATH`. Refer to [this stackoverflow answer](https://stackoverflow.com/a/62151306/2027390) for more information on how to do this.
 
 ## Installing the bitstream
 
-You can use the `scripts/update_bitstream.sh` script to either automatically download and install the appropriate bitstream from the github repository or to install a bitstream that you built following the steps in [Compiling Hardware](compiling_hardware.md).
+The hardware design is defined using a bitstream. You can automatically download the appropriate bitstream or follow the steps in [Compiling Hardware](compiling_hardware.md) to produce your own (it may take a few hours).
 
-To automatically download and install the appropriate bitstream from the github repository, run:
+To automatically download and install the appropriate bitstream, run:
 ```bash
 cd <root of enso repository>
 ./scripts/update_bitstream.sh --download
 ```
 
-## Loading Bitstream and Configuring the NIC
-
-Before running any software you need to make sure that the FPGA is loaded with the latest bitstream.
-
-Run the `enso` script to load the bitstream.
+If you want to specify a different bitstream, you can install it by running:
 ```bash
-enso <enso_path>
+cd <root of enso repository>
+./scripts/update_bitstream.sh <bitstream path>
 ```
 
-You can also specify other options to configure the NIC, refer to `enso --help` for more information.
+You only need to install the bitstream once or if you want to use a different one.
 
+## Loading the bitstream and configuring the NIC
 
-<!-- Runtime configuration -->
+Before running any software you need to make sure that the FPGA is loaded with the bitstream that you installed.
 
-<!--- TODO(sadok): Describe how to load the bitstream and the need for rebooting the machine if it does not show up as a device. (may use scripts/list_enso_nics.sh for that) -->
-
-
-## Running the `enso` script in a different machine
-
-You do not need to run the `enso` script in the same machine as the one you will run Ensō. You may also choose to run it from your laptop, for example. This machine can even have a different operating system, e.g., macOS.
-
-If running the `enso` script in a different machine from the one you will run Ensō, you must make sure that you have ssh access using a password-less key (e.g., using ssh-copy-id) to the machine you will run Ensō on. You should also have an `~/.ssh/config` configuration file set with configuration to access the machine that you will run enso on.
-
-If you don't yet have a `~/.ssh/config` file, you can create one and add the following lines, replacing everything between `<>` with the correct values:
+Use the [`enso` command](enso_cli.md) to load the bitstream and automatically configure the NIC with the default values.
 ```bash
-Host <machine_name>
-  HostName <machine_address>
-  IdentityFile <private_key_path>
-  User <user_name>
+enso <path to enso repository>  --fpga <FPGA ID>
 ```
 
-`machine_name` is a nickname to the machine. You will use this name to run the `enso` script using the `--host` option.
+You should use the `--fpga` flag to specify the ID of the FPGA that you want to load. You may use the `scripts/list_enso_nics.sh` script to list the IDs of all compatible FPGAs in your system.
+
+You may also specify other options to configure the NIC. Refer to `enso --help` for more information.
+
+After the FPGA has been loaded and configured, the `enso` command will open the JTAG console. You may use the JTAG console to send extra configuration to the NIC and to retrieve NIC statistics. You can type `help` to get a list of available commands.
+
+Once you are done using the JTAG console, you can press ++ctrl+c++ to quit. You can continue to use the NIC even after the JTAG console has been closed.
+
+The first time you load the NIC, Linux will not recognize it as a PCIe device until you reboot the system. You can use the `scripts/list_enso_nics.sh` script to show all the available Ensō NICs in your system. If the NIC does not show up after you load the bitstream, reboot the system.
+
+
+## Running an application
+
+Once the NIC has been loaded and you can see the device listed when you run `scripts/list_enso_nics.sh`, you are ready to run an application. Ensō comes with some [example applications](https://github.com/crossroadsfpga/enso/tree/master/software/examples) which are built together with Ensō. You may run any of these without specifying command line arguments to obtain usage information. For example, to obtain instructions on how to run an echo server do:
+```bash
+cd <root of enso repository>
+./build/software/examples/echo
+```
+
+This will print the usage information:
+```
+Usage: ./build/software/examples/echo NB_CORES NB_QUEUES NB_CYCLES
+
+NB_CORES: Number of cores to use.
+NB_QUEUES: Number of queues per core.
+NB_CYCLES: Number of cycles to busy loop when processing each packet.
+```
+
+In Ensō, it is recommended to use at least two queues per core for maximum performance. For instance, this application could be run with:
+```bash
+./build/software/examples/echo 1 2 0
+```
+
+This will use one CPU core, 2 queues and will not busy loop when processing each packet.
+
+!!! note
+
+    You can also refer to [Build an application with Ensō](compiling_software.md#build-an-application-with-enso) for instructions on how to build your own application.
