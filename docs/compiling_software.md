@@ -76,7 +76,7 @@ Then, you should link the application with the Ensō library. The way you do it 
     ```
 
 
-## Building the documentation
+## Build the documentation
 
 You can access Ensō's documentation at [https://crossroadsfpga.github.io/enso/](https://crossroadsfpga.github.io/enso/). But if you would like to contribute to the documentation, you may choose to also build it locally.
 
