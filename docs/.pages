@@ -4,6 +4,7 @@ nav:
     - System Requirements: getting_started.md
     - Compiling Software: compiling_software.md
     - Compiling Hardware: compiling_hardware.md
+    - Ensō CLI Tool: enso_cli.md
     - Running: running.md
     - EnsōGen: ensogen.md
   - Primitives: primitives
