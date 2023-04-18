@@ -10,11 +10,11 @@ GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
 if [ $# -ne 1 ]; then
-    echo "Must specify bitstream file or 'download'."
+    echo "Must specify bitstream file or '--download'."
     echo
-    echo "Usage: $0 BITSTREAM_FILE | download"
+    echo "Usage: $0 BITSTREAM_FILE | --download"
     echo "  BITSTREAM_FILE: Path to bitstream file to use."
-    echo "  download: Automatically download bitstream for the current version."
+    echo "  --download: Automatically download bitstream for the current version."
     exit 1
 fi
 
@@ -22,7 +22,7 @@ cd $SCRIPT_DIR/..
 
 python3 -m pip install -r requirements.txt
 
-if [ "$1" == "download" ]; then
+if [ "$1" == "--download" ]; then
     echo "Downloading bitstream file."
     # Get latest tag.
     LATEST_TAG=$(git describe --abbrev=0)
