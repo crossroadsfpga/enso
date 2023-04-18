@@ -44,30 +44,35 @@ Host <server_machine_name>
 
 ## Enable autocompletion
 
-### For Bash
-Run this:
-```bash
-_ENSO_COMPLETE=bash_source enso > ~/.enso-complete.bash
-```
+Follow these instructions to enable autocompletion to the `enso` command depending on the shell that you use.
 
-Then add the following to your `.bashrc`:
-```bash
-. ~/.enso-complete.bash
-```
+=== "Bash"
 
-### For Zsh
-Run this:
-```zsh
-_ENSO_COMPLETE=zsh_source enso > ~/.enso-complete.zsh
-```
+    Run this:
+    ```bash
+    _ENSO_COMPLETE=bash_source enso > ~/.enso-complete.bash
+    ```
 
-Then add the following to your `.zshrc`:
-```zsh
-. ~/.enso-complete.zsh
-```
+    Then add the following to your `.bashrc`:
+    ```bash
+    . ~/.enso-complete.bash
+    ```
 
-### For Fish
-Save the script to `~/.config/fish/completions/enso.fish`:
-```fish
-_ENSO_COMPLETE=fish_source enso > ~/.config/fish/completions/enso.fish
-```
+=== "Zsh"
+
+    Run this:
+    ```zsh
+    _ENSO_COMPLETE=zsh_source enso > ~/.enso-complete.zsh
+    ```
+
+    Then add the following to your `.zshrc`:
+    ```zsh
+    . ~/.enso-complete.zsh
+    ```
+
+=== "Fish"
+
+    Save the following script to `~/.config/fish/completions/enso.fish`:
+    ```fish
+    _ENSO_COMPLETE=fish_source enso > ~/.config/fish/completions/enso.fish
+    ```

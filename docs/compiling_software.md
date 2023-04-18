@@ -50,31 +50,30 @@ sudo ninja install
 
 Then, you should link the application with the Ensō library. The way you do it depends on how you are compiling your code. Here are some examples using `gcc`, `meson` and `cmake`.
 
-### Using `gcc` with no build system
+=== "GCC with no build system"
 
-```bash
-g++ -o my_app my_app.cpp -lenso
-```
+    ```bash
+    g++ -o my_app my_app.cpp -lenso
+    ```
 
-### Using `meson`
+=== "Meson"
 
-If using meson, you should add the following to your `meson.build` file:
-```meson
-enso_dep = dependency('enso')
-```
+    Add the following to your `meson.build` file:
+    ```meson
+    enso_dep = dependency('enso')
+    ```
 
-Then, you can link your application with the Ensō library:
-```meson
-executable('my_app', 'my_app.cpp', dependencies: [enso_dep])
-```
+    Then, you can link your application with the Ensō library:
+    ```meson
+    executable('my_app', 'my_app.cpp', dependencies: [enso_dep])
+    ```
 
-### Using `cmake`
+=== "CMake"
 
-If using `cmake`, you should add the following to your `CMakeLists.txt` file:
-```cmake
-link_libraries(enso)
-```
-
+    Add the following to your `CMakeLists.txt` file:
+    ```cmake
+    link_libraries(enso)
+    ```
 
 
 ## Building the documentation
