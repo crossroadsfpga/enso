@@ -20,8 +20,6 @@ fi
 
 cd $SCRIPT_DIR/..
 
-python3 -m pip install -r requirements.txt
-
 if [ "$1" == "--download" ]; then
     echo "Downloading bitstream file."
     # Get latest tag.
@@ -47,3 +45,6 @@ else
     # Copy bitstream file to the scripts directory.
     cp $BITSTREAM_FILE scripts/alt_ehipc2_hw.sof
 fi
+
+chksum=$(sha256sum scripts/alt_ehipc2_hw.sof | cut -d " " -f 1)
+echo "sha256sum: $chksum"
