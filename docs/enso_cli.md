@@ -23,7 +23,7 @@ enso --help
 If, after installing the tool, you still get an error saying that the `enso` command is not found, you may need to add the `bin` directory of the python installation to your `PATH`. Refer to [this stackoverflow answer](https://stackoverflow.com/a/62151306/2027390) for more information on how to do this.
 
 
-## Running the Ensō CLI Tool in a different machine
+## Running the Ensō CLI Tool in a different machine <small>optional</small> { #running-the-enso-cli-tool-in-a-different-machine data-toc-label="Running the Ensō CLI Tool in a different machine" }
 
 You do not need to run the `enso` command in the same machine as the one you will run an Ensō-based application. You may also choose to run it from your laptop, for example. This machine can even have a different operating system, e.g., macOS.
 
@@ -42,7 +42,7 @@ Host <server_machine_name>
 `server_machine_name` is a nickname to the server machine. This is the name you specify when running the `enso` command with the `--host` option.
 
 
-## Enable autocompletion
+## Enable autocompletion <small>optional</small> { #enable-autocompletion data-toc-label="Enable autocompletion" }
 
 Follow these instructions to enable autocompletion to the `enso` command depending on the shell that you use.
 
