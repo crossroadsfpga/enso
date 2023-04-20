@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# exit when error occurs
+set -e
+trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
+trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
+
 PROJECT_NAME="enso"
 
 CUR_DIR=$(pwd)
