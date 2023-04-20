@@ -27,7 +27,7 @@ Before running any software you need to make sure that the FPGA is loaded with t
 
 Use the [`enso` command](enso_cli.md) to load the bitstream and automatically configure the NIC with the default values.
 ```bash
-enso <path to enso repository>  --fpga <FPGA ID>
+enso <path to enso repository> --fpga <FPGA ID>
 ```
 
 You should use the `--fpga` flag to specify the ID of the FPGA that you want to load. You may use the `scripts/list_enso_nics.sh` script to list the IDs of all compatible FPGAs in your system.
@@ -38,7 +38,7 @@ After the FPGA has been loaded and configured, the `enso` command will open the 
 
 Once you are done using the JTAG console, you can press ++ctrl+c++ to quit. You can continue to use the NIC even after the JTAG console has been closed.
 
-The first time you load the NIC, Linux will not recognize it as a PCIe device until you reboot the system. You can use the `scripts/list_enso_nics.sh` script to show all the available Ensō NICs in your system. If the NIC does not show up after you load the bitstream, reboot the system.
+The first time you load the NIC, Linux will not recognize it as a PCIe device until you reboot the system. You can use the `scripts/list_enso_nics.sh` script to show all the available Ensō NICs in your system. If the NIC does not show up as a PCIe device after you load the bitstream, reboot the system.
 
 
 ## Running an application
