@@ -46,5 +46,6 @@ else
     cp $BITSTREAM_FILE scripts/alt_ehipc2_hw.sof
 fi
 
+echo "Successfully updated bitstream file. To load it, use the enso command."
 chksum=$(sha256sum scripts/alt_ehipc2_hw.sof | cut -d " " -f 1)
 echo "sha256sum: $chksum"
