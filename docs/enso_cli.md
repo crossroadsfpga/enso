@@ -29,7 +29,7 @@ You do not need to run the `enso` command in the same machine as the one you wil
 
 We refer to the machine that you plan to run the `enso` command as *client* and to the machine you will run the Ensō-based application (the one with the FPGA) as *server*.
 
-The `enso` command provides the `--host <host name>` option that lets you specify a different server machine. But there are a few extra configuration steps that you need in order to use this option. First, you need to make sure that you have ssh access using a password-less key (e.g., using ssh-copy-id) from the client to the server machine. The client should also have an `~/.ssh/config` configuration file set with configuration to access the server machine.
+The `enso` command provides the `--host <host name>` option that lets you specify a different server machine. But there are a few extra configuration steps that you need in order to use this option. First, you need to make sure that you have ssh access using a password-less key (e.g., using ssh-copy-id) from the client to the server machine. The client should also have an `~/.ssh/config` configuration file set with configuration to access the server machine. The command does not support SSH Agent so you must make sure that you specify the `IdentityFile` in the configuration file.
 
 If you don't yet have an `~/.ssh/config` file, you can create one and add the following lines, replacing everything between `<>` with the correct values:
 ```bash
