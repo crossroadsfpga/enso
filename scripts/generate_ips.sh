@@ -5,6 +5,8 @@ set -e
 trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
 trap 'echo "\"${last_command}\" command exited with code $?."' EXIT
 
+PROJECT_NAME="enso"
+
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 REPO_DIR=$SCRIPT_DIR/..
 
@@ -27,7 +29,6 @@ rm -rf ip
 rm -rf pcie_ed.qsys
 rm -rf pcie_ed
 qsys-script --script=pcie_ed.tcl --quartus-project=../quartus/enso.qsf
-
 
 PROJECT_DIR=$REPO_DIR/hardware
 
