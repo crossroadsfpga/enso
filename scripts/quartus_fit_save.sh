@@ -48,7 +48,7 @@ cat "$PROJECT_OUTPUT_DIRECTORY/$PROJECT_NAME.fit.summary"
 
 if grep -q "Timing requirements not met" $QUARTUS_STA_LOG_FILE; then
   # Show slack.
-  grep -C 10 "Timing requirements not met" quartus_sta.log
+  grep -C 10 "Timing requirements not met" $QUARTUS_STA_LOG_FILE
   RED='\033[0;31m'
   NC='\033[0m' # No Color.
   echo -e "${RED}===========================${NC}"
@@ -71,4 +71,4 @@ echo "Done (seed=$SEED)"
 # Announce that it is over.
 tput bel
 
-read -p "Press press enter to continue"
+read -p "Press enter to continue"
