@@ -4,6 +4,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/enso-white.svg">
+  <source media="(prefers-color-scheme: light)" srcset="./docs/assets/enso-black.svg">
   <img align="right" width="200" alt="Enso" src="./docs/assets/enso-black.svg">
 </picture>
 
