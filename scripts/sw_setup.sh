@@ -26,7 +26,7 @@ else
 fi
 
 cd $REPO_DIR/software/kernel/linux/
-sudo ./install
+./install
 cd $REPO_DIR
 
 which python3
