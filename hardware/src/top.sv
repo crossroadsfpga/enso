@@ -542,9 +542,8 @@ always @ (posedge clk) begin
         if (max_fd_out_fifo <= fdw_out_meta_csr_readdata) begin
             max_fd_out_fifo <= fdw_out_meta_csr_readdata;
         end
-        // if (eth_out_pkt_fifo_out_valid & !reg_out_almost_full
-        //         & eth_out_pkt_fifo_out_eop) begin
-        if (eth_out_pkt_fifo_out_valid & !reg_out_almost_full) begin
+        if (eth_out_pkt_fifo_out_valid & !reg_out_almost_full
+                & eth_out_pkt_fifo_out_eop) begin
             out_pkt_cnt <= out_pkt_cnt + 1;
         end
         if (conf_ft_valid & conf_ft_ready) begin
