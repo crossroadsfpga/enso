@@ -11,34 +11,25 @@ repo_url: https://github.com/crossroadsfpga/enso
 # Copyright
 copyright: Copyright &copy; 2023 <a href=https://hsadok.com target="_blank">Hugo Sadok</a>
 
-# docs_dir: .
-
 theme:
   name: material
   features:
-    # - announce.dismiss
     - content.action.edit
     - content.action.view
     - content.code.annotate
     - content.code.copy
-    # - content.tabs.link
     - content.tooltips
-    # - header.autohide
-    # - navigation.expand
     - navigation.footer
     - navigation.indexes
     - navigation.instant
-    # - navigation.prune
     - navigation.sections
     - navigation.tabs
-    # - navigation.tabs.sticky
     - navigation.top
     - navigation.tracking
     - search.highlight
     - search.share
     - search.suggest
     - toc.follow
-    # - toc.integrate
   language: en
   palette:
     - scheme: default
@@ -53,9 +44,6 @@ theme:
 extra:
   version:
     provider: mike
-  analytics:
-    provider: google
-    property: G-7WKNV89H63
 
 extra_javascript:
   - https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js
