@@ -46,8 +46,6 @@ ninja
 sudo ninja install
 ```
 
-Then, you should link the application with the Ensō library. The way you do it depends on how you are compiling your code. Here are some examples using `gcc`, `meson` and `cmake`.
-
 !!! tip
 
     If `sudo ninja install` fails, you may try using the following command instead:
@@ -56,6 +54,8 @@ Then, you should link the application with the Ensō library. The way you do it 
     ```
 
     This will use the user `ninja` instead of the system `ninja`.
+
+Then, you should link the application with the Ensō library. The way you do it depends on how you are compiling your code. Here are some examples using `gcc`, `meson` and `cmake`.
 
 
 === "GCC with no build system"
