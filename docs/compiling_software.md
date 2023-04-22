@@ -9,10 +9,8 @@ Prepare the compilation using `meson` and compile it with `ninja`.
 
 Setup to use gcc:
 ```bash
-meson setup --native-file gcc.ini build
+meson setup build
 ```
-
-This will use `gcc-9`, you may change `gcc.ini` to use a different version of GCC.
 
 Now compile:
 ```bash

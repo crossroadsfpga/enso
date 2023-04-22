@@ -37,8 +37,8 @@ sudo apt install \
   python3-pip \
   python3-setuptools \
   python3-wheel \
-  gcc-9 \
-  g++-9 \
+  gcc \
+  g++ \
   libpcap-dev \
   tshark
 
