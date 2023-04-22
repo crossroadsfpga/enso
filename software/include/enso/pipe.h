@@ -324,11 +324,25 @@ class RxPipe {
   template <typename T>
   class MessageBatch {
    public:
-    constexpr T begin() { return T(kBuf, kMessageLimit, this); }
-    constexpr T begin() const { return T(kBuf, kMessageLimit, this); }
-    constexpr T end() { return T(kBuf + kAvailableBytes, kMessageLimit, this); }
+    /**
+     * @brief Instantiates an empty message batch.
+     */
+    constexpr MessageBatch() : MessageBatch(nullptr, 0, 0, nullptr) {}
+
+    MessageBatch(const MessageBatch&) = default;
+    MessageBatch(MessageBatch&&) = default;
+
+    MessageBatch& operator=(const MessageBatch&) = default;
+    MessageBatch& operator=(MessageBatch&&) = default;
+
+    constexpr T begin() { return T(buf_, message_limit_, this); }
+    constexpr T begin() const { return T(buf_, message_limit_, this); }
+
+    constexpr T end() {
+      return T(buf_ + available_bytes_, message_limit_, this);
+    }
     constexpr T end() const {
-      return T(kBuf + kAvailableBytes, kMessageLimit, this);
+      return T(buf_ + available_bytes_, message_limit_, this);
     }
 
     /**
@@ -347,24 +361,30 @@ class RxPipe {
     }
 
     /**
-     * @brief Number of bytes available in the batch.
+     * @brief Returns number of bytes available in the batch.
      *
-     * @note It may include more messages than `kMessageLimit`, in which case,
-     * iterating over the batch will result in fewer bytes than kAvailableBytes.
-     * After iterating over the batch, the total number of bytes iterated over
-     * can be obtained by calling `processed_bytes()`.
+     * @note It may include more messages than `message_limit()`, in which case,
+     * iterating over the batch will result in fewer bytes than
+     * `available_bytes()`. After iterating over the batch, the total number of
+     * bytes iterated over can be obtained by calling `processed_bytes()`.
+     * 
+     * @return The number of bytes available in the batch.
      */
-    const uint32_t kAvailableBytes;
+    uint32_t available_bytes() const { return available_bytes_; }
 
     /**
-     * @brief Maximum number of messages in the batch.
+     * @brief Returns maximum number of messages in the batch.
+     * 
+     * @return The maximum number of messages in the batch.
      */
-    const int32_t kMessageLimit;
+    int32_t message_limit() const { return message_limit_; }
 
     /**
-     * @brief A pointer to the start of the batch.
+     * @brief Returns a pointer to the start of the batch.
+     * 
+     * @return A pointer to the start of the batch.
      */
-    uint8_t* const kBuf;
+    uint8_t* buf() const { return buf_; }
 
    private:
     /**
@@ -377,14 +397,17 @@ class RxPipe {
      */
     constexpr MessageBatch(uint8_t* buf, uint32_t available_bytes,
                            int32_t message_limit, RxPipe* pipe)
-        : kAvailableBytes(available_bytes),
-          kMessageLimit(message_limit),
-          kBuf(buf),
+        : available_bytes_(available_bytes),
+          message_limit_(message_limit),
+          buf_(buf),
           pipe_(pipe) {}
 
     friend class RxPipe;
     friend T;
 
+    uint32_t available_bytes_;
+    int32_t message_limit_;
+    uint8_t* buf_;
     uint32_t processed_bytes_ = 0;
     RxPipe* pipe_;
   };
@@ -1141,7 +1164,7 @@ class MessageIteratorBase {
  public:
   constexpr uint8_t* operator*() { return addr_; }
 
-  /**
+  /*
    * This is a bit ugly but, as far as I know, there is no way to check for the
    * end of a range-based for loop without overloading the != operator.
    *
@@ -1168,6 +1191,17 @@ class MessageIteratorBase {
   }
 
  protected:
+  inline MessageIteratorBase()
+      : addr_(nullptr),
+        missing_messages_(0),
+        batch_(nullptr),
+        next_addr_(nullptr) {}
+
+  MessageIteratorBase(const MessageIteratorBase&) = default;
+  MessageIteratorBase& operator=(const MessageIteratorBase&) = default;
+  MessageIteratorBase(MessageIteratorBase&&) = default;
+  MessageIteratorBase& operator=(MessageIteratorBase&&) = default;
+
   /**
    * @param addr The address of the first message.
    * @param message_limit The maximum number of messages to receive.
@@ -1194,12 +1228,19 @@ class MessageIteratorBase {
  */
 class PktIterator : public MessageIteratorBase<PktIterator> {
  public:
+  inline PktIterator() : MessageIteratorBase() {}
+
   /**
    * @copydoc MessageIteratorBase::MessageIteratorBase
    */
   inline PktIterator(uint8_t* addr, int32_t message_limit,
                      RxPipe::MessageBatch<PktIterator>* batch)
       : MessageIteratorBase(addr, message_limit, batch) {}
+
+  PktIterator(const PktIterator&) = default;
+  PktIterator& operator=(const PktIterator&) = default;
+  PktIterator(PktIterator&&) = default;
+  PktIterator& operator=(PktIterator&&) = default;
 
   /**
    * @brief Computes the next message address based on the current message.
