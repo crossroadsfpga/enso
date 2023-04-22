@@ -7,7 +7,7 @@ git clone https://github.com/crossroadsfpga/enso
 
 Prepare the compilation using `meson` and compile it with `ninja`.
 
-Setup to use gcc:
+Setup build directory:
 ```bash
 meson setup build
 ```

@@ -11,7 +11,7 @@ echo >> raw_bytes.txt
 OUTPUT_FILE=${2:-"output.pkt"}
 
 #convert the raw_bytes to verilog ROM content
-python2 parse_output_100.py raw_bytes.txt $OUTPUT_FILE
+python3 parse_output_100.py raw_bytes.txt $OUTPUT_FILE
 
 #run Modelsim
 #./run_vsim.sh
