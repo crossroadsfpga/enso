@@ -84,7 +84,7 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
       auto& pipe = pipes[i];
       auto batch = pipe->PeekPkts();
 
-      if (unlikely(batch.kAvailableBytes == 0)) {
+      if (unlikely(batch.available_bytes() == 0)) {
         continue;
       }
 

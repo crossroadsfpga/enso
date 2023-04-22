@@ -20,7 +20,7 @@ assert(pipe != nullptr);
 
 while (keep_running) {
   auto batch = pipe->RecvPkts();
-  if (unlikely(batch.kAvailableBytes == 0)) {
+  if (unlikely(batch.available_bytes() == 0)) {
     continue;
   }
   for (auto pkt : batch) {

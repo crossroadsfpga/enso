@@ -94,7 +94,7 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id,
       auto& rx_pipe = rx_pipes[i];
       auto batch = rx_pipe->RecvPkts();
 
-      if (unlikely(batch.kAvailableBytes == 0)) {
+      if (unlikely(batch.available_bytes() == 0)) {
         continue;
       }
 
@@ -114,7 +114,7 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id,
       auto& tx_pipe = tx_pipes[i];
       uint8_t* tx_buf = tx_pipe->AllocateBuf(batch_length);
 
-      memcpy(tx_buf, batch.kBuf, batch_length);
+      memcpy(tx_buf, batch.buf(), batch_length);
 
       rx_pipe->Clear();
 
