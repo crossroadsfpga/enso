@@ -86,7 +86,7 @@ class EnsoGen(Pktgen):
         nic: EnsoNic,
         core_id: int = 0,
         queues: int = 4,
-        multicore: bool = False,
+        single_core: bool = False,
         rtt: bool = False,
         rtt_hist: bool = False,
         rtt_hist_offset: Optional[int] = None,
@@ -107,7 +107,7 @@ class EnsoGen(Pktgen):
         self._pcap_path = None
 
         self.core_id = core_id
-        self.multicore = multicore
+        self.single_core = single_core
         self.rtt = rtt
         self.rtt_hist = rtt_hist
         self.rtt_hist_offset = rtt_hist_offset
@@ -195,8 +195,8 @@ class EnsoGen(Pktgen):
             f" --save {self.stats_file}"
         )
 
-        if self.multicore:
-            command += " --multicore"
+        if self.single_core:
+            command += " --single-core"
 
         if self.rtt:
             command += " --rtt"

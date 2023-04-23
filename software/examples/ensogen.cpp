@@ -122,7 +122,7 @@ static void print_usage(const char* program_name) {
       " [--core CORE_ID]\n"
       " [--queues NB_QUEUES]\n"
       " [--save SAVE_FILE]\n"
-      " [--multicore]\n"
+      " [--single-core]\n"
       " [--rtt]\n"
       " [--rtt-hist HIST_FILE]\n"
       " [--rtt-hist-offset HIST_OFFSET]\n"
@@ -139,7 +139,7 @@ static void print_usage(const char* program_name) {
       "  --core: Specify CORE_ID to run on (default: %d).\n"
       "  --queues: Specify number of RX queues (default: %d).\n"
       "  --save: Save RX and TX stats to SAVE_FILE.\n"
-      "  --multicore: Use separate cores for receiving and transmitting.\n"
+      "  --single-core: Use the same core for receiving and transmitting.\n"
       "  --rtt: Enable packet timestamping and report average RTT.\n"
       "  --rtt-hist: Save RTT histogram to HIST_FILE (implies --rtt).\n"
       "  --rtt-hist-offset: Offset to be used when saving the histogram\n"
@@ -160,7 +160,7 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_CORE "core"
 #define CMD_OPT_QUEUES "queues"
 #define CMD_OPT_SAVE "save"
-#define CMD_OPT_MULTICORE "multicore"
+#define CMD_OPT_SINGLE_CORE "single-core"
 #define CMD_OPT_RTT "rtt"
 #define CMD_OPT_RTT_HIST "rtt-hist"
 #define CMD_OPT_RTT_HIST_OFF "rtt-hist-offset"
@@ -175,7 +175,7 @@ enum {
   CMD_OPT_CORE_NUM,
   CMD_OPT_QUEUES_NUM,
   CMD_OPT_SAVE_NUM,
-  CMD_OPT_MULTICORE_NUM,
+  CMD_OPT_SINGLE_CORE_NUM,
   CMD_OPT_RTT_NUM,
   CMD_OPT_RTT_HIST_NUM,
   CMD_OPT_RTT_HIST_OFF_NUM,
@@ -192,7 +192,7 @@ static const struct option long_options[] = {
     {CMD_OPT_CORE, required_argument, NULL, CMD_OPT_CORE_NUM},
     {CMD_OPT_QUEUES, required_argument, NULL, CMD_OPT_QUEUES_NUM},
     {CMD_OPT_SAVE, required_argument, NULL, CMD_OPT_SAVE_NUM},
-    {CMD_OPT_MULTICORE, no_argument, NULL, CMD_OPT_MULTICORE_NUM},
+    {CMD_OPT_SINGLE_CORE, no_argument, NULL, CMD_OPT_SINGLE_CORE_NUM},
     {CMD_OPT_RTT, no_argument, NULL, CMD_OPT_RTT_NUM},
     {CMD_OPT_RTT_HIST, required_argument, NULL, CMD_OPT_RTT_HIST_NUM},
     {CMD_OPT_RTT_HIST_OFF, required_argument, NULL, CMD_OPT_RTT_HIST_OFF_NUM},
@@ -205,7 +205,7 @@ struct parsed_args_t {
   int core_id;
   uint32_t nb_queues;
   bool save;
-  bool multicore;
+  bool single_core;
   bool enable_rtt;
   bool enable_rtt_history;
   std::string hist_file;
@@ -229,7 +229,7 @@ static int parse_args(int argc, char** argv,
   parsed_args.core_id = DEFAULT_CORE_ID;
   parsed_args.nb_queues = DEFAULT_NB_QUEUES;
   parsed_args.save = false;
-  parsed_args.multicore = false;
+  parsed_args.single_core = false;
   parsed_args.enable_rtt = false;
   parsed_args.enable_rtt_history = false;
   parsed_args.rtt_hist_offset = DEFAULT_HIST_OFFSET;
@@ -254,8 +254,8 @@ static int parse_args(int argc, char** argv,
         parsed_args.save = true;
         parsed_args.save_file = optarg;
         break;
-      case CMD_OPT_MULTICORE_NUM:
-        parsed_args.multicore = true;
+      case CMD_OPT_SINGLE_CORE_NUM:
+        parsed_args.single_core = true;
         break;
       case CMD_OPT_RTT_HIST_NUM:
         parsed_args.enable_rtt_history = true;
@@ -740,8 +740,9 @@ int main(int argc, char** argv) {
 
   std::vector<std::thread> threads;
 
-  // When using multicore we launch separate threads for RX and TX.
-  if (parsed_args.multicore) {
+  // When using single_core we use the same thread for RX and TX, otherwise we
+  // launch separate threads for RX and TX.
+  if (!parsed_args.single_core) {
     std::thread rx_thread = std::thread([&parsed_args, &rx_stats] {
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
