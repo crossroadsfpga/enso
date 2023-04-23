@@ -149,8 +149,17 @@ Flow binding is implemented using a cuckoo hash table. This allows the applicati
 
 Packets that do not match any flow in the flow table are directed to fallback queues using a hash of the packet's 5-tuple. The number of fallback queues should be configured in the hardware. If the number of fallback queues is set to *n*, the first *n* RX Ensō Pipes are used as fallback queues.
 
-<!-- TODO(sadok): Should describe how to configure the hardware. -->
+To set the number of fallback queues, you can use the `--fallback_queues` option when running the [`enso`](../running.md#loading-the-bitstream-and-configuring-the-nic) command as follows:
 
+```bash
+enso <enso path> --fpga <fpga id> --fallback-queues <number of fallback queues>
+```
+
+Alternatively, if you have already loaded the bitstream, you can also set the number of fallback queues using the JTAG console. Use the `set_nb_fallback_queues` command as follows:
+
+```tcl
+set_nb_fallback_queues <number of fallback queues>
+```
 
 ## Examples
 
