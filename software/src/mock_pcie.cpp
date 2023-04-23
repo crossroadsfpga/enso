@@ -30,6 +30,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "mock_pcie.h"
+
 #include <arpa/inet.h>
 #include <enso/consts.h>
 #include <enso/helpers.h>
@@ -50,20 +52,24 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 #include "pcie.h"
 #include "syscall_api/intel_fpga_pcie_api.hpp"
 
 namespace enso {
 
-#define MAX_NUM_PACKETS 512
-#define MOCK_BATCH_SIZE 16
-
+// Number of seconds passed
 struct timeval ts;
+// PCAP object
 pcap_t* pd;
+// PCAP dumper to send packets to
 pcap_dumper_t* pdumper_out;
+// Buffer storing all incoming packets
 packet_t* in_buf[MAX_NUM_PACKETS];
+// Index of pipe head: where the program can start reading from
 uint32_t pipe_packets_head;
+// Index of pipe tail: where the program can start writing to
 uint32_t pipe_packets_tail;
 
 int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
@@ -77,7 +83,54 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   return 0;
 }
 
-// called each time a packet is processed
+int mock_enso_pipe_init() {
+  enso_pipe_t* enso_pipe = new enso_pipe_t;
+  if (!enso_pipe) {
+    return -1;
+  }
+  enso_pipe->head = 0;
+  enso_pipe->tail = 0;
+  enso_pipe->index = size(enso_pipes_vector);
+  enso_pipe->pipe_buffer = new u_char[ENSO_PIPE_SIZE];
+  enso_pipes_vector.push_back(enso_pipe);
+  return 0;
+}
+
+int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
+                   volatile struct QueueRegs* enso_pipe_regs,
+                   struct NotificationBufPair* notification_buf_pair,
+                   enso_pipe_id_t enso_pipe_id) {
+  (void)enso_pipe;
+  (void)enso_pipe_regs;
+  (void)notification_buf_pair;
+  (void)enso_pipe_id;
+
+  ts.tv_sec = 0;
+  ts.tv_usec = 0;
+
+  if (mock_enso_pipe_init() < 0) {
+    return -1;
+  }
+
+  pipe_packets_head = 0;
+  pipe_packets_tail = 0;
+
+  // opening file to dump packets to that mimics the network.
+  pd = pcap_open_dead(DLT_EN10MB, 65535);
+  pdumper_out = pcap_dump_open(pd, "out.pcap");
+
+  if (read_in_file() < 0) return -1;
+
+  return 0;
+}
+
+/**
+ * @brief Called every time a packet is processed when reading from a PCAP file.
+ *
+ * @param user
+ * @param pkt_hdr
+ * @param pkt_bytes
+ */
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
@@ -94,6 +147,11 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   if (pipe_packets_tail == MAX_NUM_PACKETS) pcap_breakloop(context->pcap);
 }
 
+/**
+ * @brief Helper function for reading from the incoming network file.
+ *
+ * @return 0 on success, negative on error.
+ */
 int read_in_file() {
   // reading from in file and storing in a buffer
   char errbuf[PCAP_ERRBUF_SIZE];
@@ -116,30 +174,16 @@ int read_in_file() {
   return 0;
 }
 
-int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
-                   volatile struct QueueRegs* enso_pipe_regs,
-                   struct NotificationBufPair* notification_buf_pair,
-                   enso_pipe_id_t enso_pipe_id) {
-  (void)enso_pipe;
-  (void)enso_pipe_regs;
-  (void)notification_buf_pair;
-  (void)enso_pipe_id;
-
-  ts.tv_sec = 0;
-  ts.tv_usec = 0;
-
-  pipe_packets_head = 0;
-  pipe_packets_tail = 0;
-
-  // opening files to dump packets to
-  pd = pcap_open_dead(DLT_EN10MB, 65535);
-  pdumper_out = pcap_dump_open(pd, "out.pcap");
-
-  if (read_in_file() < 0) return -1;
-
-  return 0;
-}
-
+/**
+ * @brief Consumes from the network and puts the received packets on the correct
+ * pipe, which is determined with RSS hashing.
+ *
+ * @param enso_pipe
+ * @param notification_buf_pair
+ * @param buf
+ * @param peek
+ * @return _enso_always_inline
+ */
 static _enso_always_inline uint32_t
 __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
@@ -160,11 +204,15 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
 
   uint32_t max_index =
       std::min(pipe_packets_tail, pipe_packets_head + MOCK_BATCH_SIZE);
-  // use receive-side scaling or round robin
 
+  int enso_pipe_index;
   // getting total number of bytes to read
   while (index < max_index) {
     packet_t* pkt = in_buf[index];
+    if (index == 0) {
+      enso_pipe_index =
+          rss_hash_packet(pkt->pkt_bytes, size(enso_pipes_vector));
+    }
     uint32_t pkt_len = pkt->pkt_len;
     // packets must be cache-aligned: so get aligned length
     uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
@@ -175,41 +223,51 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
     index += 1;
   }
 
-  // malloc a buffer the c++ way
-  u_char* my_buf = new u_char[num_bytes_read];
+  enso_pipe_t* enso_pipe = enso_pipes_vector[enso_pipe_index];
+  void* initial_buf = enso_pipe->buf + enso_pipe->head;
+  int num_bytes_available;
+  if (enso_pipe->tail > enso_pipe->head) {
+    num_bytes_available = enso_pipe->tail - enso_pipe->head;
+  } else {
+    num_bytes_available = ENSO_PIPE_SIZE - (enso_pipe->head - enso_pipe->tail);
+  }
+
   num_bytes_read = 0;
+  int position = enso_pipe->head;
   // reading bytes
-  while (pipe_packets_head < max_index) {
+  while (num_bytes_available > 0 && pipe_packets_head < max_index) {
     packet_t* pkt = in_buf[pipe_packets_head];
-    memcpy(my_buf + num_bytes_read, pkt->pkt_bytes, pkt->pkt_len);
     uint32_t pkt_len = pkt->pkt_len;
     // packets must be cache-aligned: so get aligned length
     uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
     uint16_t pkt_aligned_len = nb_flits * 64;
+    if (pkt_aligned_len > num_bytes_available) {
+      break;
+    }
+    memcpy(enso_pipe->buf + position, pkt->pkt_bytes, pkt->pkt_len);
 
+    position = (position + pkt_aligned_len) % ENSO_PIPE_SIZE;
     num_bytes_read += pkt_aligned_len;
-
     pipe_packets_head += 1;
+    num_bytes_available -= pkt_aligned_len;
   }
 
   // give the buffer to the caller
-  *buf = my_buf;
+  *buf = initial_buf;
 
   return num_bytes_read;
 }
 
+/**
+ * @brief Sends packets to the network file to be read by other programs.
+ *
+ * @param notification_buf_pair
+ * @param phys_addr
+ * @param len
+ * @return uint32_t
+ */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len) {
-  // phys_addr is the virtual address in the mock
-  // add number of times you want to send this set of packets using macros
-  // writing to file is like writing to network
-  // the file is the network, like an ethernet pipe
-  // set transmission bandwidth as a parameter, never allow
-  // more data in a certain period of time than the given bandwidth
-  // calculate number of packets per interval
-  // can sleep until then OR loop using c++ function
-  // https://en.cppreference.com/w/cpp/thread/sleep_for
-
   std::cout << "Sending to queue" << std::endl;
 
   (void)notification_buf_pair;

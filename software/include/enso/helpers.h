@@ -115,6 +115,8 @@ void print_pkt_header(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
 
+int rss_hash_packet(uint8_t* pkt_buf, int mod);
+
 }  // namespace enso
 
 #endif  // SOFTWARE_INCLUDE_ENSO_HELPERS_H_
