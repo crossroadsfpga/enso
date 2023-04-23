@@ -28,7 +28,7 @@ title: "Ensō"
 version: 0.3.0
 license: BSD-3-Clause-Clear
 # doi: 10.5281/zenodo.1234
-date-released: 2023-04-04
+date-released: 2023-04-23
 repository-code: "https://github.com/crossroadsfpga/enso"
 url: "https://github.com/crossroadsfpga/enso"
 # Update this:
@@ -61,12 +61,11 @@ preferred-citation:
     given-names: "Ren"
   # doi: "10.0000/00000"
   title: "Ensō: A Streaming Interface for NIC-Application Communication"
-  collection-title: "Proceedings of the 17th USENIX Symposium on Operating Systems Design and Implementation"
-  conference: "17th USENIX Symposium on Operating Systems Design and Implementation"
+  collection-title: "17th USENIX Symposium on Operating Systems Design and Implementation"
+  conference: "OSDI '23"
   month: 7
   # start: 1 # First page number
   # end: 10 # Last page number
-  
-  # issue: 1
-  # volume: 1
+  publisher: "USENIX Association"
+  # isbn:
   year: 2023
