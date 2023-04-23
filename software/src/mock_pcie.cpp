@@ -72,6 +72,8 @@ uint32_t pipe_packets_head;
 // Index of pipe tail: where the program can start writing to
 uint32_t pipe_packets_tail;
 
+int init = 1;
+
 int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
                           volatile struct QueueRegs* notification_buf_pair_regs,
                           enso_pipe_id_t nb_queues,
@@ -105,21 +107,25 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   (void)notification_buf_pair;
   (void)enso_pipe_id;
 
-  ts.tv_sec = 0;
-  ts.tv_usec = 0;
-
   if (mock_enso_pipe_init() < 0) {
     return -1;
   }
 
-  pipe_packets_head = 0;
-  pipe_packets_tail = 0;
+  if (init) {
+    ts.tv_sec = 0;
+    ts.tv_usec = 0;
 
-  // opening file to dump packets to that mimics the network.
-  pd = pcap_open_dead(DLT_EN10MB, 65535);
-  pdumper_out = pcap_dump_open(pd, "out.pcap");
+    pipe_packets_head = 0;
+    pipe_packets_tail = 0;
 
-  if (read_in_file() < 0) return -1;
+    // opening file to dump packets to that mimics the network.
+    pd = pcap_open_dead(DLT_EN10MB, 65535);
+    pdumper_out = pcap_dump_open(pd, "out.pcap");
+
+    if (read_in_file() < 0) return -1;
+
+    init = 0;
+  }
 
   return 0;
 }
