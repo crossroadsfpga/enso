@@ -1,6 +1,7 @@
 # Ensō
 
 [![docs](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml/badge.svg)](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml)
+[![DOI](https://zenodo.org/badge/248301431.svg)](https://zenodo.org/badge/latestdoi/248301431)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/crossroadsfpga/enso/osdi23ae/docs/assets/enso-white.svg">
