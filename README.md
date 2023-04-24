@@ -3,8 +3,8 @@
 [![docs](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml/badge.svg)](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/enso-white.svg">
-  <source media="(prefers-color-scheme: light)" srcset="./docs/assets/enso-black.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/crossroadsfpga/enso/osdi23ae/docs/assets/enso-white.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/crossroadsfpga/enso/osdi23ae/docs/assets/enso-black.svg">
   <img align="right" width="200" alt="Enso" src="./docs/assets/enso-black.svg">
 </picture>
 
