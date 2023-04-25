@@ -11,5 +11,5 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 REPO_DIR="$SCRIPT_DIR/.."
 
 cd $REPO_DIR
-./docs/build_hw_docs.sh
+# ./docs/build_hw_docs.sh
 mkdocs build -f mkdocs.yml
