@@ -4,9 +4,9 @@ EnsōGen is a software packet generator built on top of the Ensō NIC interface.
 
 ## Running
 
-EnsōGen is built as part of Ensō. Make sure to follow the instructions in [Compiling Software](compiling_software.md) to build Ensō and that you have the [`enso` command](running.md#installing-enso-script) installed.
+EnsōGen is built as part of Ensō. Make sure to follow the instructions in [Compiling Software](compiling_software.md) to build Ensō and that you have the [`enso` command](enso_cli.md) installed.
 
-To run EnsōGen, you first need to setup the NIC with the right parameters. By default, you should run the `enso` command as follows:
+To run EnsōGen, you first need to set up the NIC with the right parameters. By default, you should run the `enso` command as follows:
     
 ```bash
 enso <path to enso repo> --fpga <fpga ID> --fallback-queues 4 --enable-rr
