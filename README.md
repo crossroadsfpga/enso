@@ -4,8 +4,8 @@
 [![DOI](https://zenodo.org/badge/248301431.svg)](https://zenodo.org/badge/latestdoi/248301431)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/crossroadsfpga/enso/osdi23ae/docs/assets/enso-white.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/crossroadsfpga/enso/osdi23ae/docs/assets/enso-black.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/crossroadsfpga/enso/master/docs/assets/enso-white.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/crossroadsfpga/enso/master/docs/assets/enso-black.svg">
   <img align="right" width="200" alt="Enso" src="./docs/assets/enso-black.svg">
 </picture>
 
