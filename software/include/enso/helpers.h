@@ -88,8 +88,8 @@ struct stats_t {
  * To convert from number of cycles to ns. Do `cycles * kNsPerTimestampCycle`.
  *
  * @param pkt Packet to retrieve the RTT from.
- * @return Return RTT measure for the packet in nanoseconds. If timestamp is
- *         not enabled the value returned is undefined.
+ * @return Return RTT measure for the packet in number of cycles. If timestamp
+ *         is not enabled on the NIC, the value returned is undefined.
  */
 inline uint32_t get_pkt_rtt(const uint8_t* pkt) {
   uint32_t rtt = *((uint32_t*)(pkt + kPacketRttOffset));
