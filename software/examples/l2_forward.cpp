@@ -59,7 +59,6 @@ void run_forward(uint32_t nb_queues, uint32_t core_id, enso::stats_t* stats) {
 
   std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
   std::vector<RxPipe*> rx_pipes;
-  std::vector<TxPipe*> tx_pipes;
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -74,65 +73,62 @@ void run_forward(uint32_t nb_queues, uint32_t core_id, enso::stats_t* stats) {
     }
 
     rx_pipes.push_back(rx_pipe);
+  }
 
-    TxPipe* tx_pipe = dev->AllocateTxPipe();
-    if (!tx_pipe) {
-      std::cerr << "Problem creating TX pipe" << std::endl;
-      exit(3);
-    }
-    tx_pipes.push_back(tx_pipe);
+  TxPipe* tx_pipe = dev->AllocateTxPipe();
+  if (!tx_pipe) {
+    std::cerr << "Problem creating TX pipe" << std::endl;
+    exit(3);
   }
 
   setup_done = true;
 
   while (keep_running) {
-    for (uint32_t i = 0; i < nb_queues; ++i) {
-      auto& rx_pipe = rx_pipes[i];
-      auto batch = rx_pipe->PeekPkts();
+    RxPipe* rx_pipe = dev->NextRxPipeToRecv();
 
-      if (unlikely(batch.available_bytes() == 0)) {
-        continue;
-      }
-
-      auto& tx_pipe = tx_pipes[i];
-      uint8_t* tx_buf = tx_pipe->AllocateBuf(batch.available_bytes());
-
-      for (auto pkt : batch) {
-        // Align packet length to 64 bytes.
-        uint16_t pkt_len = enso::get_pkt_len(pkt);
-        uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-        pkt_len = nb_flits * 64;
-        const struct ether_header* l2_hdr = (struct ether_header*)pkt;
-
-        struct ether_addr original_src_mac =
-            *((struct ether_addr*) l2_hdr->ether_shost);
-        struct ether_addr original_dst_mac =
-            *((struct ether_addr*) l2_hdr->ether_dhost);
-
-        // Forward packet to TX.
-        memcpy(tx_buf, pkt, pkt_len);
-        l2_hdr = (struct ether_header*)tx_buf;
-        struct ether_addr* new_src_mac =
-            (struct ether_addr*) l2_hdr->ether_shost;
-        struct ether_addr* new_dst_mac =
-            (struct ether_addr*) l2_hdr->ether_dhost;
-
-        *new_src_mac = original_dst_mac;
-        *new_dst_mac = original_src_mac;
-
-        tx_buf += pkt_len;
-        ++(stats->nb_pkts);
-      }
-      uint32_t batch_length = batch.processed_bytes();
-      rx_pipe->ConfirmBytes(batch_length);
-
-      stats->recv_bytes += batch_length;
-      ++(stats->nb_batches);
-
-      rx_pipe->Clear();
-
-      tx_pipe->SendAndFree(batch_length);
+    if (unlikely(rx_pipe == nullptr)) {
+      continue;
     }
+
+    auto batch = rx_pipe->PeekPkts();
+
+    uint8_t* tx_buf = tx_pipe->AllocateBuf(batch.available_bytes());
+
+    for (auto pkt : batch) {
+      // Align packet length to 64 bytes.
+      uint16_t pkt_len = enso::get_pkt_len(pkt);
+      uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+      pkt_len = nb_flits * 64;
+      const struct ether_header* l2_hdr = (struct ether_header*)pkt;
+
+      struct ether_addr original_src_mac =
+          *((struct ether_addr*) l2_hdr->ether_shost);
+      struct ether_addr original_dst_mac =
+          *((struct ether_addr*) l2_hdr->ether_dhost);
+
+      // Forward packet to TX.
+      memcpy(tx_buf, pkt, pkt_len);
+      l2_hdr = (struct ether_header*)tx_buf;
+      struct ether_addr* new_src_mac =
+          (struct ether_addr*) l2_hdr->ether_shost;
+      struct ether_addr* new_dst_mac =
+          (struct ether_addr*) l2_hdr->ether_dhost;
+
+      *new_src_mac = original_dst_mac;
+      *new_dst_mac = original_src_mac;
+
+      tx_buf += pkt_len;
+      ++(stats->nb_pkts);
+    }
+    uint32_t batch_length = batch.processed_bytes();
+    rx_pipe->ConfirmBytes(batch_length);
+
+    stats->recv_bytes += batch_length;
+    ++(stats->nb_batches);
+
+    rx_pipe->Clear();
+
+    tx_pipe->SendAndFree(batch_length);
   }
 }
 
