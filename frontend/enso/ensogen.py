@@ -170,7 +170,7 @@ class EnsoGen(Pktgen):
         rate_frac = Fraction(hardware_rate).limit_denominator(1000)
 
         self.current_throughput = throughput
-        self.current_goodput = pkts_per_sec * flits_per_pkt * 512
+        self.current_goodput = pkts_per_sec * self.mean_pcap_pkt_size * 8
         self.current_pps = pkts_per_sec
         self.expected_tx_duration = nb_pkts / pkts_per_sec
 
