@@ -41,10 +41,28 @@
 #include <memory>
 #include <thread>
 
+#include <immintrin.h>
+
 #include "example_helpers.h"
 
 static volatile bool keep_running = true;
 static volatile bool setup_done = false;
+
+// Adapted from DPDK's rte_mov64() and rte_memcpy() functions.
+static _enso_always_inline void mov64(uint8_t *dst, const uint8_t *src) {
+  __m512i zmm0;
+  zmm0 = _mm512_loadu_si512((const void *)src);
+  _mm512_storeu_si512((void *)dst, zmm0);
+}
+
+static _enso_always_inline void memcpy_64_align(void* dst, const void* src,
+                                                size_t n) {
+  for (; n >= 64; n -= 64) {
+    mov64((uint8_t *)dst, (const uint8_t *)src);
+    dst = (uint8_t *)dst + 64;
+    src = (const uint8_t *)src + 64;
+  }
+}
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
@@ -97,8 +115,7 @@ void run_forward(uint32_t nb_queues, uint32_t core_id, enso::stats_t* stats) {
     for (auto pkt : batch) {
       // Align packet length to 64 bytes.
       uint16_t pkt_len = enso::get_pkt_len(pkt);
-      uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-      pkt_len = nb_flits * 64;
+      uint16_t pkt_len_64 = ((pkt_len - 1) / 64 + 1) * 64;
       const struct ether_header* l2_hdr = (struct ether_header*)pkt;
 
       struct ether_addr original_src_mac =
@@ -107,7 +124,7 @@ void run_forward(uint32_t nb_queues, uint32_t core_id, enso::stats_t* stats) {
           *((struct ether_addr*) l2_hdr->ether_dhost);
 
       // Forward packet to TX.
-      memcpy(tx_buf, pkt, pkt_len);
+      memcpy_64_align(tx_buf, pkt, pkt_len_64);
       l2_hdr = (struct ether_header*)tx_buf;
       struct ether_addr* new_src_mac =
           (struct ether_addr*) l2_hdr->ether_shost;
@@ -117,7 +134,7 @@ void run_forward(uint32_t nb_queues, uint32_t core_id, enso::stats_t* stats) {
       *new_src_mac = original_dst_mac;
       *new_dst_mac = original_src_mac;
 
-      tx_buf += pkt_len;
+      tx_buf += pkt_len_64;
       ++(stats->nb_pkts);
     }
     uint32_t batch_length = batch.processed_bytes();
