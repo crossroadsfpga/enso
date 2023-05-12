@@ -161,5 +161,6 @@ int rss_hash_packet(uint8_t* pkt_buf, int mod) {
       break;
   }
   return (src_ip ^ dst_ip ^ protocol ^ src_port ^ dst_port) % mod;
+}
 
 }  // namespace enso

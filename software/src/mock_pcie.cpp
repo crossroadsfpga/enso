@@ -59,6 +59,13 @@
 
 namespace enso {
 
+struct PcapHandlerContext {
+  packet_t** buf;
+  int buf_position;
+  uint32_t hugepage_offset;
+  pcap_t* pcap;
+};
+
 // Number of seconds passed
 struct timeval ts;
 // PCAP object
@@ -93,40 +100,7 @@ int mock_enso_pipe_init() {
   enso_pipe->head = 0;
   enso_pipe->tail = 0;
   enso_pipe->index = size(enso_pipes_vector);
-  enso_pipe->pipe_buffer = new u_char[ENSO_PIPE_SIZE];
   enso_pipes_vector.push_back(enso_pipe);
-  return 0;
-}
-
-int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
-                   volatile struct QueueRegs* enso_pipe_regs,
-                   struct NotificationBufPair* notification_buf_pair,
-                   enso_pipe_id_t enso_pipe_id) {
-  (void)enso_pipe;
-  (void)enso_pipe_regs;
-  (void)notification_buf_pair;
-  (void)enso_pipe_id;
-
-  if (mock_enso_pipe_init() < 0) {
-    return -1;
-  }
-
-  if (init) {
-    ts.tv_sec = 0;
-    ts.tv_usec = 0;
-
-    pipe_packets_head = 0;
-    pipe_packets_tail = 0;
-
-    // opening file to dump packets to that mimics the network.
-    pd = pcap_open_dead(DLT_EN10MB, 65535);
-    pdumper_out = pcap_dump_open(pd, "out.pcap");
-
-    if (read_in_file() < 0) return -1;
-
-    init = 0;
-  }
-
   return 0;
 }
 
@@ -180,6 +154,38 @@ int read_in_file() {
   return 0;
 }
 
+int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
+                   volatile struct QueueRegs* enso_pipe_regs,
+                   struct NotificationBufPair* notification_buf_pair,
+                   enso_pipe_id_t enso_pipe_id) {
+  (void)enso_pipe;
+  (void)enso_pipe_regs;
+  (void)notification_buf_pair;
+  (void)enso_pipe_id;
+
+  if (mock_enso_pipe_init() < 0) {
+    return -1;
+  }
+
+  if (init) {
+    ts.tv_sec = 0;
+    ts.tv_usec = 0;
+
+    pipe_packets_head = 0;
+    pipe_packets_tail = 0;
+
+    // opening file to dump packets to that mimics the network.
+    pd = pcap_open_dead(DLT_EN10MB, 65535);
+    pdumper_out = pcap_dump_open(pd, "out.pcap");
+
+    if (read_in_file() < 0) return -1;
+
+    init = 0;
+  }
+
+  return 0;
+}
+
 /**
  * @brief Consumes from the network and puts the received packets on the correct
  * pipe, which is determined with RSS hashing.
@@ -191,10 +197,10 @@ int read_in_file() {
  * @return _enso_always_inline
  */
 static _enso_always_inline uint32_t
-__consume_queue(struct RxEnsoPipeInternal* enso_pipe,
+__consume_queue(struct RxEnsoPipeInternal* e,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
-  (void)(enso_pipe);
+  (void)(e);
   (void)notification_buf_pair;
   (void)peek;
 
@@ -230,12 +236,13 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
   }
 
   enso_pipe_t* enso_pipe = enso_pipes_vector[enso_pipe_index];
-  void* initial_buf = enso_pipe->buf + enso_pipe->head;
+  void* initial_buf = enso_pipe->pipe_buffer + enso_pipe->head;
   int num_bytes_available;
   if (enso_pipe->tail > enso_pipe->head) {
     num_bytes_available = enso_pipe->tail - enso_pipe->head;
   } else {
-    num_bytes_available = ENSO_PIPE_SIZE - (enso_pipe->head - enso_pipe->tail);
+    num_bytes_available =
+        MOCK_ENSO_PIPE_SIZE - (enso_pipe->head - enso_pipe->tail);
   }
 
   num_bytes_read = 0;
@@ -250,9 +257,9 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
     if (pkt_aligned_len > num_bytes_available) {
       break;
     }
-    memcpy(enso_pipe->buf + position, pkt->pkt_bytes, pkt->pkt_len);
+    memcpy(enso_pipe->pipe_buffer + position, pkt->pkt_bytes, pkt->pkt_len);
 
-    position = (position + pkt_aligned_len) % ENSO_PIPE_SIZE;
+    position = (position + pkt_aligned_len) % MOCK_ENSO_PIPE_SIZE;
     num_bytes_read += pkt_aligned_len;
     pipe_packets_head += 1;
     num_bytes_available -= pkt_aligned_len;

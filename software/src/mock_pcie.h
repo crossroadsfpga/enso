@@ -25,19 +25,12 @@
 
 #define MAX_NUM_PACKETS 512
 #define MOCK_BATCH_SIZE 16
-#define ENSO_PIPE_SIZE 2048
+#define MOCK_ENSO_PIPE_SIZE 2048
 
 typedef struct packet {
   u_char* pkt_bytes;
   uint32_t pkt_len;
 } packet_t;
-
-struct PcapHandlerContext {
-  packet_t** buf;
-  int buf_position;
-  uint32_t hugepage_offset;
-  pcap_t* pcap;
-};
 
 /**
  * @brief Mock enso pipe structure.
