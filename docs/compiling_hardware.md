@@ -30,7 +30,7 @@ cd <root of enso repository>
 ./synthesize.sh
 ```
 
-The resulting bitstream will be placed the the directory where you ran the command and it will be named `enso_0.sof`. If the design does not meet timing, the bitstream will be saved as `neg_slack_enso_0.sof`.
+The resulting bitstream will be placed in the directory where you ran the command and it will be named `enso_0.sof`. If the design does not meet timing, the bitstream will be saved as `neg_slack_enso_0.sof`.
 
 !!! note
 
