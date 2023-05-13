@@ -70,8 +70,8 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
       std::cerr << "Problem creating RX/TX pipe" << std::endl;
       exit(3);
     }
-    uint32_t dst_ip = kBaseIpAddress + i;
-    pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+    // uint32_t dst_ip = kBaseIpAddress + i;
+    // pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
 
     pipes.push_back(pipe);
   }

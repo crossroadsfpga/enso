@@ -92,6 +92,11 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
   return 0;
 }
 
+/**
+ * @brief
+ *
+ * @return int
+ */
 int mock_enso_pipe_init() {
   enso_pipe_t* enso_pipe = new enso_pipe_t;
   if (!enso_pipe) {
@@ -154,10 +159,20 @@ int read_in_file() {
   return 0;
 }
 
+/**
+ * @brief
+ *
+ * @param enso_pipe
+ * @param enso_pipe_regs
+ * @param notification_buf_pair
+ * @param enso_pipe_id
+ * @return int
+ */
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id) {
+  std::cout << "Enso pipe init" << std::endl;
   (void)enso_pipe;
   (void)enso_pipe_regs;
   (void)notification_buf_pair;
@@ -200,6 +215,7 @@ static _enso_always_inline uint32_t
 __consume_queue(struct RxEnsoPipeInternal* e,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
+  std::cout << "Consume queue" << std::endl;
   (void)(e);
   (void)notification_buf_pair;
   (void)peek;
@@ -281,12 +297,14 @@ __consume_queue(struct RxEnsoPipeInternal* e,
  */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len) {
-  std::cout << "Sending to queue" << std::endl;
+  std::cout << "Sending to queue with phys addr %p" << std::endl;
 
   (void)notification_buf_pair;
 
   u_char* addr_buf = new u_char[len];
+  std::cout << "Doing memcpy" << std::endl;
   memcpy(addr_buf, (uint8_t*)phys_addr, len);
+  std::cout << "Done memcpy" << std::endl;
 
   uint32_t processed_bytes = 0;
   uint8_t* pkt = addr_buf;
