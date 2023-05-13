@@ -66,7 +66,7 @@ int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
                       uint32_t enso_pipe_id);
 
 /**
- * @brief Sends configuration to the dataplane.
+ * @brief Sends configuration to the NIC.
  *
  * @param notification_buf_pair Notification buffer to send configuration
  *                              through.

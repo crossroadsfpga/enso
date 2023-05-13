@@ -1,185 +1,32 @@
 # Ensō
 
-## System Requirements
+[![docs](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml/badge.svg)](https://github.com/crossroadsfpga/enso/actions/workflows/docs.yml)
+[![DOI](https://zenodo.org/badge/248301431.svg)](https://zenodo.org/badge/latestdoi/248301431)
 
-Ensō currently requires an Intel Stratix 10 MX FPGA. Support for other boards might be added in the future.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/crossroadsfpga/enso/master/docs/assets/enso-white.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/crossroadsfpga/enso/master/docs/assets/enso-black.svg">
+  <img align="right" width="200" alt="Enso" src="./docs/assets/enso-black.svg">
+</picture>
 
-## Setup
+Ensō is a high-performance streaming interface for NIC-application communication.
 
-Here we describe the steps to compile and install Ensō.
+Ensō's design encompasses both *hardware* and *software*. The hardware component targets an FPGA NIC[^1] and implements the Ensō interface. The software component uses this interface and exposes simple communication primitives called [Ensō Pipes](https://crossroadsfpga.github.io/enso/primitives/rx_enso_pipe/). Applications can use Ensō Pipes to send and receive data in different formats, such as raw packets, application-level messages, or TCP-like byte streams.
 
-### Prepare system
+[^1]: Network Interface Cards (NICs) are the hardware devices that connect a computer to the network. They are responsible for transmitting data from the CPU to the network and vice versa. FPGAs are reconfigurable hardware devices. They can be reconfigured to implement arbitrary hardware designs. Here we use an FPGA to implement a NIC with the Ensō interface but the same interface could also be implemented in a traditional fixed-function hardware.
 
-Setup hugepages:
 
-```bash
-mkdir -p /mnt/huge
-(mount | grep /mnt/huge) > /dev/null || mount -t hugetlbfs hugetlbfs /mnt/huge
-for i in /sys/devices/system/node/node[0-9]*
-do
-	echo 16384 > "$i"/hugepages/hugepages-2048kB/nr_hugepages
-done
-```
+## Why Ensō?
 
-<!-- TODO(sadok): Make hugepage allocation permanent. -->
+Traditionally, NICs expose a *packetized* interface that software (applications or the kernel) must use to communicate with the NIC. Ensō provides two main advantages over this interface:
 
-<!-- TODO(sadok): Describe how to setup quartus project. -->
+- **Flexibility:** While NICs were traditionally in charge of delivering raw packets to software, an increasing amount of high-level functionality is now performed on the NIC. The packetized interface, however, forces data to be fragmented into packets that are then scattered across memory. This prevents the NIC and the application from communicating efficiently using higher-level abstractions such as application-level messages or TCP streams. Ensō instead allows the NIC and the application to communicate using a contiguous stream of bytes, which can be used to represent *arbitrary* data.
+- **Performance:** By forcing hardware and software to synchronize buffers for every packet, the packetized interface imposes significant per-packet overhead both in terms of CPU cycles as well as PCIe bandwidth. This results in significant performance degradation, in particular when using small requests. Ensō's use of a byte stream interface allows the NIC and the application to exchange multiple packets (or messages) at once, which reduces the number of CPU cycles and PCIe transactions required to communicate each request. Moreover, by placing packets (or messages) contiguously in memory, Ensō makes better use of the CPU prefetcher, vastly reducing the number of cache misses.
 
-### Dependencies
 
-Ensō has the following dependencies:
-* Either gcc (>= 9.0) or clang (>= 8.0)
-* Python (>= 3.6)
-* pip
-* Meson (>= 0.58)
-* Ninja
-* libpcap
+## Getting started
 
-In Ubuntu 20.04 or other recent Debian-based distributions these dependencies can be obtained with the following commands:
-```bash
-sudo apt update
-sudo apt install \
-  python3 \
-  python3-pip \
-  python3-setuptools \
-  python3-wheel \
-  gcc-9 \
-  g++-9 \
-  clang-8 \
-  clang++-8 \
-  libpcap-dev
-sudo pip3 install meson ninja
-```
-
-### Compilation
-
-Start by cloning the enso repository, if you haven't already:
-```bash
-git clone https://github.com/hsadok/enso
-```
-
-Prepare the compilation using meson and compile it with ninja.
-
-To use gcc:
-```bash
-meson setup --native-file gcc.ini build-gcc
-```
-
-To use clang:
-```bash
-meson setup --native-file llvm.ini build-clang
-```
-
-To compile:
-```bash
-cd build-*
-ninja
-```
-
-### Compilation options
-
-There are a few compile-time options that you may set. You can see all the options with:
-```bash
-meson configure
-```
-
-If you run the above in the build directory, it also shows the current value for each option.
-
-To change one of the options run:
-```bash
-meson configure -D<option_name>=<value>
-```
-
-For instance, to change the batch size and enable latency optimization:
-```bash
-meson configure -Dbatch_size=64 -Dlatency_opt=true
-```
-
-<!--- TODO(sadok): Describe how to synthesize hardware. -->
-
-### Installing enso script
-
-To configure and load the enso dataplane you should install the enso script in your *local machine* (e.g., your laptop). This is different from the machine that you will run enso on.
-
-If you haven't already, clone the enso repository in your *local machine*:
-```bash
-git clone https://github.com/hsadok/enso
-```
-
-To install the enso script run in the `enso` directory:
-```bash
-cd enso
-python3 -m pip install -e frontend
-```
-
-Refer to the [enso script documentation](frontend/README.md) for instructions on how to enable autocompletion or the dependencies you need to run the EnsōGen packet generator.
-
-Before you can run the script. You must make sure that you have ssh access using a password-less key (e.g., using ssh-copy-id) to the machine you will run enso on. You should also have a `~/.ssh/config` configuration file set in your local machine with configuration to access the machine that you will run enso on.
-
-If you don't yet have a `~/.ssh/config` file, you can create one and add the following lines, replacing everything between `<>` with the correct values:
-```bash
-Host <machine_name>
-  HostName <machine_address>
-  IdentityFile <private_key_path>
-  User <user_name>
-```
-
-`machine_name` is a nickname to the machine. You will use this name to run the enso script.
-
-Next we will describe to use the script to load the bitstream and configure the dataplane but you can also use the enso script itself to obtain usage information:
-```bash
-enso --help
-```
-
-### Loading the bitstream to the FPGA
-
-Before running any software you need to make sure that the FPGA is loaded with the latest bitstream. To do so, you must first place the bitstream file in the correct location. You can obtain the bitstream file from [here](https://drive.google.com/drive/folders/1J2YYTNXotdOOeKWvoj_5-heE5qE2dQAC?usp=sharing) or synthesize it from the source code as described in the [synthesis section](#synthesis).
-
-Copy the bitstream file (`alt_ehipc2_hw.sof`) to `enso/hardware_test/alt_ehipc2_hw.sof` in the machine with the FPGA, e.g.:
-```bash
-cp <bitstream_path>/alt_ehipc2_hw.sof <enso_path>/enso/hardware_test/alt_ehipc2_hw.sof
-```
-
-Run the `enso` script in the local machine to load the bitstream in the one with the FPGA:
-```bash
-enso <host> <remote_enso_path> --load-bitstream
-```
-
-You can also specify other options to configure the dataplane, refer to `enso --help` for more information.
-
-<!---
-## Development Environment
-
-### Software
-
-### Hardware
-
-* Simulation
-* Synthesis
-
--->
-
-## Building Documentation
-
-Install the requirements, this assumes that you already have pip and npm installed:
-
-```bash
-sudo apt update
-sudo apt install doxygen python3-pip npm
-python3 -m pip install -r docs/requirements.txt
-sudo npm install -g teroshdl
-```
-
-To build the documentation, run (from the build directory):
-
-```bash
-meson compile docs
-```
-
-While writing documentation, you can use the following command to automatically rebuild the documentation when you make changes:
-
-```bash
-mkdocs serve
-```
-
-Note that this does not automatically rebuild the hardware and software API reference. You need to rerun `meson compile docs` to do that.
+- [Setup](https://crossroadsfpga.github.io/enso/getting_started/)
+- Understanding the primitives: [RX Ensō Pipe](https://crossroadsfpga.github.io/enso/primitives/rx_enso_pipe/), [TX Ensō Pipe](https://crossroadsfpga.github.io/enso/primitives/tx_enso_pipe/), [RX/TX Ensō Pipe](https://crossroadsfpga.github.io/enso/primitives/rx_tx_enso_pipe/)
+- Examples: [Echo Server](https://github.com/crossroadsfpga/enso/blob/master/software/examples/echo.cpp), [Packet Capture](https://github.com/crossroadsfpga/enso/blob/master/software/examples/capture.cpp), [EnsōGen Packet Generator](https://github.com/crossroadsfpga/enso/blob/master/software/examples/ensogen.cpp)
+- API References: [Software](https://crossroadsfpga.github.io/enso/software/), [Hardware](https://crossroadsfpga.github.io/enso/hardware/)

@@ -47,11 +47,14 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <pthread.h>
 
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace enso {
 
@@ -70,6 +73,12 @@ namespace enso {
 
 #define _enso_always_inline __attribute__((always_inline)) inline
 
+struct stats_t {
+  uint64_t recv_bytes;
+  uint64_t nb_batches;
+  uint64_t nb_pkts;
+} __attribute__((aligned(64)));
+
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
  *
@@ -79,22 +88,22 @@ namespace enso {
  * To convert from number of cycles to ns. Do `cycles * kNsPerTimestampCycle`.
  *
  * @param pkt Packet to retrieve the RTT from.
- * @return Return RTT measure for the packet in nanoseconds. If timestamp is
- *         not enabled the value returned is undefined.
+ * @return Return RTT measure for the packet in number of cycles. If timestamp
+ *         is not enabled on the NIC, the value returned is undefined.
  */
-inline uint32_t get_pkt_rtt(uint8_t* pkt) {
+inline uint32_t get_pkt_rtt(const uint8_t* pkt) {
   uint32_t rtt = *((uint32_t*)(pkt + kPacketRttOffset));
   return be32toh(rtt);
 }
 
-constexpr uint16_t be_to_le_16(uint16_t le) {
+constexpr uint16_t be_to_le_16(const uint16_t le) {
   return ((le & (uint16_t)0x00ff) << 8) | ((le & (uint16_t)0xff00) >> 8);
 }
 
-constexpr uint16_t get_pkt_len(uint8_t* addr) {
-  struct ether_header* l2_hdr = (struct ether_header*)addr;
-  struct iphdr* l3_hdr = (struct iphdr*)(l2_hdr + 1);
-  uint16_t total_len = be_to_le_16(l3_hdr->tot_len) + sizeof(*l2_hdr);
+constexpr uint16_t get_pkt_len(const uint8_t* addr) {
+  const struct ether_header* l2_hdr = (struct ether_header*)addr;
+  const struct iphdr* l3_hdr = (struct iphdr*)(l2_hdr + 1);
+  const uint16_t total_len = be_to_le_16(l3_hdr->tot_len) + sizeof(*l2_hdr);
 
   return total_len;
 }
@@ -116,6 +125,11 @@ void print_pkt_header(uint8_t* pkt);
 void print_buf(void* buf, const uint32_t nb_cache_lines);
 
 int rss_hash_packet(uint8_t* pkt_buf, int mod);
+
+int set_core_id(std::thread& thread, int core_id);
+
+void show_stats(const std::vector<stats_t>& thread_stats,
+                volatile bool* keep_running);
 
 }  // namespace enso
 

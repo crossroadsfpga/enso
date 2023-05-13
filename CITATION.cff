@@ -1,0 +1,71 @@
+cff-version: 1.2.0
+message: "If you use Ensō, consider citing it as below."
+authors:
+- family-names: "Sadok"
+  given-names: "Hugo"
+  orcid: "https://orcid.org/0000-0002-2464-1465"
+- family-names: "Atre"
+  given-names: "Nirav"
+  orcid: "https://orcid.org/0000-0003-0718-1839"
+- family-names: "Zhao"
+  given-names: "Zhipeng"
+  orcid: "https://orcid.org/0000-0002-3349-8939"
+- family-names: "Berger"
+  given-names: "Daniel S."
+  orcid: "https://orcid.org/0000-0002-3911-1512"
+- family-names: "Hoe"
+  given-names: "James C."
+  orcid: "https://orcid.org/0000-0002-9302-5287"
+- family-names: "Panda"
+  given-names: "Aurojit"
+  orcid: "https://orcid.org/0000-0001-9664-4377"
+- family-names: "Sherry"
+  given-names: "Justine"
+  orcid: "https://orcid.org/0000-0002-8270-4102"
+- family-names: "Wang"
+  given-names: "Ren"
+title: "Ensō"
+version: 0.3.2
+license: BSD-3-Clause-Clear
+# doi: 10.5281/zenodo.1234
+date-released: 2023-04-23
+repository-code: "https://github.com/crossroadsfpga/enso"
+url: "https://github.com/crossroadsfpga/enso"
+# Update this:
+# repository-artifact: 'https://github.com/crossroadsfpga/enso'
+preferred-citation:
+  type: conference-paper
+  authors:
+  - family-names: "Sadok"
+    given-names: "Hugo"
+    orcid: "https://orcid.org/0000-0002-2464-1465"
+  - family-names: "Atre"
+    given-names: "Nirav"
+    orcid: "https://orcid.org/0000-0003-0718-1839"
+  - family-names: "Zhao"
+    given-names: "Zhipeng"
+    orcid: "https://orcid.org/0000-0002-3349-8939"
+  - family-names: "Berger"
+    given-names: "Daniel S."
+    orcid: "https://orcid.org/0000-0002-3911-1512"
+  - family-names: "Hoe"
+    given-names: "James C."
+    orcid: "https://orcid.org/0000-0002-9302-5287"
+  - family-names: "Panda"
+    given-names: "Aurojit"
+    orcid: "https://orcid.org/0000-0001-9664-4377"
+  - family-names: "Sherry"
+    given-names: "Justine"
+    orcid: "https://orcid.org/0000-0002-8270-4102"
+  - family-names: "Wang"
+    given-names: "Ren"
+  # doi: "10.0000/00000"
+  title: "Ensō: A Streaming Interface for NIC-Application Communication"
+  collection-title: "17th USENIX Symposium on Operating Systems Design and Implementation"
+  conference: "OSDI '23"
+  month: 7
+  # start: 1 # First page number
+  # end: 10 # Last page number
+  publisher: "USENIX Association"
+  # isbn:
+  year: 2023

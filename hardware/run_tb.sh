@@ -16,6 +16,18 @@ altera_lnsim_ver="$sim_lib_path/altera_lnsim_ver"
 fourteennm_ver="$sim_lib_path/fourteennm_ver"
 fourteennm_ct1_ver="$sim_lib_path/fourteennm_ct1_ver"
 
+USAGE="Usage: $0 rate nb_pkts pkt_size nb_dsc_queues nb_pkt_queues [--gui]"
+
+if [ "$#" -lt 5 ] || [ "$#" -gt 6 ]; then
+    echo $USAGE
+    exit 1
+fi
+
+if [ "$#" -eq 6 ] && [ "$6" != "--gui" ]; then
+    echo $USAGE
+    exit 1
+fi
+
 RATE=${1:-"100"}
 
 NB_PKTS=$2

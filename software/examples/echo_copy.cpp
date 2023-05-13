@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Carnegie Mellon University
+ * Copyright (c) 2023, Carnegie Mellon University
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the disclaimer
@@ -30,382 +30,138 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <enso/consts.h>
 #include <enso/helpers.h>
-#include <enso/socket.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <sched.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <x86intrin.h>
+#include <enso/pipe.h>
 
-#include <cerrno>
 #include <chrono>
 #include <csignal>
-#include <cstdlib>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
-#include <string>
+#include <memory>
 #include <thread>
 
-#include "app.h"
+#include "example_helpers.h"
 
-#define ZERO_COPY
+static volatile bool keep_running = true;
+static volatile bool setup_done = false;
 
-// Huge page size that we are using (in bytes).
-#define HUGEPAGE_SIZE (2UL << 20)
+void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-// Size of the buffer that we keep packets in.
-#define BUFFER_SIZE enso::kMaxTransferLen
+void run_echo_copy(uint32_t nb_queues, uint32_t core_id,
+                   [[maybe_unused]] uint32_t nb_cycles, enso::stats_t* stats) {
+  std::this_thread::sleep_for(std::chrono::seconds(1));
 
-// Number of transfers required to send a buffer full of packets.
-#define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / enso::kMaxTransferLen) + 1)
+  std::cout << "Running on core " << sched_getcpu() << std::endl;
 
-// Adapted from ixy.
-static void* get_huge_page(size_t size) {
-  static int id = 0;
-  int fd;
-  char huge_pages_path[128];
+  using enso::Device;
+  using enso::RxPipe;
+  using enso::TxPipe;
 
-  snprintf(huge_pages_path, sizeof(huge_pages_path), "/mnt/huge/pktgen:%i", id);
-  ++id;
+  std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
+  std::vector<RxPipe*> rx_pipes;
+  std::vector<TxPipe*> tx_pipes;
 
-  fd = open(huge_pages_path, O_CREAT | O_RDWR, S_IRWXU);
-  if (fd == -1) {
-    std::cerr << "(" << errno << ") Problem opening huge page file descriptor"
-              << std::endl;
-    return NULL;
+  if (!dev) {
+    std::cerr << "Problem creating device" << std::endl;
+    exit(2);
   }
 
-  if (ftruncate(fd, (off_t)size)) {
-    std::cerr << "(" << errno
-              << ") Could not truncate huge page to size: " << size
-              << std::endl;
-    close(fd);
-    unlink(huge_pages_path);
-    return NULL;
+  for (uint32_t i = 0; i < nb_queues; ++i) {
+    RxPipe* rx_pipe = dev->AllocateRxPipe();
+    if (!rx_pipe) {
+      std::cerr << "Problem creating RX pipe" << std::endl;
+      exit(3);
+    }
+
+    uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
+    rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+
+    rx_pipes.push_back(rx_pipe);
+
+    TxPipe* tx_pipe = dev->AllocateTxPipe();
+    if (!tx_pipe) {
+      std::cerr << "Problem creating TX pipe" << std::endl;
+      exit(3);
+    }
+    tx_pipes.push_back(tx_pipe);
   }
 
-  void* virt_addr = (void*)mmap(NULL, size, PROT_READ | PROT_WRITE,
-                                MAP_SHARED | MAP_HUGETLB, fd, 0);
+  setup_done = true;
 
-  if (virt_addr == (void*)-1) {
-    std::cerr << "(" << errno << ") Could not mmap huge page" << std::endl;
-    close(fd);
-    unlink(huge_pages_path);
-    return NULL;
+  while (keep_running) {
+    for (uint32_t i = 0; i < nb_queues; ++i) {
+      auto& rx_pipe = rx_pipes[i];
+      auto batch = rx_pipe->RecvPkts();
+
+      if (unlikely(batch.available_bytes() == 0)) {
+        continue;
+      }
+
+      for (auto pkt : batch) {
+        ++pkt[63];  // Increment payload.
+
+        for (uint32_t i = 0; i < nb_cycles; ++i) {
+          asm("nop");
+        }
+
+        ++(stats->nb_pkts);
+      }
+      uint32_t batch_length = batch.processed_bytes();
+      stats->recv_bytes += batch_length;
+      ++(stats->nb_batches);
+
+      auto& tx_pipe = tx_pipes[i];
+      uint8_t* tx_buf = tx_pipe->AllocateBuf(batch_length);
+
+      memcpy(tx_buf, batch.buf(), batch_length);
+
+      rx_pipe->Clear();
+
+      tx_pipe->SendAndFree(batch_length);
+    }
   }
-
-  // Allocate same huge page at the end of the last one.
-  void* ret =
-      (void*)mmap((uint8_t*)virt_addr + size, size, PROT_READ | PROT_WRITE,
-                  MAP_FIXED | MAP_SHARED | MAP_HUGETLB, fd, 0);
-
-  if (ret == (void*)-1) {
-    std::cerr << "(" << errno << ") Could not mmap second huge page"
-              << std::endl;
-    close(fd);
-    unlink(huge_pages_path);
-    free(virt_addr);
-    return NULL;
-  }
-
-  if (mlock(virt_addr, size)) {
-    std::cerr << "(" << errno << ") Could not lock huge page" << std::endl;
-    munmap(virt_addr, size);
-    close(fd);
-    unlink(huge_pages_path);
-    return NULL;
-  }
-
-  // Don't keep it around in the hugetlbfs.
-  close(fd);
-  unlink(huge_pages_path);
-
-  return virt_addr;
 }
-
-// Adapted from ixy.
-static uint64_t virt_to_phys(void* virt) {
-  long pagesize = sysconf(_SC_PAGESIZE);
-  int fd = open("/proc/self/pagemap", O_RDONLY);
-  if (fd < 0) {
-    return 0;
-  }
-  // pagemap is an array of pointers for each normal-sized page
-  if (lseek(fd, (uintptr_t)virt / pagesize * sizeof(uintptr_t), SEEK_SET) < 0) {
-    close(fd);
-    return 0;
-  }
-
-  uintptr_t phy = 0;
-  if (read(fd, &phy, sizeof(phy)) < 0) {
-    close(fd);
-    return 0;
-  }
-  close(fd);
-
-  if (!phy) {
-    return 0;
-  }
-  // bits 0-54 are the page number
-  return (uint64_t)((phy & 0x7fffffffffffffULL) * pagesize +
-                    ((uintptr_t)virt) % pagesize);
-}
-
-static volatile int keep_running = 1;
-static volatile int setup_done = 0;
-
-void int_handler(int signal __attribute__((unused))) { keep_running = 0; }
-
-struct buf_tracker {
-  uint8_t* tx_buf;
-  uint64_t phys_addr;
-  uint32_t tx_buf_offset;
-  uint32_t transmissions_pending;
-  int free_bytes;
-};
 
 int main(int argc, const char* argv[]) {
-  int result;
-  uint64_t recv_bytes = 0;
-  uint64_t nb_batches = 0;
-  uint64_t nb_pkts = 0;
-  uint64_t dropped_pkts = 0;
-  uint64_t dropped_bytes = 0;
-
-  if (argc != 5) {
-    std::cerr << "Usage: " << argv[0] << " core port nb_queues nb_cycles"
+  if (argc != 4) {
+    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
+              << std::endl
+              << std::endl;
+    std::cerr << "NB_CORES: Number of cores to use." << std::endl;
+    std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
+    std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
+                 " packet."
               << std::endl;
     return 1;
   }
 
-  int core_id = atoi(argv[1]);
-  int port = atoi(argv[2]);
-  int nb_queues = atoi(argv[3]);
-  uint32_t nb_cycles = atoi(argv[4]);
-
-  uint32_t addr_offset = core_id * nb_queues;
+  uint32_t nb_cores = atoi(argv[1]);
+  uint32_t nb_queues = atoi(argv[2]);
+  uint32_t nb_cycles = atoi(argv[3]);
 
   signal(SIGINT, int_handler);
 
-  std::thread socket_thread =
-      std::thread([&recv_bytes, port, addr_offset, nb_queues, &nb_batches,
-                   &nb_pkts, &nb_cycles, &dropped_pkts, &dropped_bytes] {
-        uint32_t tx_pr_head = 0;
-        uint32_t tx_pr_tail = 0;
-        tx_pending_request_t* tx_pending_requests =
-            new tx_pending_request_t[enso::kMaxPendingTxRequests + 1];
-        (void)nb_cycles;
+  std::vector<std::thread> threads;
+  std::vector<enso::stats_t> thread_stats(nb_cores);
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        std::cout << "Running socket on CPU " << sched_getcpu() << std::endl;
-
-        // uint8_t* tx_bufs[nb_queues];
-        // uint32_t tx_buf_offsets[nb_queues];
-        // uint32_t transmissions_pending[nb_queues];
-        // uint32_t free_bytes[nb_queues];
-        // uint64_t phys_addr[nb_queues];
-
-        struct buf_tracker* buf_trackers = new buf_tracker[nb_queues];
-        if (buf_trackers == NULL) {
-          std::cerr << "Could not allocate buf_trackers" << std::endl;
-          return;
-        }
-
-        for (int i = 0; i < nb_queues; ++i) {
-          // TODO(sadok) can we make this a valid file descriptor?
-          std::cout << "Creating queue " << i << std::endl;
-          int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, nb_queues);
-
-          if (socket_fd == -1) {
-            std::cerr << "Problem creating socket (" << errno
-                      << "): " << strerror(errno) << std::endl;
-            exit(2);
-          }
-
-          struct sockaddr_in addr;
-          memset(&addr, 0, sizeof(addr));
-
-          uint32_t ip_address = ntohl(inet_addr("192.168.0.0"));
-          ip_address += addr_offset + i;
-
-          addr.sin_family = AF_INET;
-          addr.sin_addr.s_addr = htonl(ip_address);
-          addr.sin_port = htons(port);
-
-          if (enso::bind(socket_fd, (struct sockaddr*)&addr, sizeof(addr))) {
-            std::cerr << "Problem binding socket (" << errno
-                      << "): " << strerror(errno) << std::endl;
-            exit(3);
-          }
-
-          // Allocate TX buffers.
-          struct buf_tracker* bt = &buf_trackers[i];
-          bt->tx_buf = (uint8_t*)get_huge_page(HUGEPAGE_SIZE);
-          if (bt->tx_buf == NULL) {
-            std::cerr << "Problem allocating TX buffer" << std::endl;
-            exit(4);
-          }
-          bt->tx_buf_offset = 0;
-          bt->transmissions_pending = 0;
-          bt->free_bytes = HUGEPAGE_SIZE;
-          bt->phys_addr = virt_to_phys(bt->tx_buf);
-
-          std::cout << "Done creating queue " << i << std::endl;
-        }
-
-#ifdef ZERO_COPY
-        unsigned char* buf;
-#else
-        unsigned char buf[BUF_LEN];
-#endif
-
-        setup_done = 1;
-
-        while (keep_running) {
-          // HACK(sadok) this only works because socket_fd is incremental, it
-          // would not work with an actual file descriptor
-          for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-#ifdef ZERO_COPY
-            int recv_len = enso::recv_zc(socket_fd, (void**)&buf, BUF_LEN, 0);
-#else
-            int recv_len = enso::recv(socket_fd, buf, BUF_LEN, 0);
-#endif
-            if (unlikely(recv_len < 0)) {
-              std::cerr << "Error receiving" << std::endl;
-              exit(4);
-            }
-
-            struct buf_tracker* bt = &buf_trackers[socket_fd];
-
-            if (likely(recv_len > 0)) {
-#ifdef LATENCY_OPT
-              // Prefetch next queue.
-              enso::free_enso_pipe((socket_fd + 1) & (nb_queues - 1), 0);
-#endif
-              int processed_bytes = 0;
-              uint8_t* pkt = buf;
-
-              int transmission_len = 0;
-              while (processed_bytes < recv_len) {
-                uint16_t pkt_len = enso::get_pkt_len(pkt);
-                uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-                uint16_t pkt_aligned_len = nb_flits * 64;
-
-                ++pkt[63];  // Increment payload.
-
-                // for (uint32_t i = 0; i < nb_cycles; ++i) {
-                //     asm("nop");
-                // }
-
-                pkt += pkt_aligned_len;
-                processed_bytes += pkt_aligned_len;
-                ++nb_pkts;
-
-                // If no more space left, ignore remaining packets.
-                if (likely(processed_bytes <= bt->free_bytes)) {
-                  transmission_len += pkt_aligned_len;
-                } else {
-                  ++dropped_pkts;
-                  dropped_bytes += pkt_aligned_len;
-                }
-              }
-
-              ++nb_batches;
-              recv_bytes += recv_len;
-
-              constexpr uint32_t kBufFillThresh =
-                  enso::kNotificationBufSize - TRANSFERS_PER_BUFFER - 1;
-
-              if (likely(bt->transmissions_pending < kBufFillThresh)) {
-                memcpy(bt->tx_buf + bt->tx_buf_offset, buf, transmission_len);
-
-                bt->tx_buf_offset = (bt->tx_buf_offset + transmission_len) &
-                                    (HUGEPAGE_SIZE - 1);
-                bt->free_bytes -= transmission_len;
-                ++bt->transmissions_pending;
-                // TODO(sadok): This should be transparent to the app.
-                // Save transmission request so that we can free the buffer once
-                // it's complete.
-                tx_pending_requests[tx_pr_tail].socket_fd = socket_fd;
-                tx_pending_requests[tx_pr_tail].length = transmission_len;
-                tx_pr_tail =
-                    (tx_pr_tail + 1) % (enso::kMaxPendingTxRequests + 1);
-
-                enso::send(socket_fd, bt->phys_addr, transmission_len, 0);
-              }
-
-              // Free all packets.
-              enso::free_enso_pipe(socket_fd, recv_len);
-            }
-          }
-
-          uint32_t nb_tx_completions = enso::get_completions(0);
-
-          // Free data that was already sent.
-          for (uint32_t i = 0; i < nb_tx_completions; ++i) {
-            tx_pending_request_t tx_req = tx_pending_requests[tx_pr_head];
-            struct buf_tracker* bt = &buf_trackers[tx_req.socket_fd];
-            bt->free_bytes += tx_req.length;
-            bt->transmissions_pending -= 1;
-            tx_pr_head = (tx_pr_head + 1) % (enso::kMaxPendingTxRequests + 1);
-          }
-        }
-
-        // TODO(sadok): it is also common to use the close() syscall to close a
-        // UDP socket.
-        for (int socket_fd = 0; socket_fd < nb_queues; ++socket_fd) {
-          enso::print_sock_stats(socket_fd);
-          enso::shutdown(socket_fd, SHUT_RDWR);
-        }
-
-        delete[] tx_pending_requests;
-        delete[] buf_trackers;
-      });
-
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  result = pthread_setaffinity_np(socket_thread.native_handle(), sizeof(cpuset),
-                                  &cpuset);
-  if (result < 0) {
-    std::cerr << "Error setting CPU affinity" << std::endl;
-    return 6;
-  }
-
-  while (!setup_done) continue;
-
-  std::cout << "Starting..." << std::endl;
-
-  while (keep_running) {
-    uint64_t recv_bytes_before = recv_bytes;
-    uint64_t nb_batches_before = nb_batches;
-    uint64_t nb_pkts_before = nb_pkts;
-
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    uint64_t delta_bytes = recv_bytes - recv_bytes_before;
-    uint64_t delta_pkts = nb_pkts - nb_pkts_before;
-    uint64_t delta_batches = nb_batches - nb_batches_before;
-    std::cout << std::dec << delta_bytes * 8. / 1e6 << " Mbps  " << recv_bytes
-              << " B  " << nb_batches << " batches  " << nb_pkts << " pkts  "
-              << dropped_pkts << " dropped pkts  " << dropped_bytes
-              << " dropped bytes";
-
-    if (delta_batches > 0) {
-      std::cout << "  " << delta_bytes / delta_batches << " B/batch";
-      std::cout << "  " << delta_pkts / delta_batches << " pkt/batch";
+  for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
+    threads.emplace_back(run_echo_copy, nb_queues, core_id, nb_cycles,
+                         &(thread_stats[core_id]));
+    if (enso::set_core_id(threads.back(), core_id)) {
+      std::cerr << "Error setting CPU affinity" << std::endl;
+      return 6;
     }
-    std::cout << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
-  std::cout << "Waiting for threads" << std::endl;
+  while (!setup_done) continue;  // Wait for setup to be done.
 
-  socket_thread.join();
+  show_stats(thread_stats, &keep_running);
+
+  for (auto& thread : threads) {
+    thread.join();
+  }
 
   return 0;
 }

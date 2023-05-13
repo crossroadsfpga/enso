@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Helper script to run ensogen with the correct arguments for numerator and
+# denominator depending on a given rate and pcap file.
+
+set -e
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+ENSOGEN_PATH="${SCRIPT_DIR}/../build/software/examples/ensogen"
+ENSOGEN_PATH=$(realpath $ENSOGEN_PATH)
+
+if [ ! -f $ENSOGEN_PATH ]; then
+    echo "Error: Could not find ensogen binary at $ENSOGEN_PATH"
+    echo "Make sure you have built the enso project."
+    exit 1
+fi
+
+if [ $# -lt 2 ]; then
+    echo "Usage: ./ensogen.sh PCAP_FILE RATE_GBPS [OPTIONS]"
+    echo "Example: ./ensogen.sh /tmp/pcap_file.pcap 100 --pcie-addr 65:00.0"
+    exit 1
+fi
+
+pcap_file=$1
+rate=$2
+extra_args=${@:3}
+
+pattern="Average packet size:"
+mean_pkt_size=$(capinfos -z $pcap_file | grep "$pattern" | awk '{print $4}')
+
+num_den=$(python3 <<EOF
+import math
+from fractions import Fraction
+pkt_size = $mean_pkt_size
+rate = $rate * 1e9
+mac_overhead = 24
+clock = 200e6
+
+rate_pps = rate / ((pkt_size + mac_overhead) * 8)
+flits_per_pkt = math.ceil(pkt_size / 64)
+rate_flits_per_second = rate_pps * flits_per_pkt
+clock_fraction = Fraction(rate_flits_per_second / clock).limit_denominator(1000)
+
+print(clock_fraction.numerator, clock_fraction.denominator)
+
+EOF
+)
+
+sudo $ENSOGEN_PATH $pcap_file $num_den $extra_args

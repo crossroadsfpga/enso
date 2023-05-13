@@ -63,42 +63,25 @@ void set_bdf(uint16_t bdf_) { bdf = bdf_; }
 
 int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
            int nb_queues) noexcept {  // HACK(sadok) using protocol as nb_queues
-  IntelFpgaPcieDev* dev;
-  int bar = -1;
-  int result;
-
   if (unlikely(nb_open_sockets >= MAX_NB_SOCKETS)) {
     std::cerr << "Maximum number of sockets reached" << std::endl;
     return -1;
   }
 
-  dev = IntelFpgaPcieDev::Create(bdf, bar);
-  if (unlikely(dev == nullptr)) {
-    std::cerr << "Could not create device" << std::endl;
-    return -1;
-  }
-
-  result = dev->use_cmd(true);
-  if (unlikely(result == 0)) {
-    std::cerr << "Could not switch to CMD use mode!" << std::endl;
-    return -1;
-  }
-
-  // FIXME(sadok) use __sync_fetch_and_add to update atomically
+  // FIXME(sadok): Use __sync_fetch_and_add to update atomically.
   unsigned int socket_id = nb_open_sockets++;
 
   struct SocketInternal* socket_entry = &open_sockets[socket_id];
 
-  socket_entry->dev = dev;
   socket_entry->notification_buf_pair = &notification_buf_pair[sched_getcpu()];
 
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
   struct RxEnsoPipeInternal* enso_pipe = &socket_entry->enso_pipe;
 
-  result =
-      dma_init(dev, notification_buf_pair, enso_pipe, socket_id, nb_queues);
-
+  int bar = -1;
+  int result = dma_init(notification_buf_pair, enso_pipe, socket_id, nb_queues,
+                        bdf, bar);
   if (unlikely(result < 0)) {
     std::cerr << "Problem initializing DMA" << std::endl;
     return -1;
@@ -154,6 +137,8 @@ ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
   struct NotificationBufPair* notification_buf_pair =
       socket->notification_buf_pair;
 
+  get_new_tails(notification_buf_pair);
+
   ssize_t bytes_received =
       get_next_batch_from_queue(enso_pipe, notification_buf_pair, &ring_buf);
 
@@ -163,7 +148,7 @@ ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
 
   memcpy(buf, ring_buf, bytes_received);
 
-  advance_ring_buffer(enso_pipe, bytes_received);
+  advance_pipe(enso_pipe, bytes_received);
 
   return bytes_received;
 }
@@ -176,6 +161,8 @@ ssize_t recv_zc(int sockfd, void** buf, size_t len, int flags) {
   struct RxEnsoPipeInternal* enso_pipe = &socket->enso_pipe;
   struct NotificationBufPair* notification_buf_pair =
       socket->notification_buf_pair;
+
+  get_new_tails(notification_buf_pair);
 
   return get_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
 }
@@ -203,7 +190,7 @@ uint32_t get_completions(int ref_sockfd) {
 }
 
 void free_enso_pipe(int sockfd, size_t len) {
-  advance_ring_buffer(&(open_sockets[sockfd].enso_pipe), len);
+  advance_pipe(&(open_sockets[sockfd].enso_pipe), len);
 }
 
 int enable_device_timestamp() {
@@ -235,22 +222,11 @@ int disable_device_rate_limit() {
 }
 
 int shutdown(int sockfd, int how __attribute__((unused))) noexcept {
-  int result;
-  IntelFpgaPcieDev* dev = open_sockets[sockfd].dev;
+  dma_finish(&open_sockets[sockfd]);
 
-  result = dma_finish(&open_sockets[sockfd]);
-  result = dev->use_cmd(false);
-
-  if (unlikely(result == 0)) {
-    std::cerr << "Could not switch to CMD use mode!\n";
-    return -1;
-  }
+  // TODO(sadok): Remove entry from the NIC flow table.
 
   --nb_open_sockets;
-
-  // TODO(sadok) remove entry from the NIC flow table
-
-  delete dev;
 
   return 0;
 }

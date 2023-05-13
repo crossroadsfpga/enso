@@ -1,8 +1,5 @@
-#!/usr/bin/python
-import os
+#!/usr/bin/python3
 import sys
-import csv
-import re
 
 
 def parse_line(line):
@@ -13,9 +10,9 @@ def parse_line(line):
     if length - 1 == 32:
         res = temp[:-1]
     else:
-        empty = (32 - (length - 1)) / 2
+        empty = (32 - (length - 1)) // 2
         res = temp[:-1] + (empty * 2) * "f"
-    # print len(res)
+
     return res, empty
 
 
@@ -41,6 +38,7 @@ for i, line in enumerate(f):
         data_c, empty_c = parse_line(line)
     else:
         c = 0
+
     if "0x0000:" in line:
         sop = 1
 
@@ -48,28 +46,30 @@ for i, line in enumerate(f):
         eop = 0
 
         if cnt == 4:
+            data_p_str = ""
+            for i in data_p:
+                assert i is not None
+                data_p_str += i
 
             fout.write(
                 str(sop)
                 + str(eop)
                 + str(format(empty_p, "x")).zfill(2)
-                + data_p[0]
-                + data_p[1]
-                + data_p[2]
-                + data_p[3]
+                + data_p_str
                 + "\n"
             )
             cnt = 0
             sop = 0
     elif p == 1 and c == 0:
-        # print "cnt = ", cnt, "empty_p = ", empty_p
         eop = 1
         empty_p = empty_p + (4 - cnt) * 16
         for j in range(0, cnt):
+            d = data_p[j]
+            assert d is not None
             if j == 0:
-                data_field = data_p[0]
+                data_field = d
             else:
-                data_field = data_field + data_p[j]
+                data_field = data_field + d
         data_field = data_field + ((4 - cnt) * 16 * 2) * "f"
         fout.write(
             str(sop)
@@ -78,16 +78,16 @@ for i, line in enumerate(f):
             + data_field
             + "\n"
         )
-        # print str(sop)+str(eop)+str(format(empty_p,'x')).zfill(2)+data_field+"\n"
         sop = 0
         cnt = 0
     else:
         eop = 0
     p = c
-    # print(data_c)
+
     if c:
         data_p[cnt] = data_c
         cnt += 1
     empty_p = empty_c
+
 f.close()
 fout.close()

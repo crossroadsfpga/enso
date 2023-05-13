@@ -1,12 +1,16 @@
 nav:
   - Home: index.md
-  - Getting started:
-    - Setup: getting_started.md
-    - Performance Tuning: tuning.md
+  - Getting Started:
+    - System Requirements: getting_started.md
+    - Compiling Software: compiling_software.md
+    - Compiling Hardware: compiling_hardware.md
+    - Ensō CLI Tool: enso_cli.md
+    - Running: running.md
+    - EnsōGen: ensogen.md
   - Primitives: primitives
   # - Examples: examples
   # - Developer Guide:
   #   - Development Environment
   #   - Code Style
   - Hardware Reference: hardware
-  - Software Reference: /software/" target="_blank
+  - Software Reference: /enso/software/" target="_blank

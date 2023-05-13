@@ -1,44 +1,35 @@
 site_name: Ensō
-# site_url:
+site_url: https://crossroadsfpga.github.io/enso/
 site_author: Hugo Sadok
 site_description: >-
   Ensō is a fast and flexible streaming interface for NIC-Application communication.
 
 # Repository
-repo_name: hsadok/enso
-repo_url: https://github.com/hsadok/enso
+repo_name: crossroadsfpga/enso
+repo_url: https://github.com/crossroadsfpga/enso
 
 # Copyright
 copyright: Copyright &copy; 2023 <a href=https://hsadok.com target="_blank">Hugo Sadok</a>
 
-# docs_dir: .
-
 theme:
   name: material
   features:
-    # - announce.dismiss
     - content.action.edit
     - content.action.view
     - content.code.annotate
     - content.code.copy
-    # - content.tabs.link
     - content.tooltips
-    # - header.autohide
-    # - navigation.expand
     - navigation.footer
     - navigation.indexes
     - navigation.instant
-    # - navigation.prune
     - navigation.sections
     - navigation.tabs
-    # - navigation.tabs.sticky
     - navigation.top
     - navigation.tracking
     - search.highlight
     - search.share
     - search.suggest
     - toc.follow
-    # - toc.integrate
   language: en
   palette:
     - scheme: default
@@ -66,6 +57,7 @@ markdown_extensions:
   - admonition
   - pymdownx.highlight
   - pymdownx.inlinehilite
+  - pymdownx.keys
   - pymdownx.details
   - pymdownx.emoji:
       emoji_index: !!python/name:materialx.emoji.twemoji
@@ -75,6 +67,8 @@ markdown_extensions:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true 
 
 # Note that we are using the awesome-pages plugin, therefore nav is defined in
 # the .pages file present in each directory.

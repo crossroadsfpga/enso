@@ -75,24 +75,29 @@ namespace enso {
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
-  IntelFpgaPcieDev* dev;
   struct RxEnsoPipeInternal enso_pipe;
 };
 
-int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
-                          volatile struct QueueRegs* notification_buf_pair_regs,
+int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
+                          struct NotificationBufPair* notification_buf_pair,
                           enso_pipe_id_t nb_queues,
                           enso_pipe_id_t enso_pipe_id_offset);
 
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
-                   volatile struct QueueRegs* enso_pipe_regs,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id);
 
-int dma_init(IntelFpgaPcieDev* dev,
-             struct NotificationBufPair* notification_buf_pair,
+int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
-             unsigned nb_queues);
+             unsigned nb_queues, uint32_t bdf, int32_t bar);
+
+/**
+ * Get latest tails for the pipes associated with the given notification buffer.
+ * 
+ * @param notification_buf_pair Notification buffer to get data from.
+ * @return Number of notifications received.
+ */
+uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair);
 
 uint32_t get_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
@@ -133,7 +138,7 @@ uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
  * @param enso_pipe Enso pipe to advance.
  * @param len Number of bytes to free.
  */
-void advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe, size_t len);
+void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len);
 
 /**
  * Frees all the received bytes in the buffer associated with the `socket_entry`
@@ -141,7 +146,14 @@ void advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe, size_t len);
  *
  * @param enso_pipe Enso pipe to advance.
  */
-void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe);
+void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe);
+
+/**
+ * Prefetches a given Enso Pipe.
+ * 
+ * @param enso_pipe Enso pipe to prefetch.
+ */
+void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
 
 /**
  * Sends data through a given queue.

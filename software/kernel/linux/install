@@ -1,5 +1,5 @@
 #!/bin/bash
-make clean; make;
+make
 if [[ `lsmod | grep -o intel_fpga_pcie_drv` ]]
 then
     echo "Unloading previous module"

@@ -1,28 +1,28 @@
 # Hardware Counters
 
 | <div style="width:200px"></div> Counter | Description |
-| -------------------------- | ----------- |
+| --------------------------------------- | ----------- |
 | `IN_PKT`                   | Number of packets that arrived at the Ethernet port. |
 | `OUT_PKT`                  | Number of packets that left the Ethernet port. |
-| `OUT_IN_COMP_PKT`          | |
-| `OUT_PARSER_PKT`           | |
-| `MAX_PARSER_FIFO`          | |
-| `FD_IN_PKT`                | |
-| `FD_OUT_PKT`               | |
-| `MAX_FD_OUT_FIFO`          | |
-| `IN_DATAMOVER_PKT`         | |
-| `IN_EMPTYLIST_PKT`         | |
-| `OUT_EMPTYLIST_PKT`        | |
-| `PKT_ETH`                  | |
-| `PKT_DROP`                 | |
-| `PKT_PCIE`                 | |
-| `MAX_DM2PCIE_FIFO`         | Maximum occupancy of the packet FIFO connection the data mover to `pdu_gen`. |
-| `MAX_DM2PCIE_META_FIFO`    | Maximum occupancy of the metadata FIFO connection the data mover to `pdu_gen`. |
-| `PCIE_PKT`                 | |
-| `PCIE_META`                | |
-| `DM_PCIE_PKT`              | |
-| `DM_PCIE_META`             | |
-| `DM_ETH_PKT`               | |
+| `OUT_IN_COMP_PKT`          | Number of packets that left the `input_comp` module. |
+| `OUT_PARSER_PKT`           | Number of packets that left the Parser module. |
+| `MAX_PARSER_FIFO`          | Maximum occupancy of the FIFO that holds packets coming from the `parser` module. |
+| `FD_IN_PKT`                | Number of packets that entered the Flow Director module. |
+| `FD_OUT_PKT`               | Number of packets that left the Flow Director module. |
+| `MAX_FD_OUT_FIFO`          | Maximum occupancy of the FIFO that holds packets coming from the Flow Director module. |
+| `IN_DATAMOVER_PKT`         | Number of packets that entered the Data Mover module. |
+| `IN_EMPTYLIST_PKT`         | Number of entries enqueued in the empty list. |
+| `OUT_EMPTYLIST_PKT`        | Number of entries dequeued from the empty list. |
+| `PKT_ETH`                  | Number of packets forwarded back to the Ethernet without going to the host. |
+| `PKT_DROP`                 | Number of packets dropped. |
+| `PKT_PCIE`                 | Number of packets forwarded to the host over PCIe. |
+| `MAX_DM2PCIE_FIFO`         | Maximum occupancy of the packet FIFO connecting the data mover to `pdu_gen`. |
+| `MAX_DM2PCIE_META_FIFO`    | Maximum occupancy of the metadata FIFO connecting the data mover to `pdu_gen`. |
+| `PCIE_PKT`                 | Number of packets sent to PCIe that entered the `pdu_gen` module. |
+| `PCIE_META`                | Number of metadata entries for packets sent to PCIe that entered the `pdu_gen` module. |
+| `DM_PCIE_PKT`              | Number of packets that entered the packet FIFO connecting the data mover to the `pdu_gen` module. |
+| `DM_PCIE_META`             | Number of metadata entries that entered the metadata FIFO connecting the data mover to the `pdu_gen` module. |
+| `DM_ETH_PKT`               | Number of TX packets directed to Ethernet. |
 | `RX_DMA_PKT`               | Number of packets sent to the DMA engine (RX path). |
 | `RX_PKT_HEAD_UPD`          | Number of updates to the RX packet queue head pointer from software. |
 | `TX_DSC_TAIL_UPD`          | Number of updates to the TX descriptor queue tail pointer from software. |

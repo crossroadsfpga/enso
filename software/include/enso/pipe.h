@@ -275,16 +275,17 @@ class Device {
 
   const std::string kPcieAddr;
   const uint32_t kNbRxPipes;
+  const uint32_t kPipeIdMask = kNbRxPipes - 1;
 
-  IntelFpgaPcieDev* fpga_dev_;
   struct NotificationBufPair notification_buf_pair_;
   int16_t core_id_;
   uint16_t bdf_;
-  void* uio_mmap_bar2_addr_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
   std::vector<RxTxPipe*> rx_tx_pipes_;
+
+  int32_t next_pipe_id_ = -1;
 
   uint32_t tx_pr_head_ = 0;
   uint32_t tx_pr_tail_ = 0;
@@ -323,11 +324,25 @@ class RxPipe {
   template <typename T>
   class MessageBatch {
    public:
-    constexpr T begin() { return T(kBuf, kMessageLimit, this); }
-    constexpr T begin() const { return T(kBuf, kMessageLimit, this); }
-    constexpr T end() { return T(kBuf + kAvailableBytes, kMessageLimit, this); }
+    /**
+     * @brief Instantiates an empty message batch.
+     */
+    constexpr MessageBatch() : MessageBatch(nullptr, 0, 0, nullptr) {}
+
+    MessageBatch(const MessageBatch&) = default;
+    MessageBatch(MessageBatch&&) = default;
+
+    MessageBatch& operator=(const MessageBatch&) = default;
+    MessageBatch& operator=(MessageBatch&&) = default;
+
+    constexpr T begin() { return T(buf_, message_limit_, this); }
+    constexpr T begin() const { return T(buf_, message_limit_, this); }
+
+    constexpr T end() {
+      return T(buf_ + available_bytes_, message_limit_, this);
+    }
     constexpr T end() const {
-      return T(kBuf + kAvailableBytes, kMessageLimit, this);
+      return T(buf_ + available_bytes_, message_limit_, this);
     }
 
     /**
@@ -346,24 +361,30 @@ class RxPipe {
     }
 
     /**
-     * @brief Number of bytes available in the batch.
+     * @brief Returns number of bytes available in the batch.
      *
-     * @note It may include more messages than `kMessageLimit`, in which case,
-     * iterating over the batch will result in fewer bytes than kAvailableBytes.
-     * After iterating over the batch, the total number of bytes iterated over
-     * can be obtained by calling `processed_bytes()`.
+     * @note It may include more messages than `message_limit()`, in which case,
+     * iterating over the batch will result in fewer bytes than
+     * `available_bytes()`. After iterating over the batch, the total number of
+     * bytes iterated over can be obtained by calling `processed_bytes()`.
+     * 
+     * @return The number of bytes available in the batch.
      */
-    const uint32_t kAvailableBytes;
+    uint32_t available_bytes() const { return available_bytes_; }
 
     /**
-     * @brief Maximum number of messages in the batch.
+     * @brief Returns maximum number of messages in the batch.
+     * 
+     * @return The maximum number of messages in the batch.
      */
-    const int32_t kMessageLimit;
+    int32_t message_limit() const { return message_limit_; }
 
     /**
-     * @brief A pointer to the start of the batch.
+     * @brief Returns a pointer to the start of the batch.
+     * 
+     * @return A pointer to the start of the batch.
      */
-    uint8_t* const kBuf;
+    uint8_t* buf() const { return buf_; }
 
    private:
     /**
@@ -376,14 +397,17 @@ class RxPipe {
      */
     constexpr MessageBatch(uint8_t* buf, uint32_t available_bytes,
                            int32_t message_limit, RxPipe* pipe)
-        : kAvailableBytes(available_bytes),
-          kMessageLimit(message_limit),
-          kBuf(buf),
+        : available_bytes_(available_bytes),
+          message_limit_(message_limit),
+          buf_(buf),
           pipe_(pipe) {}
 
     friend class RxPipe;
     friend T;
 
+    uint32_t available_bytes_;
+    int32_t message_limit_;
+    uint8_t* buf_;
     uint32_t processed_bytes_ = 0;
     RxPipe* pipe_;
   };
@@ -476,9 +500,8 @@ class RxPipe {
    */
   template <typename T>
   constexpr MessageBatch<T> RecvMessages(int32_t max_nb_messages = -1) {
-    void* buf = nullptr;
-    uint32_t recv = external_peek_next_batch_from_queue(
-        &internal_rx_pipe_, notification_buf_pair_, &buf);
+    uint8_t* buf = nullptr;
+    uint32_t recv = Peek(&buf, ~0);
     return MessageBatch<T>((uint8_t*)buf, recv, max_nb_messages, this);
   }
 
@@ -510,6 +533,11 @@ class RxPipe {
 
   /**
    * @brief Prefetches the next batch of bytes to be received on the RxPipe.
+   * 
+   * @warning Explicit prefetching from the application cannot be used in
+   *          conjunction with the `NextRxPipeToRecv` and `NextRxTxPipeToRecv`
+   *          functions. To use prefetching with these functions, compile the
+   *          library with `-Dlatency_opt=true`.
    */
   void Prefetch();
 
@@ -544,6 +572,31 @@ class RxPipe {
   inline enso_pipe_id_t id() const { return kId; }
 
   /**
+   * @brief Returns the context associated with the pipe.
+   * 
+   * Applications can use context to associate arbitrary pointers with a given
+   * pipe that can later be retrieved in a different point. For instance, when
+   * using Device::NextRxPipeToRecv(), the application may use the context to
+   * retrieve application data associated with the returned pipe.
+   * 
+   * @see RxPipe::set_context()
+   *
+   * @return The context associated with the pipe.
+   */
+  inline void* context() const {
+    return context_;
+  }
+
+  /**
+   * @brief Sets the context associated with the pipe.
+   * 
+   * @see RxPipe::context()
+   */
+  inline void set_context(void* new_context) {
+    context_ = new_context;
+  }
+
+  /**
    * The size of a "buffer quantum" in bytes. This is the minimum unit that can
    * be sent at a time. Every transfer should be a multiple of this size.
    */
@@ -575,15 +628,19 @@ class RxPipe {
   /**
    * @brief Initializes the RX pipe.
    *
-   * @param enso_pipe_regs The Enso Pipe registers.
-   *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init(volatile struct QueueRegs* enso_pipe_regs) noexcept;
+  int Init() noexcept;
+
+  void SetAsNextPipe() noexcept { next_pipe_ = true; }
 
   friend class Device;
 
+  bool next_pipe_ = false;  ///< Whether this pipe is the next pipe to be
+                            ///< processed by the device. This is used in
+                            ///< conjunction with NextRxPipe().
   const enso_pipe_id_t kId;  ///< The ID of the pipe.
+  void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
 };
@@ -621,7 +678,7 @@ class TxPipe {
   TxPipe& operator=(TxPipe&&) = delete;
 
   /**
-   * @brief Allocate a buffer in the pipe.
+   * @brief Allocates a buffer in the pipe.
    *
    * There can only be a single buffer allocated at a time for a given Pipe.
    * Calling this function again when a buffer is already allocated will return
@@ -750,11 +807,41 @@ class TxPipe {
   }
 
   /**
+   * @brief Returns the pipe's internal buffer.
+   *
+   * @return A pointer to the start of the pipe's internal buffer.
+   */
+  inline uint8_t* buf() const { return buf_; }
+
+  /**
    * @brief Returns the pipe's ID.
    *
    * @return The pipe's ID.
    */
   inline enso_pipe_id_t id() const { return kId; }
+
+  /**
+   * @brief Returns the context associated with the pipe.
+   * 
+   * Applications can use context to associate arbitrary pointers with a given
+   * pipe that can later be retrieved in a different point.
+   * 
+   * @see TxPipe::set_context()
+   *
+   * @return The context associated with the pipe.
+   */
+  inline void* context() const {
+    return context_;
+  }
+
+  /**
+   * @brief Sets the context associated with the pipe.
+   * 
+   * @see TxPipe::context()
+   */
+  inline void set_context(void* new_context) {
+    context_ = new_context;
+  }
 
   /**
    * The size of a "buffer quantum" in bytes. This is the minimum unit that can
@@ -809,6 +896,7 @@ class TxPipe {
   friend RxTxPipe;  // FIXME(sadok): Should not need this.
 
   const enso_pipe_id_t kId;  ///< The ID of the pipe.
+  void* context_;
   Device* device_;
   uint8_t* buf_;
   bool internal_buf_;       // If true, the buffer is allocated internally.
@@ -976,6 +1064,13 @@ class RxTxPipe {
   }
 
   /**
+   * @brief Returns the pipe's internal buffer.
+   *
+   * @return A pointer to the start of the pipe's internal buffer.
+   */
+  inline uint8_t* buf() const { return rx_pipe_->buf(); }
+
+  /**
    * @copydoc RxPipe::id
    */
   inline enso_pipe_id_t rx_id() const { return rx_pipe_->id(); }
@@ -984,6 +1079,29 @@ class RxTxPipe {
    * @copydoc TxPipe::id
    */
   inline enso_pipe_id_t tx_id() const { return tx_pipe_->id(); }
+
+  /**
+   * @brief Returns the context associated with the pipe.
+   * 
+   * Applications can use context to associate arbitrary pointers with a given
+   * pipe that can later be retrieved in a different point. For instance, when
+   * using Device::NextRxTxPipeToRecv(), the application may use the context to
+   * retrieve application data associated with the returned pipe.
+   * 
+   * @see RxTxPipe::set_context()
+   *
+   * @return The context associated with the pipe.
+   */
+  inline void* context() const { return rx_pipe_->context(); }
+
+  /**
+   * @brief Sets the context associated with the pipe.
+   * 
+   * @see RxTxPipe::context()
+   */
+  inline void set_context(void* new_context) {
+    rx_pipe_->set_context(new_context);
+  }
 
   /**
    * @copydoc RxPipe::kQuantumSize
@@ -1048,7 +1166,7 @@ class MessageIteratorBase {
  public:
   constexpr uint8_t* operator*() { return addr_; }
 
-  /**
+  /*
    * This is a bit ugly but, as far as I know, there is no way to check for the
    * end of a range-based for loop without overloading the != operator.
    *
@@ -1075,6 +1193,17 @@ class MessageIteratorBase {
   }
 
  protected:
+  inline MessageIteratorBase()
+      : addr_(nullptr),
+        missing_messages_(0),
+        batch_(nullptr),
+        next_addr_(nullptr) {}
+
+  MessageIteratorBase(const MessageIteratorBase&) = default;
+  MessageIteratorBase& operator=(const MessageIteratorBase&) = default;
+  MessageIteratorBase(MessageIteratorBase&&) = default;
+  MessageIteratorBase& operator=(MessageIteratorBase&&) = default;
+
   /**
    * @param addr The address of the first message.
    * @param message_limit The maximum number of messages to receive.
@@ -1101,12 +1230,19 @@ class MessageIteratorBase {
  */
 class PktIterator : public MessageIteratorBase<PktIterator> {
  public:
+  inline PktIterator() : MessageIteratorBase() {}
+
   /**
    * @copydoc MessageIteratorBase::MessageIteratorBase
    */
   inline PktIterator(uint8_t* addr, int32_t message_limit,
                      RxPipe::MessageBatch<PktIterator>* batch)
       : MessageIteratorBase(addr, message_limit, batch) {}
+
+  PktIterator(const PktIterator&) = default;
+  PktIterator& operator=(const PktIterator&) = default;
+  PktIterator(PktIterator&&) = default;
+  PktIterator& operator=(PktIterator&&) = default;
 
   /**
    * @brief Computes the next message address based on the current message.
