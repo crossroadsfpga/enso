@@ -42,6 +42,7 @@
 #include <enso/helpers.h>
 #include <enso/internals.h>
 #include <immintrin.h>
+#include <mock_pcie.h>
 
 #include <cstdio>
 
@@ -86,12 +87,43 @@ struct __attribute__((__packed__)) RateLimitConfig {
 /**
  * Sends configuration through a notification buffer.
  *
+ * NOTE: if mock enso pipe, then add config notification to global hash table
+ * of queue configurations.
+ *
  * @param notification_buf_pair The notification buffer pair to send the
  *                              configuration through.
  * @param config_notification The configuration notification to send. Must be
  *                            a config notification, i.e., signal >= 2.
  * @return 0 on success, -1 on failure.
  */
+#ifdef MOCK
+
+int send_config(struct NotificationBufPair* notification_buf_pair,
+                struct TxNotification* config_notification) {
+  // reject anything that is not binding a configuration to a pipe
+  assert(config_notification->config_id == FLOW_TABLE_CONFIG_ID);
+
+  // Make sure it's a config notification.
+  if (config_notification->signal < 2) {
+    return -1;
+  }
+
+  // Make sure that it's enso pipe ID is within the vector
+  if (config_notification->enso_pipe_id < 0 ||
+      config_notification->enso_pipe_id >= size(enso_pipes_vector)) {
+    return -2;
+  }
+
+  // Adding to hash map
+  config_tuple tup(config_notification->dst_port, config_notification->src_port,
+                   config_notification->dst_ip, config_notification->src_ip,
+                   config_notification->protocol);
+  config_hashmap[tup] = config_notification->enso_pipe_id;
+
+  return 0;
+}
+
+#else
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification) {
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
@@ -134,6 +166,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   return 0;
 }
+#endif
 
 int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
                       uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,

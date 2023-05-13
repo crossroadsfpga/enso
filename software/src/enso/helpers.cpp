@@ -38,6 +38,7 @@
  */
 
 #include <enso/helpers.h>
+#include <mock_pcie.h>
 
 #include <cstdio>
 #include <iostream>
@@ -164,6 +165,13 @@ int rss_hash_packet(uint8_t* pkt_buf, int mod) {
     default:
       break;
   }
+
+  // check if this configuration has already been bound
+  config_tuple tup(dst_port, src_port, dst_ip, src_ip, protocol);
+  if (config_hashmap.contains(tup)) {
+    return config_hahsmap[tup];
+  }
+
   return (src_ip ^ dst_ip ^ protocol ^ src_port ^ dst_port) % mod;
 }
 

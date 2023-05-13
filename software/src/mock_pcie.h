@@ -18,6 +18,8 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "pcie.h"
@@ -37,10 +39,20 @@ typedef struct packet {
  *
  */
 typedef struct enso_pipe {
-  u_char pipe_buffer[ENSO_PIPE_SIZE];
-  int head;
-  int tail;
-  int index;
+  u_char pipe_buffer[ENSO_PIPE_SIZE];  // buffer to store packet contents
+  int head;   // position of head: where to read packets frmo
+  int tail;   // position of tail: where to write packets to
+  int index;  // index of this enso pipe in the enso pipes vector
 } enso_pipe_t;
 
+/**
+ * @brief Vector of all enso pipes in mock
+ *
+ */
 std::vector<enso_pipe_t*> enso_pipes_vector;
+
+// RSS 5-tuple containing dst port, src port, dst ip, src ip, protocol
+typedef tuple<uint16_t, uint16_t, uint32_t, uint32_t, uint32_t> config_tuple;
+
+// Hash map containing bindings of configurations to enso pipe IDs
+unordered_map<config_tuple, int> config_hashmap;
