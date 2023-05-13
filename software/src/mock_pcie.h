@@ -18,8 +18,6 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
-#include <tuple>
-#include <unordered_map>
 #include <vector>
 
 #include "pcie.h"
@@ -50,9 +48,3 @@ typedef struct enso_pipe {
  *
  */
 std::vector<enso_pipe_t*> enso_pipes_vector;
-
-// RSS 5-tuple containing dst port, src port, dst ip, src ip, protocol
-typedef tuple<uint16_t, uint16_t, uint32_t, uint32_t, uint32_t> config_tuple;
-
-// Hash map containing bindings of configurations to enso pipe IDs
-unordered_map<config_tuple, int> config_hashmap;

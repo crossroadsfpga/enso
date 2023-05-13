@@ -38,13 +38,15 @@
  */
 
 #include <enso/helpers.h>
-#include <mock_pcie.h>
 
 #include <cstdio>
 #include <iostream>
 #include <thread>
 #include <vector>
+
 namespace enso {
+
+std::unordered_map<config_tuple, int, hash_config_tuple> config_hashmap;
 
 uint16_t get_bdf_from_pcie_addr(const std::string& pcie_addr) {
   uint32_t domain, bus, dev, func;
@@ -168,8 +170,8 @@ int rss_hash_packet(uint8_t* pkt_buf, int mod) {
 
   // check if this configuration has already been bound
   config_tuple tup(dst_port, src_port, dst_ip, src_ip, protocol);
-  if (config_hashmap.contains(tup)) {
-    return config_hahsmap[tup];
+  if (config_hashmap.find(tup) != config_hashmap.end()) {
+    return config_hashmap[tup];
   }
 
   return (src_ip ^ dst_ip ^ protocol ^ src_port ^ dst_port) % mod;

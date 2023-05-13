@@ -42,7 +42,6 @@
 #include <enso/helpers.h>
 #include <enso/internals.h>
 #include <immintrin.h>
-#include <mock_pcie.h>
 
 #include <cstdio>
 
