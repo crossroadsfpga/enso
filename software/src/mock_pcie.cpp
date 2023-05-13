@@ -216,7 +216,7 @@ __consume_queue(struct RxEnsoPipeInternal* e,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
   std::cout << "Consume queue" << std::endl;
-  (void)(e);
+  (void)e;
   (void)notification_buf_pair;
   (void)peek;
 
