@@ -332,7 +332,6 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   return nb_consumed_notifications;
 }
 
-
 uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   return __get_new_tails(notification_buf_pair);
 }

@@ -367,21 +367,21 @@ class RxPipe {
      * iterating over the batch will result in fewer bytes than
      * `available_bytes()`. After iterating over the batch, the total number of
      * bytes iterated over can be obtained by calling `processed_bytes()`.
-     * 
+     *
      * @return The number of bytes available in the batch.
      */
     uint32_t available_bytes() const { return available_bytes_; }
 
     /**
      * @brief Returns maximum number of messages in the batch.
-     * 
+     *
      * @return The maximum number of messages in the batch.
      */
     int32_t message_limit() const { return message_limit_; }
 
     /**
      * @brief Returns a pointer to the start of the batch.
-     * 
+     *
      * @return A pointer to the start of the batch.
      */
     uint8_t* buf() const { return buf_; }
@@ -533,7 +533,7 @@ class RxPipe {
 
   /**
    * @brief Prefetches the next batch of bytes to be received on the RxPipe.
-   * 
+   *
    * @warning Explicit prefetching from the application cannot be used in
    *          conjunction with the `NextRxPipeToRecv` and `NextRxTxPipeToRecv`
    *          functions. To use prefetching with these functions, compile the
@@ -573,28 +573,24 @@ class RxPipe {
 
   /**
    * @brief Returns the context associated with the pipe.
-   * 
+   *
    * Applications can use context to associate arbitrary pointers with a given
    * pipe that can later be retrieved in a different point. For instance, when
    * using Device::NextRxPipeToRecv(), the application may use the context to
    * retrieve application data associated with the returned pipe.
-   * 
+   *
    * @see RxPipe::set_context()
    *
    * @return The context associated with the pipe.
    */
-  inline void* context() const {
-    return context_;
-  }
+  inline void* context() const { return context_; }
 
   /**
    * @brief Sets the context associated with the pipe.
-   * 
+   *
    * @see RxPipe::context()
    */
-  inline void set_context(void* new_context) {
-    context_ = new_context;
-  }
+  inline void set_context(void* new_context) { context_ = new_context; }
 
   /**
    * The size of a "buffer quantum" in bytes. This is the minimum unit that can
@@ -636,9 +632,9 @@ class RxPipe {
 
   friend class Device;
 
-  bool next_pipe_ = false;  ///< Whether this pipe is the next pipe to be
-                            ///< processed by the device. This is used in
-                            ///< conjunction with NextRxPipe().
+  bool next_pipe_ = false;   ///< Whether this pipe is the next pipe to be
+                             ///< processed by the device. This is used in
+                             ///< conjunction with NextRxPipe().
   const enso_pipe_id_t kId;  ///< The ID of the pipe.
   void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
@@ -822,26 +818,22 @@ class TxPipe {
 
   /**
    * @brief Returns the context associated with the pipe.
-   * 
+   *
    * Applications can use context to associate arbitrary pointers with a given
    * pipe that can later be retrieved in a different point.
-   * 
+   *
    * @see TxPipe::set_context()
    *
    * @return The context associated with the pipe.
    */
-  inline void* context() const {
-    return context_;
-  }
+  inline void* context() const { return context_; }
 
   /**
    * @brief Sets the context associated with the pipe.
-   * 
+   *
    * @see TxPipe::context()
    */
-  inline void set_context(void* new_context) {
-    context_ = new_context;
-  }
+  inline void set_context(void* new_context) { context_ = new_context; }
 
   /**
    * The size of a "buffer quantum" in bytes. This is the minimum unit that can
@@ -1080,12 +1072,12 @@ class RxTxPipe {
 
   /**
    * @brief Returns the context associated with the pipe.
-   * 
+   *
    * Applications can use context to associate arbitrary pointers with a given
    * pipe that can later be retrieved in a different point. For instance, when
    * using Device::NextRxTxPipeToRecv(), the application may use the context to
    * retrieve application data associated with the returned pipe.
-   * 
+   *
    * @see RxTxPipe::set_context()
    *
    * @return The context associated with the pipe.
@@ -1094,7 +1086,7 @@ class RxTxPipe {
 
   /**
    * @brief Sets the context associated with the pipe.
-   * 
+   *
    * @see RxTxPipe::context()
    */
   inline void set_context(void* new_context) {

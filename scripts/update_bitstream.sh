@@ -33,7 +33,7 @@ if [ "$1" == "--download" ]; then
 
     wget $BITSTREAM_URL
     mv $BITSTREAM_NAME scripts/alt_ehipc2_hw.sof
-else 
+else
     BITSTREAM_FILE=$1
 
     # Check if bitstream file exists.

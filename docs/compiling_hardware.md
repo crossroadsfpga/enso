@@ -35,7 +35,7 @@ The resulting bitstream will be placed in the directory where you ran the comman
 !!! note
 
     The above command will use a single seed to synthesize the hardware. It is often advantageous to synthesize with multiple seeds to increase the probability of finding a design that meets timing. If you have enough memory, you can synthesize with multiple seeds in parallel. (Requires GNU Parallel to be installed.)
-    
+
     To do so, you can specify multiple seeds when running the command. For example, to synthesize with seeds 1, 2, 3, and 4, run:
 
     ```bash

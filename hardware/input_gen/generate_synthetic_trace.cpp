@@ -30,6 +30,13 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <arpa/inet.h>
+#include <netinet/ether.h>
+#include <netinet/ip.h>
+#include <netinet/udp.h>
+#include <pcap/pcap.h>
+#include <sys/time.h>
+
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -37,28 +44,16 @@
 #include <string>
 #include <vector>
 
-#include <arpa/inet.h>
-#include <pcap/pcap.h>
-#include <sys/time.h>
-#include <netinet/ether.h>
-#include <netinet/ip.h>
-#include <netinet/udp.h>
-
-
 constexpr uint32_t kMaxPktSize = 1518;
 constexpr char kDstMac[] = "aa:aa:aa:aa:aa:aa";
 constexpr char kSrcMac[] = "bb:bb:bb:bb:bb:bb";
 
-static constexpr  uint32_t ip(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
-    return (((uint32_t) a) << 24)
-         | (((uint32_t) b) << 16)
-         | (((uint32_t) c) << 8)
-         |  ((uint32_t) d);
+static constexpr uint32_t ip(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
+  return (((uint32_t)a) << 24) | (((uint32_t)b) << 16) | (((uint32_t)c) << 8) |
+         ((uint32_t)d);
 }
 
-
-int main(int argc, char const *argv[])
-{
+int main(int argc, char const* argv[]) {
   if (argc != 6) {
     std::cerr << "Usage: " << argv[0] << " NB_PKTS PKT_SIZE NB_SRC NB_DST "
               << "OUTPUT_PCAP" << std::endl;
@@ -83,8 +78,8 @@ int main(int argc, char const *argv[])
 
   struct ether_addr dst_mac = *ether_aton(kDstMac);
   struct ether_addr src_mac = *ether_aton(kSrcMac);
-  pcap_t *pd;
-  pcap_dumper_t *pdumper;
+  pcap_t* pd;
+  pcap_dumper_t* pdumper;
 
   pd = pcap_open_dead(DLT_EN10MB, 65535);
   pdumper = pcap_dump_open(pd, output_pcap.c_str());
@@ -94,12 +89,12 @@ int main(int argc, char const *argv[])
   uint8_t pkt[kMaxPktSize];
   memset(pkt, 0, kMaxPktSize);
 
-  struct ether_header* l2_hdr = (struct ether_header*) &pkt;
-  struct iphdr* l3_hdr = (struct iphdr*) (l2_hdr + 1);
-  struct udphdr* l4_hdr = (struct udphdr*) (l3_hdr + 1);
+  struct ether_header* l2_hdr = (struct ether_header*)&pkt;
+  struct iphdr* l3_hdr = (struct iphdr*)(l2_hdr + 1);
+  struct udphdr* l4_hdr = (struct udphdr*)(l3_hdr + 1);
 
-  *((struct ether_addr*) &l2_hdr->ether_dhost) = dst_mac;
-  *((struct ether_addr*) &l2_hdr->ether_shost) = src_mac;
+  *((struct ether_addr*)&l2_hdr->ether_dhost) = dst_mac;
+  *((struct ether_addr*)&l2_hdr->ether_shost) = src_mac;
 
   l2_hdr->ether_type = htons(ETHERTYPE_IP);
   l3_hdr->ihl = 5;
@@ -117,7 +112,7 @@ int main(int argc, char const *argv[])
   uint32_t dst_ip = ip(192, 168, 0, 0);
 
   uint32_t mss =
-    pkt_size - sizeof(*l2_hdr) - sizeof(*l3_hdr) - sizeof(*l4_hdr) - 4;
+      pkt_size - sizeof(*l2_hdr) - sizeof(*l3_hdr) - sizeof(*l4_hdr) - 4;
 
   int nb_pkts = 0;
 
@@ -137,11 +132,11 @@ int main(int argc, char const *argv[])
       l4_hdr->len = htons(sizeof(*l4_hdr) + mss);
 
       ++(ts.tv_usec);
-      pcap_dump((u_char*) pdumper, &pkt_hdr, pkt);
+      pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
 
       ++nb_pkts;
       if (nb_pkts >= total_nb_packets) {
-          break;
+        break;
       }
     }
   }

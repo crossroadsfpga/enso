@@ -93,7 +93,7 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
 
 /**
  * Get latest tails for the pipes associated with the given notification buffer.
- * 
+ *
  * @param notification_buf_pair Notification buffer to get data from.
  * @return Number of notifications received.
  */
@@ -150,7 +150,7 @@ void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe);
 
 /**
  * Prefetches a given Enso Pipe.
- * 
+ *
  * @param enso_pipe Enso pipe to prefetch.
  */
 void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
