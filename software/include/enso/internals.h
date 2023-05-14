@@ -75,12 +75,12 @@ struct __attribute__((__packed__)) RxNotification {
 };
 
 struct __attribute__((__packed__)) TxNotification {
-  uint64_t signal; // whether or not notification has been consumed by hardware
+  uint64_t signal;  // whether or not notification has been consumed by hardware
   uint64_t phys_addr;
   uint64_t length;  // In bytes (up to 1MB).
   uint64_t pad[5];
 };
- 
+
 struct NotificationBufPair {
   // First cache line:
   struct RxNotification* rx_buf;

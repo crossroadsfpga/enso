@@ -49,12 +49,9 @@
 namespace enso {
 
 #ifdef MOCK
-uint64_t virt_to_phys(void *virt) {
-  return virt;
-}
+uint64_t virt_to_phys(void* virt) { return virt; }
 #else
 uint64_t virt_to_phys(void* virt) {
-
   long page_size = sysconf(_SC_PAGESIZE);
   int fd = open("/proc/self/pagemap", O_RDONLY);
 

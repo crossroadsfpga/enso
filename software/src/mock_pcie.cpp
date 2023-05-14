@@ -98,7 +98,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
  * @return int
  */
 int mock_enso_pipe_init() {
-  enso_pipe_t* enso_pipe = new enso_pipe_t;
+  enso_pipe_t* enso_pipe = malloc(sizeof(enso_pipe_t));
   if (!enso_pipe) {
     return -1;
   }
@@ -233,7 +233,7 @@ __consume_queue(struct RxEnsoPipeInternal* e,
   uint32_t max_index =
       std::min(pipe_packets_tail, pipe_packets_head + MOCK_BATCH_SIZE);
 
-  int enso_pipe_index;
+  int enso_pipe_index = 0;
   // getting total number of bytes to read
   while (index < max_index) {
     packet_t* pkt = in_buf[index];
