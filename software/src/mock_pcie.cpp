@@ -98,7 +98,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
  * @return int
  */
 int mock_enso_pipe_init() {
-  enso_pipe_t* enso_pipe = malloc(sizeof(enso_pipe_t));
+  enso_pipe_t* enso_pipe = new struct enso_pipe();
   if (!enso_pipe) {
     return -1;
   }
