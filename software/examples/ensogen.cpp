@@ -566,9 +566,9 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
     transmission_length =
         std::min(transmission_length, tx_args.current_enso_pipe->length);
 
-    uint32_t good_transmission_length = (uint32_t)std::min(
-        tx_args.total_remaining_good_bytes,
-        (uint64_t)tx_args.current_enso_pipe->good_bytes);
+    uint32_t good_transmission_length =
+        (uint32_t)std::min(tx_args.total_remaining_good_bytes,
+                           (uint64_t)tx_args.current_enso_pipe->good_bytes);
 
     uint64_t phys_addr = tx_args.current_enso_pipe->phys_addr;
 
@@ -861,10 +861,9 @@ int main(int argc, char** argv) {
 
   } else {
     // Send and receive packets within the same thread.
-    std::thread rx_tx_thread =
-        std::thread([&parsed_args, &rx_stats, total_bytes_to_send,
-                     total_good_bytes_to_send, pkts_in_last_buffer, &enso_pipes,
-                     &tx_stats] {
+    std::thread rx_tx_thread = std::thread(
+        [&parsed_args, &rx_stats, total_bytes_to_send, total_good_bytes_to_send,
+         pkts_in_last_buffer, &enso_pipes, &tx_stats] {
           std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
           for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {

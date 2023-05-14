@@ -1,13 +1,13 @@
 // (C) 2001-2019 Intel Corporation. All rights reserved.
-// Your use of Intel Corporation's design tools, logic functions and other 
-// software and tools, and its AMPP partner logic functions, and any output 
-// files from any of the foregoing (including device programming or simulation 
-// files), and any associated documentation or information are expressly subject 
-// to the terms and conditions of the Intel Program License Subscription 
-// Agreement, Intel FPGA IP License Agreement, or other applicable 
-// license agreement, including, without limitation, that your use is for the 
-// sole purpose of programming logic devices manufactured by Intel and sold by 
-// Intel or its authorized distributors.  Please refer to the applicable 
+// Your use of Intel Corporation's design tools, logic functions and other
+// software and tools, and its AMPP partner logic functions, and any output
+// files from any of the foregoing (including device programming or simulation
+// files), and any associated documentation or information are expressly subject
+// to the terms and conditions of the Intel Program License Subscription
+// Agreement, Intel FPGA IP License Agreement, or other applicable
+// license agreement, including, without limitation, that your use is for the
+// sole purpose of programming logic devices manufactured by Intel and sold by
+// Intel or its authorized distributors.  Please refer to the applicable
 // agreement for further details.
 
 
@@ -29,9 +29,9 @@ module alt_aeuex_avalon_mm_read_combine #(
 	output reg [DAT_WIDTH-1:0] host_readdata,
 	output reg host_readdata_valid,
 	output host_waitrequest,
-	
+
 	input [NUM_CLIENTS-1:0] client_readdata_valid,
-	input [NUM_CLIENTS*DAT_WIDTH-1:0] client_readdata		
+	input [NUM_CLIENTS*DAT_WIDTH-1:0] client_readdata
 );
 
 /////////////////////////
@@ -66,9 +66,9 @@ generate
 		for (i=0; i<NUM_CLIENTS; i=i+1) begin : rs
 			assign mbits[i] = client_readdata_valid_r[i] &
 				client_readdata_r[i*DAT_WIDTH+j];
-		end	
+		end
 		assign rmux[j] = (|mbits) | (timeout_read & tconst[j]);
-	end	
+	end
 endgenerate
 
 always @(posedge clk) begin
@@ -94,7 +94,7 @@ always @(posedge clk or posedge arst) begin
 	timeout_read <= 1'b0;
 	if (host_read & !read_pending) begin
 		timer <= 0;
-		read_pending <= 1'b1;				
+		read_pending <= 1'b1;
 	end
 	else begin
 		if (read_pending) begin

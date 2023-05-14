@@ -254,8 +254,9 @@ class EnsoGen(Pktgen):
         # Retrieve the latest stats.
         with tempfile.TemporaryDirectory() as tmp:
             local_stats = f"{tmp}/stats.csv"
-            download_file(self.nic.host_name, self.stats_file, local_stats,
-                          self.log_file)
+            download_file(
+                self.nic.host_name, self.stats_file, local_stats, self.log_file
+            )
             parsed_stats = EnsoGenStats(local_stats)
 
             stats_summary = parsed_stats.get_summary(calculate_tx_mean)

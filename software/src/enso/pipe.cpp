@@ -86,9 +86,7 @@ void RxPipe::Free(uint32_t nb_bytes) {
   advance_pipe(&internal_rx_pipe_, nb_bytes);
 }
 
-void RxPipe::Prefetch() {
-  prefetch_pipe(&internal_rx_pipe_);
-}
+void RxPipe::Prefetch() { prefetch_pipe(&internal_rx_pipe_); }
 
 void RxPipe::Clear() { fully_advance_pipe(&internal_rx_pipe_); }
 
