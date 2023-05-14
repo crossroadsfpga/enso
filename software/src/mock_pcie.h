@@ -70,26 +70,26 @@
 #define MOCK_BATCH_SIZE 16
 #define MOCK_ENSO_PIPE_SIZE 2048
 
-typedef struct packet {
+struct Packet {
   u_char* pkt_bytes;
   uint32_t pkt_len;
-} packet_t;
+};
 
 /**
  * @brief Mock enso pipe structure.
  *
  */
-typedef struct enso_pipe {
+struct MockEnsoPipe {
   u_char pipe_buffer[ENSO_PIPE_SIZE];  // buffer to store packet contents
   int head;   // position of head: where to read packets frmo
   int tail;   // position of tail: where to write packets to
   int index;  // index of this enso pipe in the enso pipes vector
-} enso_pipe_t;
+};
 
 /**
  * @brief Vector of all enso pipes in mock
  *
  */
-std::vector<enso_pipe_t*> enso_pipes_vector;
+std::vector<struct MockEnsoPipe*> enso_pipes_vector;
 
 #endif  // SOFTWARE_SRC_MOCK_PCIE_H_

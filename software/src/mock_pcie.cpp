@@ -60,7 +60,7 @@
 namespace enso {
 
 struct PcapHandlerContext {
-  packet_t** buf;
+  struct Packet** buf;
   int buf_position;
   uint32_t hugepage_offset;
   pcap_t* pcap;
@@ -73,7 +73,7 @@ pcap_t* pd;
 // PCAP dumper to send packets to
 pcap_dumper_t* pdumper_out;
 // Buffer storing all incoming packets
-packet_t* in_buf[MAX_NUM_PACKETS];
+struct Packet* in_buf[MAX_NUM_PACKETS];
 // Index of pipe head: where the program can start reading from
 uint32_t pipe_packets_head;
 // Index of pipe tail: where the program can start writing to
@@ -98,7 +98,7 @@ int notification_buf_init(struct NotificationBufPair* notification_buf_pair,
  * @return int
  */
 int mock_enso_pipe_init() {
-  enso_pipe_t* enso_pipe = new struct enso_pipe();
+  struct MockEnsoPipe* enso_pipe = new struct MockEnsoPipe();
   if (!enso_pipe) {
     return -1;
   }
@@ -121,7 +121,7 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
   uint32_t len = pkt_hdr->len;
 
-  packet_t* pkt = new packet_t;
+  struct Packet* pkt = new struct Packet();
   pkt->pkt_bytes = new u_char[len];
   memcpy(pkt->pkt_bytes, pkt_bytes, len);
   pkt->pkt_len = len;
@@ -236,7 +236,7 @@ __consume_queue(struct RxEnsoPipeInternal* e,
   int enso_pipe_index = 0;
   // getting total number of bytes to read
   while (index < max_index) {
-    packet_t* pkt = in_buf[index];
+    struct Packet* pkt = in_buf[index];
     if (index == 0) {
       enso_pipe_index =
           rss_hash_packet(pkt->pkt_bytes, size(enso_pipes_vector));
@@ -251,7 +251,7 @@ __consume_queue(struct RxEnsoPipeInternal* e,
     index += 1;
   }
 
-  enso_pipe_t* enso_pipe = enso_pipes_vector[enso_pipe_index];
+  struct MockEnsoPipe* enso_pipe = enso_pipes_vector[enso_pipe_index];
   void* initial_buf = enso_pipe->pipe_buffer + enso_pipe->head;
   int num_bytes_available;
   if (enso_pipe->tail > enso_pipe->head) {
@@ -265,7 +265,7 @@ __consume_queue(struct RxEnsoPipeInternal* e,
   int position = enso_pipe->head;
   // reading bytes
   while (num_bytes_available > 0 && pipe_packets_head < max_index) {
-    packet_t* pkt = in_buf[pipe_packets_head];
+    struct Packet* pkt = in_buf[pipe_packets_head];
     uint32_t pkt_len = pkt->pkt_len;
     // packets must be cache-aligned: so get aligned length
     uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
