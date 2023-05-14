@@ -83,10 +83,10 @@ struct stats_t {
 
 // RSS 5-tuple containing dst port, src port, dst ip, src ip, protocol
 typedef std::tuple<uint16_t, uint16_t, uint32_t, uint32_t, uint32_t>
-    config_tuple;
+    ConfigTuple;
 
 // A hash function used to hash the config tuple
-struct hash_config_tuple {
+struct HashConfigTuple {
   template <class T1, class T2, class T3, class T4, class T5>
 
   size_t operator()(const std::tuple<T1, T2, T3, T4, T5>& x) const {
@@ -96,7 +96,7 @@ struct hash_config_tuple {
 };
 
 // Hash map containing bindings of configurations to enso pipe IDs
-extern std::unordered_map<config_tuple, int, hash_config_tuple> config_hashmap;
+extern std::unordered_map<ConfigTuple, int, HashConfigTuple> config_hashmap;
 
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
