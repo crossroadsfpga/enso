@@ -114,9 +114,9 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   }
 
   // Adding to hash map
-  config_tuple tup(config_notification->dst_port, config_notification->src_port,
-                   config_notification->dst_ip, config_notification->src_ip,
-                   config_notification->protocol);
+  ConfigTuple tup(config_notification->dst_port, config_notification->src_port,
+                  config_notification->dst_ip, config_notification->src_ip,
+                  config_notification->protocol);
   config_hashmap[tup] = config_notification->enso_pipe_id;
 
   return 0;
