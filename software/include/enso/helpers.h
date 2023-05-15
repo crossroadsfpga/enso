@@ -100,7 +100,7 @@ constexpr uint16_t be_to_le_16(const uint16_t le) {
   return ((le & (uint16_t)0x00ff) << 8) | ((le & (uint16_t)0xff00) >> 8);
 }
 
-constexpr uint16_t get_pkt_len(const uint8_t* addr) {
+_enso_always_inline uint16_t get_pkt_len(const uint8_t* addr) {
   const struct ether_header* l2_hdr = (struct ether_header*)addr;
   const struct iphdr* l3_hdr = (struct iphdr*)(l2_hdr + 1);
   const uint16_t total_len = be_to_le_16(l3_hdr->tot_len) + sizeof(*l2_hdr);
@@ -108,7 +108,7 @@ constexpr uint16_t get_pkt_len(const uint8_t* addr) {
   return total_len;
 }
 
-constexpr uint8_t* get_next_pkt(uint8_t* pkt) {
+_enso_always_inline uint8_t* get_next_pkt(uint8_t* pkt) {
   uint16_t pkt_len = get_pkt_len(pkt);
   uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
   return pkt + nb_flits * 64;
