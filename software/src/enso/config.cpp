@@ -46,12 +46,12 @@
 #include <cassert>
 #include <cstdio>
 #include <tuple>
+#include <vector>
 
+#include "../mock_pcie.h"
 #include "../pcie.h"
 
 namespace enso {
-
-extern std::vector<struct MockEnsoPipe*> enso_pipes_vector;
 
 enum ConfigId {
   FLOW_TABLE_CONFIG_ID = 1,

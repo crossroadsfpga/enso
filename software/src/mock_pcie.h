@@ -41,29 +41,13 @@
 #ifndef SOFTWARE_SRC_MOCK_PCIE_H_
 #define SOFTWARE_SRC_MOCK_PCIE_H_
 
-#include <arpa/inet.h>
-#include <enso/consts.h>
-#include <enso/helpers.h>
-#include <enso/ixy_helpers.h>
-#include <immintrin.h>
-#include <pcap/pcap.h>
-#include <sched.h>
-#include <string.h>
-#include <time.h>
+#include <endian.h>
+#include <enso/internals.h>
+#include <netinet/ether.h>
+#include <netinet/ip.h>
 
-#include <algorithm>
-#include <cassert>
-#include <cerrno>
-#include <cstdint>
-#include <cstdlib>
-#include <ctime>
-#include <iomanip>
-#include <iostream>
-#include <limits>
-#include <stdexcept>
 #include <vector>
 
-#include "pcie.h"
 #include "syscall_api/intel_fpga_pcie_api.hpp"
 
 #define MAX_NUM_PACKETS 512
@@ -90,6 +74,6 @@ struct MockEnsoPipe {
  * @brief Vector of all enso pipes in mock
  *
  */
-std::vector<struct MockEnsoPipe*> enso_pipes_vector;
+static std::vector<struct MockEnsoPipe*> enso_pipes_vector;
 
 #endif  // SOFTWARE_SRC_MOCK_PCIE_H_

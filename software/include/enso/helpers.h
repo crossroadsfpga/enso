@@ -81,6 +81,7 @@ struct stats_t {
   uint64_t nb_pkts;
 } __attribute__((aligned(64)));
 
+#ifdef MOCK
 // RSS 5-tuple containing dst port, src port, dst ip, src ip, protocol
 typedef std::tuple<uint16_t, uint16_t, uint32_t, uint32_t, uint32_t>
     ConfigTuple;
@@ -97,6 +98,8 @@ struct HashConfigTuple {
 
 // Hash map containing bindings of configurations to enso pipe IDs
 extern std::unordered_map<ConfigTuple, int, HashConfigTuple> config_hashmap;
+
+#endif
 
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
