@@ -1241,7 +1241,7 @@ class PktIterator : public MessageIteratorBase<PktIterator> {
    *
    * @return The next message.
    */
-  constexpr inline uint8_t* GetNextMessage(uint8_t* current_message) {
+  _enso_always_inline uint8_t* GetNextMessage(uint8_t* current_message) {
     return get_next_pkt(current_message);
   }
 
@@ -1250,7 +1250,7 @@ class PktIterator : public MessageIteratorBase<PktIterator> {
    *
    * @param nb_bytes The number of bytes processed.
    */
-  constexpr inline void OnAdvanceMessage(uint32_t nb_bytes) {
+  constexpr void OnAdvanceMessage(uint32_t nb_bytes) {
     batch_->pipe_->ConfirmBytes(nb_bytes);
   }
 };
@@ -1273,14 +1273,14 @@ class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
   /**
    * @copydoc PktIterator::GetNextMessage
    */
-  constexpr inline uint8_t* GetNextMessage(uint8_t* current_message) {
+  _enso_always_inline uint8_t* GetNextMessage(uint8_t* current_message) {
     return get_next_pkt(current_message);
   }
 
   /**
    * @copydoc PktIterator::OnAdvanceMessage
    */
-  constexpr inline void OnAdvanceMessage([[maybe_unused]] uint32_t nb_bytes) {}
+  constexpr void OnAdvanceMessage([[maybe_unused]] uint32_t nb_bytes) {}
 };
 
 }  // namespace enso

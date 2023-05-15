@@ -112,11 +112,11 @@ class PktIterator : public MessageIteratorBase<PktIterator> {
                      RxPipe::MessageBatch<PktIterator>* batch)
       : MessageIteratorBase(addr, message_limit, batch) {} // (1)!
 
-  constexpr inline uint8_t* GetNextMessage(uint8_t* current_message) {
+  constexpr uint8_t* GetNextMessage(uint8_t* current_message) {
     return get_next_pkt(current_message); // (2)!
   }
 
-  constexpr inline void OnAdvanceMessage(uint32_t nb_bytes) {
+  constexpr void OnAdvanceMessage(uint32_t nb_bytes) {
     batch_->pipe_->ConfirmBytes(nb_bytes); // (3)!
   }
 };
