@@ -43,11 +43,15 @@
 #include <enso/internals.h>
 #include <immintrin.h>
 
+#include <cassert>
 #include <cstdio>
+#include <tuple>
 
 #include "../pcie.h"
 
 namespace enso {
+
+extern std::vector<struct MockEnsoPipe*> enso_pipes_vector;
 
 enum ConfigId {
   FLOW_TABLE_CONFIG_ID = 1,
@@ -99,25 +103,31 @@ struct __attribute__((__packed__)) RateLimitConfig {
 
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification) {
+  (void)notification_buf_pair;
+  FlowTableConfig* config = (FlowTableConfig*)config_notification;
   // reject anything that is not binding a configuration to a pipe
-  assert(config_notification->config_id == FLOW_TABLE_CONFIG_ID);
+  assert(config->config_id == FLOW_TABLE_CONFIG_ID);
 
   // Make sure it's a config notification.
-  if (config_notification->signal < 2) {
+  if (config->signal < 2) {
     return -1;
   }
 
   // Make sure that it's enso pipe ID is within the vector
-  if (config_notification->enso_pipe_id < 0 ||
-      config_notification->enso_pipe_id >= size(enso_pipes_vector)) {
+  if (config->enso_pipe_id >= size(enso_pipes_vector)) {
     return -2;
   }
 
   // Adding to hash map
-  ConfigTuple tup(config_notification->dst_port, config_notification->src_port,
-                  config_notification->dst_ip, config_notification->src_ip,
-                  config_notification->protocol);
-  config_hashmap[tup] = config_notification->enso_pipe_id;
+  uint16_t dst_port = config->dst_port;
+  uint16_t src_port = config->src_port;
+  uint32_t dst_ip = config->dst_ip;
+  uint32_t src_ip = config->src_ip;
+  uint32_t protocol = config->protocol;
+  ConfigTuple tup =
+      std::make_tuple(dst_port, src_port, dst_ip, src_ip, protocol);
+
+  config_hashmap[tup] = config->enso_pipe_id;
 
   return 0;
 }
