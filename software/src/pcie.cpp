@@ -469,10 +469,6 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
 
     // Block until we can send: continually move TX pipe head forward based
     // on pipe's completion notifications
-
-    // question--is this not a spinloop and would it not be better to set up
-    // a mechanism to sleep and then be awakened (like condition variables) once
-    // a change has been made?
     while (unlikely(free_slots == 0)) {
       ++notification_buf_pair->tx_full_cnt;
       // updating head to move past packets already sent
