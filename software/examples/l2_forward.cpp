@@ -49,9 +49,11 @@ static volatile bool setup_done = false;
 
 // Adapted from DPDK's rte_mov64() and rte_memcpy() functions.
 static _enso_always_inline void mov64(uint8_t* dst, const uint8_t* src) {
-  __m512i zmm0;
-  zmm0 = _mm512_loadu_si512((const void*)src);
-  _mm512_storeu_si512((void*)dst, zmm0);
+  // __m512i zmm0;
+  // zmm0 = _mm512_loadu_si512((const void*)src);
+  // _mm512_storeu_si512((void*)dst, zmm0);
+  (void)dst;
+  (void)src;
 }
 
 static _enso_always_inline void memcpy_64_align(void* dst, const void* src,

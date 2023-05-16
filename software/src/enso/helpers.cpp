@@ -46,7 +46,9 @@
 
 namespace enso {
 
+#ifdef MOCK
 std::unordered_map<ConfigTuple, int, HashConfigTuple> config_hashmap;
+#endif
 
 uint16_t get_bdf_from_pcie_addr(const std::string& pcie_addr) {
   uint32_t domain, bus, dev, func;
@@ -135,6 +137,7 @@ void print_pkt_header(uint8_t* pkt) {
   }
 }
 
+#ifdef MOCK
 /**
  * @brief Hashes a packet with RSS to determine which pipe it should be
  * directed to.
@@ -176,6 +179,8 @@ int rss_hash_packet(uint8_t* pkt_buf, int mod) {
 
   return (src_ip ^ dst_ip ^ protocol ^ src_port ^ dst_port) % mod;
 }
+
+#endif
 
 int set_core_id(std::thread& thread, int core_id) {
   cpu_set_t cpuset;
