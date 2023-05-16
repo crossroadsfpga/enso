@@ -96,7 +96,6 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
 
         ++(stats->nb_pkts);
       }
-      printf("num packets: %ld\n", stats->nb_pkts);
       uint32_t batch_length = batch.processed_bytes();
       pipe->ConfirmBytes(batch_length);
 

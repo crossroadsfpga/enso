@@ -74,10 +74,10 @@ pcap_t* pd;
 pcap_dumper_t* pdumper_out;
 // Buffer storing all incoming packets
 struct Packet* in_buf[MAX_NUM_PACKETS];
-// Index of pipe head: where the program can start reading from
-uint32_t pipe_packets_head;
+// Index of network head: where the program can start reading from
+uint32_t network_head;
 // Index of pipe tail: where the program can start writing to
-uint32_t pipe_packets_tail;
+uint32_t network_tail;
 
 int init = 1;
 
@@ -134,11 +134,11 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   pkt->pkt_bytes = new u_char[len];
   memcpy(pkt->pkt_bytes, pkt_bytes, len);
   pkt->pkt_len = len;
-  context->buf[pipe_packets_tail] = pkt;
+  context->buf[network_tail] = pkt;
 
-  pipe_packets_tail += 1;
+  network_tail += 1;
   // if we hit the max num packets to read, break from loop
-  if (pipe_packets_tail == MAX_NUM_PACKETS) pcap_breakloop(context->pcap);
+  if (network_tail == MAX_NUM_PACKETS) pcap_breakloop(context->pcap);
 }
 
 /**
@@ -192,8 +192,8 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
     ts.tv_sec = 0;
     ts.tv_usec = 0;
 
-    pipe_packets_head = 0;
-    pipe_packets_tail = 0;
+    network_head = 0;
+    network_tail = 0;
 
     // opening file to dump packets to that mimics the network.
     pd = pcap_open_dead(DLT_EN10MB, 65535);
@@ -209,7 +209,8 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
 
 /**
  * @brief Consumes from the network and puts the received packets on the correct
- * pipe, which is determined with RSS hashing.
+ * pipe, which is determined with RSS hashing and then gives the address of the
+ * buffer to the caller.
  *
  * @param enso_pipe
  * @param notification_buf_pair
@@ -221,27 +222,21 @@ static _enso_always_inline uint32_t
 __consume_queue(struct RxEnsoPipeInternal* e,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
-  std::cout << "Consume queue" << std::endl;
   (void)e;
   (void)notification_buf_pair;
   (void)peek;
 
   *buf = new u_char[0];
 
-  printf("pipe packets head: %d, tail: %d\n", pipe_packets_head,
-         pipe_packets_tail);
-  if (pipe_packets_head == pipe_packets_tail) {
-    std::cout << "Nothing in queue" << std::endl;
+  if (network_head == network_tail) {
     return 0;
   }
 
   uint32_t index = 0;
   size_t num_bytes_read = 0;
-
-  uint32_t max_index =
-      std::min(pipe_packets_tail, pipe_packets_head + MOCK_BATCH_SIZE);
-
+  uint32_t max_index = std::min(network_tail, network_head + MOCK_BATCH_SIZE);
   int enso_pipe_index = 0;
+
   // getting total number of bytes to read
   while (index < max_index) {
     struct Packet* pkt = in_buf[index];
@@ -259,6 +254,7 @@ __consume_queue(struct RxEnsoPipeInternal* e,
     index += 1;
   }
 
+  // getting enso pipe and number of bytes available in it
   struct MockEnsoPipe* enso_pipe = enso_pipes_vector[enso_pipe_index];
   void* initial_buf = enso_pipe->pipe_buffer + enso_pipe->head;
   int num_bytes_available;
@@ -269,11 +265,11 @@ __consume_queue(struct RxEnsoPipeInternal* e,
         MOCK_ENSO_PIPE_SIZE - (enso_pipe->head - enso_pipe->tail);
   }
 
+  // reading bytes from network and copying to the enso pipe
   num_bytes_read = 0;
   int position = enso_pipe->head;
-  // reading bytes
-  while (num_bytes_available > 0 && pipe_packets_head < max_index) {
-    struct Packet* pkt = in_buf[pipe_packets_head];
+  while (num_bytes_available > 0 && network_head < max_index) {
+    struct Packet* pkt = in_buf[network_head];
     uint32_t pkt_len = pkt->pkt_len;
     // packets must be cache-aligned: so get aligned length
     uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
@@ -285,14 +281,16 @@ __consume_queue(struct RxEnsoPipeInternal* e,
 
     position = (position + pkt_aligned_len) % MOCK_ENSO_PIPE_SIZE;
     num_bytes_read += pkt_aligned_len;
-    pipe_packets_head += 1;
+    network_head += 1;
     num_bytes_available -= pkt_aligned_len;
   }
 
+  // changing position of head and tail in enso pipe
+  enso_pipe->head = (enso_pipe->head + num_bytes_read) % MOCK_ENSO_PIPE_SIZE;
+  enso_pipe->tail = (enso_pipe->tail + num_bytes_read) % MOCK_ENSO_PIPE_SIZE;
+
   // give the buffer to the caller
   *buf = initial_buf;
-
-  printf("buffer given on consuming: %p\n", initial_buf);
 
   return num_bytes_read;
 }
@@ -307,8 +305,6 @@ __consume_queue(struct RxEnsoPipeInternal* e,
  */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len) {
-  printf("Sending to queue with phys addr %p\n", (void*)phys_addr);
-
   (void)notification_buf_pair;
 
   u_char* addr_buf = new u_char[len];
@@ -316,7 +312,6 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
 
   uint32_t processed_bytes = 0;
   uint8_t* pkt = addr_buf;
-  int num_packets = 0;
 
   while (processed_bytes < len) {
     // read header of each packet to get packet length
@@ -336,9 +331,7 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
     // moving packet forward by aligned length
     pkt += pkt_aligned_len;
     processed_bytes += pkt_aligned_len;
-    num_packets += 1;
   }
-  pipe_packets_tail = (pipe_packets_tail + num_packets) % MOCK_ENSO_PIPE_SIZE;
 
   return len;
 }
@@ -466,7 +459,7 @@ __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
 
   // get hash of five-tuple from
   (void)notification_buf_pair;
-  if (pipe_packets_head == pipe_packets_tail) return -1;
+  if (network_head == network_tail) return -1;
   return 0;
 }
 

@@ -52,7 +52,7 @@
 
 #define MAX_NUM_PACKETS 512
 #define MOCK_BATCH_SIZE 16
-#define MOCK_ENSO_PIPE_SIZE 2048
+#define MOCK_ENSO_PIPE_SIZE (2048 * 16)
 
 struct Packet {
   u_char* pkt_bytes;
@@ -64,7 +64,7 @@ struct Packet {
  *
  */
 struct MockEnsoPipe {
-  u_char pipe_buffer[ENSO_PIPE_SIZE];  // buffer to store packet contents
+  u_char pipe_buffer[MOCK_ENSO_PIPE_SIZE];  // buffer to store packet contents
   int head;   // position of head: where to read packets frmo
   int tail;   // position of tail: where to write packets to
   int index;  // index of this enso pipe in the enso pipes vector
