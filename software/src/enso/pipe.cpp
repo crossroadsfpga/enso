@@ -103,14 +103,16 @@ TxPipe::~TxPipe() {
 }
 
 int TxPipe::Init() noexcept {
+#ifndef MOCK
   if (internal_buf_) {
     std::string name = "enso:tx_pipe_" + std::to_string(kId);
+
     buf_ = (uint8_t*)get_huge_page(name, true);
     if (unlikely(!buf_)) {
       return -1;
     }
   }
-
+#endif
   buf_phys_addr_ = virt_to_phys(buf_);
 
   return 0;

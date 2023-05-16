@@ -46,6 +46,7 @@
 #include <cassert>
 #include <cerrno>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
@@ -98,7 +99,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
  *
  * @return int
  */
-int mock_enso_pipe_init() {
+int mock_enso_pipe_init(struct RxEnsoPipeInternal* rx_enso_pipe) {
   struct MockEnsoPipe* enso_pipe = new struct MockEnsoPipe();
   if (!enso_pipe) {
     return -1;
@@ -107,6 +108,13 @@ int mock_enso_pipe_init() {
   enso_pipe->tail = 0;
   enso_pipe->index = size(enso_pipes_vector);
   enso_pipes_vector.push_back(enso_pipe);
+
+  // Setting up rx enso pipe with mock buffer
+  rx_enso_pipe->buf = (uint32_t*)enso_pipe->pipe_buffer;
+  rx_enso_pipe->buf_phys_addr = (uint64_t)enso_pipe->pipe_buffer;
+  rx_enso_pipe->rx_head = 0;
+  rx_enso_pipe->rx_tail = 0;
+
   return 0;
 }
 
@@ -154,7 +162,6 @@ int read_in_file() {
   if ((err = pcap_loop(pcap, 0, pcap_pkt_handler, (u_char*)&context)) < 0) {
     std::cerr << "Error while reading pcap (" << pcap_geterr(pcap) << ")"
               << std::endl;
-    std::cerr << "Error: " << err << std::endl;
     return 3;
   }
   return 0;
@@ -177,7 +184,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   (void)notification_buf_pair;
   (void)enso_pipe_id;
 
-  if (mock_enso_pipe_init() < 0) {
+  if (mock_enso_pipe_init(enso_pipe) < 0) {
     return -1;
   }
 
@@ -221,6 +228,8 @@ __consume_queue(struct RxEnsoPipeInternal* e,
 
   *buf = new u_char[0];
 
+  printf("pipe packets head: %d, tail: %d\n", pipe_packets_head,
+         pipe_packets_tail);
   if (pipe_packets_head == pipe_packets_tail) {
     std::cout << "Nothing in queue" << std::endl;
     return 0;
@@ -283,6 +292,8 @@ __consume_queue(struct RxEnsoPipeInternal* e,
   // give the buffer to the caller
   *buf = initial_buf;
 
+  printf("buffer given on consuming: %p\n", initial_buf);
+
   return num_bytes_read;
 }
 
@@ -296,17 +307,16 @@ __consume_queue(struct RxEnsoPipeInternal* e,
  */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len) {
-  std::cout << "Sending to queue with phys addr %p" << std::endl;
+  printf("Sending to queue with phys addr %p\n", (void*)phys_addr);
 
   (void)notification_buf_pair;
 
   u_char* addr_buf = new u_char[len];
-  std::cout << "Doing memcpy" << std::endl;
   memcpy(addr_buf, (uint8_t*)phys_addr, len);
-  std::cout << "Done memcpy" << std::endl;
 
   uint32_t processed_bytes = 0;
   uint8_t* pkt = addr_buf;
+  int num_packets = 0;
 
   while (processed_bytes < len) {
     // read header of each packet to get packet length
@@ -326,10 +336,11 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
     // moving packet forward by aligned length
     pkt += pkt_aligned_len;
     processed_bytes += pkt_aligned_len;
+    num_packets += 1;
   }
-  pipe_packets_tail += processed_bytes;
+  pipe_packets_tail = (pipe_packets_tail + num_packets) % MOCK_ENSO_PIPE_SIZE;
 
-  return 0;
+  return len;
 }
 
 int dma_init(struct NotificationBufPair* notification_buf_pair,
