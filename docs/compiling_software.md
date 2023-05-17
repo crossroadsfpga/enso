@@ -86,7 +86,7 @@ Then, you should link the application with the Ensō library. The way you do it 
 
 ## Build the documentation <small>optional</small> { #build-the-documentation data-toc-label="Build the documentation" }
 
-You can access Ensō's documentation at [https://crossroadsfpga.github.io/enso/](https://crossroadsfpga.github.io/enso/). But if you would like to contribute to the documentation, you may choose to also build it locally.
+You can access Ensō's documentation at [https://enso.cs.cmu.edu/](https://enso.cs.cmu.edu/). But if you would like to contribute to the documentation, you may choose to also build it locally.
 
 Install the requirements:
 
