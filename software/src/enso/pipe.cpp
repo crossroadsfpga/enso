@@ -245,7 +245,7 @@ RxPipe* Device::NextRxPipeToRecv() {
     uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
 
     if (enso_pipe_head != enso_pipe_tail) {
-      rx_tx_pipes_[id]->Prefetch();
+      rx_pipes_[id]->Prefetch();
       break;
     }
 
