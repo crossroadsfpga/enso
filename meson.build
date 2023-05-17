@@ -32,3 +32,4 @@ endif
 subdir('software')
 subdir('docs')
 subdir('hardware')
+subdir('scripts')

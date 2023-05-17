@@ -471,6 +471,13 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
   (void)pkt_hdr;
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
+
+  const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
+  if (l2_hdr->ether_type != htons(ETHERTYPE_IP)) {
+    std::cerr << "Non-IPv4 packets are not supported" << std::endl;
+    exit(8);
+  }
+
   uint32_t len = enso::get_pkt_len(pkt_bytes);
   uint32_t nb_flits = (len - 1) / 64 + 1;
 
@@ -518,7 +525,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 
   if (unlikely(recv_len < 0)) {
     std::cerr << "Error receiving" << std::endl;
-    exit(4);
+    exit(7);
   }
 
   if (likely(recv_len > 0)) {

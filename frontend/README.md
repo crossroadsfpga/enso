@@ -6,14 +6,6 @@ To install the frontend run in the current directory (`frontend`):
 ```bash
 python3 -m pip install -e .
 ```
-To run the EnsōGen packet generator you also need to have the `capinfos` command installed in the machine you want to use to generate packets.
-
-On Ubuntu (or other Debian-based system) run:
-```bash
-sudo apt install tshark
-```
-
-For other distributions refer to the [wireshark docs](https://tshark.dev/setup/install/#installing-tshark-only) to find the correct package name (either `tshark` or `wireshark-cli`).
 
 ## Running
 

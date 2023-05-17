@@ -19,7 +19,6 @@ Ensō has the following dependencies:
 - Ninja
 - libpcap
 - wget
-- capinfos (for EnsōGen)
 
 There are also python dependencies listed in `requirements.txt` that can be installed with `pip`.
 

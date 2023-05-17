@@ -8,12 +8,12 @@ from fractions import Fraction
 from typing import Optional, TextIO, Union
 
 from netexp.helpers import download_file
-from netexp.pcap import mean_pkt_size_pcap
 from netexp.pktgen import Pktgen
 
 from enso.consts import (
     FPGA_RATELIMIT_CLOCK,
     ENSOGEN_CMD,
+    GET_PCAP_SIZE_CMD,
     PCAP_GEN_CMD,
     PCAPS_DIR,
 )
@@ -295,7 +295,7 @@ class EnsoGen(Pktgen):
 
     @pcap_path.setter
     def pcap_path(self, pcap_path) -> None:
-        self.mean_pcap_pkt_size = mean_pkt_size_pcap(self.nic.host, pcap_path)
+        self.mean_pcap_pkt_size = self.get_pcap_mean_pkt_size(pcap_path)
         self._pcap_path = pcap_path
 
     @property
@@ -353,3 +353,15 @@ class EnsoGen(Pktgen):
     def close(self) -> None:
         # No need to close here.
         pass
+
+    def get_pcap_mean_pkt_size(self, pcap_path: str) -> float:
+        cmd_str = f"{self.nic.enso_path}/{GET_PCAP_SIZE_CMD} {pcap_path}"
+        cmd = self.nic.host.run_command(cmd_str, pty=True)
+        output = cmd.watch(keyboard_int=lambda: cmd.send("\x03"))
+        status = cmd.recv_exit_status()
+
+        if status != 0:
+            raise RuntimeError(f'Error processing pcap: "{output}"')
+
+        mean_pcap_pkt_size = float(output)
+        return mean_pcap_pkt_size

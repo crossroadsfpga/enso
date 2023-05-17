@@ -5,14 +5,12 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 ENSOGEN_PATH="${SCRIPT_DIR}/../build/software/examples/ensogen"
 ENSOGEN_PATH=$(realpath $ENSOGEN_PATH)
 
-if [ ! -f $ENSOGEN_PATH ]; then
-    echo "Error: Could not find ensogen binary at $ENSOGEN_PATH"
-    echo "Make sure you have built the enso project."
-    exit 1
-fi
+GET_PCAP_SIZE_CMD_PATH="${SCRIPT_DIR}/../build/scripts/get_pcap_pkt_size"
+GET_PCAP_SIZE_CMD_PATH=$(realpath $GET_PCAP_SIZE_CMD_PATH)
 
 if [ $# -lt 2 ]; then
     echo "Usage: ./ensogen.sh PCAP_FILE RATE_GBPS [OPTIONS]"
@@ -20,12 +18,24 @@ if [ $# -lt 2 ]; then
     exit 1
 fi
 
+if [ ! -f $ENSOGEN_PATH ]; then
+    echo "Error: Could not find ensogen binary at $ENSOGEN_PATH"
+    echo "Make sure you have built the enso project."
+    exit 2
+fi
+
+if [ ! -f $GET_PCAP_SIZE_CMD_PATH ]; then
+    echo "Error: Could not find binary at $GET_PCAP_SIZE_CMD_PATH"
+    echo "Make sure you have built the enso project."
+    exit 3
+fi
+
 pcap_file=$1
 rate=$2
 extra_args=${@:3}
 
 pattern="Average packet size:"
-mean_pkt_size=$(capinfos -z $pcap_file | grep "$pattern" | awk '{print $4}')
+mean_pkt_size=$($GET_PCAP_SIZE_CMD_PATH $pcap_file)
 
 num_den=$(python3 <<EOF
 import math

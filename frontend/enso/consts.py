@@ -8,6 +8,7 @@ DEFAULT_NB_FALLBACK_QUEUES = 0
 # The following paths are relative to the enso path.
 SETUP_SW_CMD = "scripts/sw_setup.sh"
 ENSOGEN_CMD = "build/software/examples/ensogen"
+GET_PCAP_SIZE_CMD = "build/scripts/get_pcap_pkt_size"
 PCAPS_DIR = "frontend/pcaps/"
 PCAP_GEN_CMD = "build/hardware/input_gen/generate_synthetic_trace"
 
