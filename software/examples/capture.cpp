@@ -31,6 +31,7 @@
  */
 
 #include <enso/helpers.h>
+#include <enso/internals.h>
 #include <enso/pipe.h>
 #include <pcap/pcap.h>
 

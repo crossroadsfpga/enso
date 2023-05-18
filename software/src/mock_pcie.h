@@ -46,9 +46,12 @@
 #include <netinet/ether.h>
 #include <netinet/ip.h>
 
+#include <unordered_map>
 #include <vector>
 
 #include "syscall_api/intel_fpga_pcie_api.hpp"
+
+namespace enso {
 
 #define MAX_NUM_PACKETS 512
 #define MOCK_BATCH_SIZE 16
@@ -59,21 +62,17 @@ struct Packet {
   uint32_t pkt_len;
 };
 
-/**
- * @brief Mock enso pipe structure.
- *
- */
-struct MockEnsoPipe {
-  u_char pipe_buffer[MOCK_ENSO_PIPE_SIZE];  // buffer to store packet contents
-  int head;   // position of head: where to read packets frmo
-  int tail;   // position of tail: where to write packets to
-  int index;  // index of this enso pipe in the enso pipes vector
-};
+typedef struct RxEnsoPipeInternal* MockEnsoPipe;
 
 /**
- * @brief Vector of all enso pipes in mock
+ * @brief Hashmap of all enso pipes in mock
  *
  */
-static std::vector<struct MockEnsoPipe*> enso_pipes_vector;
+static std::unordered_map<uint16_t, MockEnsoPipe> enso_pipes_map;
+static std::vector<MockEnsoPipe> enso_pipes_vector;
+
+static std::vector<MockEnsoPipe> next_enso_pipes;
+
+}  // namespace enso
 
 #endif  // SOFTWARE_SRC_MOCK_PCIE_H_

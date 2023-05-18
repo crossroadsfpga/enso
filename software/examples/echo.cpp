@@ -87,6 +87,7 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
         continue;
       }
 
+      int num_pkts = 0;
       for (auto pkt : batch) {
         ++pkt[63];  // Increment payload.
 
@@ -95,6 +96,7 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
         }
 
         ++(stats->nb_pkts);
+        num_pkts += 1;
       }
       uint32_t batch_length = batch.processed_bytes();
       pipe->ConfirmBytes(batch_length);

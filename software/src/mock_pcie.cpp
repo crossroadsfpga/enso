@@ -79,6 +79,8 @@ uint32_t network_head;
 // Index of pipe tail: where the program can start writing to
 uint32_t network_tail;
 
+int curr_id = 0;
+
 int init = 1;
 
 int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
@@ -100,20 +102,16 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
  * @return int
  */
 int mock_enso_pipe_init(struct RxEnsoPipeInternal* rx_enso_pipe) {
-  struct MockEnsoPipe* enso_pipe = new struct MockEnsoPipe();
-  if (!enso_pipe) {
-    return -1;
-  }
-  enso_pipe->head = 0;
-  enso_pipe->tail = 0;
-  enso_pipe->index = size(enso_pipes_vector);
-  enso_pipes_vector.push_back(enso_pipe);
-
   // Setting up rx enso pipe with mock buffer
-  rx_enso_pipe->buf = (uint32_t*)enso_pipe->pipe_buffer;
-  rx_enso_pipe->buf_phys_addr = (uint64_t)enso_pipe->pipe_buffer;
+  rx_enso_pipe->buf = (uint32_t*)malloc(MOCK_ENSO_PIPE_SIZE);
+  rx_enso_pipe->buf_phys_addr = (uint64_t)rx_enso_pipe->buf;
   rx_enso_pipe->rx_head = 0;
   rx_enso_pipe->rx_tail = 0;
+  rx_enso_pipe->id = curr_id;
+  curr_id += 1;
+
+  enso_pipes_map[rx_enso_pipe->id] = rx_enso_pipe;
+  enso_pipes_vector.push_back(rx_enso_pipe);
 
   return 0;
 }
@@ -226,9 +224,8 @@ __consume_queue(struct RxEnsoPipeInternal* e,
   (void)notification_buf_pair;
   (void)peek;
 
-  *buf = new u_char[0];
-
   if (network_head == network_tail) {
+    *buf = new u_char[0];
     return 0;
   }
 
@@ -255,39 +252,45 @@ __consume_queue(struct RxEnsoPipeInternal* e,
   }
 
   // getting enso pipe and number of bytes available in it
-  struct MockEnsoPipe* enso_pipe = enso_pipes_vector[enso_pipe_index];
-  void* initial_buf = enso_pipe->pipe_buffer + enso_pipe->head;
+  struct RxEnsoPipeInternal* enso_pipe = enso_pipes_vector[enso_pipe_index];
+  void* initial_buf = ((u_char*)enso_pipe->buf) + enso_pipe->rx_tail;
   int num_bytes_available;
-  if (enso_pipe->tail > enso_pipe->head) {
-    num_bytes_available = enso_pipe->tail - enso_pipe->head;
+  if (enso_pipe->rx_tail < enso_pipe->rx_head) {
+    num_bytes_available = enso_pipe->rx_head - enso_pipe->rx_tail;
   } else {
     num_bytes_available =
-        MOCK_ENSO_PIPE_SIZE - (enso_pipe->head - enso_pipe->tail);
+        MOCK_ENSO_PIPE_SIZE - (enso_pipe->rx_tail - enso_pipe->rx_head);
   }
 
   // reading bytes from network and copying to the enso pipe
   num_bytes_read = 0;
-  int position = enso_pipe->head;
+  int num_packets = 0;
   while (num_bytes_available > 0 && network_head < max_index) {
     struct Packet* pkt = in_buf[network_head];
     uint32_t pkt_len = pkt->pkt_len;
+
     // packets must be cache-aligned: so get aligned length
     uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
     uint16_t pkt_aligned_len = nb_flits * 64;
     if (pkt_aligned_len > num_bytes_available) {
       break;
     }
-    memcpy(enso_pipe->pipe_buffer + position, pkt->pkt_bytes, pkt->pkt_len);
 
-    position = (position + pkt_aligned_len) % MOCK_ENSO_PIPE_SIZE;
+    // copying packet from network to enso pipe
+    memcpy(((u_char*)enso_pipe->buf) + enso_pipe->rx_tail, pkt->pkt_bytes,
+           pkt->pkt_len);
+
+    enso_pipe->rx_tail =
+        (enso_pipe->rx_tail + pkt_aligned_len) % MOCK_ENSO_PIPE_SIZE;
+    if (!peek) {
+      enso_pipe->rx_head =
+          (enso_pipe->rx_head + pkt_aligned_len) % MOCK_ENSO_PIPE_SIZE;
+    }
     num_bytes_read += pkt_aligned_len;
     network_head += 1;
     num_bytes_available -= pkt_aligned_len;
+    num_packets += 1;
   }
-
-  // changing position of head and tail in enso pipe
-  enso_pipe->head = (enso_pipe->head + num_bytes_read) % MOCK_ENSO_PIPE_SIZE;
-  enso_pipe->tail = (enso_pipe->tail + num_bytes_read) % MOCK_ENSO_PIPE_SIZE;
 
   // give the buffer to the caller
   *buf = initial_buf;
@@ -451,13 +454,6 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global) {
 
 static _enso_always_inline int32_t
 __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
-  // Consume up to a batch of notifications at a time. If the number of consumed
-  // notifications is the same as the number of pending notifications, we are
-  // done processing the last batch and can get the next one. Using batches here
-  // performs **significantly** better compared to always fetching the latest
-  // notification.
-
-  // get hash of five-tuple from
   (void)notification_buf_pair;
   if (network_head == network_tail) return -1;
   return 0;

@@ -113,10 +113,9 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
     return -1;
   }
 
-  // Make sure that it's enso pipe ID is within the vector
-  if (config->enso_pipe_id >= size(enso_pipes_vector)) {
+  // Check if the enso pipe ID is within the hashmap of enso pipes
+  if (enso_pipes_map.find(config->enso_pipe_id) == enso_pipes_map.end())
     return -2;
-  }
 
   // Adding to hash map
   uint16_t dst_port = config->dst_port;
