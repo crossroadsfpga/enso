@@ -71,8 +71,6 @@ typedef struct RxEnsoPipeInternal* MockEnsoPipe;
 static std::unordered_map<uint16_t, MockEnsoPipe> enso_pipes_map;
 static std::vector<MockEnsoPipe> enso_pipes_vector;
 
-static std::vector<MockEnsoPipe> next_enso_pipes;
-
 }  // namespace enso
 
 #endif  // SOFTWARE_SRC_MOCK_PCIE_H_

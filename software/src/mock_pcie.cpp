@@ -78,6 +78,8 @@ struct Packet* in_buf[MAX_NUM_PACKETS];
 uint32_t network_head;
 // Index of pipe tail: where the program can start writing to
 uint32_t network_tail;
+int num_queues = 1;
+int queue_assignments[MAX_NUM_PACKETS / MOCK_BATCH_SIZE];
 
 int curr_id = 0;
 
@@ -91,8 +93,8 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
   (void)bar;
   (void)core_id;
   (void)notification_buf_pair;
-  (void)nb_queues;
   (void)enso_pipe_id_offset;
+  num_queues = nb_queues;
   return 0;
 }
 
@@ -133,6 +135,11 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   memcpy(pkt->pkt_bytes, pkt_bytes, len);
   pkt->pkt_len = len;
   context->buf[network_tail] = pkt;
+  // adding queue assignment for current packet batch
+  if (network_tail % MOCK_BATCH_SIZE == 0) {
+    queue_assignments[network_tail / MOCK_BATCH_SIZE] =
+        rss_hash_packet(pkt->pkt_bytes, num_queues);
+  }
 
   network_tail += 1;
   // if we hit the max num packets to read, break from loop
@@ -282,10 +289,6 @@ __consume_queue(struct RxEnsoPipeInternal* e,
 
     enso_pipe->rx_tail =
         (enso_pipe->rx_tail + pkt_aligned_len) % MOCK_ENSO_PIPE_SIZE;
-    if (!peek) {
-      enso_pipe->rx_head =
-          (enso_pipe->rx_head + pkt_aligned_len) % MOCK_ENSO_PIPE_SIZE;
-    }
     num_bytes_read += pkt_aligned_len;
     network_head += 1;
     num_bytes_available -= pkt_aligned_len;
@@ -345,9 +348,9 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
   (void)notification_buf_pair;
   (void)enso_pipe;
   (void)socket_id;
-  (void)nb_queues;
   (void)bdf;
   (void)bar;
+  num_queues = nb_queues;
   return 0;
 }
 
@@ -455,8 +458,12 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global) {
 static _enso_always_inline int32_t
 __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
   (void)notification_buf_pair;
+  printf("get next enso pipe\n");
   if (network_head == network_tail) return -1;
-  return 0;
+  int id =
+      enso_pipes_map[queue_assignments[network_head / MOCK_BATCH_SIZE]]->id;
+  printf("next pipe: %u\n", id);
+  return id;
 }
 
 int32_t get_next_enso_pipe_id(
