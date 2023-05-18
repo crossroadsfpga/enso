@@ -11,7 +11,7 @@
 
 Ensō is a high-performance streaming interface for NIC-application communication.
 
-Ensō's design encompasses both *hardware* and *software*. The hardware component targets an FPGA NIC[^1] and implements the Ensō interface. The software component uses this interface and exposes simple communication primitives called [Ensō Pipes](https://crossroadsfpga.github.io/enso/primitives/rx_enso_pipe/). Applications can use Ensō Pipes to send and receive data in different formats, such as raw packets, application-level messages, or TCP-like byte streams.
+Ensō's design encompasses both *hardware* and *software*. The hardware component targets an FPGA NIC[^1] and implements the Ensō interface. The software component uses this interface and exposes simple communication primitives called [Ensō Pipes](https://enso.cs.cmu.edu/primitives/rx_enso_pipe/). Applications can use Ensō Pipes to send and receive data in different formats, such as raw packets, application-level messages, or TCP-like byte streams.
 
 [^1]: Network Interface Cards (NICs) are the hardware devices that connect a computer to the network. They are responsible for transmitting data from the CPU to the network and vice versa. FPGAs are reconfigurable hardware devices. They can be reconfigured to implement arbitrary hardware designs. Here we use an FPGA to implement a NIC with the Ensō interface but the same interface could also be implemented in a traditional fixed-function hardware.
 
@@ -26,7 +26,7 @@ Traditionally, NICs expose a *packetized* interface that software (applications 
 
 ## Getting started
 
-- [Setup](https://crossroadsfpga.github.io/enso/getting_started/)
-- Understanding the primitives: [RX Ensō Pipe](https://crossroadsfpga.github.io/enso/primitives/rx_enso_pipe/), [TX Ensō Pipe](https://crossroadsfpga.github.io/enso/primitives/tx_enso_pipe/), [RX/TX Ensō Pipe](https://crossroadsfpga.github.io/enso/primitives/rx_tx_enso_pipe/)
+- [Setup](https://enso.cs.cmu.edu/getting_started/)
+- Understanding the primitives: [RX Ensō Pipe](https://enso.cs.cmu.edu/primitives/rx_enso_pipe/), [TX Ensō Pipe](https://enso.cs.cmu.edu/primitives/tx_enso_pipe/), [RX/TX Ensō Pipe](https://enso.cs.cmu.edu/primitives/rx_tx_enso_pipe/)
 - Examples: [Echo Server](https://github.com/crossroadsfpga/enso/blob/master/software/examples/echo.cpp), [Packet Capture](https://github.com/crossroadsfpga/enso/blob/master/software/examples/capture.cpp), [EnsōGen Packet Generator](https://github.com/crossroadsfpga/enso/blob/master/software/examples/ensogen.cpp)
-- API References: [Software](https://crossroadsfpga.github.io/enso/software/), [Hardware](https://crossroadsfpga.github.io/enso/hardware/)
+- API References: [Software](https://enso.cs.cmu.edu/software/), [Hardware](https://enso.cs.cmu.edu/hardware/)

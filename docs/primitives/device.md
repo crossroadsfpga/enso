@@ -2,15 +2,15 @@
 
 The `Device` class is the main entry point for interacting with the hardware device. It is used to [allocate Ensō Pipes](#allocating-ensō-pipes) as well as to [configure the device](#configuring-the-device). It can also be used to efficiently [receive data from multiple pipes](#receiving-data-from-multiple-pipes), avoiding the need to probe each pipe individually.
 
-Every I/O thread in a program should instantiate its own `Device` instance using the [`Device::Create()`](/enso/software/classenso_1_1Device.html#a0680a603967557aef3be2d3c7931967e){target=_blank} factory method.
+Every I/O thread in a program should instantiate its own `Device` instance using the [`Device::Create()`](/software/classenso_1_1Device.html#a0680a603967557aef3be2d3c7931967e){target=_blank} factory method.
 
 ## Allocating Ensō Pipes
 
 After instantiating a device, the application can allocate Ensō Pipes of any of the three types, using the appropriate method:
 
-- [`Device::AllocateRxPipe()`](/enso/software/classenso_1_1Device.html#a317921d74d678fbd27982d1c995ae9c6){target=_blank} to allocate an [RX Ensō Pipe](rx_enso_pipe.md).
-- [`Device::AllocateTxPipe()`](/enso/software/classenso_1_1Device.html#aefb1883e2b2443ffb30e3697fcd8e6bb){target=_blank} to allocate a [TX Ensō Pipe](tx_enso_pipe.md).
-- [`Device::AllocateRxTxPipe()`](/enso/software/classenso_1_1Device.html#a44fb96b78e6dc6f0960a5153104f8e19){target=_blank} to allocate an [RX/TX Ensō Pipe](rx_tx_enso_pipe.md).
+- [`Device::AllocateRxPipe()`](/software/classenso_1_1Device.html#a317921d74d678fbd27982d1c995ae9c6){target=_blank} to allocate an [RX Ensō Pipe](rx_enso_pipe.md).
+- [`Device::AllocateTxPipe()`](/software/classenso_1_1Device.html#aefb1883e2b2443ffb30e3697fcd8e6bb){target=_blank} to allocate a [TX Ensō Pipe](tx_enso_pipe.md).
+- [`Device::AllocateRxTxPipe()`](/software/classenso_1_1Device.html#a44fb96b78e6dc6f0960a5153104f8e19){target=_blank} to allocate an [RX/TX Ensō Pipe](rx_tx_enso_pipe.md).
 
 ## Receiving Data from Multiple Pipes
 
@@ -18,7 +18,7 @@ Threads can also use `Device` instances to figure out which pipe has data pendin
 
 [^1]: This is analogous to the `select(2)` system call in POSIX.
 
-To figure out the next pipe with data pending, the application can call [`Device::NextRxPipeToRecv()`](/enso/software/classenso_1_1Device.html#abb95307e3ea14248fc15b250d67c3b0b){target=_blank} or [`Device::NextRxTxPipeToRecv()`](/enso/software/classenso_1_1Device.html#a6ebb5dde347fc643b471ccad63a9ff5a){target=_blank}. This will return the next pipe with data pending to be received, or `nullptr` if no pipe has data pending. Here is an example that receives data from multiple pipes:
+To figure out the next pipe with data pending, the application can call [`Device::NextRxPipeToRecv()`](/software/classenso_1_1Device.html#abb95307e3ea14248fc15b250d67c3b0b){target=_blank} or [`Device::NextRxTxPipeToRecv()`](/software/classenso_1_1Device.html#a6ebb5dde347fc643b471ccad63a9ff5a){target=_blank}. This will return the next pipe with data pending to be received, or `nullptr` if no pipe has data pending. Here is an example that receives data from multiple pipes:
 
 ```cpp
 // Allocate device.
@@ -56,7 +56,7 @@ You may also use a `Device` instance to configure the device.
 
 ### Hardware Rate Limiter
 
-The hardware implementation includes a rate limiter that can be used to limit the rate at which packets are sent. The rate limiter is applied to all packets sent by the device, regardless of the pipe they are sent on. That means that even if you enable rate limiting from a specific thread, it will affect pipes from all threads. The rate limiter can be enabled by calling [`Device::EnableRateLimiting()`](/enso/software/classenso_1_1Device.html#a74ff96e12ce2385b0447eadd4ededc90){target=_blank} and disabled by calling [`Device::DisableRateLimiting()`](/enso/software/classenso_1_1Device.html#a520234fd5dd585f4c8b0b9fb72adbfb8){target=_blank}.
+The hardware implementation includes a rate limiter that can be used to limit the rate at which packets are sent. The rate limiter is applied to all packets sent by the device, regardless of the pipe they are sent on. That means that even if you enable rate limiting from a specific thread, it will affect pipes from all threads. The rate limiter can be enabled by calling [`Device::EnableRateLimiting()`](/software/classenso_1_1Device.html#a74ff96e12ce2385b0447eadd4ededc90){target=_blank} and disabled by calling [`Device::DisableRateLimiting()`](/software/classenso_1_1Device.html#a520234fd5dd585f4c8b0b9fb72adbfb8){target=_blank}.
 
 When enabling the rate limiter, you specify a fraction `num / den` of the maximum hardware flit rate (a flit is 64 bytes). The maximum hardware flit rate is defined by the [`kMaxHardwareFlitRate`](/software/consts_8h.html#a2724b5cbd3bd79652a61696e662c24ce){target=_blank} constant and is 200MHz by default. This will cause packets from all queues to be sent at a rate of `num / den * kMaxHardwareFlitRate` flits per second. Note that this is slightly different from how we typically define throughput and you will need to take the packet sizes into account to set this properly.
 
@@ -68,6 +68,6 @@ You can find the maximum packet rate for any packet size by using the expression
 
 ### Hardware Time Stamping
 
-The hardware implementation can also time stamp packets as they are sent and compute the RTT when they return. This is useful to measure latency. As with the rate limiter, this configuration is applied to all pipes. You can enable time stamping by calling [`Device::EnableTimeStamping()`](/enso/software/classenso_1_1Device.html#a86e350a5dbf6145858c9b3739736c6e0) and disable it by calling [`Device::DisableTimeStamping()`](/enso/software/classenso_1_1Device.html#ae77a9be57a5d8e26009da7fa9239d4b7).
+The hardware implementation can also time stamp packets as they are sent and compute the RTT when they return. This is useful to measure latency. As with the rate limiter, this configuration is applied to all pipes. You can enable time stamping by calling [`Device::EnableTimeStamping()`](/software/classenso_1_1Device.html#a86e350a5dbf6145858c9b3739736c6e0) and disable it by calling [`Device::DisableTimeStamping()`](/software/classenso_1_1Device.html#ae77a9be57a5d8e26009da7fa9239d4b7).
 
 When timestamping is enabled, all outgoing packets will receive a timestamp and all incoming packets will have an RTT (in number of cycles). You may use [`get_pkt_rtt()`](/software/helpers_8h.html#ace30043e3eb62368ccf750a139a16383) to retrieve the RTT for a returning packet. This function will return the RTT in number of cycles. You can convert it to nanoseconds by multiplying it by [`kNsPerTimestampCycle`](/software/consts_8h.html#a512ca8b1b9bae1397e47b3642f1b30ea).
