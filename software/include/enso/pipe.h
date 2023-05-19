@@ -534,10 +534,11 @@ class RxPipe {
   /**
    * @brief Prefetches the next batch of bytes to be received on the RxPipe.
    *
-   * @warning Explicit prefetching from the application cannot be used in
+   * @warning *Explicit* prefetching from the application cannot be used in
    *          conjunction with the `NextRxPipeToRecv` and `NextRxTxPipeToRecv`
-   *          functions. To use prefetching with these functions, compile the
-   *          library with `-Dlatency_opt=true`.
+   *          functions. These functions only support *implicit* prefetching,
+   *          which can be enabled by compiling the library with
+   *          `-Dlatency_opt=true`.
    */
   void Prefetch();
 
