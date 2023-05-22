@@ -201,6 +201,19 @@ uint32_t get_unreported_completions(
  */
 void update_tx_head(struct NotificationBufPair* notification_buf_pair);
 
+/**
+ * @brief Sends configuration to the NIC.
+ *
+ * @param notification_buf_pair The notification buffer pair to send the
+ *                              configuration through.
+ * @param config_notification The configuration notification to send. Must be
+ *                            a config notification, i.e., signal >= 2.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+int send_config(struct NotificationBufPair* notification_buf_pair,
+                struct TxNotification* config_notification);
+
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
 
 void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe);

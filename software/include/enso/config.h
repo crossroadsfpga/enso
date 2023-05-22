@@ -66,18 +66,6 @@ int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
                       uint32_t enso_pipe_id);
 
 /**
- * @brief Sends configuration to the NIC.
- *
- * @param notification_buf_pair Notification buffer to send configuration
- *                              through.
- * @param config_notification Configuration notification.
- *
- * @return Return 0 if configuration was successful.
- */
-int send_config(struct NotificationBufPair* notification_buf_pair,
-                struct TxNotification* config_notification);
-
-/**
  * @brief Enables hardware timestamping.
  *
  * All outgoing packets will receive a timestamp and all incoming packets will

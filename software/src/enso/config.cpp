@@ -83,58 +83,6 @@ struct __attribute__((__packed__)) RateLimitConfig {
   uint8_t pad[40];
 };
 
-/**
- * Sends configuration through a notification buffer.
- *
- * @param notification_buf_pair The notification buffer pair to send the
- *                              configuration through.
- * @param config_notification The configuration notification to send. Must be
- *                            a config notification, i.e., signal >= 2.
- * @return 0 on success, -1 on failure.
- */
-int send_config(struct NotificationBufPair* notification_buf_pair,
-                struct TxNotification* config_notification) {
-  struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
-  uint32_t tx_tail = notification_buf_pair->tx_tail;
-  uint32_t free_slots =
-      (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
-
-  // Make sure it's a config notification.
-  if (config_notification->signal < 2) {
-    return -1;
-  }
-
-  // Block until we can send.
-  while (unlikely(free_slots == 0)) {
-    ++notification_buf_pair->tx_full_cnt;
-    update_tx_head(notification_buf_pair);
-    free_slots =
-        (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
-  }
-
-  struct TxNotification* tx_notification = tx_buf + tx_tail;
-  *tx_notification = *config_notification;
-
-  _mm_clflushopt(tx_notification);
-
-  tx_tail = (tx_tail + 1) % kNotificationBufSize;
-  notification_buf_pair->tx_tail = tx_tail;
-
-  _enso_compiler_memory_barrier();
-  *(notification_buf_pair->tx_tail_ptr) = tx_tail;
-
-  // Wait for request to be consumed.
-  uint32_t nb_unreported_completions =
-      notification_buf_pair->nb_unreported_completions;
-  while (notification_buf_pair->nb_unreported_completions ==
-         nb_unreported_completions) {
-    update_tx_head(notification_buf_pair);
-  }
-  notification_buf_pair->nb_unreported_completions = nb_unreported_completions;
-
-  return 0;
-}
-
 int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
                       uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                       uint32_t src_ip, uint32_t protocol,
