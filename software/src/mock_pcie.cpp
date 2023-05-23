@@ -81,9 +81,7 @@ uint32_t network_tail;
 int num_queues = 1;
 int queue_assignments[MAX_NUM_PACKETS / MOCK_BATCH_SIZE];
 
-int curr_id = 0;
-
-int init = 1;
+int num_queues_initialized = 0;
 
 int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
                           struct NotificationBufPair* notification_buf_pair,
@@ -99,27 +97,8 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
 }
 
 /**
- * @brief
- *
- * @return int
- */
-int mock_enso_pipe_init(struct RxEnsoPipeInternal* rx_enso_pipe) {
-  // Setting up rx enso pipe with mock buffer
-  rx_enso_pipe->buf = (uint32_t*)malloc(MOCK_ENSO_PIPE_SIZE);
-  rx_enso_pipe->buf_phys_addr = (uint64_t)rx_enso_pipe->buf;
-  rx_enso_pipe->rx_head = 0;
-  rx_enso_pipe->rx_tail = 0;
-  rx_enso_pipe->id = curr_id;
-  curr_id += 1;
-
-  enso_pipes_map[rx_enso_pipe->id] = rx_enso_pipe;
-  enso_pipes_vector.push_back(rx_enso_pipe);
-
-  return 0;
-}
-
-/**
- * @brief Called every time a packet is processed when reading from a PCAP file.
+ * @brief Called every time a packet is processed when reading from a PCAP file,
+ * reads from network file and copies to enso pipe.
  *
  * @param user
  * @param pkt_hdr
@@ -130,16 +109,33 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
   uint32_t len = pkt_hdr->len;
 
-  struct Packet* pkt = new struct Packet();
-  pkt->pkt_bytes = new u_char[len];
-  memcpy(pkt->pkt_bytes, pkt_bytes, len);
-  pkt->pkt_len = len;
-  context->buf[network_tail] = pkt;
-  // adding queue assignment for current packet batch
-  if (network_tail % MOCK_BATCH_SIZE == 0) {
-    queue_assignments[network_tail / MOCK_BATCH_SIZE] =
-        rss_hash_packet(pkt->pkt_bytes, num_queues);
+  // gets enso pipe from packet bytes
+  int enso_pipe_index = rss_hash_packet((u_char*)pkt_bytes, num_queues);
+  struct RxEnsoPipeInternal* enso_pipe = enso_pipes_vector[enso_pipe_index];
+
+  // get the number of bytes available in the enso pipe
+  uint32_t num_bytes_available;
+  if (enso_pipe->rx_tail < enso_pipe->rx_head) {
+    num_bytes_available = enso_pipe->rx_head - enso_pipe->rx_tail;
+  } else {
+    num_bytes_available =
+        MOCK_ENSO_PIPE_SIZE - (enso_pipe->rx_tail - enso_pipe->rx_head);
   }
+
+  // packets must be cache-aligned: so get aligned length
+  uint16_t nb_flits = (len - 1) / 64 + 1;
+  uint16_t pkt_aligned_len = nb_flits * 64;
+
+  // check if space available in enso pipe to store packet
+  if (num_bytes_available < pkt_aligned_len) {
+    return;
+  }
+
+  // copy packet into enso pipe
+  uint32_t tail = (enso_pipe->rx_tail * 64) % MOCK_ENSO_PIPE_SIZE;
+  memcpy(((u_char*)enso_pipe->buf) + tail, pkt_bytes, len);
+  enso_pipe->rx_tail =
+      (enso_pipe->rx_tail + pkt_aligned_len / 64) % MOCK_ENSO_PIPE_SIZE;
 
   network_tail += 1;
   // if we hit the max num packets to read, break from loop
@@ -173,27 +169,33 @@ int read_in_file() {
 }
 
 /**
- * @brief
+ * @brief Initializes the given receiving enso pipe as a mock.
  *
- * @param enso_pipe
- * @param enso_pipe_regs
- * @param notification_buf_pair
+ * @param enso_pipe enso pipe to initialize.
+ * @param notification_buf_pair unused in the mock.
  * @param enso_pipe_id
  * @return int
  */
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id) {
-  std::cout << "Enso pipe init" << std::endl;
-  (void)enso_pipe;
   (void)notification_buf_pair;
   (void)enso_pipe_id;
 
-  if (mock_enso_pipe_init(enso_pipe) < 0) {
-    return -1;
-  }
+  // Setting up rx enso pipe with mock buffer
+  enso_pipe->buf = (uint32_t*)malloc(MOCK_ENSO_PIPE_SIZE);
+  enso_pipe->buf_phys_addr = (uint64_t)enso_pipe->buf;
+  enso_pipe->rx_head = 0;
+  enso_pipe->rx_tail = 0;
+  enso_pipe->id = enso_pipe_id;
 
-  if (init) {
+  // adding enso pipe to hashmap of all pipes and to vector
+  enso_pipes_map[enso_pipe->id] = enso_pipe;
+  enso_pipes_vector.push_back(enso_pipe);
+
+  num_queues_initialized += 1;
+
+  if (num_queues_initialized == num_queues) {
     ts.tv_sec = 0;
     ts.tv_usec = 0;
 
@@ -205,8 +207,6 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
     pdumper_out = pcap_dump_open(pd, "out.pcap");
 
     if (read_in_file() < 0) return -1;
-
-    init = 0;
   }
 
   return 0;
@@ -224,81 +224,24 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
  * @return _enso_always_inline
  */
 static _enso_always_inline uint32_t
-__consume_queue(struct RxEnsoPipeInternal* e,
+__consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
-  (void)e;
   (void)notification_buf_pair;
   (void)peek;
 
-  if (network_head == network_tail) {
-    *buf = new u_char[0];
+  *buf = ((u_char*)enso_pipe->buf) + enso_pipe->rx_head;
+
+  if (enso_pipe->rx_head == enso_pipe->rx_tail) {
     return 0;
   }
+  printf("consume queue, head: %d, tail: %d\n", enso_pipe->rx_head,
+         enso_pipe->rx_tail);
 
-  uint32_t index = 0;
-  size_t num_bytes_read = 0;
-  uint32_t max_index = std::min(network_tail, network_head + MOCK_BATCH_SIZE);
-  int enso_pipe_index = 0;
+  uint32_t flit_aligned_size =
+      ((enso_pipe->rx_tail - enso_pipe->rx_head) % MOCK_ENSO_PIPE_SIZE) * 64;
 
-  // getting total number of bytes to read
-  while (index < max_index) {
-    struct Packet* pkt = in_buf[index];
-    if (index == 0) {
-      enso_pipe_index =
-          rss_hash_packet(pkt->pkt_bytes, size(enso_pipes_vector));
-    }
-    uint32_t pkt_len = pkt->pkt_len;
-    // packets must be cache-aligned: so get aligned length
-    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-    uint16_t pkt_aligned_len = nb_flits * 64;
-
-    num_bytes_read += pkt_aligned_len;
-
-    index += 1;
-  }
-
-  // getting enso pipe and number of bytes available in it
-  struct RxEnsoPipeInternal* enso_pipe = enso_pipes_vector[enso_pipe_index];
-  void* initial_buf = ((u_char*)enso_pipe->buf) + enso_pipe->rx_tail;
-  int num_bytes_available;
-  if (enso_pipe->rx_tail < enso_pipe->rx_head) {
-    num_bytes_available = enso_pipe->rx_head - enso_pipe->rx_tail;
-  } else {
-    num_bytes_available =
-        MOCK_ENSO_PIPE_SIZE - (enso_pipe->rx_tail - enso_pipe->rx_head);
-  }
-
-  // reading bytes from network and copying to the enso pipe
-  num_bytes_read = 0;
-  int num_packets = 0;
-  while (num_bytes_available > 0 && network_head < max_index) {
-    struct Packet* pkt = in_buf[network_head];
-    uint32_t pkt_len = pkt->pkt_len;
-
-    // packets must be cache-aligned: so get aligned length
-    uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
-    uint16_t pkt_aligned_len = nb_flits * 64;
-    if (pkt_aligned_len > num_bytes_available) {
-      break;
-    }
-
-    // copying packet from network to enso pipe
-    memcpy(((u_char*)enso_pipe->buf) + enso_pipe->rx_tail, pkt->pkt_bytes,
-           pkt->pkt_len);
-
-    enso_pipe->rx_tail =
-        (enso_pipe->rx_tail + pkt_aligned_len) % MOCK_ENSO_PIPE_SIZE;
-    num_bytes_read += pkt_aligned_len;
-    network_head += 1;
-    num_bytes_available -= pkt_aligned_len;
-    num_packets += 1;
-  }
-
-  // give the buffer to the caller
-  *buf = initial_buf;
-
-  return num_bytes_read;
+  return flit_aligned_size;
 }
 
 /**
@@ -312,6 +255,7 @@ __consume_queue(struct RxEnsoPipeInternal* e,
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len) {
   (void)notification_buf_pair;
+  printf("send from addr %p\n", (void*)phys_addr);
 
   u_char* addr_buf = new u_char[len];
   memcpy(addr_buf, (uint8_t*)phys_addr, len);
@@ -399,8 +343,13 @@ void fully_advance_ring_buffer(struct RxEnsoPipeInternal* enso_pipe) {
 }
 
 void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
-  (void)enso_pipe;
-  (void)len;
+  uint32_t rx_pkt_head = enso_pipe->rx_head;
+  uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
+  rx_pkt_head = (rx_pkt_head + nb_flits) % MOCK_ENSO_PIPE_SIZE;
+
+  enso_pipe->rx_head = rx_pkt_head;
+
+  printf("advanced enso pipe head to %d\n", rx_pkt_head);
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
