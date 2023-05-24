@@ -19,6 +19,7 @@ add_global_arguments('-march=native', language: ['c', 'cpp'])
 notification_buf_size = get_option('notification_buf_size')
 enso_pipe_size = get_option('enso_pipe_size')
 latency_opt = get_option('latency_opt')
+mock = get_option('mock')
 
 add_global_arguments(f'-D NOTIFICATION_BUF_SIZE=@notification_buf_size@',
                      language: ['c', 'cpp'])
@@ -27,6 +28,10 @@ add_global_arguments(f'-D ENSO_PIPE_SIZE=@enso_pipe_size@',
 
 if latency_opt
     add_global_arguments('-D LATENCY_OPT', language: ['c', 'cpp'])
+endif
+
+if mock
+    add_global_arguments(f'-D MOCK', language: ['c', 'cpp'])
 endif
 
 subdir('software')

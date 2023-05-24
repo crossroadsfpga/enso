@@ -54,6 +54,8 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <tuple>
+#include <unordered_map>
 #include <vector>
 
 namespace enso {
@@ -78,6 +80,26 @@ struct stats_t {
   uint64_t nb_batches;
   uint64_t nb_pkts;
 } __attribute__((aligned(64)));
+
+#ifdef MOCK
+// RSS 5-tuple containing dst port, src port, dst ip, src ip, protocol
+typedef std::tuple<uint16_t, uint16_t, uint32_t, uint32_t, uint32_t>
+    ConfigTuple;
+
+// A hash function used to hash the config tuple
+struct HashConfigTuple {
+  template <class T1, class T2, class T3, class T4, class T5>
+
+  size_t operator()(const std::tuple<T1, T2, T3, T4, T5>& x) const {
+    return std::get<0>(x) ^ std::get<1>(x) ^ std::get<2>(x) ^ std::get<3>(x) ^
+           std::get<4>(x);
+  }
+};
+
+// Hash map containing bindings of configurations to enso pipe IDs
+extern std::unordered_map<ConfigTuple, int, HashConfigTuple> config_hashmap;
+
+#endif
 
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
@@ -123,6 +145,8 @@ void print_pkt_ips(uint8_t* pkt);
 void print_pkt_header(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
+
+int rss_hash_packet(uint8_t* pkt_buf, int mod);
 
 int set_core_id(std::thread& thread, int core_id);
 

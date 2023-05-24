@@ -43,8 +43,12 @@
 #include <enso/internals.h>
 #include <immintrin.h>
 
+#include <cassert>
 #include <cstdio>
+#include <tuple>
+#include <vector>
 
+#include "../mock_pcie.h"
 #include "../pcie.h"
 
 namespace enso {
@@ -86,12 +90,48 @@ struct __attribute__((__packed__)) RateLimitConfig {
 /**
  * Sends configuration through a notification buffer.
  *
+ * NOTE: if mock enso pipe, then add config notification to global hash table
+ * of queue configurations.
+ *
  * @param notification_buf_pair The notification buffer pair to send the
  *                              configuration through.
  * @param config_notification The configuration notification to send. Must be
  *                            a config notification, i.e., signal >= 2.
  * @return 0 on success, -1 on failure.
  */
+#ifdef MOCK
+
+int send_config(struct NotificationBufPair* notification_buf_pair,
+                struct TxNotification* config_notification) {
+  (void)notification_buf_pair;
+  FlowTableConfig* config = (FlowTableConfig*)config_notification;
+  // reject anything that is not binding a configuration to a pipe
+  assert(config->config_id == FLOW_TABLE_CONFIG_ID);
+
+  // Make sure it's a config notification.
+  if (config->signal < 2) {
+    return -1;
+  }
+
+  // Check if the enso pipe ID is within the hashmap of enso pipes
+  if (enso_pipes_map.find(config->enso_pipe_id) == enso_pipes_map.end())
+    return -2;
+
+  // Adding to hash map
+  uint16_t dst_port = config->dst_port;
+  uint16_t src_port = config->src_port;
+  uint32_t dst_ip = config->dst_ip;
+  uint32_t src_ip = config->src_ip;
+  uint32_t protocol = config->protocol;
+  ConfigTuple tup =
+      std::make_tuple(dst_port, src_port, dst_ip, src_ip, protocol);
+
+  config_hashmap[tup] = config->enso_pipe_id;
+
+  return 0;
+}
+
+#else
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification) {
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
@@ -134,6 +174,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   return 0;
 }
+#endif
 
 int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
                       uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,

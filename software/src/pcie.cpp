@@ -460,18 +460,24 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
   uint64_t hugepage_base_addr = transf_addr & hugepage_mask;
   uint64_t hugepage_boundary = hugepage_base_addr + kBufPageSize;
 
+  // send all missing bytes
   while (missing_bytes > 0) {
+    // get free slots (i.e., slots in the enso pipe which do not currently have
+    // data)
     uint32_t free_slots =
         (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
 
-    // Block until we can send.
+    // Block until we can send: continually move TX pipe head forward based
+    // on pipe's completion notifications
     while (unlikely(free_slots == 0)) {
       ++notification_buf_pair->tx_full_cnt;
+      // updating head to move past packets already sent
       update_tx_head(notification_buf_pair);
       free_slots =
           (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
     }
 
+    // moving to notification
     struct TxNotification* tx_notification = tx_buf + tx_tail;
     uint32_t req_length = std::min(missing_bytes, (uint32_t)kMaxTransferLen);
     uint32_t missing_bytes_in_page = hugepage_boundary - transf_addr;

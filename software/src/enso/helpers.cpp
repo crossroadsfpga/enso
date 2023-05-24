@@ -43,7 +43,12 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+
 namespace enso {
+
+#ifdef MOCK
+std::unordered_map<ConfigTuple, int, HashConfigTuple> config_hashmap;
+#endif
 
 uint16_t get_bdf_from_pcie_addr(const std::string& pcie_addr) {
   uint32_t domain, bus, dev, func;
@@ -131,6 +136,51 @@ void print_pkt_header(uint8_t* pkt) {
       break;
   }
 }
+
+#ifdef MOCK
+/**
+ * @brief Hashes a packet with RSS to determine which pipe it should be
+ * directed to.
+ *
+ * @param pkt_buf packet buffer.
+ * @param mod number of pipes
+ * @return Index of pipe
+ */
+int rss_hash_packet(uint8_t* pkt_buf, int mod) {
+  struct ether_header* l2_hdr = (struct ether_header*)pkt_buf;
+  struct iphdr* l3_hdr = (struct iphdr*)(l2_hdr + 1);
+  uint32_t src_ip = l3_hdr->saddr;
+  uint32_t dst_ip = l3_hdr->daddr;
+  uint8_t protocol = l3_hdr->protocol;
+  uint32_t src_port;
+  uint32_t dst_port;
+  switch (protocol) {
+    case IPPROTO_TCP: {
+      struct tcphdr* l4_hdr = (struct tcphdr*)(l3_hdr + 1);
+      src_port = l4_hdr->source;
+      dst_port = l4_hdr->dest;
+      break;
+    }
+    case IPPROTO_UDP: {
+      struct udphdr* l4_hdr = (struct udphdr*)(l3_hdr + 1);
+      src_port = l4_hdr->source;
+      dst_port = l4_hdr->dest;
+      break;
+    }
+    default:
+      break;
+  }
+
+  // check if this configuration has already been bound
+  ConfigTuple tup(dst_port, src_port, dst_ip, src_ip, protocol);
+  if (config_hashmap.find(tup) != config_hashmap.end()) {
+    return config_hashmap[tup];
+  }
+
+  return (src_ip ^ dst_ip ^ protocol ^ src_port ^ dst_port) % mod;
+}
+
+#endif
 
 int set_core_id(std::thread& thread, int core_id) {
   cpu_set_t cpuset;

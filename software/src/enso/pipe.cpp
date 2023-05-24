@@ -50,6 +50,7 @@
 #include <memory>
 #include <string>
 
+#include "../mock_pcie.h"
 #include "../pcie.h"
 
 namespace enso {
@@ -104,13 +105,17 @@ TxPipe::~TxPipe() {
 
 int TxPipe::Init() noexcept {
   if (internal_buf_) {
+#ifndef MOCK
     std::string name = "enso:tx_pipe_" + std::to_string(kId);
+
     buf_ = (uint8_t*)get_huge_page(name, true);
     if (unlikely(!buf_)) {
       return -1;
     }
+#else
+    buf_ = (uint8_t*)(malloc(MOCK_ENSO_PIPE_SIZE));
+#endif
   }
-
   buf_phys_addr_ = virt_to_phys(buf_);
 
   return 0;

@@ -7,6 +7,12 @@ project_libraries = []
 subdir('enso')
 subdir('syscall_api')
 
-project_sources += files(
-    'pcie.cpp'
-)
+if mock
+    project_sources += files(
+        'mock_pcie.cpp'
+    )
+else
+    project_sources += files(
+        'pcie.cpp'
+    )
+endif
