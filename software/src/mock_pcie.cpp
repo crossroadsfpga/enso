@@ -115,11 +115,11 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
 
   // get the number of bytes available in the enso pipe
   uint32_t num_bytes_available;
-  if (enso_pipe->rx_tail < enso_pipe->rx_head) {
-    num_bytes_available = enso_pipe->rx_head - enso_pipe->rx_tail;
+  if (enso_pipe->rx_actual_tail < enso_pipe->rx_head) {
+    num_bytes_available = enso_pipe->rx_head - enso_pipe->rx_actual_tail;
   } else {
     num_bytes_available =
-        MOCK_ENSO_PIPE_SIZE - (enso_pipe->rx_tail - enso_pipe->rx_head);
+        MOCK_ENSO_PIPE_SIZE - (enso_pipe->rx_actual_tail - enso_pipe->rx_head);
   }
 
   // packets must be cache-aligned: so get aligned length
@@ -132,10 +132,10 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   }
 
   // copy packet into enso pipe
-  uint32_t tail = (enso_pipe->rx_tail * 64) % MOCK_ENSO_PIPE_SIZE;
+  uint32_t tail = (enso_pipe->rx_actual_tail * 64) % MOCK_ENSO_PIPE_SIZE;
   memcpy(((u_char*)enso_pipe->buf) + tail, pkt_bytes, len);
-  enso_pipe->rx_tail =
-      (enso_pipe->rx_tail + pkt_aligned_len / 64) % MOCK_ENSO_PIPE_SIZE;
+  enso_pipe->rx_actual_tail =
+      (enso_pipe->rx_actual_tail + pkt_aligned_len / 64) % MOCK_ENSO_PIPE_SIZE;
 
   network_tail += 1;
   // if we hit the max num packets to read, break from loop
@@ -187,6 +187,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   enso_pipe->buf_phys_addr = (uint64_t)enso_pipe->buf;
   enso_pipe->rx_head = 0;
   enso_pipe->rx_tail = 0;
+  enso_pipe->rx_actual_tail = 0;
   enso_pipe->id = enso_pipe_id;
 
   // adding enso pipe to hashmap of all pipes and to vector
@@ -228,18 +229,23 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
   (void)notification_buf_pair;
-  (void)peek;
+  uint32_t enso_pipe_head = enso_pipe->rx_tail;
+  uint32_t enso_pipe_tail = enso_pipe->rx_actual_tail;
 
-  *buf = ((u_char*)enso_pipe->buf) + enso_pipe->rx_head;
+  *buf = ((u_char*)enso_pipe->buf) + enso_pipe_head;
 
-  if (enso_pipe->rx_head == enso_pipe->rx_tail) {
+  if (enso_pipe_head == enso_pipe_tail) {
     return 0;
   }
-  printf("consume queue, head: %d, tail: %d\n", enso_pipe->rx_head,
-         enso_pipe->rx_tail);
+  printf("consume queue, head: %d, tail: %d\n", enso_pipe_head, enso_pipe_tail);
 
   uint32_t flit_aligned_size =
-      ((enso_pipe->rx_tail - enso_pipe->rx_head) % MOCK_ENSO_PIPE_SIZE) * 64;
+      ((enso_pipe_tail - enso_pipe_head) % MOCK_ENSO_PIPE_SIZE) * 64;
+
+  if (!peek) {
+    enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64) % ENSO_PIPE_SIZE;
+    enso_pipe->rx_tail = enso_pipe_head;
+  }
 
   return flit_aligned_size;
 }

@@ -502,8 +502,6 @@ class RxPipe {
   constexpr MessageBatch<T> RecvMessages(int32_t max_nb_messages = -1) {
     uint8_t* buf = nullptr;
     uint32_t recv = Peek(&buf, ~0);
-    printf("number of bytes received in peek, buf addr: %u, %p\n", recv,
-           (void*)buf);
     return MessageBatch<T>((uint8_t*)buf, recv, max_nb_messages, this);
   }
 

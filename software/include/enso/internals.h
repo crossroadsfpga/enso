@@ -114,6 +114,22 @@ struct NotificationBufPair {
   void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
 };
 
+#ifdef MOCK
+
+struct RxEnsoPipeInternal {
+  uint32_t* buf;
+  uint64_t buf_phys_addr;
+  struct QueueRegs* regs;
+  uint32_t* buf_head_ptr;
+  uint32_t rx_head;
+  uint32_t rx_tail;
+  uint32_t rx_actual_tail;
+  uint64_t phys_buf_offset;  // Use to convert between phys and virt address.
+  enso_pipe_id_t id;
+};
+
+#else
+
 struct RxEnsoPipeInternal {
   uint32_t* buf;
   uint64_t buf_phys_addr;
@@ -124,6 +140,8 @@ struct RxEnsoPipeInternal {
   uint64_t phys_buf_offset;  // Use to convert between phys and virt address.
   enso_pipe_id_t id;
 };
+
+#endif
 
 }  // namespace enso
 
