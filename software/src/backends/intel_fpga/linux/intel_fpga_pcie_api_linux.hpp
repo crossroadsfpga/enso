@@ -16,8 +16,10 @@
 // logic devices manufactured by Intel and sold by Intel or its authorized
 // distributors. Please refer to the applicable agreement for further details.
 
-#ifndef SOFTWARE_SRC_SYSCALL_API_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
-#define SOFTWARE_SRC_SYSCALL_API_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
+#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
+#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
+
+namespace intel_fpga_pcie_api {
 
 /**
  * struct intel_fpga_pcie_cmd - Main structure for user to communicate to
@@ -87,7 +89,6 @@ struct intel_fpga_pcie_size_app_id {
 #include <linux/types.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <unistd.h>
 
 #define INTEL_FPGA_PCIE_IOCTL_MAGIC 0x70
 #define INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV \
@@ -116,4 +117,6 @@ struct intel_fpga_pcie_size_app_id {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 11, char *)
 #define INTEL_FPGA_PCIE_IOCTL_MAXNR 11
 
-#endif  // SOFTWARE_SRC_SYSCALL_API_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
+}  // namespace intel_fpga_pcie_api
+
+#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_

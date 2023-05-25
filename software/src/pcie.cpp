@@ -46,7 +46,9 @@
 #include <immintrin.h>
 #include <sched.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cassert>
@@ -59,9 +61,16 @@
 #include <limits>
 #include <stdexcept>
 
-#include "syscall_api/intel_fpga_pcie_api.hpp"
+// Automatically points to the device backend configured at compile time.
+#include <dev_backend.h>
 
 namespace enso {
+
+static constexpr std::string_view kHugePageRxPipePathPrefix =
+    "/mnt/huge/enso_rx_pipe:";
+
+static constexpr std::string_view kHugePageNotifBufPathPrefix =
+    "/mnt/huge/enso_notif_buf:";
 
 int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
                           struct NotificationBufPair* notification_buf_pair,
@@ -77,15 +86,9 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
 
   notification_buf_pair->id = core_id;
 
-  IntelFpgaPcieDev* fpga_dev = IntelFpgaPcieDev::Create(bdf, bar);
+  DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
   if (unlikely(fpga_dev == nullptr)) {
     std::cerr << "Could not create device" << std::endl;
-    return -1;
-  }
-
-  int result = fpga_dev->use_cmd(true);
-  if (unlikely(result == 0)) {
-    std::cerr << "Could not switch to CMD use mode" << std::endl;
     return -1;
   }
   notification_buf_pair->fpga_dev = fpga_dev;
@@ -107,29 +110,28 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
                           (core_id + kMaxNbFlows) * kMemorySpacePerQueue);
 
   // Make sure the notification buffer is disabled.
-  notification_buf_pair_regs->rx_mem_low = 0;
-  notification_buf_pair_regs->rx_mem_high = 0;
-  _enso_compiler_memory_barrier();
-  while (notification_buf_pair_regs->rx_mem_low != 0 ||
-         notification_buf_pair_regs->rx_mem_high != 0)
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_low, 0);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_high, 0);
+  while (DevBackend::mmio_read32(&notification_buf_pair_regs->rx_mem_low) != 0)
     continue;
 
-  // Make sure head and tail start at zero.
-  notification_buf_pair_regs->rx_tail = 0;
-  _enso_compiler_memory_barrier();
-  while (notification_buf_pair_regs->rx_tail != 0) continue;
+  while (DevBackend::mmio_read32(&notification_buf_pair_regs->rx_mem_high) != 0)
+    continue;
 
-  notification_buf_pair_regs->rx_head = 0;
-  _enso_compiler_memory_barrier();
-  while (notification_buf_pair_regs->rx_head != 0) continue;
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_tail, 0);
+  while (DevBackend::mmio_read32(&notification_buf_pair_regs->rx_tail) != 0)
+    continue;
 
-  char huge_page_name[128];
-  int id = core_id + kMaxNbFlows;
-  snprintf(huge_page_name, sizeof(huge_page_name), "enso_notif_buf:%i", id);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_head, 0);
+  while (DevBackend::mmio_read32(&notification_buf_pair_regs->rx_head) != 0)
+    continue;
+
+  std::string huge_page_path = std::string(kHugePageNotifBufPathPrefix) +
+                               std::to_string(notification_buf_pair->id);
 
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
-      (struct RxNotification*)get_huge_page(huge_page_name);
+      (struct RxNotification*)get_huge_page(huge_page_path);
   if (notification_buf_pair->rx_buf == NULL) {
     std::cerr << "Could not get huge page" << std::endl;
     return -1;
@@ -152,8 +154,8 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
   notification_buf_pair->tx_tail = notification_buf_pair_regs->tx_tail;
   notification_buf_pair->tx_head = notification_buf_pair->tx_tail;
 
-  _enso_compiler_memory_barrier();
-  notification_buf_pair_regs->tx_head = notification_buf_pair->tx_head;
+  DevBackend::mmio_write32(&notification_buf_pair_regs->tx_head,
+                           notification_buf_pair->tx_head);
 
   // HACK(sadok): assuming that we know the number of queues beforehand
   notification_buf_pair->pending_rx_pipe_tails = (uint32_t*)malloc(
@@ -187,9 +189,10 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
 
   // Setting the address enables the queue. Do this last.
   // Use first half of the huge page for RX and second half for TX.
-  _enso_compiler_memory_barrier();
-  notification_buf_pair_regs->rx_mem_low = (uint32_t)phys_addr;
-  notification_buf_pair_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_low,
+                           (uint32_t)phys_addr);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_high,
+                           (uint32_t)(phys_addr >> 32));
   phys_addr += kAlignedDscBufPairSize / 2;
   notification_buf_pair_regs->tx_mem_low = (uint32_t)phys_addr;
   notification_buf_pair_regs->tx_mem_high = (uint32_t)(phys_addr >> 32);
@@ -209,26 +212,23 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   enso_pipe->regs = (struct QueueRegs*)enso_pipe_regs;
 
   // Make sure the queue is disabled.
-  enso_pipe_regs->rx_mem_low = 0;
-  enso_pipe_regs->rx_mem_high = 0;
-  _enso_compiler_memory_barrier();
-  while (enso_pipe_regs->rx_mem_low != 0 || enso_pipe_regs->rx_mem_high != 0)
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_low, 0);
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_high, 0);
+  while (DevBackend::mmio_read32(&enso_pipe_regs->rx_mem_low) != 0 ||
+         DevBackend::mmio_read32(&enso_pipe_regs->rx_mem_high) != 0)
     continue;
 
   // Make sure head and tail start at zero.
-  enso_pipe_regs->rx_tail = 0;
-  _enso_compiler_memory_barrier();
-  while (enso_pipe_regs->rx_tail != 0) continue;
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_tail, 0);
+  while (DevBackend::mmio_read32(&enso_pipe_regs->rx_tail) != 0) continue;
 
-  enso_pipe_regs->rx_head = 0;
-  _enso_compiler_memory_barrier();
-  while (enso_pipe_regs->rx_head != 0) continue;
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_head, 0);
+  while (DevBackend::mmio_read32(&enso_pipe_regs->rx_head) != 0) continue;
 
-  char huge_page_name[128];
-  snprintf(huge_page_name, sizeof(huge_page_name), "enso_enso_pipe:%i",
-           enso_pipe_id);
+  std::string huge_page_path =
+      std::string(kHugePageRxPipePathPrefix) + std::to_string(enso_pipe_id);
 
-  enso_pipe->buf = (uint32_t*)get_huge_page(huge_page_name, true);
+  enso_pipe->buf = (uint32_t*)get_huge_page(huge_page_path, true);
   if (enso_pipe->buf == NULL) {
     std::cerr << "Could not get huge page" << std::endl;
     return -1;
@@ -250,9 +250,10 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   // Setting the address enables the queue. Do this last.
   // The least significant bits in rx_mem_low are used to keep the notification
   // buffer ID. Therefore we add `notification_buf_pair->id` to the address.
-  _enso_compiler_memory_barrier();
-  enso_pipe_regs->rx_mem_low = (uint32_t)phys_addr + notification_buf_pair->id;
-  enso_pipe_regs->rx_mem_high = (uint32_t)(phys_addr >> 32);
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_low,
+                           (uint32_t)phys_addr + notification_buf_pair->id);
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_high,
+                           (uint32_t)(phys_addr >> 32));
 
   return 0;
 }
@@ -324,8 +325,8 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
-    _enso_compiler_memory_barrier();
-    *(notification_buf_pair->rx_head_ptr) = notification_buf_head;
+    DevBackend::mmio_write32(notification_buf_pair->rx_head_ptr,
+                             notification_buf_head);
     notification_buf_pair->rx_head = notification_buf_head;
   }
 
@@ -430,22 +431,17 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
-  _enso_compiler_memory_barrier();
-  *(enso_pipe->buf_head_ptr) = rx_pkt_head;
-
+  DevBackend::mmio_write32(enso_pipe->buf_head_ptr, rx_pkt_head);
   enso_pipe->rx_head = rx_pkt_head;
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
-  _enso_compiler_memory_barrier();
-  *(enso_pipe->buf_head_ptr) = enso_pipe->rx_tail;
-
+  DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail);
   enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 
 void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
-  _enso_compiler_memory_barrier();
-  *(enso_pipe->buf_head_ptr) = enso_pipe->rx_head;
+  DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_head);
 }
 
 static _enso_always_inline uint32_t
@@ -496,9 +492,7 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
   }
 
   notification_buf_pair->tx_tail = tx_tail;
-
-  _enso_compiler_memory_barrier();
-  *(notification_buf_pair->tx_tail_ptr) = tx_tail;
+  DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail);
 
   return len;
 }
@@ -584,9 +578,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;
-
-  _enso_compiler_memory_barrier();
-  *(notification_buf_pair->tx_tail_ptr) = tx_tail;
+  DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail);
 
   // Wait for request to be consumed.
   uint32_t nb_unreported_completions =
@@ -601,31 +593,35 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
-  if (notification_buf_pair->ref_cnt == 0) {
-    return;
-  }
   notification_buf_pair->regs->rx_mem_low = 0;
   notification_buf_pair->regs->rx_mem_high = 0;
-
   notification_buf_pair->regs->tx_mem_low = 0;
   notification_buf_pair->regs->tx_mem_high = 0;
+
   munmap(notification_buf_pair->rx_buf, kAlignedDscBufPairSize);
+
+  std::string huge_page_path = std::string(kHugePageNotifBufPathPrefix) +
+                               std::to_string(notification_buf_pair->id);
+  unlink(huge_page_path.c_str());
+
   free(notification_buf_pair->pending_rx_pipe_tails);
   free(notification_buf_pair->wrap_tracker);
   free(notification_buf_pair->next_rx_pipe_ids);
 
-  notification_buf_pair->fpga_dev->use_cmd(false);
-  delete notification_buf_pair->fpga_dev;
-
-  --(notification_buf_pair->ref_cnt);
+  delete (DevBackend*)notification_buf_pair->fpga_dev;
 }
 
-void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe) {
+void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe,
+                    enso_pipe_id_t enso_pipe_id) {
   enso_pipe->regs->rx_mem_low = 0;
   enso_pipe->regs->rx_mem_high = 0;
 
   if (enso_pipe->buf) {
     munmap(enso_pipe->buf, kBufPageSize);
+    std::string huge_page_path =
+        std::string(kHugePageRxPipePathPrefix) + std::to_string(enso_pipe_id);
+    unlink(huge_page_path.c_str());
+    enso_pipe->buf = nullptr;
   }
 }
 
@@ -633,10 +629,22 @@ int dma_finish(struct SocketInternal* socket_entry) {
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;
 
-  enso_pipe_free(&socket_entry->enso_pipe);
+  struct RxEnsoPipeInternal* enso_pipe = &socket_entry->enso_pipe;
+
+  enso_pipe_id_t enso_pipe_id =
+      enso_pipe->id + notification_buf_pair->enso_pipe_id_offset;
+
   if (notification_buf_pair->ref_cnt == 0) {
+    return -1;
+  }
+
+  enso_pipe_free(enso_pipe, enso_pipe_id);
+
+  if (notification_buf_pair->ref_cnt == 1) {
     notification_buf_free(notification_buf_pair);
   }
+
+  --(notification_buf_pair->ref_cnt);
 
   return 0;
 }
@@ -646,14 +654,6 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
       socket_entry->notification_buf_pair;
   return (uint32_t)socket_entry->enso_pipe.id +
          notification_buf_pair->enso_pipe_id_offset;
-}
-
-void print_fpga_reg(IntelFpgaPcieDev* dev, unsigned nb_regs) {
-  uint32_t temp_r;
-  for (unsigned int i = 0; i < nb_regs; ++i) {
-    dev->read32(2, reinterpret_cast<void*>(0 + i * 4), &temp_r);
-    printf("fpga_reg[%d] = 0x%08x \n", i, temp_r);
-  }
 }
 
 void print_stats(struct SocketInternal* socket_entry, bool print_global) {

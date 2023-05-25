@@ -53,9 +53,6 @@
 #include <string>
 #include <vector>
 
-// Avoid exposing `intel_fpga_pcie_api.hpp` externally.
-class IntelFpgaPcieDev;
-
 namespace enso {
 
 class RxPipe;
@@ -885,6 +882,10 @@ class TxPipe {
     app_end_ = (app_end_ + nb_bytes) & kBufMask;
   }
 
+  inline std::string GetHugePageFilePath() const {
+    return std::string(kHugePagePathPrefix) + std::to_string(kId);
+  }
+
   friend class Device;
 
   const enso_pipe_id_t kId;  ///< The ID of the pipe.
@@ -895,6 +896,9 @@ class TxPipe {
   uint32_t app_begin_ = 0;  // The next byte to be sent.
   uint32_t app_end_ = 0;    // The next byte to be allocated.
   uint64_t buf_phys_addr_;
+
+  static constexpr std::string_view kHugePagePathPrefix =
+      "/mnt/huge/enso_tx_pipe:";
 
   static constexpr uint32_t kBufMask = (kMaxCapacity + kQuantumSize) - 1;
   static_assert((kBufMask & (kBufMask + 1)) == 0,

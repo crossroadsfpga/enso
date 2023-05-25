@@ -47,7 +47,6 @@
 #include <iostream>
 
 #include "../pcie.h"
-#include "../syscall_api/intel_fpga_pcie_api.hpp"
 
 namespace enso {
 

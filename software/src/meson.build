@@ -5,7 +5,7 @@ project_sources = []
 project_libraries = []
 
 subdir('enso')
-subdir('syscall_api')
+subdir('backends')
 
 project_sources += files(
     'pcie.cpp'

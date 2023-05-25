@@ -44,9 +44,6 @@
 
 #include <stdint.h>
 
-// Avoid exposing `intel_fpga_pcie_api.hpp` externally.
-class IntelFpgaPcieDev;
-
 namespace enso {
 
 #if MAX_NB_FLOWS < 65536
@@ -110,7 +107,7 @@ struct NotificationBufPair {
   // the pipe ids used by the app.
   uint32_t enso_pipe_id_offset;
 
-  IntelFpgaPcieDev* fpga_dev;
+  void* fpga_dev;            // Avoid exposing `DevBackend` externally.
   void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
 };
 

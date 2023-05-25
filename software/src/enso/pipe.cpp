@@ -42,6 +42,8 @@
 #include <enso/ixy_helpers.h>
 #include <enso/pipe.h>
 #include <sched.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cassert>
@@ -90,7 +92,7 @@ void RxPipe::Prefetch() { prefetch_pipe(&internal_rx_pipe_); }
 
 void RxPipe::Clear() { fully_advance_pipe(&internal_rx_pipe_); }
 
-RxPipe::~RxPipe() { enso_pipe_free(&internal_rx_pipe_); }
+RxPipe::~RxPipe() { enso_pipe_free(&internal_rx_pipe_, kId); }
 
 int RxPipe::Init() noexcept {
   return enso_pipe_init(&internal_rx_pipe_, notification_buf_pair_, kId);
@@ -99,13 +101,15 @@ int RxPipe::Init() noexcept {
 TxPipe::~TxPipe() {
   if (internal_buf_) {
     munmap(buf_, kMaxCapacity);
+    std::string path = GetHugePageFilePath();
+    unlink(path.c_str());
   }
 }
 
 int TxPipe::Init() noexcept {
   if (internal_buf_) {
-    std::string name = "enso:tx_pipe_" + std::to_string(kId);
-    buf_ = (uint8_t*)get_huge_page(name, true);
+    std::string path = GetHugePageFilePath();
+    buf_ = (uint8_t*)get_huge_page(path, true);
     if (unlikely(!buf_)) {
       return -1;
     }

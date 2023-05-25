@@ -17,12 +17,15 @@
 // distributors. Please refer to the applicable agreement for further details.
 
 #include <sched.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include <iostream>
 #include <stdexcept>
 
 #include "../intel_fpga_pcie_api.hpp"
+
+namespace intel_fpga_pcie_api {
 
 /******************************************************************************
  * Templated access functions.
@@ -88,6 +91,11 @@ IntelFpgaPcieDev *IntelFpgaPcieDev::Create(unsigned int bdf, int bar) noexcept {
   }
 
   if (dev->Init(bdf, bar)) {
+    delete dev;
+    return nullptr;
+  }
+
+  if (dev->use_cmd(true) != 1) {
     delete dev;
     return nullptr;
   }
@@ -175,6 +183,7 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
 }
 
 IntelFpgaPcieDev::~IntelFpgaPcieDev(void) {
+  use_cmd(false);
   close(m_dev_handle);
   close(m_uio_dev_handle);
 }
@@ -446,3 +455,5 @@ int IntelFpgaPcieDev::get_uio_dev_name(char *uio_dev_name) {
   return ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_GET_UIO_DEV_NAME,
                uio_dev_name);
 }
+
+}  // namespace intel_fpga_pcie_api

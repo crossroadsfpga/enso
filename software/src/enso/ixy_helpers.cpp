@@ -81,13 +81,9 @@ uint64_t virt_to_phys(void* virt) {
 
 void* get_huge_page(const std::string& name, bool mirror) {
   int fd;
-  char huge_pages_path[128];
   constexpr uint32_t kSize = kBufPageSize;
 
-  snprintf(huge_pages_path, sizeof(huge_pages_path), "/mnt/huge/%s",
-           name.c_str());
-
-  fd = open(huge_pages_path, O_CREAT | O_RDWR, S_IRWXU);
+  fd = open(name.c_str(), O_CREAT | O_RDWR, S_IRWXU);
   if (fd == -1) {
     std::cerr << "(" << errno << ") Problem opening huge page file descriptor"
               << std::endl;
@@ -99,7 +95,7 @@ void* get_huge_page(const std::string& name, bool mirror) {
               << ") Could not truncate huge page to size: " << kSize
               << std::endl;
     close(fd);
-    unlink(huge_pages_path);
+    unlink(name.c_str());
     return nullptr;
   }
 
@@ -109,7 +105,7 @@ void* get_huge_page(const std::string& name, bool mirror) {
   if (virt_addr == (void*)-1) {
     std::cerr << "(" << errno << ") Could not mmap huge page" << std::endl;
     close(fd);
-    unlink(huge_pages_path);
+    unlink(name.c_str());
     return nullptr;
   }
 
@@ -123,7 +119,7 @@ void* get_huge_page(const std::string& name, bool mirror) {
       std::cerr << "(" << errno << ") Could not mmap second huge page"
                 << std::endl;
       close(fd);
-      unlink(huge_pages_path);
+      unlink(name.c_str());
       free(virt_addr);
       return nullptr;
     }
@@ -133,13 +129,11 @@ void* get_huge_page(const std::string& name, bool mirror) {
     std::cerr << "(" << errno << ") Could not lock huge page" << std::endl;
     munmap(virt_addr, kSize);
     close(fd);
-    unlink(huge_pages_path);
+    unlink(name.c_str());
     return nullptr;
   }
 
-  // Don't keep it around in the hugetlbfs.
   close(fd);
-  unlink(huge_pages_path);
 
   return virt_addr;
 }

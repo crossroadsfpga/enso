@@ -41,37 +41,12 @@
 #define SOFTWARE_SRC_PCIE_H_
 
 #include <endian.h>
+#include <enso/helpers.h>
 #include <enso/internals.h>
 #include <netinet/ether.h>
 #include <netinet/ip.h>
 
-#include "syscall_api/intel_fpga_pcie_api.hpp"
-
 namespace enso {
-
-#define RULE_ID_LINE_LEN 64  // bytes
-#define RULE_ID_SIZE 2       // bytes
-#define NB_RULES_IN_LINE (RULE_ID_LINE_LEN / RULE_ID_SIZE)
-
-#define MAX_PKT_SIZE 24  // in flits, if changed, must also change hardware
-
-// 4 bytes, 1 dword
-#define HEAD_OFFSET 4
-#define C2F_TAIL_OFFSET 16
-
-#define PDU_ID_OFFSET 0
-#define PDU_PORTS_OFFSET 1
-#define PDU_DST_IP_OFFSET 2
-#define PDU_SRC_IP_OFFSET 3
-#define PDU_PROTOCOL_OFFSET 4
-#define PDU_SIZE_OFFSET 5
-#define PDU_FLIT_OFFSET 6
-#define ACTION_OFFSET 7
-#define QUEUE_ID_LO_OFFSET 8
-#define QUEUE_ID_HI_OFFSET 9
-
-#define ACTION_NO_MATCH 1
-#define ACTION_MATCH 2
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
@@ -216,13 +191,12 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
 
-void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe);
+void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe,
+                    enso_pipe_id_t enso_pipe_id);
 
 int dma_finish(struct SocketInternal* socket_entry);
 
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
-
-void print_fpga_reg(IntelFpgaPcieDev* dev, unsigned nb_regs);
 
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
 

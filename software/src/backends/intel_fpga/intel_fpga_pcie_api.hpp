@@ -16,8 +16,8 @@
 // logic devices manufactured by Intel and sold by Intel or its authorized
 // distributors. Please refer to the applicable agreement for further details.
 
-#ifndef SOFTWARE_SRC_SYSCALL_API_INTEL_FPGA_PCIE_API_HPP_
-#define SOFTWARE_SRC_SYSCALL_API_INTEL_FPGA_PCIE_API_HPP_
+#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
+#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
 
 /**
  * @file
@@ -37,6 +37,8 @@ typedef ssize_t INTEL_FPGA_PCIE_DEV_HANDLE;
 #include "linux/intel_fpga_pcie_api_linux.hpp"
 
 #endif  // __linux__
+
+namespace intel_fpga_pcie_api {
 
 /**
  * Intel FPGA PCIe device handle class.
@@ -352,4 +354,6 @@ class IntelFpgaPcieDev {
   unsigned int m_kmem_size;
 };
 
-#endif  // SOFTWARE_SRC_SYSCALL_API_INTEL_FPGA_PCIE_API_HPP_
+}  // namespace intel_fpga_pcie_api
+
+#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
