@@ -2,7 +2,7 @@ site_name: Ensō
 site_url: https://enso.cs.cmu.edu/
 site_author: Hugo Sadok
 site_description: >-
-  Ensō is a fast and flexible streaming interface for NIC-Application communication.
+  Ensō is a fast and flexible streaming interface for NIC-application communication.
 
 # Repository
 repo_name: crossroadsfpga/enso
