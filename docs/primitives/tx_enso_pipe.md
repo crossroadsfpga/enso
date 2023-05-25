@@ -3,6 +3,17 @@
 
 TX Ensō Pipes work in reverse to [RX Ensō Pipes](rx_enso_pipe.md) and are used to *transmit* data to the NIC. To send data through a TX Ensō Pipe, the application allocates a buffer within the pipe, fill it with data and then send it.
 
+## Allocating a TX Ensō Pipe
+
+You need to use a [Device](device.md) object to allocate a TX Ensō Pipe. For example:
+
+```cpp
+enso::TxPipe* tx_pipe = device->AllocateTxPipe();
+assert(tx_pipe != nullptr);
+```
+
+Note that pipes are not thread safe. Each thread that receives data in a program shouuld allocate its own device instance and TX Ensō Pipes.
+
 ## Allocating a buffer
 
 TX Ensō Pipes manage memory through a simple best-effort allocator. The allocator will always try to return the largest contiguous buffer possible within a given TX Ensō Pipe. The allocated buffer's capacity can also implicitly *increase* at any point but it will never implicitly *decrease*.
