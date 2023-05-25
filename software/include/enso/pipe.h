@@ -424,11 +424,44 @@ class RxPipe {
    * @note Binding semantics depend on the functionality implemented on the NIC.
    *       More flexible steering may require different kinds of bindings.
    *
-   * @param dst_port Destination port.
-   * @param src_port Source port.
-   * @param dst_ip Destination IP.
-   * @param src_ip Source IP.
-   * @param protocol Protocol.
+   * While binding semantics will vary for different NIC implementations, here
+   * we describe how the NIC implementation that accompanies Enso behaves.
+   *
+   * Every call to `Bind()` will result in a new flow entry being created on the
+   * NIC using all the fields specified in the function arguments (5-tuple). For
+   * every incoming packet, the NIC will try to find a matching flow entry. If
+   * it does, it will steer the packet to the corresponding RX pipe. If it
+   * does not, it will steer the packet to one of the fallback queues.
+   *
+   * The fields that are used to find a matching entry depend on the incoming
+   * packet:
+   * - If the packet protocol is TCP (`6`):
+   *   - If the SYN flag is set, the NIC will match it to a flow entry based on
+   *     dst IP, dst port, and protocol, all the other fields will be set to 0
+   *     when looking for a matching flow entry.
+   *   - For TCP packets without a SYN flag set, the NIC will use all the
+   *     fields, i.e., dst IP, dst port, src IP, src port, and protocol.
+   * - If the packet protocol is UDP (`17`), the NIC will use only dst IP, dst
+   *   port, and protocol when looking for a matching flow entry. All the other
+   *   fields will be set to 0.
+   * - For all the other protocols, the NIC will use only the destination IP
+   *   when looking for a matching flow entry. All the other fields will be set
+   *   to 0.
+   *
+   * Therefore, if you want to listen for new TCP connections, you should bind
+   * to the destination IP and port and set all the other fields to 0. If you
+   * want to receive packets from an open TCP connection, you should bind to
+   * all the fields, i.e., dst IP, dst port, src IP, src port, and protocol. If
+   * you want to receive UDP packets, you should bind to the destination IP
+   * and port and set all the other fields to 0.
+   *
+   * @param dst_port Destination port (little-endian).
+   * @param src_port Source port (little-endian).
+   * @param dst_ip Destination IP (little-endian).
+   * @param src_ip Source IP (little-endian).
+   * @param protocol Protocol (little-endian).
+   *
+   * @return 0 on success, a different value otherwise.
    */
   int Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
            uint32_t src_ip, uint32_t protocol);
