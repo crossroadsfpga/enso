@@ -4,14 +4,14 @@ RX Ensō Pipes are used to *receive* data from the NIC. They offer multiple opti
 
 ## Allocating RX Ensō Pipes
 
-You need to use a [Device](device.md) object to allocate an RX Ensō Pipe. The following example shows how to allocate an RX Ensō Pipe.
+You need to use a [Device](device.md) object to allocate an RX Ensō Pipe. For example:
 
 ```cpp
 RxPipe* rx_pipe = device->AllocateRxPipe();
 assert(rx_pipe != nullptr);
 ```
 
-Note that pipes are not thread safe. Each thread that receives data in a program shouuld allocate its own device instance and RX Ensō Pipes.
+Note that pipes are not thread safe. Each thread that receives data in a program should allocate its own device instance and RX Ensō Pipes.
 
 ## Receiving byte streams
 

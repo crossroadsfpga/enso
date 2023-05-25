@@ -12,7 +12,7 @@ enso::TxPipe* tx_pipe = device->AllocateTxPipe();
 assert(tx_pipe != nullptr);
 ```
 
-Note that pipes are not thread safe. Each thread that receives data in a program shouuld allocate its own device instance and TX Ensō Pipes.
+Note that pipes are not thread safe. Each thread that receives data in a program should allocate its own device instance and TX Ensō Pipes.
 
 ## Allocating a buffer
 
