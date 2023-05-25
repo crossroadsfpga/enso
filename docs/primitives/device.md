@@ -2,7 +2,7 @@
 
 The `Device` class is the main entry point for interacting with the hardware device. It is used to [allocate Ensō Pipes](#allocating-ensō-pipes) as well as to [configure the device](#configuring-the-device). It can also be used to efficiently [receive data from multiple pipes](#receiving-data-from-multiple-pipes), avoiding the need to probe each pipe individually.
 
-Every I/O thread in a program should instantiate its own `Device` instance using the [`Device::Create()`](/software/classenso_1_1Device.html#a0680a603967557aef3be2d3c7931967e){target=_blank} factory method.
+Every I/O thread in a program should instantiate its own `Device` instance using the [`Device::Create()`](/software/classenso_1_1Device.html#a0680a603967557aef3be2d3c7931967e){target=_blank} factory method. The `Create()` currently requires the total number of RX pipes that will be used by the application thread. Moreover, all `Device` instances must use the same number of queues. This will change in the future.
 
 ## Allocating Ensō Pipes
 
@@ -52,7 +52,7 @@ while (keep_running) {
 
 ## Configuring the Device
 
-You may also use a `Device` instance to configure the device.
+You may also use a `Device` instance to configure the hardware device.
 
 ### Hardware Rate Limiter
 

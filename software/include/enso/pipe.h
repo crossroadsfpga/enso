@@ -82,11 +82,11 @@ uint32_t external_peek_next_batch_from_queue(
  */
 class Device {
  public:
+  // TODO(sadok): nb_rx_pipes should not be needed.
   /**
    * @brief Factory method to create a device.
    *
-   * @param nb_rx_pipes The number of RX Pipes to create. TODO(sadok): This
-   *                    should not be needed.
+   * @param nb_rx_pipes The number of RX Pipes to create.
    * @param core_id The core ID of the thread that will access the device. If
    *                -1, uses the current core.
    * @param pcie_addr The PCIe address of the device. If empty, uses the first
