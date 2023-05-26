@@ -45,6 +45,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -80,8 +81,15 @@ uint32_t network_head;
 uint32_t network_tail;
 int num_queues = 1;
 int queue_assignments[MAX_NUM_PACKETS / MOCK_BATCH_SIZE];
+std::chrono::milliseconds time_last_recv_call;
 
 int num_queues_initialized = 0;
+
+std::chrono::milliseconds get_curr_time_millis() {
+  std::chrono::milliseconds ms =
+      duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+  return ms;
+}
 
 int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
                           struct NotificationBufPair* notification_buf_pair,
@@ -203,6 +211,8 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
     network_head = 0;
     network_tail = 0;
 
+    time_last_recv_call = get_curr_time_millis();
+
     // opening file to dump packets to that mimics the network.
     pd = pcap_open_dead(DLT_EN10MB, 65535);
     pdumper_out = pcap_dump_open(pd, "out.pcap");
@@ -229,6 +239,12 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
   (void)notification_buf_pair;
+  // Get upper limit on batch size to emulate target rate
+  std::chrono::milliseconds curr_time = get_curr_time_millis();
+  float diff_seconds = (curr_time.count() - time_last_recv_call.count()) / 1000;
+  uint32_t upper_limit_size = (uint32_t)(TARGET_RATE * diff_seconds);
+  uint32_t upper_limit_size_aligned = ((upper_limit_size - 1) / 64 + 1) * 64;
+
   uint32_t enso_pipe_head = enso_pipe->rx_tail;
   uint32_t enso_pipe_tail = enso_pipe->rx_actual_tail;
 
@@ -237,10 +253,11 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
   if (enso_pipe_head == enso_pipe_tail) {
     return 0;
   }
-  printf("consume queue, head: %d, tail: %d\n", enso_pipe_head, enso_pipe_tail);
 
   uint32_t flit_aligned_size =
       ((enso_pipe_tail - enso_pipe_head) % MOCK_ENSO_PIPE_SIZE) * 64;
+
+  flit_aligned_size = std::min(upper_limit_size_aligned, flit_aligned_size);
 
   if (!peek) {
     enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64) % ENSO_PIPE_SIZE;
@@ -261,7 +278,6 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len) {
   (void)notification_buf_pair;
-  printf("send from addr %p\n", (void*)phys_addr);
 
   u_char* addr_buf = new u_char[len];
   memcpy(addr_buf, (uint8_t*)phys_addr, len);

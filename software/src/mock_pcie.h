@@ -56,6 +56,9 @@ namespace enso {
 #define MAX_NUM_PACKETS 512
 #define MOCK_BATCH_SIZE 16
 #define MOCK_ENSO_PIPE_SIZE 32768
+#define KILOBYTE 1000L
+#define GIGABYTE (KILOBYTE * KILOBYTE * KILOBYTE)
+#define TARGET_RATE (100 * GIGABYTE)
 
 struct Packet {
   u_char* pkt_bytes;
