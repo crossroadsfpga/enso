@@ -42,9 +42,6 @@ theme:
   logo: assets/enso-white.svg
 
 extra:
-  version:
-    provider: mike
-
   analytics:
     provider: google
     property: G-7WKNV89H63
