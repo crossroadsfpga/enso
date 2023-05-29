@@ -72,6 +72,12 @@ static constexpr std::string_view kHugePageRxPipePathPrefix =
 static constexpr std::string_view kHugePageNotifBufPathPrefix =
     "/mnt/huge/enso_notif_buf:";
 
+static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
+#ifdef __CLFLUSHOPT__
+  _mm_clflushopt(addr);
+#endif
+}
+
 int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
                           struct NotificationBufPair* notification_buf_pair,
                           enso_pipe_id_t nb_queues,
@@ -485,7 +491,7 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     uint64_t huge_page_offset = (transf_addr + req_length) % kBufPageSize;
     transf_addr = hugepage_base_addr + huge_page_offset;
 
-    _mm_clflushopt(tx_notification);
+    try_clflush(tx_notification);
 
     tx_tail = (tx_tail + 1) % kNotificationBufSize;
     missing_bytes -= req_length;
@@ -574,7 +580,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   struct TxNotification* tx_notification = tx_buf + tx_tail;
   *tx_notification = *config_notification;
 
-  _mm_clflushopt(tx_notification);
+  try_clflush(tx_notification);
 
   tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;

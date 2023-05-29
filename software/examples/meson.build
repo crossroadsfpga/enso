@@ -15,5 +15,4 @@ executable('ensogen', 'ensogen.cpp', dependencies: [thread_dep, pcap_dep],
 executable('capture', 'capture.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: enso_lib, include_directories: inc)
 executable('l2_forward', 'l2_forward.cpp', dependencies: thread_dep,
-           link_with: enso_lib, include_directories: inc,
-           cpp_args : '-mavx512f')
+           link_with: enso_lib, include_directories: inc)

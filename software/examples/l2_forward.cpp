@@ -49,9 +49,29 @@ static volatile bool setup_done = false;
 
 // Adapted from DPDK's rte_mov64() and rte_memcpy() functions.
 static _enso_always_inline void mov64(uint8_t* dst, const uint8_t* src) {
+#if defined __AVX512F__
   __m512i zmm0;
   zmm0 = _mm512_loadu_si512((const void*)src);
   _mm512_storeu_si512((void*)dst, zmm0);
+#elif defined __AVX2__
+  __m256i ymm0, ymm1;
+  ymm0 = _mm256_loadu_si256((const __m256i*)(const void*)src);
+  ymm1 = _mm256_loadu_si256((const __m256i*)(const void*)(src + 32));
+  _mm256_storeu_si256((__m256i*)(void*)dst, ymm0);
+  _mm256_storeu_si256((__m256i*)(void*)(dst + 32), ymm1);
+#elif defined __SSE2__
+  __m128i xmm0, xmm1, xmm2, xmm3;
+  xmm0 = _mm_loadu_si128((const __m128i*)(const void*)src);
+  xmm1 = _mm_loadu_si128((const __m128i*)(const void*)(src + 16));
+  xmm2 = _mm_loadu_si128((const __m128i*)(const void*)(src + 32));
+  xmm3 = _mm_loadu_si128((const __m128i*)(const void*)(src + 48));
+  _mm_storeu_si128((__m128i*)(void*)dst, xmm0);
+  _mm_storeu_si128((__m128i*)(void*)(dst + 16), xmm1);
+  _mm_storeu_si128((__m128i*)(void*)(dst + 32), xmm2);
+  _mm_storeu_si128((__m128i*)(void*)(dst + 48), xmm3);
+#else
+  memcpy(dst, src, 64);
+#endif
 }
 
 static _enso_always_inline void memcpy_64_align(void* dst, const void* src,
