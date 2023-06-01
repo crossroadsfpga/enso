@@ -42,6 +42,7 @@
 #include <endian.h>
 #include <enso/consts.h>
 #include <enso/internals.h>
+#include <enso/ixy_helpers.h>
 #include <netinet/ether.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>

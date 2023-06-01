@@ -42,7 +42,6 @@
 #include <arpa/inet.h>
 #include <enso/consts.h>
 #include <enso/helpers.h>
-#include <enso/ixy_helpers.h>
 #include <immintrin.h>
 #include <sched.h>
 #include <string.h>

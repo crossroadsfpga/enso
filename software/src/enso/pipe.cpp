@@ -39,7 +39,6 @@
 
 #include <enso/config.h>
 #include <enso/helpers.h>
-#include <enso/ixy_helpers.h>
 #include <enso/pipe.h>
 #include <sched.h>
 #include <sys/mman.h>
