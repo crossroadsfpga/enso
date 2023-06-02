@@ -175,3 +175,17 @@ TEST(TestQueue, TestWrapAround) {
 
   EXPECT_EQ(q_cons->Pop().value_or(elem)[0], -1);
 }
+
+TEST(TestQueue, JoinExisting) {
+  auto q_prod = enso::QueueProducer<int>::Create("JoinExisting", 0, false);
+  EXPECT_NE(q_prod, nullptr);
+
+  auto q_cons = enso::QueueConsumer<int>::Create("JoinExisting", 0, true);
+  EXPECT_NE(q_cons, nullptr);
+
+  auto q_prod2 = enso::QueueProducer<int>::Create("JoinExisting", 0, false);
+  EXPECT_EQ(q_prod2, nullptr);
+
+  auto q_cons2 = enso::QueueConsumer<int>::Create("JoinExisting", 0, false);
+  EXPECT_EQ(q_cons2, nullptr);
+}
