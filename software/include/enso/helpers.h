@@ -78,7 +78,7 @@ struct stats_t {
   uint64_t recv_bytes;
   uint64_t nb_batches;
   uint64_t nb_pkts;
-} __attribute__((aligned(64)));
+} __attribute__((aligned(kCacheLineSize)));
 
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.

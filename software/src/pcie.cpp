@@ -65,12 +65,6 @@
 
 namespace enso {
 
-static constexpr std::string_view kHugePageRxPipePathPrefix =
-    "/mnt/huge/enso_rx_pipe:";
-
-static constexpr std::string_view kHugePageNotifBufPathPrefix =
-    "/mnt/huge/enso_notif_buf:";
-
 static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 #ifdef __CLFLUSHOPT__
   _mm_clflushopt(addr);
@@ -233,7 +227,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   std::string huge_page_path =
       std::string(kHugePageRxPipePathPrefix) + std::to_string(enso_pipe_id);
 
-  enso_pipe->buf = (uint32_t*)get_huge_page(huge_page_path, true);
+  enso_pipe->buf = (uint32_t*)get_huge_page(huge_page_path, 0, true);
   if (enso_pipe->buf == NULL) {
     std::cerr << "Could not get huge page" << std::endl;
     return -1;

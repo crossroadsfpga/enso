@@ -56,15 +56,17 @@ uint64_t virt_to_phys(void* virt);
  *
  * Huge pages are allocated to be `kBufPageSize` bytes in size.
  *
- * @param name A name to identify of the huge page to be allocated. Will be used
- *             to name the huge page file.
+ * @param path Path to huge page file.
  * @param mirror Whether to mirror the huge page or not. Mirroring means that
  *               the same page is mapped again right after the allocated memory.
  *               This is useful to handle wrap-around in the buffers. Defaults
  *               to false.
+ * @param size The size of the huge page to be allocated. If 0, defaults to
+ *            `kBufPageSize`.
  * @return A pointer to the allocated huge page.
  */
-void* get_huge_page(const std::string& name, bool mirror = false);
+void* get_huge_page(const std::string& path, size_t size = 0,
+                    bool mirror = false);
 
 }  // namespace enso
 

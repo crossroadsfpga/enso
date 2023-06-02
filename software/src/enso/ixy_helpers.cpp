@@ -79,57 +79,65 @@ uint64_t virt_to_phys(void* virt) {
                     ((uintptr_t)virt) % page_size);
 }
 
-void* get_huge_page(const std::string& name, bool mirror) {
+void* get_huge_page(const std::string& path, size_t size, bool mirror) {
   int fd;
-  constexpr uint32_t kSize = kBufPageSize;
+  if (size == 0) {
+    size = kBufPageSize;
+  }
 
-  fd = open(name.c_str(), O_CREAT | O_RDWR, S_IRWXU);
+  if (mirror && size % kBufPageSize) {
+    std::cerr << "Mirror huge pages must be a multiple of huge page size"
+              << std::endl;
+    return nullptr;
+  }
+
+  fd = open(path.c_str(), O_CREAT | O_RDWR, S_IRWXU);
   if (fd == -1) {
     std::cerr << "(" << errno << ") Problem opening huge page file descriptor"
               << std::endl;
     return nullptr;
   }
 
-  if (ftruncate(fd, (off_t)kSize)) {
+  if (ftruncate(fd, (off_t)size)) {
     std::cerr << "(" << errno
-              << ") Could not truncate huge page to size: " << kSize
+              << ") Could not truncate huge page to size: " << size
               << std::endl;
     close(fd);
-    unlink(name.c_str());
+    unlink(path.c_str());
     return nullptr;
   }
 
-  void* virt_addr = (void*)mmap(nullptr, kSize * 2, PROT_READ | PROT_WRITE,
+  void* virt_addr = (void*)mmap(nullptr, size * 2, PROT_READ | PROT_WRITE,
                                 MAP_SHARED | MAP_HUGETLB, fd, 0);
 
   if (virt_addr == (void*)-1) {
     std::cerr << "(" << errno << ") Could not mmap huge page" << std::endl;
     close(fd);
-    unlink(name.c_str());
+    unlink(path.c_str());
     return nullptr;
   }
 
   if (mirror) {
     // Allocate same huge page at the end of the last one.
     void* ret =
-        (void*)mmap((uint8_t*)virt_addr + kSize, kSize, PROT_READ | PROT_WRITE,
+        (void*)mmap((uint8_t*)virt_addr + size, size, PROT_READ | PROT_WRITE,
                     MAP_FIXED | MAP_SHARED | MAP_HUGETLB, fd, 0);
 
     if (ret == (void*)-1) {
       std::cerr << "(" << errno << ") Could not mmap second huge page"
                 << std::endl;
       close(fd);
-      unlink(name.c_str());
+      unlink(path.c_str());
       free(virt_addr);
       return nullptr;
     }
   }
 
-  if (mlock(virt_addr, kSize)) {
+  if (mlock(virt_addr, size)) {
     std::cerr << "(" << errno << ") Could not lock huge page" << std::endl;
-    munmap(virt_addr, kSize);
+    munmap(virt_addr, size);
     close(fd);
-    unlink(name.c_str());
+    unlink(path.c_str());
     return nullptr;
   }
 

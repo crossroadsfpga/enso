@@ -42,6 +42,7 @@
 #define SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 
 #include <cstdint>
+#include <string>
 
 namespace enso {
 
@@ -78,6 +79,16 @@ constexpr uint32_t kMaxPendingTxRequests = kNotificationBufSize - 1;
 
 // Using 2MB huge pages (size in bytes).
 constexpr uint32_t kBufPageSize = 1UL << 21;
+
+// Huge page paths.
+static constexpr std::string_view kHugePageRxPipePathPrefix =
+    "/mnt/huge/enso_rx_pipe:";
+static constexpr std::string_view kHugePagePathPrefix =
+    "/mnt/huge/enso_tx_pipe:";
+static constexpr std::string_view kHugePageNotifBufPathPrefix =
+    "/mnt/huge/enso_notif_buf:";
+static constexpr std::string_view kHugePageQueuePathPrefix =
+    "/mnt/huge/enso_queue:";
 
 // We need this to allow the same huge page to be mapped to adjacent memory
 // regions.
@@ -116,6 +127,8 @@ constexpr uint32_t kPacketRttOffset = 18;
 constexpr uint32_t kMaxHardwareFlitRate = 200e6;
 
 constexpr uint32_t kMemorySpacePerQueue = 1 << 12;
+
+constexpr uint32_t kCacheLineSize = 64;  // bytes.
 
 }  // namespace enso
 

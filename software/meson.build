@@ -9,3 +9,4 @@ pkg_mod = import('pkgconfig')
 pkg_mod.generate(enso_lib)
 
 subdir('examples')
+subdir('test')

@@ -108,7 +108,7 @@ TxPipe::~TxPipe() {
 int TxPipe::Init() noexcept {
   if (internal_buf_) {
     std::string path = GetHugePageFilePath();
-    buf_ = (uint8_t*)get_huge_page(path, true);
+    buf_ = (uint8_t*)get_huge_page(path, 0, true);
     if (unlikely(!buf_)) {
       return -1;
     }

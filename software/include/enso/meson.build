@@ -4,6 +4,7 @@ public_enso_headers = files(
     'helpers.h',
     'ixy_helpers.h',
     'internals.h',
+    'queue.h',
     'pipe.h',
     'socket.h',
 )
