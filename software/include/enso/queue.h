@@ -127,10 +127,14 @@ class Queue {
    * @param size Size of the queue (in bytes). If zero (default), the size will
    *        be inferred if the queue already exists and will be set to
    *        kBufPageSize otherwise.
+   * @param join_if_exists If true (default), the queue will be joined if it
+   *       already exists. If false, the creation will fail if the queue already
+   *       exists.
    * @return A unique pointer to the object or nullptr if the creation fails.
    */
   static std::unique_ptr<Subclass> Create(const std::string& queue_name,
-                                          size_t size = 0) noexcept {
+                                          size_t size = 0,
+                                          bool join_if_exists = true) noexcept {
     std::unique_ptr<Subclass> queue(new (std::nothrow)
                                         Subclass(queue_name, size));
 
@@ -138,7 +142,7 @@ class Queue {
       return std::unique_ptr<Subclass>{};
     }
 
-    if (queue->Init()) {
+    if (queue->Init(join_if_exists)) {
       return std::unique_ptr<Subclass>{};
     }
 
@@ -173,9 +177,12 @@ class Queue {
   /**
    * @brief Initializes the Queue object.
    *
+   * @param join_if_exists If true, the queue will be joined if it already
+   *        exists. If false, the creation will fail if the queue already
+   *        exists.
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init() noexcept {
+  int Init(bool join_if_exists) noexcept {
     if (size_ == 0) {
       size_ = kBufPageSize;
     }
@@ -197,8 +204,9 @@ class Queue {
     huge_page_path_ = std::string(kHugePageQueuePathPrefix) + queue_name_;
 
     // Check if the a file starting with huge_page_path_ exists.
-    std::filesystem::path dir_path =
-        std::filesystem::path(huge_page_path_).parent_path();
+    std::filesystem::path path = std::filesystem::path(huge_page_path_);
+    std::filesystem::path dir_path = path.parent_path();
+    std::string file_name = path.filename();
 
     bool create_queue = true;
     for (const auto& entry : std::filesystem::directory_iterator(dir_path)) {
@@ -208,9 +216,9 @@ class Queue {
 
       std::string entry_name = entry.path().filename().string();
 
-      // File starting with huge_page_path_ exists.
-      if (entry_name.find(huge_page_path_) == 0) {
-        std::string size_str = entry_name.substr(huge_page_path_.size());
+      // File starting with file_name exists.
+      if (entry_name.find(file_name) == 0) {
+        std::string size_str = entry_name.substr(file_name.size());
 
         // Check if the string is a number.
         if (size_str.find_first_not_of("0123456789") != std::string::npos) {
@@ -229,6 +237,11 @@ class Queue {
 
         create_queue = false;
       }
+    }
+
+    if (!join_if_exists && !create_queue) {
+      std::cerr << "Queue already exists" << std::endl;
+      return -1;
     }
 
     created_queue_ = create_queue;
@@ -260,7 +273,7 @@ class Queue {
   size_t size_;
   uint32_t capacity_;  // In number of elements.
   uint32_t index_mask_;
-  Element* buf_addr_;
+  Element* buf_addr_ = nullptr;
   std::string huge_page_path_;
   bool created_queue_ = false;
 };
@@ -295,10 +308,13 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   /**
    * @brief Initializes the Queue object.
    *
+   * @param join_if_exists If true, the queue will be joined if it already
+   *        exists. If false, the creation will fail if the queue already
+   *        exists.
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init() noexcept {
-    if (Parent::Init()) {
+  int Init(bool join_if_exists) noexcept {
+    if (Parent::Init(join_if_exists)) {
       return -1;
     }
 
@@ -378,10 +394,13 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
   /**
    * @brief Initializes the Queue object.
    *
+   * @param join_if_exists If true, the queue will be joined if it already
+   *        exists. If false, the creation will fail if the queue already
+   *        exists.
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init() noexcept {
-    if (Parent::Init()) {
+  int Init(bool join_if_exists) noexcept {
+    if (Parent::Init(join_if_exists)) {
       return -1;
     }
 

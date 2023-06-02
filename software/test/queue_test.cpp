@@ -113,15 +113,15 @@ TEST(TestQueue, EmptyAfterFull) {
   elem_t elem;
   for (int32_t i = 0; i < capacity; ++i) {
     elem[0] = i;
-    ASSERT_EQ(q_prod->Push(elem), 0);
+    EXPECT_EQ(q_prod->Push(elem), 0);
   }
   elem[0] = -1;
-  ASSERT_EQ(q_prod->Push(elem), -1);
+  EXPECT_EQ(q_prod->Push(elem), -1);
 
   for (int32_t i = 0; i < capacity; ++i) {
-    ASSERT_EQ(q_cons->Pop().value_or(elem)[0], i);
+    EXPECT_EQ(q_cons->Pop().value_or(elem)[0], i);
   }
-  ASSERT_EQ(q_cons->Pop().value_or(elem)[0], -1);
+  EXPECT_EQ(q_cons->Pop().value_or(elem)[0], -1);
 }
 
 TEST(TestQueue, Front) {
@@ -167,11 +167,25 @@ TEST(TestQueue, TestWrapAround) {
     EXPECT_EQ(q_prod->Push(elem), 0);
   }
   elem[0] = -1;
-  ASSERT_EQ(q_prod->Push(elem), -1);
+  EXPECT_EQ(q_prod->Push(elem), -1);
 
   for (; j < i; ++j) {
     EXPECT_EQ(q_cons->Pop().value_or(elem)[0], j);
   }
 
   EXPECT_EQ(q_cons->Pop().value_or(elem)[0], -1);
+}
+
+TEST(TestQueue, JoinExisting) {
+  auto q_prod = enso::QueueProducer<int>::Create("JoinExisting", 0, false);
+  EXPECT_NE(q_prod, nullptr);
+
+  auto q_cons = enso::QueueConsumer<int>::Create("JoinExisting", 0, true);
+  EXPECT_NE(q_cons, nullptr);
+
+  auto q_prod2 = enso::QueueProducer<int>::Create("JoinExisting", 0, false);
+  EXPECT_EQ(q_prod2, nullptr);
+
+  auto q_cons2 = enso::QueueConsumer<int>::Create("JoinExisting", 0, false);
+  EXPECT_EQ(q_cons2, nullptr);
 }
