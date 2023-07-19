@@ -500,7 +500,7 @@ class RxPipe {
    */
   constexpr void ConfirmBytes(uint32_t nb_bytes) {
     uint32_t rx_tail = internal_rx_pipe_.rx_tail;
-    rx_tail = (rx_tail + nb_bytes / 64) % ENSO_PIPE_SIZE;
+    rx_tail = (rx_tail + nb_bytes / 64) % kEnsoPipeSize;
     internal_rx_pipe_.rx_tail = rx_tail;
   }
 
@@ -513,7 +513,7 @@ class RxPipe {
   constexpr uint32_t capacity() const {
     uint32_t rx_head = internal_rx_pipe_.rx_head;
     uint32_t rx_tail = internal_rx_pipe_.rx_tail;
-    return ((rx_head - rx_tail) % ENSO_PIPE_SIZE) * 64;
+    return ((rx_head - rx_tail) % kEnsoPipeSize) * 64;
   }
 
   /**
@@ -633,7 +633,7 @@ class RxPipe {
    * Maximum capacity achievable by the pipe. There should always be at least
    * one buffer quantum available.
    */
-  static constexpr uint32_t kMaxCapacity = ENSO_PIPE_SIZE * 64 - kQuantumSize;
+  static constexpr uint32_t kMaxCapacity = kEnsoPipeSize * 64 - kQuantumSize;
 
  private:
   /**
@@ -876,7 +876,7 @@ class TxPipe {
    * Maximum capacity achievable by the pipe. There should always be at least
    * one buffer quantum available.
    */
-  static constexpr uint32_t kMaxCapacity = ENSO_PIPE_SIZE * 64 - kQuantumSize;
+  static constexpr uint32_t kMaxCapacity = kEnsoPipeSize * 64 - kQuantumSize;
 
  private:
   /**
@@ -1148,7 +1148,7 @@ class RxTxPipe {
    * Threshold for processing completions. If the RX pipe's capacity is greater
    * than this threshold, we process completions.
    */
-  static constexpr uint32_t kCompletionsThreshold = ENSO_PIPE_SIZE * 64 / 2;
+  static constexpr uint32_t kCompletionsThreshold = kEnsoPipeSize * 64 / 2;
 
   /**
    * RxTxPipes can only be instantiated from a Device object, using the
