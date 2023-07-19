@@ -51,6 +51,7 @@
 #include <netinet/udp.h>
 #include <pthread.h>
 
+#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -161,6 +162,9 @@ static _enso_always_inline void mov64(uint8_t* dst, const uint8_t* src) {
 
 static _enso_always_inline void memcpy_64_align(void* dst, const void* src,
                                                 size_t n) {
+  // Check that it is aligned to 64 bytes.
+  assert(((uint64_t)dst & 0x3f) == 0);
+
   for (; n >= 64; n -= 64) {
     mov64((uint8_t*)dst, (const uint8_t*)src);
     dst = (uint8_t*)dst + 64;
