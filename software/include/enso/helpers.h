@@ -77,11 +77,11 @@ namespace enso {
 
 #define _enso_always_inline __attribute__((always_inline)) inline
 
-struct stats_t {
+struct alignas(kCacheLineSize) stats_t {
   uint64_t recv_bytes;
   uint64_t nb_batches;
   uint64_t nb_pkts;
-} __attribute__((aligned(kCacheLineSize)));
+};
 
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
