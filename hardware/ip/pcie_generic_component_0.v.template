@@ -1,9 +1,9 @@
 // generic_component_0.v
 
-// This file must be coppied to the generated PCIe Core IP at:
+// This file must be copied to the generated PCIe Core IP at:
 // pcie_ed/generic_component_0/synth/generic_component_0.v
 //
-// This is done automatically by the `sythesize.sh` script and the
+// This is done automatically by the `synthesize.sh` script and the
 // `generate_ips.sh` script.
 
 `timescale 1 ps / 1 ps
