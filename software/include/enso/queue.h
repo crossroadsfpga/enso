@@ -55,6 +55,11 @@
 
 namespace enso {
 
+// This implementation assumes AVX512.
+#ifndef __AVX512F__
+#error "Need support for AVX512F to use Queue."
+#endif  // __AVX512F__
+
 template <typename T>
 static constexpr T align_cache_power_two(T value) {
   T cache_aligned = (value + kCacheLineSize - 1) & ~(kCacheLineSize - 1);
@@ -96,14 +101,14 @@ class Queue {
   static constexpr size_t kElementPadding =
       align_cache_power_two(kElementMetaSize) - kElementMetaSize;
 
-  struct Element {
+  struct alignas(kCacheLineSize) Element {
     uint64_t signal;
     T data;
     uint8_t pad[kElementPadding];
   };
 
-  static_assert((sizeof(Element) % kCacheLineSize) == 0,
-                "Element size must be multiple of a cache line");
+  static_assert(sizeof(Element) == kCacheLineSize,
+                "Element must fit in a cache line");
 
   static_assert((sizeof(Element) & (sizeof(Element) - 1)) == 0,
                 "Element size must be a power of two");
@@ -293,8 +298,14 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
       return -1;  // Queue is full.
     }
 
-    current_element->signal = 1;
-    current_element->data = data;
+    __m512i tmp_element_raw;
+    struct Parent::Element* tmp_element =
+        (struct Parent::Element*)(&tmp_element_raw);
+    tmp_element->signal = 1;
+    tmp_element->data = data;
+
+    _mm512_stream_si512((__m512i*)current_element, tmp_element_raw);
+    _mm_sfence();
 
     tail_ = (tail_ + 1) & Parent::index_mask();
 
@@ -362,7 +373,7 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
    */
   inline T* Front() {
     struct Parent::Element* current_element = &(Parent::buf_addr()[head_]);
-    if (unlikely(!current_element->signal)) {
+    if (!current_element->signal) {
       return nullptr;  // Queue is empty.
     }
     return &(current_element->data);
@@ -375,7 +386,7 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
    */
   inline std::optional<T> Pop() {
     struct Parent::Element* current_element = &(Parent::buf_addr()[head_]);
-    if (unlikely(!current_element->signal)) {
+    if (!current_element->signal) {
       return {};  // Queue is empty.
     }
 
