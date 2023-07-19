@@ -130,6 +130,25 @@ constexpr uint32_t kMemorySpacePerQueue = 1 << 12;
 
 constexpr uint32_t kCacheLineSize = 64;  // bytes.
 
+// Software backend definitions.
+
+// IPC queue names for software backend.
+static constexpr std::string_view kIpcQueueToAppName = "enso_ipc_queue_to_app";
+static constexpr std::string_view kIpcQueueFromAppName =
+    "enso_ipc_queue_from_app";
+
+enum class MmioNotificationType : uint64_t {
+  kWrite = 0,
+  kRead = 1,
+  kControl = 2
+};
+
+struct MmioNotification {
+  MmioNotificationType type;
+  uint64_t address;
+  uint64_t value;
+};
+
 }  // namespace enso
 
 #endif  // SOFTWARE_INCLUDE_ENSO_CONSTS_H_
