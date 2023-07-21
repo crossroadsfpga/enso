@@ -208,7 +208,7 @@ class Queue {
 
     huge_page_path_ = std::string(kHugePageQueuePathPrefix) + queue_name_;
 
-    // Check if the a file starting with huge_page_path_ exists.
+    // Check if a file starting with huge_page_path_ exists.
     std::filesystem::path path = std::filesystem::path(huge_page_path_);
     std::filesystem::path dir_path = path.parent_path();
     std::string file_name = path.filename();
