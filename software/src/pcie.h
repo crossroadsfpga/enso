@@ -53,37 +53,82 @@ struct SocketInternal {
   struct RxEnsoPipeInternal enso_pipe;
 };
 
+/**
+ * @brief Initializes the notification buffer pair.
+ *
+ * @param bdf BDF of the PCIe device to use.
+ * @param bar PCIe BAR to use (set to -1 to automatically select one).
+ * @param core_id Core ID to use.
+ * @param notification_buf_pair Notification buffer pair to initialize.
+ * @param nb_queues Number of queues that will be used by the application.
+ * @param enso_pipe_id_offset Offset to use when initializing the Enso Pipe IDs.
+ *                            This is mostly a hack and should be removed in the
+ *                            future.
+ */
 int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
                           struct NotificationBufPair* notification_buf_pair,
                           enso_pipe_id_t nb_queues,
                           enso_pipe_id_t enso_pipe_id_offset);
 
+/**
+ * @brief Initializes an Enso Pipe.
+ *
+ * @param enso_pipe Enso Pipe to initialize.
+ * @param notification_buf_pair Notification buffer pair to use.
+ * @param enso_pipe_id ID of the Enso Pipe to initialize.
+ */
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id);
 
+/**
+ * @brief Initializes an enso pipe and the notification buffer if needed.
+ *
+ * @deprecated This function is deprecated and will be removed in the future.
+ */
 int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
              unsigned nb_queues, uint32_t bdf, int32_t bar);
 
 /**
- * Get latest tails for the pipes associated with the given notification buffer.
+ * @brief Gets latest tails for the pipes associated with the given notification
+ * buffer.
  *
  * @param notification_buf_pair Notification buffer to get data from.
  * @return Number of notifications received.
  */
 uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair);
 
+/**
+ * @brief Gets the next batch of data from the given Enso Pipe.
+ *
+ * @param enso_pipe Enso Pipe to get data from.
+ * @param notification_buf_pair Notification buffer to get data from.
+ * @param buf Pointer to the buffer where the data will be stored, it will be
+ *            updated to point to the next available data.
+ * @return Number of bytes received.
+ */
 uint32_t get_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
+/**
+ * @brief Gets the next batch of data from the given Enso Pipe without consuming
+ *        it. So the next call to `get_next_batch_from_queue` or to
+ *       `peek_next_batch_from_queue` will return the same data.
+ *
+ * @param enso_pipe Enso Pipe to get data from.
+ * @param notification_buf_pair Notification buffer to get data from.
+ * @param buf Pointer to the buffer where the data will be stored, it will be
+ *            updated to point to the next available data.
+ * @return Number of bytes received.
+ */
 uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
 /**
- * Get next Enso Pipe with pending data.
+ * @brief Get next Enso Pipe with pending data.
  *
  * @param notification_buf_pair Notification buffer to get data from.
  * @return ID for the next Enso Pipe that has data available, or -1 if no Enso
@@ -93,7 +138,7 @@ int32_t get_next_enso_pipe_id(
     struct NotificationBufPair* notification_buf_pair);
 
 /**
- * Get next batch of data from the next available Enso Pipe.
+ * @brief Get next batch of data from the next available Enso Pipe.
  *
  * @param notification_buf_pair Notification buffer to get data from.
  * @param socket_entries Array of socket entries.
@@ -106,9 +151,9 @@ uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
                         int* enso_pipe_id, void** buf);
 
 /**
- * Frees the next `len` bytes in the buffer associated with the `socket_entry`
- * socket. If `len` is greater than the number of allocated bytes in the buffer,
- * the behavior is undefined.
+ * @brief Frees the next `len` bytes in the buffer associated with the
+ * `socket_entry` socket. If `len` is greater than the number of allocated bytes
+ * in the buffer, the behavior is undefined.
  *
  * @param enso_pipe Enso pipe to advance.
  * @param len Number of bytes to free.
@@ -116,22 +161,22 @@ uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
 void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len);
 
 /**
- * Frees all the received bytes in the buffer associated with the `socket_entry`
- * socket.
+ * @brief Frees all the received bytes in the buffer associated with the
+ * `socket_entry` socket.
  *
  * @param enso_pipe Enso pipe to advance.
  */
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe);
 
 /**
- * Prefetches a given Enso Pipe.
+ * @brief Prefetches a given Enso Pipe.
  *
  * @param enso_pipe Enso pipe to prefetch.
  */
 void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
 
 /**
- * Sends data through a given queue.
+ * @brief Sends data through a given queue.
  *
  * This function returns as soon as a transmission requests has been enqueued to
  * the TX notification buffer. That means that it is not safe to modify or
@@ -152,8 +197,8 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
                        uint64_t phys_addr, uint32_t len);
 
 /**
- * Returns the number of transmission requests that were completed since the
- * last call to this function.
+ * @brief Returns the number of transmission requests that were completed since
+ * the last call to this function.
  *
  * Since transmissions are always completed in order, one can figure out which
  * transmissions were completed by keeping track of all the calls to
@@ -170,7 +215,7 @@ uint32_t get_unreported_completions(
     struct NotificationBufPair* notification_buf_pair);
 
 /**
- * Updates the tx head and the number of TX completions.
+ * @brief Updates the tx head and the number of TX completions.
  *
  * @param notification_buf_pair Notification buffer to be updated.
  */
@@ -189,15 +234,41 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair);
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification);
 
+/**
+ * @brief Frees the notification buffer pair.
+ *
+ * @param notification_buf_pair Notification buffer pair to free.
+ */
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
 
+/**
+ * @brief Frees the Enso Pipe.
+ *
+ * @param enso_pipe Enso Pipe to free.
+ * @param enso_pipe_id Hardware ID of the Enso Pipe to free.
+ */
 void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe,
                     enso_pipe_id_t enso_pipe_id);
 
+/**
+ * @brief Frees the notification buffer and all pipes.
+ *
+ * @deprecated This function is deprecated and will be removed in the future.
+ */
 int dma_finish(struct SocketInternal* socket_entry);
 
+/**
+ * @brief Gets the Enso Pipe ID associated with a given socket.
+ *
+ * @deprecated This function is deprecated and will be removed in the future.
+ */
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 
+/**
+ * @brief Prints statistics for a given socket.
+ *
+ * @deprecated This function is deprecated and will be removed in the future.
+ */
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
 }  // namespace enso
