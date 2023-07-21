@@ -114,7 +114,9 @@ int TxPipe::Init() noexcept {
     }
   }
 
-  buf_phys_addr_ = virt_to_phys(buf_);
+  struct NotificationBufPair* notif_buf = &(device_->notification_buf_pair_);
+
+  buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
 
   return 0;
 }

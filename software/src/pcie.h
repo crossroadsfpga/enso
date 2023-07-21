@@ -235,6 +235,17 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification);
 
 /**
+ * @brief Converts an address in the application's virtual address space to an
+ *        address that can be used by the device (typically a physical address).
+ *
+ * @param notification_buf_pair Notification buffer pair to use.
+ * @param virt_addr Virtual address to convert.
+ * @return Converted address or 0 if the address cannot be translated.
+ */
+uint64_t get_dev_addr_from_virt_addr(
+    struct NotificationBufPair* notification_buf_pair, void* virt_addr);
+
+/**
  * @brief Frees the notification buffer pair.
  *
  * @param notification_buf_pair Notification buffer pair to free.

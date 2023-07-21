@@ -84,6 +84,17 @@ class DevBackend {
     return *addr;
   }
 
+  /**
+   * @brief Converts an address in the application's virtual address space to an
+   *        address that can be used by the device (typically the physical
+   *        address).
+   * @param virt_addr Address in the application's virtual address space.
+   * @return Address that can be used by the device.
+   */
+  uint64_t ConvertVirtAddrToDevAddr(void* virt_addr) {
+    return virt_to_phys(virt_addr);
+  }
+
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
       : bdf_(bdf), bar_(bar) {}

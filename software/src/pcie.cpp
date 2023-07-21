@@ -141,7 +141,8 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
       (struct TxNotification*)((uint64_t)notification_buf_pair->rx_buf +
                                kAlignedDscBufPairSize / 2);
 
-  uint64_t phys_addr = virt_to_phys(notification_buf_pair->rx_buf);
+  uint64_t phys_addr =
+      fpga_dev->ConvertVirtAddrToDevAddr(notification_buf_pair->rx_buf);
 
   notification_buf_pair->rx_head_ptr =
       (uint32_t*)&notification_buf_pair_regs->rx_head;
@@ -203,6 +204,8 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    struct NotificationBufPair* notification_buf_pair,
                    enso_pipe_id_t enso_pipe_id) {
   void* uio_mmap_bar2_addr = notification_buf_pair->uio_mmap_bar2_addr;
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
   // Register associated with the enso pipe.
   volatile struct QueueRegs* enso_pipe_regs =
@@ -232,7 +235,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
     std::cerr << "Could not get huge page" << std::endl;
     return -1;
   }
-  uint64_t phys_addr = virt_to_phys(enso_pipe->buf);
+  uint64_t phys_addr = fpga_dev->ConvertVirtAddrToDevAddr(enso_pipe->buf);
 
   enso_pipe->buf_phys_addr = phys_addr;
   enso_pipe->phys_buf_offset = phys_addr - (uint64_t)(enso_pipe->buf);
@@ -589,6 +592,14 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   notification_buf_pair->nb_unreported_completions = nb_unreported_completions;
 
   return 0;
+}
+
+uint64_t get_dev_addr_from_virt_addr(
+    struct NotificationBufPair* notification_buf_pair, void* virt_addr) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  uint64_t dev_addr = fpga_dev->ConvertVirtAddrToDevAddr(virt_addr);
+  return dev_addr;
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {

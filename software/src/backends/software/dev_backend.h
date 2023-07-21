@@ -92,14 +92,14 @@ class DevBackend {
 
     // Block if full.
     while (queue_to_backend_->Push(
-               {MmioNotificationType::kWrite, (uint64_t)addr, value}) != 0) {
+               {MmioNotifType::kWrite, (uint64_t)addr, value}) != 0) {
     }
   }
 
   static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
     _enso_compiler_memory_barrier();
-    while (queue_to_backend_->Push(
-               {MmioNotificationType::kRead, (uint64_t)addr, 0}) != 0) {
+    while (queue_to_backend_->Push({MmioNotifType::kRead, (uint64_t)addr, 0}) !=
+           0) {
     }
 
     std::optional<MmioNotification> notification;
@@ -108,8 +108,34 @@ class DevBackend {
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == MmioNotificationType::kRead);
-    assert(notification->addr == (uint64_t)addr);
+    assert(notification->type == MmioNotifType::kRead);
+    assert(notification->address == (uint64_t)addr);
+    return notification->value;
+  }
+
+  /**
+   * @brief Converts an address in the application's virtual address space to an
+   *        address that can be used by the device.
+   * @param virt_addr Address in the application's virtual address space.
+   * @return Converted address or 0 if the address cannot be translated.
+   */
+  uint64_t ConvertVirtAddrToDevAddr(void* virt_addr) {
+    uint64_t phys_addr = virt_to_phys(virt_addr);
+
+    _enso_compiler_memory_barrier();
+    while (queue_to_backend_->Push(
+               {MmioNotifType::kRead, (uint64_t)phys_addr, 0}) != 0) {
+    }
+
+    std::optional<MmioNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == MmioNotifType::kTranslAddr);
+    assert(notification->address == (uint64_t)phys_addr);
+
     return notification->value;
   }
 
