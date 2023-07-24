@@ -148,10 +148,14 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
       (uint32_t*)&notification_buf_pair_regs->rx_head;
   notification_buf_pair->tx_tail_ptr =
       (uint32_t*)&notification_buf_pair_regs->tx_tail;
-  notification_buf_pair->rx_head = notification_buf_pair_regs->rx_head;
+
+  notification_buf_pair->rx_head =
+      DevBackend::mmio_read32(notification_buf_pair->rx_head_ptr);
 
   // Preserve TX DSC tail and make head have the same value.
-  notification_buf_pair->tx_tail = notification_buf_pair_regs->tx_tail;
+  notification_buf_pair->tx_tail =
+      DevBackend::mmio_read32(notification_buf_pair->tx_tail_ptr);
+
   notification_buf_pair->tx_head = notification_buf_pair->tx_tail;
 
   DevBackend::mmio_write32(&notification_buf_pair_regs->tx_head,
@@ -193,9 +197,13 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
                            (uint32_t)phys_addr);
   DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_high,
                            (uint32_t)(phys_addr >> 32));
+
   phys_addr += kAlignedDscBufPairSize / 2;
-  notification_buf_pair_regs->tx_mem_low = (uint32_t)phys_addr;
-  notification_buf_pair_regs->tx_mem_high = (uint32_t)(phys_addr >> 32);
+
+  DevBackend::mmio_write32(&notification_buf_pair_regs->tx_mem_low,
+                           (uint32_t)phys_addr);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->tx_mem_high,
+                           (uint32_t)(phys_addr >> 32));
 
   return 0;
 }
