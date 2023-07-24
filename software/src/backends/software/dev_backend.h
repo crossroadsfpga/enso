@@ -124,7 +124,7 @@ class DevBackend {
 
     _enso_compiler_memory_barrier();
     while (queue_to_backend_->Push(
-               {MmioNotifType::kRead, (uint64_t)phys_addr, 0}) != 0) {
+               {MmioNotifType::kTranslAddr, (uint64_t)phys_addr, 0}) != 0) {
     }
 
     std::optional<MmioNotification> notification;
