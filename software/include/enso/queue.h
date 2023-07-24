@@ -206,6 +206,7 @@ class Queue {
     capacity_ = size_ / sizeof(struct Element);
     index_mask_ = capacity_ - 1;
 
+    // Keep path so that we can unlink it later if needed.
     huge_page_path_ = std::string(kHugePageQueuePathPrefix) + queue_name_;
 
     // Check if a file starting with huge_page_path_ exists.
