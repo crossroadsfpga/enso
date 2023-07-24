@@ -161,9 +161,9 @@ class DevBackend {
     }
 
     std::string queue_to_app_name =
-        std::string(enso::kIpcQueueToAppName) + std::to_string(core_id_);
-    std::string queue_from_app_name =
-        std::string(enso::kIpcQueueFromAppName) + std::to_string(core_id_);
+        std::string(enso::kIpcQueueToAppName) + std::to_string(core_id_) + "_";
+    std::string queue_from_app_name = std::string(enso::kIpcQueueFromAppName) +
+                                      std::to_string(core_id_) + "_";
 
     queue_to_backend_ =
         QueueProducer<MmioNotification>::Create(queue_from_app_name);
