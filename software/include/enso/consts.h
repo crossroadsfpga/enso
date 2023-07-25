@@ -81,14 +81,11 @@ constexpr uint32_t kMaxPendingTxRequests = kNotificationBufSize - 1;
 constexpr uint32_t kBufPageSize = 1UL << 21;
 
 // Huge page paths.
-static constexpr std::string_view kHugePageRxPipePathPrefix =
-    "/mnt/huge/enso_rx_pipe:";
-static constexpr std::string_view kHugePagePathPrefix =
-    "/mnt/huge/enso_tx_pipe:";
-static constexpr std::string_view kHugePageNotifBufPathPrefix =
-    "/mnt/huge/enso_notif_buf:";
-static constexpr std::string_view kHugePageQueuePathPrefix =
-    "/mnt/huge/enso_queue:";
+static constexpr std::string_view kHugePageDefaultPrefix = "/mnt/huge/enso";
+static constexpr std::string_view kHugePageRxPipePathPrefix = "_rx_pipe:";
+static constexpr std::string_view kHugePagePathPrefix = "_tx_pipe:";
+static constexpr std::string_view kHugePageNotifBufPathPrefix = "_notif_buf:";
+static constexpr std::string_view kHugePageQueuePathPrefix = "_queue:";
 
 // We need this to allow the same huge page to be mapped to adjacent memory
 // regions.

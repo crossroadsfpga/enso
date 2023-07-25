@@ -74,7 +74,8 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
                           struct NotificationBufPair* notification_buf_pair,
                           enso_pipe_id_t nb_queues,
-                          enso_pipe_id_t enso_pipe_id_offset) {
+                          enso_pipe_id_t enso_pipe_id_offset,
+                          const std::string& shared_memory_prefix) {
   if (core_id < 0) {
     core_id = sched_getcpu();
     if (core_id < 0) {
@@ -125,7 +126,8 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
   while (DevBackend::mmio_read32(&notification_buf_pair_regs->rx_head) != 0)
     continue;
 
-  std::string huge_page_path = std::string(kHugePageNotifBufPathPrefix) +
+  std::string huge_page_path = shared_memory_prefix +
+                               std::string(kHugePageNotifBufPathPrefix) +
                                std::to_string(notification_buf_pair->id);
 
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
@@ -190,6 +192,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
   notification_buf_pair->tx_full_cnt = 0;
   notification_buf_pair->nb_unreported_completions = 0;
   notification_buf_pair->enso_pipe_id_offset = enso_pipe_id_offset;
+  notification_buf_pair->shared_memory_prefix = shared_memory_prefix;
 
   // Setting the address enables the queue. Do this last.
   // Use first half of the huge page for RX and second half for TX.
@@ -235,8 +238,9 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   DevBackend::mmio_write32(&enso_pipe_regs->rx_head, 0);
   while (DevBackend::mmio_read32(&enso_pipe_regs->rx_head) != 0) continue;
 
-  std::string huge_page_path =
-      std::string(kHugePageRxPipePathPrefix) + std::to_string(enso_pipe_id);
+  std::string huge_page_path = notification_buf_pair->shared_memory_prefix +
+                               std::string(kHugePageRxPipePathPrefix) +
+                               std::to_string(enso_pipe_id);
 
   enso_pipe->buf = (uint32_t*)get_huge_page(huge_page_path, 0, true);
   if (enso_pipe->buf == NULL) {
@@ -252,6 +256,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   enso_pipe->buf_head_ptr = (uint32_t*)&enso_pipe_regs->rx_head;
   enso_pipe->rx_head = 0;
   enso_pipe->rx_tail = 0;
+  enso_pipe->shared_memory_prefix = notification_buf_pair->shared_memory_prefix;
 
   // Make sure the last tail matches the current head.
   notification_buf_pair->pending_rx_pipe_tails[enso_pipe->id] =
@@ -270,7 +275,8 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
 
 int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
-             unsigned nb_queues, uint32_t bdf, int32_t bar) {
+             unsigned nb_queues, uint32_t bdf, int32_t bar,
+             const std::string& shared_memory_prefix) {
   printf("Running with NOTIFICATION_BUF_SIZE: %i\n", NOTIFICATION_BUF_SIZE);
   printf("Running with ENSO_PIPE_SIZE: %i\n", ENSO_PIPE_SIZE);
 
@@ -289,7 +295,8 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
     enso_pipe_id_t enso_pipe_id_offset = enso_pipe_id;
 
     int ret = notification_buf_init(bdf, bar, core_id, notification_buf_pair,
-                                    nb_queues, enso_pipe_id_offset);
+                                    nb_queues, enso_pipe_id_offset,
+                                    shared_memory_prefix);
     if (ret != 0) {
       return ret;
     }
@@ -618,8 +625,10 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
 
   munmap(notification_buf_pair->rx_buf, kAlignedDscBufPairSize);
 
-  std::string huge_page_path = std::string(kHugePageNotifBufPathPrefix) +
+  std::string huge_page_path = notification_buf_pair->shared_memory_prefix +
+                               std::string(kHugePageNotifBufPathPrefix) +
                                std::to_string(notification_buf_pair->id);
+
   unlink(huge_page_path.c_str());
 
   free(notification_buf_pair->pending_rx_pipe_tails);
@@ -636,8 +645,9 @@ void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe,
 
   if (enso_pipe->buf) {
     munmap(enso_pipe->buf, kBufPageSize);
-    std::string huge_page_path =
-        std::string(kHugePageRxPipePathPrefix) + std::to_string(enso_pipe_id);
+    std::string huge_page_path = enso_pipe->shared_memory_prefix +
+                                 std::string(kHugePageRxPipePathPrefix) +
+                                 std::to_string(enso_pipe_id);
     unlink(huge_page_path.c_str());
     enso_pipe->buf = nullptr;
   }

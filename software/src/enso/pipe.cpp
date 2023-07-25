@@ -137,11 +137,11 @@ int RxTxPipe::Init() noexcept {
   return 0;
 }
 
-std::unique_ptr<Device> Device::Create(const uint32_t nb_rx_pipes,
-                                       int16_t core_id,
-                                       const std::string& pcie_addr) noexcept {
-  std::unique_ptr<Device> dev(new (std::nothrow)
-                                  Device(nb_rx_pipes, core_id, pcie_addr));
+std::unique_ptr<Device> Device::Create(
+    const uint32_t nb_rx_pipes, int16_t core_id, const std::string& pcie_addr,
+    const std::string& shared_memory_prefix) noexcept {
+  std::unique_ptr<Device> dev(new (std::nothrow) Device(
+      nb_rx_pipes, core_id, pcie_addr, shared_memory_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
@@ -340,8 +340,9 @@ int Device::Init() noexcept {
   // currently placed back to back.
   enso_pipe_id_t enso_pipe_id_offset = id * kNbRxPipes;
 
-  int ret = notification_buf_init(bdf, bar, id, &notification_buf_pair_,
-                                  kNbRxPipes, enso_pipe_id_offset);
+  int ret =
+      notification_buf_init(bdf, bar, id, &notification_buf_pair_, kNbRxPipes,
+                            enso_pipe_id_offset, shared_memory_prefix_);
   if (ret != 0) {
     // Could not initialize notification buffer.
     return 3;

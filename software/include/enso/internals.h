@@ -44,6 +44,8 @@
 
 #include <stdint.h>
 
+#include <string>
+
 namespace enso {
 
 #if MAX_NB_FLOWS < 65536
@@ -109,6 +111,7 @@ struct NotificationBufPair {
 
   void* fpga_dev;            // Avoid exposing `DevBackend` externally.
   void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
+  std::string shared_memory_prefix;
 };
 
 struct RxEnsoPipeInternal {
@@ -120,6 +123,7 @@ struct RxEnsoPipeInternal {
   uint32_t rx_tail;
   uint64_t phys_buf_offset;  // Use to convert between phys and virt address.
   enso_pipe_id_t id;
+  std::string shared_memory_prefix;
 };
 
 }  // namespace enso

@@ -80,7 +80,7 @@ int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
 
   int bar = -1;
   int result = dma_init(notification_buf_pair, enso_pipe, socket_id, nb_queues,
-                        bdf, bar);
+                        bdf, bar, std::string(kHugePageDefaultPrefix));
   if (unlikely(result < 0)) {
     std::cerr << "Problem initializing DMA" << std::endl;
     return -1;
