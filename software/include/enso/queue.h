@@ -73,7 +73,7 @@ static constexpr T align_cache_power_two(T value) {
 /**
  * @brief Queue parent class.
  *
- * Use this queues to communicate between different threads. It should be
+ * Use this queue to communicate between different threads. It should be
  * instantiated using either the QueueConsumer or QueueProducer classes through
  * the Create method.
  *
