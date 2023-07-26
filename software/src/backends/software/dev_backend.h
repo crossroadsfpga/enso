@@ -88,8 +88,6 @@ class DevBackend {
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value) {
-    _enso_compiler_memory_barrier();
-
     // Block if full.
     while (queue_to_backend_->Push(
                {MmioNotifType::kWrite, (uint64_t)addr, value}) != 0) {
@@ -97,7 +95,6 @@ class DevBackend {
   }
 
   static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
-    _enso_compiler_memory_barrier();
     while (queue_to_backend_->Push({MmioNotifType::kRead, (uint64_t)addr, 0}) !=
            0) {
     }
