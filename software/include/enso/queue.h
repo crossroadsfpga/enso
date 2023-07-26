@@ -135,20 +135,19 @@ class Queue {
    * @param join_if_exists If true (default), the queue will be joined if it
    *       already exists. If false, the creation will fail if the queue already
    *       exists.
-   * @param shared_memory_prefix Prefix to use when creating the shared memory
+   * @param huge_page_prefix Prefix to use when creating the shared memory
    *       file. If empty (default), the default prefix will be used.
    * @return A unique pointer to the object or nullptr if the creation fails.
    */
   static std::unique_ptr<Subclass> Create(
       const std::string& queue_name, size_t size = 0,
-      bool join_if_exists = true,
-      std::string shared_memory_prefix = "") noexcept {
-    if (shared_memory_prefix == "") {
-      shared_memory_prefix = kHugePageDefaultPrefix;
+      bool join_if_exists = true, std::string huge_page_prefix = "") noexcept {
+    if (huge_page_prefix == "") {
+      huge_page_prefix = kHugePageDefaultPrefix;
     }
 
     std::unique_ptr<Subclass> queue(
-        new (std::nothrow) Subclass(queue_name, size, shared_memory_prefix));
+        new (std::nothrow) Subclass(queue_name, size, huge_page_prefix));
 
     if (queue == nullptr) {
       return std::unique_ptr<Subclass>{};
@@ -184,10 +183,10 @@ class Queue {
 
  protected:
   explicit Queue(const std::string& queue_name, size_t size,
-                 const std::string& shared_memory_prefix) noexcept
+                 const std::string& huge_page_prefix) noexcept
       : size_(size),
         queue_name_(queue_name),
-        shared_memory_prefix_(shared_memory_prefix) {}
+        huge_page_prefix_(huge_page_prefix) {}
 
   /**
    * @brief Initializes the Queue object.
@@ -217,8 +216,8 @@ class Queue {
     index_mask_ = capacity_ - 1;
 
     // Keep path so that we can unlink it later if needed.
-    huge_page_path_ = shared_memory_prefix_ +
-                      std::string(kHugePageQueuePathPrefix) + queue_name_;
+    huge_page_path_ =
+        huge_page_prefix_ + std::string(kHugePageQueuePathPrefix) + queue_name_;
 
     // Check if a file starting with huge_page_path_ exists.
     std::filesystem::path path = std::filesystem::path(huge_page_path_);
@@ -293,7 +292,7 @@ class Queue {
   std::string huge_page_path_;
   bool created_queue_ = false;
   std::string queue_name_;
-  std::string shared_memory_prefix_;
+  std::string huge_page_prefix_;
 };
 
 template <typename T>
@@ -327,8 +326,8 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
 
  protected:
   explicit QueueProducer(const std::string& queue_name, size_t size,
-                         const std::string& shared_memory_prefix) noexcept
-      : Queue<T, QueueProducer<T>>(queue_name, size, shared_memory_prefix) {}
+                         const std::string& huge_page_prefix) noexcept
+      : Queue<T, QueueProducer<T>>(queue_name, size, huge_page_prefix) {}
 
   /**
    * @brief Initializes the Queue object.
@@ -414,8 +413,8 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
 
  protected:
   explicit QueueConsumer(const std::string& queue_name, size_t size,
-                         const std::string& shared_memory_prefix) noexcept
-      : Queue<T, QueueConsumer<T>>(queue_name, size, shared_memory_prefix) {}
+                         const std::string& huge_page_prefix) noexcept
+      : Queue<T, QueueConsumer<T>>(queue_name, size, huge_page_prefix) {}
 
   /**
    * @brief Initializes the Queue object.

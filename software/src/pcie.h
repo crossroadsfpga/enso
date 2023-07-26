@@ -66,13 +66,13 @@ struct SocketInternal {
  * @param enso_pipe_id_offset Offset to use when initializing the Enso Pipe IDs.
  *                            This is mostly a hack and should be removed in the
  *                            future.
- * @param shared_memory_prefix Prefix to use when creating the shared memory.
+ * @param huge_page_prefix File prefix to use when allocating the huge pages.
  */
 int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
                           struct NotificationBufPair* notification_buf_pair,
                           enso_pipe_id_t nb_queues,
                           enso_pipe_id_t enso_pipe_id_offset,
-                          const std::string& shared_memory_prefix);
+                          const std::string& huge_page_prefix);
 
 /**
  * @brief Initializes an Enso Pipe.
@@ -93,7 +93,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
 int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
              unsigned nb_queues, uint32_t bdf, int32_t bar,
-             const std::string& shared_memory_prefix);
+             const std::string& huge_page_prefix);
 
 /**
  * @brief Gets latest tails for the pipes associated with the given notification

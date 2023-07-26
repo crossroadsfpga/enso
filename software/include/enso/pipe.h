@@ -91,15 +91,15 @@ class Device {
    *                -1, uses the current core.
    * @param pcie_addr The PCIe address of the device. If empty, uses the first
    *                  device found.
-   * @param shared_memory_prefix The prefix to use for shared memory. If empty,
-   *                             uses the default prefix.
+   * @param huge_page_prefix The prefix to use for huge pages file. If empty,
+   *                         uses the default prefix.
    * @return A unique pointer to the device. May be null if the device cannot be
    *         created.
    */
   static std::unique_ptr<Device> Create(
       uint32_t nb_rx_pipes, int16_t core_id = -1,
       const std::string& pcie_addr = "",
-      const std::string& shared_memory_prefix = "") noexcept;
+      const std::string& huge_page_prefix = "") noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -242,16 +242,16 @@ class Device {
    * Use `Create` factory method to instantiate objects externally.
    */
   Device(uint32_t nb_rx_pipes, int16_t core_id, const std::string& pcie_addr,
-         std::string shared_memory_prefix) noexcept
+         std::string huge_page_prefix) noexcept
       : kPcieAddr(pcie_addr), kNbRxPipes(nb_rx_pipes), core_id_(core_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
               << std::endl;
 #endif  // NDEBUG
-    if (shared_memory_prefix == "") {
-      shared_memory_prefix = std::string(kHugePageDefaultPrefix);
+    if (huge_page_prefix == "") {
+      huge_page_prefix = std::string(kHugePageDefaultPrefix);
     }
-    shared_memory_prefix_ = shared_memory_prefix;
+    huge_page_prefix_ = huge_page_prefix;
 
     rx_pipes_.reserve(kNbRxPipes);
   }
@@ -285,7 +285,7 @@ class Device {
   struct NotificationBufPair notification_buf_pair_;
   int16_t core_id_;
   uint16_t bdf_;
-  std::string shared_memory_prefix_;
+  std::string huge_page_prefix_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -925,7 +925,7 @@ class TxPipe {
   }
 
   inline std::string GetHugePageFilePath() const {
-    return device_->shared_memory_prefix_ + std::string(kHugePagePathPrefix) +
+    return device_->huge_page_prefix_ + std::string(kHugePagePathPrefix) +
            std::to_string(kId);
   }
 
