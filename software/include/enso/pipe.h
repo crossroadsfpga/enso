@@ -767,7 +767,6 @@ class TxPipe {
    */
   inline void SendAndFree(uint32_t nb_bytes) {
     uint64_t phys_addr = buf_phys_addr_ + app_begin_;
-    assert(((app_end_ - app_begin_) & kBufMask) + nb_bytes <= kMaxCapacity);
     assert(nb_bytes <= kMaxCapacity);
     assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
