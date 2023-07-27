@@ -618,10 +618,10 @@ uint64_t get_dev_addr_from_virt_addr(
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
-  notification_buf_pair->regs->rx_mem_low = 0;
-  notification_buf_pair->regs->rx_mem_high = 0;
-  notification_buf_pair->regs->tx_mem_low = 0;
-  notification_buf_pair->regs->tx_mem_high = 0;
+  DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_low, 0);
+  DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_high, 0);
+  DevBackend::mmio_write32(&notification_buf_pair->regs->tx_mem_low, 0);
+  DevBackend::mmio_write32(&notification_buf_pair->regs->tx_mem_high, 0);
 
   munmap(notification_buf_pair->rx_buf, kAlignedDscBufPairSize);
 
@@ -640,8 +640,8 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
 
 void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe,
                     enso_pipe_id_t enso_pipe_id) {
-  enso_pipe->regs->rx_mem_low = 0;
-  enso_pipe->regs->rx_mem_high = 0;
+  DevBackend::mmio_write32(&enso_pipe->regs->rx_mem_low, 0);
+  DevBackend::mmio_write32(&enso_pipe->regs->rx_mem_high, 0);
 
   if (enso_pipe->buf) {
     munmap(enso_pipe->buf, kBufPageSize);
