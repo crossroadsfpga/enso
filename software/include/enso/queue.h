@@ -316,8 +316,7 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     tmp_element->signal = 1;
     tmp_element->data = data;
 
-    _mm512_stream_si512((__m512i*)current_element, tmp_element_raw);
-    _mm_sfence();
+    _mm512_storeu_si512((__m512i*)current_element, tmp_element_raw);
 
     tail_ = (tail_ + 1) & Parent::index_mask();
 
