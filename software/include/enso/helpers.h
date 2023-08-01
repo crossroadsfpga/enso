@@ -160,6 +160,13 @@ static _enso_always_inline void mov64(uint8_t* dst, const uint8_t* src) {
 #endif
 }
 
+/**
+ * @brief Copies data from src to dst.
+ *
+ * @param dst Destination address.
+ * @param src Source address.
+ * @param n 64-byte aligned number of bytes to copy.
+ */
 static _enso_always_inline void memcpy_64_align(void* dst, const void* src,
                                                 size_t n) {
   // Check that it is aligned to 64 bytes.
