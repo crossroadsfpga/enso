@@ -64,6 +64,12 @@ Then, you should link the application with the Ensō library. The way you do it 
     g++ -o my_app my_app.cpp -lenso
     ```
 
+    You may also use `pkg-config` to retrieve the flags:
+
+    ```bash
+    g++ -o my_app my_app.cpp $(pkg-config --cflags --libs enso)
+    ```
+
 === "Meson"
 
     Add the following to your `meson.build` file:
