@@ -134,7 +134,7 @@ void show_stats(const std::vector<stats_t>& thread_stats,
                 volatile bool* keep_running);
 
 // Adapted from DPDK's rte_mov64() and rte_memcpy() functions.
-static _enso_always_inline void mov64(uint8_t* dst, const uint8_t* src) {
+_enso_always_inline void mov64(uint8_t* dst, const uint8_t* src) {
 #if defined __AVX512F__
   __m512i zmm0;
   zmm0 = _mm512_loadu_si512((const void*)src);
@@ -167,8 +167,7 @@ static _enso_always_inline void mov64(uint8_t* dst, const uint8_t* src) {
  * @param src Source address.
  * @param n 64-byte aligned number of bytes to copy.
  */
-static _enso_always_inline void memcpy_64_align(void* dst, const void* src,
-                                                size_t n) {
+_enso_always_inline void memcpy_64_align(void* dst, const void* src, size_t n) {
   // Check that it is aligned to 64 bytes.
   assert(((uint64_t)dst & 0x3f) == 0);
 
