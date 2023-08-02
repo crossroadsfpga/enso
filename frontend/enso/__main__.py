@@ -73,7 +73,7 @@ from enso.enso_nic import EnsoNic
 )
 @click.option(
     "--latency-opt/--throughput-opt",
-    default=False,
+    default=True,
     show_default=True,
     help="Optimize for throughput/latency.",
 )

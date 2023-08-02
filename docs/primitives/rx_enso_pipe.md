@@ -173,9 +173,9 @@ set_nb_fallback_queues <number of fallback queues>
 
 ## Notification Prefetching
 
-Under the hood, Ensō uses a reactive notification mechanism that dramatically improves throughput but that may also increase latency. To reduce latency when receiving packets, applications can choose to use notification prefetching. Ensō supports two types of notification prefetching: implicit and explicit.
+Under the hood, Ensō uses a reactive notification mechanism that dramatically improves throughput but that may also increase latency when used by itself. To reduce latency when receiving packets, Ensō also employs a mechanism called notification prefetching, that causes software to preemptively request new notifications from the NIC. Ensō supports two types of notification prefetching: implicit and explicit.
 
-To use notification prefetching *implicitly*, it is sufficient to compile Ensō with `-Dlatency_opt=true`. This will cause the library to always prefetch notifications for the next pipe when receiving data from a given one. Refer to the [build instructions](../compiling_software.md#compilation-options) for more details on how to change compile-time options.
+By default, Ensō already prefetches notifications implicitly. Applications that do not benefit from low latency may choose to disable notification prefetching by compiling Ensō with `-Dlatency_opt=false`. This will cause the library to only prefetch notifications when explicitly requested by the application. Refer to the [build instructions](../compiling_software.md#compilation-options) for more details on how to change compile-time options.
 
 Alternatively, users that want more control over when notification prefetching happens may choose to prefetch notifications *explicitly*. To explicitly prefetch notifications for a given pipe, an application can use the [`RxPipe::Prefetch()`](/software/classenso_1_1RxPipe.html#ad779bff3360fcfb1b517e5b04e0c82cc) method. This will force the NIC to notify any pending data for such pipe.
 

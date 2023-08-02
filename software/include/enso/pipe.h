@@ -577,7 +577,7 @@ class RxPipe {
    *          conjunction with the `NextRxPipeToRecv` and `NextRxTxPipeToRecv`
    *          functions. These functions only support *implicit* prefetching,
    *          which can be enabled by compiling the library with
-   *          `-Dlatency_opt=true`.
+   *          `-Dlatency_opt=true` (the default).
    */
   void Prefetch();
 
@@ -1066,6 +1066,12 @@ class RxTxPipe {
 
   /**
    * @brief Prefetches the next batch of bytes to be received on the RxTxPipe.
+   *
+   * @warning *Explicit* prefetching from the application cannot be used in
+   *          conjunction with the `NextRxPipeToRecv` and `NextRxTxPipeToRecv`
+   *          functions. These functions only support *implicit* prefetching,
+   *          which can be enabled by compiling the library with
+   *          `-Dlatency_opt=true` (the default).
    */
   inline void Prefetch() { rx_pipe_->Prefetch(); }
 
