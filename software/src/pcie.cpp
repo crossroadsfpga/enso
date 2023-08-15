@@ -138,10 +138,14 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
     return -1;
   }
 
+  memset(notification_buf_pair->rx_buf, 0, kNotificationBufSize * 64);
+
   // Use first half of the huge page for RX and second half for TX.
   notification_buf_pair->tx_buf =
       (struct TxNotification*)((uint64_t)notification_buf_pair->rx_buf +
                                kAlignedDscBufPairSize / 2);
+
+  memset(notification_buf_pair->tx_buf, 0, kNotificationBufSize * 64);
 
   uint64_t phys_addr =
       fpga_dev->ConvertVirtAddrToDevAddr(notification_buf_pair->rx_buf);
