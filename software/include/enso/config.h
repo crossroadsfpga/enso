@@ -87,15 +87,6 @@ int enable_timestamp(struct NotificationBufPair* notification_buf_pair);
 int disable_timestamp(struct NotificationBufPair* notification_buf_pair);
 
 /**
- * @brief Disables hardware rate limit.
- *
- * @param notification_buf_pair Notification buffer to send configuration
- *                              through.
- * @return 0 if configuration was successful.
- */
-int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
-
-/**
  * @brief Enables hardware rate limit.
  *
  * Once rate limiting is enabled, packets from all queues are sent at a rate of
@@ -133,6 +124,15 @@ int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
  */
 int enable_rate_limit(struct NotificationBufPair* notification_buf_pair,
                       uint16_t num, uint16_t den);
+
+/**
+ * @brief Disables hardware rate limit.
+ *
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @return 0 if configuration was successful.
+ */
+int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
 
 }  // namespace enso
 
