@@ -59,9 +59,9 @@ In the previous example, we knew the amount of data to be transmitted and we exp
 enso::TxPipe* tx_pipe = device->AllocateTxPipe();
 assert(tx_pipe != nullptr);
 
-// Allocate a buffer. Note that we request a buffer of size 0, this is
-// guaranteed to never block.
-uint8_t* buf = tx_pipe->AllocateBuf(0);
+// Allocate a buffer. Note that we do not specify a target size.
+// This makes sure that AllocateBuf will never block.
+uint8_t* buf = tx_pipe->AllocateBuf();
 
 // Retrieve the buffer's current capacity.
 uint32_t data_size = tx_pipe->capacity();
@@ -73,7 +73,7 @@ uint32_t data_size = tx_pipe->capacity();
 tx_pipe->SendAndFree(data_size);
 
 // The previous buffer is now invalid, allocate a new one.
-buf = tx_pipe.AllocateBuf(0);
+buf = tx_pipe.AllocateBuf();
 ```
 
 ## Partial transfers

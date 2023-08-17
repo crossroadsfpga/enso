@@ -739,11 +739,11 @@ class TxPipe {
    *
    * @param target_capacity Target capacity of the buffer. It will block until
    *                        the buffer is at least this big. May set it to 0 to
-   *                        avoid blocking.
+   *                        avoid blocking (the default).
    *
    * @return The allocated buffer address.
    */
-  uint8_t* AllocateBuf(uint32_t target_capacity) {
+  uint8_t* AllocateBuf(uint32_t target_capacity = 0) {
     ExtendBufToTarget(target_capacity);
     return buf_ + app_begin_;
   }
