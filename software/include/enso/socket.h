@@ -44,9 +44,6 @@
 #include <arpa/inet.h>
 #include <linux/types.h>
 
-// TODO(sadok): Do not expose pcie.h here.
-// #include "pcie.h"
-
 namespace enso {
 
 typedef unsigned short sa_family_t;
