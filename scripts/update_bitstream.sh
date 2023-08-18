@@ -18,6 +18,8 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
+DST_BITSTREAM_FILE="scripts/enso.sof"
+
 cd $SCRIPT_DIR/..
 
 if [ "$1" == "--download" ]; then
@@ -32,7 +34,7 @@ if [ "$1" == "--download" ]; then
     echo "Downloading bitstream file from: $BITSTREAM_URL"
 
     wget $BITSTREAM_URL
-    mv $BITSTREAM_NAME scripts/alt_ehipc2_hw.sof
+    mv $BITSTREAM_NAME $DST_BITSTREAM_FILE
 else
     BITSTREAM_FILE=$1
 
@@ -43,9 +45,9 @@ else
     fi
 
     # Copy bitstream file to the scripts directory.
-    cp $BITSTREAM_FILE scripts/alt_ehipc2_hw.sof
+    cp $BITSTREAM_FILE $DST_BITSTREAM_FILE
 fi
 
 echo "Successfully updated bitstream file. To load it, use the enso command."
-chksum=$(sha256sum scripts/alt_ehipc2_hw.sof | cut -d " " -f 1)
+chksum=$(sha256sum $DST_BITSTREAM_FILE | cut -d " " -f 1)
 echo "sha256sum: $chksum"

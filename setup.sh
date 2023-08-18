@@ -56,7 +56,7 @@ cd $SCRIPT_DIR
 python3 -m pip install -r requirements.txt
 
 # If the bitstream file is not present, download it.
-if [ ! -f "scripts/alt_ehipc2_hw.sof" ]; then
+if [ ! -f "scripts/enso.sof" ]; then
     ./scripts/update_bitstream.sh --download
 else
     echo "Using existing bitstream file."
