@@ -27,3 +27,7 @@ for device in $DEVICE_ADDRS; do
     fi
 done
 echo "1" | sudo tee -a /sys/bus/pci/rescan > /dev/null
+
+SHA256_SUM=$(sha256sum ./alt_ehipc2_hw.sof | awk '{print $1}')
+
+echo "Loaded bitstream with sha256sum: $SHA256_SUM"
