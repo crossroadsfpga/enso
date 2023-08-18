@@ -18,7 +18,7 @@ Note that pipes are not thread safe. Each thread that receives data in a program
 
 TX Ensō Pipes manage memory through a simple best-effort allocator. The allocator will always try to return the largest contiguous buffer possible within a given TX Ensō Pipe. The allocated buffer's capacity can also implicitly *increase* at any point but it will never implicitly *decrease*.
 
-To request a buffer, the application calls [`TxPipe::AllocateBuf()`](/software/classenso_1_1TxPipe.html#a9bdacc1ea56674adb385e296bb6fb04a){target=_blank} with a target size. This will return a buffer with size at least as large as the target. Each pipe can only allocate a single buffer at a time. If the application calls `TxPipe::AllocateBuf()` while a buffer is still valid, the function will return the same buffer. Since the buffer's capacity can implicitly increase, the application can always retrieve the current capacity by calling [`TxPipe::capacity()`](/software/classenso_1_1TxPipe.html#a657f7225e695b20cc71136747e276952){target=_blank}.
+To request a buffer, the application calls [`TxPipe::AllocateBuf()`](/software/classenso_1_1TxPipe.html#a45762501055df470f8c6bb2d747e8228){target=_blank} with a target size. This will return a buffer with size at least as large as the target. Each pipe can only allocate a single buffer at a time. If the application calls `TxPipe::AllocateBuf()` while a buffer is still valid, the function will return the same buffer. Since the buffer's capacity can implicitly increase, the application can always retrieve the current capacity by calling [`TxPipe::capacity()`](/software/classenso_1_1TxPipe.html#a657f7225e695b20cc71136747e276952){target=_blank}.
 
 
 !!! note

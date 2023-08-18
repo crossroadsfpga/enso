@@ -2,15 +2,24 @@
 
 The `Device` class is the main entry point for interacting with the hardware device. It is used to [allocate Ensō Pipes](#allocating-ensō-pipes) as well as to [configure the device](#configuring-the-device). It can also be used to efficiently [receive data from multiple pipes](#receiving-data-from-multiple-pipes), avoiding the need to probe each pipe individually.
 
-Every I/O thread in a program should instantiate its own `Device` instance using the [`Device::Create()`](/software/classenso_1_1Device.html#a0680a603967557aef3be2d3c7931967e){target=_blank} factory method. `Device` objects, like pipe objects, are not meant to be thread safe. They are designed to be used by a single thread only.
+Every I/O thread in a program should instantiate its own `Device` instance using the [`Device::Create()`](/software/classenso_1_1Device.html#a0c300092e23104fa44bd72d103b27d5e){target=_blank} factory method. `Device` objects, like pipe objects, are not meant to be thread safe. They are designed to be used by a single thread only.
 
 ## Allocating Ensō Pipes
 
 After instantiating a device, the application can allocate Ensō Pipes of any of the three types, using the appropriate method:
 
-- [`Device::AllocateRxPipe()`](/software/classenso_1_1Device.html#a317921d74d678fbd27982d1c995ae9c6){target=_blank} to allocate an [RX Ensō Pipe](rx_enso_pipe.md).
+- [`Device::AllocateRxPipe()`](/software/classenso_1_1Device.html#abe09e3410f98864b06e71ad8d346920f){target=_blank} to allocate an [RX Ensō Pipe](rx_enso_pipe.md).
 - [`Device::AllocateTxPipe()`](/software/classenso_1_1Device.html#aefb1883e2b2443ffb30e3697fcd8e6bb){target=_blank} to allocate a [TX Ensō Pipe](tx_enso_pipe.md).
-- [`Device::AllocateRxTxPipe()`](/software/classenso_1_1Device.html#a44fb96b78e6dc6f0960a5153104f8e19){target=_blank} to allocate an [RX/TX Ensō Pipe](rx_tx_enso_pipe.md).
+- [`Device::AllocateRxTxPipe()`](/software/classenso_1_1Device.html#accf412178b2473146c3a0f7161883b3b){target=_blank} to allocate an [RX/TX Ensō Pipe](rx_tx_enso_pipe.md).
+
+RX Ensō Pipes and RX/TX Ensō Pipes can also be set as fallback when being allocated. Fallback pipes receive packets that do not match any explicit bind rules. See [Binding and flow steering](rx_enso_pipe.md#binding-and-flow-steering) for more details on how the NIC steers packets to fallback pipes.
+
+To set a pipe as fallback, both `Device::AllocateRxPipe()` and `Device::AllocateRxTxPipe()` accept an optional boolean argument that specifies whether the pipe should be set as fallback. For example:
+
+```cpp
+RxPipe* rx_pipe_1 = dev->AllocateRxPipe();     // Normal pipe, non-fallback.
+RxPipe* rx_pipe_2 = dev->AllocateRxPipe(true); // Set as fallback.
+```
 
 ## Receiving Data from Multiple Pipes
 
@@ -70,3 +79,7 @@ You can find the maximum packet rate for any packet size by using the expression
 The hardware implementation can also time stamp packets as they are sent and compute the RTT when they return. This is useful to measure latency. As with the rate limiter, this configuration is applied to all pipes. You can enable time stamping by calling [`Device::EnableTimeStamping()`](/software/classenso_1_1Device.html#a86e350a5dbf6145858c9b3739736c6e0) and disable it by calling [`Device::DisableTimeStamping()`](/software/classenso_1_1Device.html#ae77a9be57a5d8e26009da7fa9239d4b7).
 
 When timestamping is enabled, all outgoing packets will receive a timestamp and all incoming packets will have an RTT (in number of cycles). You may use [`get_pkt_rtt()`](/software/helpers_8h.html#ace30043e3eb62368ccf750a139a16383) to retrieve the RTT for a returning packet. This function will return the RTT in number of cycles. You can convert it to nanoseconds by multiplying it by [`kNsPerTimestampCycle`](/software/consts_8h.html#a512ca8b1b9bae1397e47b3642f1b30ea).
+
+### Round-Robin Steering
+
+As described in [Binding and flow steering](rx_enso_pipe.md#binding-and-flow-steering), the NIC sends packets that do not match any binding rules to fallback pipes. By default, this is done using a hash of the five-tuple. You can change it to use round-robin instead by using [`Device::EnableRoundRobin()`](/software/classenso_1_1Device.html#ab0c6fe16134c0dff1025a5e3938b6af7) or revert back to the default by using [`Device::DisableRoundRobin()`](/software/classenso_1_1Device.html#a830b9bec4273c273acedd7b126b663fb).

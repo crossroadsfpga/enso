@@ -153,23 +153,13 @@ rx_pipe->Clear();
 
 ## Binding and flow steering
 
-The NIC is responsible for demultiplexing incoming data among the RX Ensō Pipes. The logic to demultiplex packets should depend on the offloads implemented on the NIC. For convenience, our hardware implementation includes two types of flow steering mechanisms: flow hashing and flow binding.
+The NIC is responsible for demultiplexing incoming data among the RX Ensō Pipes. The logic to demultiplex packets should depend on the offloads implemented on the NIC. For convenience, our hardware implementation includes three ways of steering incoming data to RX Ensō Pipes: flow binding, hashing, and round robin.
 
-Flow binding is implemented using a cuckoo hash table. This allows the application to map arbitrary flows to RX Ensō Pipes. We borrow from the socket API terminology and call this mapping between RX Ensō Pipes and flows *binding*. To bind an RX Ensō Pipe to a flow, you can use [`RxPipe::Bind()`](/software/classenso_1_1RxPipe.html#aa61037a3883e3908a51a730eb6017cac){target=_blank}, specifying the flow's five-tuple. You can call `RxPipe::Bind()` multiple times on the same pipe to bind it to multiple flows.
+Flow binding is implemented using a cuckoo hash table on the NIC. This allows the application to map specific flows to RX Ensō Pipes. We borrow from the socket API terminology and call this mapping between RX Ensō Pipes and flows *binding*. To bind an RX Ensō Pipe to a flow, you can use [`RxPipe::Bind()`](/software/classenso_1_1RxPipe.html#aa61037a3883e3908a51a730eb6017cac){target=_blank}, specifying the flow's five-tuple. You can call `RxPipe::Bind()` multiple times on the same pipe to bind it to multiple flows.
 
-Packets that do not match any flow in the flow table are directed to fallback queues using a hash of the packet's 5-tuple. The number of fallback queues should be configured in the hardware. If the number of fallback queues is set to *n*, the first *n* RX Ensō Pipes are used as fallback queues.
+Packets that do not match any flow in the flow table are directed to what we call *fallback queues*. When you allocate an RX Ensō Pipe, you can set it as fallback (see [Allocating Ensō Pipes](device.md#allocating-enso-pipes)). If no fallback pipe is currently allocated, packets that do not match any flow are dropped.
 
-To set the number of fallback queues, you can use the `--fallback_queues` option when running the [`enso`](../running.md#loading-the-bitstream-and-configuring-the-nic) command as follows:
-
-```bash
-enso <enso path> --fpga <fpga id> --fallback-queues <number of fallback queues>
-```
-
-Alternatively, if you have already loaded the bitstream, you can also set the number of fallback queues using the JTAG console. Use the `set_nb_fallback_queues` command as follows:
-
-```tcl
-set_nb_fallback_queues <number of fallback queues>
-```
+When multiple fallback pipes are allocated, the NIC can steer packets among them in two different ways. By default, the NIC uses a hash of the packet's 5-tuple to decide which pipe to send the packet. Alternatively, the NIC can also be configured to use round robin (see [Round-Robin Steering](device.md#round-robin-steering)).
 
 ## Notification Prefetching
 
