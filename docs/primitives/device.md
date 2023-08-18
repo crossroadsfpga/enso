@@ -2,9 +2,7 @@
 
 The `Device` class is the main entry point for interacting with the hardware device. It is used to [allocate Ensō Pipes](#allocating-ensō-pipes) as well as to [configure the device](#configuring-the-device). It can also be used to efficiently [receive data from multiple pipes](#receiving-data-from-multiple-pipes), avoiding the need to probe each pipe individually.
 
-Every I/O thread in a program should instantiate its own `Device` instance using the [`Device::Create()`](/software/classenso_1_1Device.html#a0680a603967557aef3be2d3c7931967e){target=_blank} factory method. The `Create()` currently requires the total number of RX pipes that will be used by the application thread. Moreover, all `Device` instances must use the same number of queues. This will change in the future.
-
-`Device` objects, like pipe objects, are not meant to be thread safe. They are designed to be used by a single thread.
+Every I/O thread in a program should instantiate its own `Device` instance using the [`Device::Create()`](/software/classenso_1_1Device.html#a0680a603967557aef3be2d3c7931967e){target=_blank} factory method. `Device` objects, like pipe objects, are not meant to be thread safe. They are designed to be used by a single thread only.
 
 ## Allocating Ensō Pipes
 
@@ -24,8 +22,7 @@ To figure out the next pipe with data pending, the application can call [`Device
 
 ```cpp
 // Allocate device.
-constexpr uint32_t nb_queues = 2;
-std::unique_ptr<Device> dev = Device::Create(nb_queues);
+std::unique_ptr<Device> dev = Device::Create();
 
 // Allocate RX pipes.
 RxPipe* rx_pipe_1 = dev->AllocateRxPipe();
