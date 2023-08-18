@@ -114,7 +114,21 @@ struct intel_fpga_pcie_ksize {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 10, unsigned int *)
 #define INTEL_FPGA_PCIE_IOCTL_CHR_GET_UIO_DEV_NAME \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 11, char *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 11
+#define INTEL_FPGA_PCIE_IOCTL_GET_NB_FALLBACK_QUEUES \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 12, unsigned int *)
+#define INTEL_FPGA_PCIE_IOCTL_SET_RR_STATUS \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 13, bool)
+#define INTEL_FPGA_PCIE_IOCTL_GET_RR_STATUS \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 14, bool *)
+#define INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUFFER \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 15, unsigned int *)
+#define INTEL_FPGA_PCIE_IOCTL_FREE_NOTIF_BUFFER \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 16, unsigned int)
+#define INTEL_FPGA_PCIE_IOCTL_ALLOC_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 17, unsigned int *)
+#define INTEL_FPGA_PCIE_IOCTL_FREE_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 18, unsigned int)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 18
 
 long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
                                     unsigned long arg);

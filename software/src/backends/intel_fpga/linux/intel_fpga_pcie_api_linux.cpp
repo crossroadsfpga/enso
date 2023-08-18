@@ -456,4 +456,66 @@ int IntelFpgaPcieDev::get_uio_dev_name(char *uio_dev_name) {
                uio_dev_name);
 }
 
+int IntelFpgaPcieDev::get_nb_fallback_queues() {
+  int result;
+  unsigned int nb_fallback_queues;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_GET_NB_FALLBACK_QUEUES,
+                 &nb_fallback_queues);
+
+  if (result != 0) {
+    return -1;
+  }
+
+  return nb_fallback_queues;
+}
+
+int IntelFpgaPcieDev::set_rr_status(bool enable_rr) {
+  return ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SET_RR_STATUS, enable_rr);
+}
+
+int IntelFpgaPcieDev::get_rr_status() {
+  int result;
+  bool rr_status;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_GET_RR_STATUS, &rr_status);
+
+  if (result != 0) {
+    return -1;
+  }
+
+  return rr_status;
+}
+
+int IntelFpgaPcieDev::allocate_notif_buf() {
+  int result;
+  unsigned int buf_id;
+  result =
+      ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUFFER, &buf_id);
+
+  if (result != 0) {
+    return -1;
+  }
+
+  return buf_id;
+}
+
+int IntelFpgaPcieDev::free_notif_buf(int id) {
+  return ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_FREE_NOTIF_BUFFER, id);
+}
+
+int IntelFpgaPcieDev::allocate_pipe(bool fallback) {
+  int result;
+  unsigned int uarg = fallback;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_ALLOC_PIPE, &uarg);
+
+  if (result != 0) {
+    return -1;
+  }
+
+  return uarg;
+}
+
+int IntelFpgaPcieDev::free_pipe(int id) {
+  return ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_FREE_PIPE, id);
+}
+
 }  // namespace intel_fpga_pcie_api

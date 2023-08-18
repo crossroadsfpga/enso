@@ -101,8 +101,7 @@ class EnsoGen(Pktgen):
         super().__init__()
 
         self.nic = nic
-        self.nic.enable_rr()
-        self.nic.fallback_queues = queues
+        self.queues = queues
 
         self._pcap_path = None
 
@@ -300,11 +299,11 @@ class EnsoGen(Pktgen):
 
     @property
     def queues(self) -> int:
-        return self.nic.fallback_queues
+        return self._queues
 
     @queues.setter
     def queues(self, queues) -> None:
-        self.nic.fallback_queues = queues
+        self._queues = queues
 
     def get_nb_rx_pkts(self) -> int:
         return self.nb_rx_pkts

@@ -110,6 +110,28 @@ int intel_fpga_pcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
   dev_bk->chr_open_cnt = 0;
   dev_bk->dev = dev;
   dev_bk->bdf = bdf;
+  dev_bk->nb_fb_queues = 0;
+  dev_bk->enable_rr = false;
+
+  dev_bk->notif_q_status = kzalloc(MAX_NB_APPS / 8, GFP_KERNEL);
+  if (dev_bk->notif_q_status == NULL) {
+    INTEL_FPGA_PCIE_ERR(
+        "couldn't create notification queue status "
+        "for device with BDF: %04x.",
+        bdf);
+    retval = -ENOMEM;
+    goto failed_notif_q_status_alloc;
+  }
+
+  dev_bk->pipe_status = kzalloc(MAX_NB_FLOWS / 8, GFP_KERNEL);
+  if (dev_bk->pipe_status == NULL) {
+    INTEL_FPGA_PCIE_ERR(
+        "couldn't create pipe status for device "
+        "with BDF: %04x.",
+        bdf);
+    retval = -ENOMEM;
+    goto failed_pipe_status_alloc;
+  }
 
   // Save the bookkeeper in (private) driver data
   pci_set_drvdata(dev, dev_bk);
@@ -204,8 +226,12 @@ failed_map:
   pci_release_regions(dev);
 failed_req_region:
   pci_disable_device(dev);
+  kfree(dev_bk->pipe_status);
+failed_pipe_status_alloc:
+  kfree(dev_bk->notif_q_status);
 failed_pcie_enable:
   pci_set_drvdata(dev, NULL);
+failed_notif_q_status_alloc:
   kfree(dev_bk);
 failed_devbk_alloc:
   return retval;
@@ -257,6 +283,8 @@ void intel_fpga_pcie_remove(struct pci_dev *dev) {
   pci_release_regions(dev);
   pci_disable_device(dev);
   pci_set_drvdata(dev, NULL);
+  kfree(dev_bk->pipe_status);
+  kfree(dev_bk->notif_q_status);
   kfree(dev_bk);
 }
 

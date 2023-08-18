@@ -50,11 +50,11 @@ typedef unsigned short sa_family_t;
 typedef unsigned int socklen_t;
 
 #define MAX_NB_CORES 128
-#define MAX_NB_SOCKETS 16384
+#define MAX_NB_SOCKETS MAX_NB_FLOWS
 
 void set_bdf(uint16_t bdf_);
 
-int socket(int domain, int type, int protocol) noexcept;
+int socket(int domain, int type, int protocol, bool fallback) noexcept;
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) noexcept;
 
@@ -120,6 +120,16 @@ int enable_device_rate_limit(uint16_t num, uint16_t den);
  * Disable hardware rate limit for the device. This applies to all sockets.
  */
 int disable_device_rate_limit();
+
+/*
+ * Enable round robin for the device. This applies to all sockets.
+ */
+int enable_device_round_robin();
+
+/*
+ * Disable round robin for the device. This applies to all sockets.
+ */
+int disable_device_round_robin();
 
 /*
  * Free packet buffer. Use this to free received packets.

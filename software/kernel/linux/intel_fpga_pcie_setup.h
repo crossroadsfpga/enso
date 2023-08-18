@@ -74,6 +74,13 @@
 #define PCI_DEVID(bus, devfn) ((((u16)(bus)) << 8) | (devfn))
 #endif
 
+// These determine the maximum number of notification buffers and enso pipes.
+// These macros also exist in hardware and **must be kept in sync**. Update the
+// variables with the same name on `hardware/src/constants.sv`,
+// `software/include/enso/consts.h`, and `scripts/hwtest/my_stats.tcl`.
+#define MAX_NB_APPS 1024
+#define MAX_NB_FLOWS 8192
+
 /**
  * struct bar_info - Contains information about a single BAR.
  *
@@ -170,6 +177,11 @@ struct global_bookkeep {
  *                  interrupt context. Currently, only @chr_open_cnt requires
  *                  synchronization as other fields are written once.
  * @info:           uio info.
+ * @nb_fb_queues:   Number of fallback queues.
+ * @enable_rr:      Enable round-robin scheduling among fallback queues.
+ * @notif_q_status: Bit vector to keep track of which notification queue has
+ *                  been allocated.
+ * @pipe_status:    Bit vector to keep track of which pipe has been allocated.
  */
 struct dev_bookkeep {
   struct pci_dev *dev;
@@ -180,6 +192,10 @@ struct dev_bookkeep {
   int chr_open_cnt;
   struct semaphore sem;
   struct uio_info info;
+  uint32_t nb_fb_queues;
+  bool enable_rr;
+  uint8_t *notif_q_status;
+  uint8_t *pipe_status;
 };
 
 /**
@@ -192,11 +208,19 @@ struct dev_bookkeep {
  *                  structure to convey access BAR/location.
  * @cur_bar_num:    If @use_cmd is false, indicates the current BAR being
  *                  accessed.
+ * @nb_fb_queues:   Number of fallback queues.
+ * @notif_q_status: Bit vector to keep track of which notification queue has
+ *                  been allocated for this particular character device.
+ * @pipe_status:    Bit vector to keep track of which pipe has been allocated
+ *                  for this particular character device.
  */
 struct chr_dev_bookkeep {
   struct dev_bookkeep *dev_bk;
   bool use_cmd;
   unsigned int cur_bar_num;
+  uint32_t nb_fb_queues;
+  uint8_t *notif_q_status;
+  uint8_t *pipe_status;
 };
 
 int intel_fpga_pcie_probe(struct pci_dev *dev, const struct pci_device_id *id);

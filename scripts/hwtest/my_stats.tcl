@@ -122,11 +122,8 @@ proc help {} {
     puts "s, get_top_stats:       Show stats."
     puts "sw_rst:                 Software reset."
     puts "chkmac_stats:           Check stats from Ethernet core."
-    puts "set_nb_fallback_queues: Set number of fallback queues."
     puts "enable_desc_per_pkt:    Enable sending a descriptors per packet."
     puts "disable_desc_per_pkt:   Disable sending a descriptors per packet."
-    puts "enable_rr:              Enable round-robin of packets among RX queues."
-    puts "disable_rr:             Disable round-robin of packets among RX queues."
 }
 
 proc set_up {} {
@@ -913,22 +910,6 @@ proc set_eth_port {eth_port} {
     set_up
 }
 
-proc set_nb_fallback_queues {nb_fb_queues} {
-    global PCIE_BASE
-    global PCIE_CTRL_REG
-    global rdata
-    global wdata
-
-    set wr_reg [expr $PCIE_CTRL_REG + 3]
-    set rdata [reg_read $PCIE_BASE $wr_reg]
-    set wdata [expr (($rdata & 0xc0000000) | ($nb_fb_queues & 0x3fffffff))]
-
-    reg_write $PCIE_BASE $wr_reg $wdata
-
-    set_clear
-    set_up
-}
-
 proc set_desc_per_pkt {desc_per_pkt_value} {
     global PCIE_BASE
     global PCIE_CTRL_REG
@@ -952,29 +933,4 @@ proc enable_desc_per_pkt {} {
 
 proc disable_desc_per_pkt {} {
     set_desc_per_pkt 0
-}
-
-proc set_rr {rr_value} {
-    global PCIE_BASE
-    global PCIE_CTRL_REG
-    global rdata
-    global wdata
-
-    set wr_reg [expr $PCIE_CTRL_REG + 3]
-
-    set rdata [reg_read $PCIE_BASE $wr_reg]
-    set wdata [expr (($rdata & 0x7fffffff) | ($rr_value << 31))]
-
-    reg_write $PCIE_BASE $wr_reg $wdata
-
-    set_clear
-    set_up
-}
-
-proc enable_rr {} {
-    set_rr 1
-}
-
-proc disable_rr {} {
-    set_rr 0
 }

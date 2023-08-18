@@ -149,6 +149,23 @@ static int chr_open(struct inode *inode, struct file *filp) {
   chr_dev_bk->dev_bk = dev_bk;
   filp->private_data = chr_dev_bk;
 
+  chr_dev_bk->nb_fb_queues = 0;
+
+  chr_dev_bk->notif_q_status = kzalloc(MAX_NB_APPS / 8, GFP_KERNEL);
+  if (chr_dev_bk->notif_q_status == NULL) {
+    INTEL_FPGA_PCIE_ERR("couldn't create notification queue status ");
+    kfree(chr_dev_bk);
+    return -ENOMEM;
+  }
+
+  chr_dev_bk->pipe_status = kzalloc(MAX_NB_FLOWS / 8, GFP_KERNEL);
+  if (chr_dev_bk->pipe_status == NULL) {
+    INTEL_FPGA_PCIE_ERR("couldn't create pipe status for device ");
+    kfree(chr_dev_bk->notif_q_status);
+    kfree(chr_dev_bk);
+    return -ENOMEM;
+  }
+
   /*
    * Even if no BARs exist, address checks during the actual
    * access will flag invalid access and fail gracefully.
@@ -190,8 +207,10 @@ static int chr_open(struct inode *inode, struct file *filp) {
  * Return: 0 if successful, negative error code otherwise.
  */
 static int chr_release(struct inode *inode, struct file *filp) {
+  int i;
   struct chr_dev_bookkeep *chr_dev_bk;
   struct dev_bookkeep *dev_bk;
+
   chr_dev_bk = filp->private_data;
   dev_bk = chr_dev_bk->dev_bk;
 
@@ -206,8 +225,21 @@ static int chr_release(struct inode *inode, struct file *filp) {
       "closed handle to device with BDF %04x. "
       "Total handle open count is %d.",
       dev_bk->bdf, dev_bk->chr_open_cnt);
+
+  // Release notification buffers and pipes.
+  for (i = 0; i < MAX_NB_APPS / 8; ++i) {
+    dev_bk->notif_q_status[i] &= ~(chr_dev_bk->notif_q_status[i]);
+  }
+  for (i = 0; i < MAX_NB_FLOWS / 8; ++i) {
+    dev_bk->pipe_status[i] &= ~(chr_dev_bk->pipe_status[i]);
+  }
+
+  dev_bk->nb_fb_queues -= chr_dev_bk->nb_fb_queues;
+
   up(&dev_bk->sem);
 
+  kfree(chr_dev_bk->notif_q_status);
+  kfree(chr_dev_bk->pipe_status);
   kfree(chr_dev_bk);
 
   return 0;

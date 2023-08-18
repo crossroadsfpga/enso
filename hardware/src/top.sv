@@ -238,6 +238,10 @@ rate_limit_config_t conf_rl_data;
 logic               conf_rl_valid;
 logic               conf_rl_ready;
 
+fallback_queues_config_t conf_fq_data;
+logic                    conf_fq_valid;
+logic                    conf_fq_ready;
+
 config_flit_t pcie_out_config_data;
 logic         pcie_out_config_valid;
 logic         pcie_out_config_ready;
@@ -245,6 +249,7 @@ logic         pcie_out_config_ready;
 logic [31:0] pcie_out_config_fifo_occup;
 
 logic          flow_table_wrapper_out_meta_valid;
+logic          flow_table_wrapper_out_meta_ready;
 metadata_t     flow_table_wrapper_out_meta_data;
 logic          flow_table_wrapper_out_control_done;
 
@@ -253,12 +258,11 @@ metadata_t     fdw_in_meta_data;
 logic          fdw_in_meta_ready;
 logic          fdw_in_meta_almost_full;
 
-logic [31:0]   fdw_out_meta_csr_readdata;
-logic          fdw_out_meta_valid;
-metadata_t     fdw_out_meta_data;
-logic          fdw_out_meta_ready;
-logic [31:0]   nb_fallback_queues;
-logic          enable_rr;
+logic [31:0]             fdw_out_meta_csr_readdata;
+logic                    fdw_out_meta_valid;
+metadata_t               fdw_out_meta_data;
+logic                    fdw_out_meta_ready;
+
 logic          pcie_eth_port_nb;
 
 logic          dm_in_meta_valid;
@@ -950,7 +954,7 @@ assign out_valid_int = eth_out_pkt_fifo_out_valid & !reg_out_almost_full;
 // Connect flow_director with flow_table_wrapper.
 assign fdw_in_meta_data  = flow_table_wrapper_out_meta_data;
 assign fdw_in_meta_valid = flow_table_wrapper_out_meta_valid;
-assign flow_table_wrapper_out_ready = fdw_in_meta_ready;
+assign flow_table_wrapper_out_meta_ready = fdw_in_meta_ready;
 
 
 // Sync disable_pcie to clk_datamover domain.
@@ -1209,7 +1213,10 @@ configurator configurator_inst (
     .out_conf_ts_ready (conf_ts_ready),
     .out_conf_rl_data  (conf_rl_data),
     .out_conf_rl_valid (conf_rl_valid),
-    .out_conf_rl_ready (conf_rl_ready)
+    .out_conf_rl_ready (conf_rl_ready),
+    .out_conf_fq_data  (conf_fq_data),
+    .out_conf_fq_valid (conf_fq_valid),
+    .out_conf_fq_ready (conf_fq_ready)
 );
 
 dc_fifo_wrapper_infill  #(
@@ -1250,7 +1257,7 @@ flow_table_wrapper flow_table_wrapper_0 (
     .in_meta_ready    (parser_out_fifo_out_ready),
     .out_meta_data    (flow_table_wrapper_out_meta_data),
     .out_meta_valid   (flow_table_wrapper_out_meta_valid),
-    .out_meta_ready   (flow_table_wrapper_out_ready),
+    .out_meta_ready   (flow_table_wrapper_out_meta_ready),
     .in_control_data  (conf_ft_data),
     .in_control_valid (conf_ft_valid),
     .in_control_ready (conf_ft_ready),
@@ -1267,8 +1274,9 @@ flow_director flow_director_inst (
     .out_meta_data      (fdw_out_meta_data),
     .out_meta_valid     (fdw_out_meta_valid),
     .out_meta_ready     (fdw_out_meta_ready),
-    .nb_fallback_queues (nb_fallback_queues),
-    .enable_rr          (enable_rr)
+    .conf_fd_data       (conf_fq_data),
+    .conf_fd_valid      (conf_fq_valid),
+    .conf_fd_ready      (conf_fq_ready)
 );
 
 dc_fifo_wrapper_infill  #(
@@ -1627,8 +1635,6 @@ pcie_top pcie (
     .out_config_ready         (pcie_out_config_ready),
     .disable_pcie             (disable_pcie),
     .sw_reset                 (sw_reset),
-    .nb_fallback_queues       (nb_fallback_queues),
-    .enable_rr                (enable_rr),
     .eth_port_nb              (pcie_eth_port_nb),
     .pcie_core_full_cnt       (pcie_core_full_cnt),
     .rx_dma_dsc_cnt           (rx_dma_dsc_cnt),

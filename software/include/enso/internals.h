@@ -103,12 +103,6 @@ struct NotificationBufPair {
   uint8_t* wrap_tracker;
   uint32_t* pending_rx_pipe_tails;
 
-  // FIXME(sadok): This is used to decrement the enso pipe id and use it as an
-  // index to the pending_rx_pipe_tails array. This only works because pipes for
-  // the same app are contiguous. To fix this, we need to make the NIC aware of
-  // the pipe ids used by the app.
-  uint32_t enso_pipe_id_offset;
-
   void* fpga_dev;            // Avoid exposing `DevBackend` externally.
   void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
   std::string huge_page_prefix;

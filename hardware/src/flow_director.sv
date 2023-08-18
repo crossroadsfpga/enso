@@ -13,26 +13,41 @@ module flow_director(
     output logic          out_meta_valid,
     input  logic          out_meta_ready,
 
-    /// Configure number of fallback queues. We send packets to fallback queues
-    /// whenever they don't match an entry in the flow table.
-    input logic [31:0] nb_fallback_queues,
-
-    /// Enable packet round robin for fallback queues. When disabled, use a hash
-    /// of the five-tuple instead.
-    input logic enable_rr
+    // Configuration.
+    input var fallback_queues_config_t conf_fd_data,
+    input logic                        conf_fd_valid,
+    output logic                       conf_fd_ready
 );
 
-logic [31:0] fallback_q_mask;
-assign fallback_q_mask = nb_fallback_queues - 1;
+logic [31:0] nb_fallback_queues;
+logic [31:0] fallback_queue_mask;
+logic        enable_rr;
+
+assign conf_fd_ready = 1'b1;
 
 logic [31:0] next_rr_queue;
+
+always @(posedge clk) begin
+    if (rst) begin
+        enable_rr <= 0;
+        nb_fallback_queues <= 0;
+        fallback_queue_mask <= 0;
+    end else begin
+        // Apply configuration.
+        if (conf_fd_valid) begin
+            nb_fallback_queues <= conf_fd_data.nb_fallback_queues;
+            fallback_queue_mask <= conf_fd_data.fallback_queue_mask;
+            enable_rr <= conf_fd_data.enable_rr;
+        end
+    end
+end
 
 always @(posedge clk) begin
     if (rst) begin
         next_rr_queue <= 0;
     end else begin
         if (enable_rr) begin
-            next_rr_queue <= (next_rr_queue + 1) & fallback_q_mask;
+            next_rr_queue <= (next_rr_queue + 1) & fallback_queue_mask;
         end
     end
 end
@@ -55,7 +70,7 @@ always_comb begin
                 out_meta_data.pkt_queue_id = next_rr_queue;
             end else begin
                 out_meta_data.pkt_queue_id =
-                    in_meta_data.hash & fallback_q_mask;
+                    in_meta_data.hash & fallback_queue_mask;
             end
         end
     end

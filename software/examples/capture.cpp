@@ -49,8 +49,8 @@ static volatile bool setup_done = false;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void capture_packets(uint32_t nb_queues, uint32_t core_id,
-                     const std::string& pcap_file, enso::stats_t* stats) {
+void capture_packets(uint32_t nb_queues, const std::string& pcap_file,
+                     enso::stats_t* stats) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
@@ -58,7 +58,7 @@ void capture_packets(uint32_t nb_queues, uint32_t core_id,
   using enso::Device;
   using enso::RxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
+  std::unique_ptr<Device> dev = Device::Create();
   std::vector<RxPipe*> rx_pipes;
 
   if (!dev) {
@@ -67,7 +67,7 @@ void capture_packets(uint32_t nb_queues, uint32_t core_id,
   }
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    RxPipe* rx_pipe = dev->AllocateRxPipe();
+    RxPipe* rx_pipe = dev->AllocateRxPipe(true);
     if (!rx_pipe) {
       std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);
@@ -137,8 +137,8 @@ int main(int argc, const char* argv[]) {
 
   std::vector<enso::stats_t> thread_stats(1);
 
-  std::thread socket_thread = std::thread(capture_packets, nb_queues, kCoreId,
-                                          pcap_file, &(thread_stats[0]));
+  std::thread socket_thread =
+      std::thread(capture_packets, nb_queues, pcap_file, &(thread_stats[0]));
 
   if (enso::set_core_id(socket_thread, kCoreId)) {
     std::cerr << "Error setting CPU affinity" << std::endl;

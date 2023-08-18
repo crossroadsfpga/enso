@@ -58,7 +58,7 @@ namespace enso {
  * @param enso_pipe_id Enso Pipe ID that will be associated with the flow entry.
  *
  *
- * @return Return 0 if configuration was successful.
+ * @return Return 0 if configuration was successful, -1 otherwise.
  */
 int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
                       uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
@@ -73,7 +73,7 @@ int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
  *
  * @param notification_buf_pair Notification buffer to send configuration
  *                              through.
- * @return 0 if configuration was successful.
+ * @return 0 if configuration was successful, -1 otherwise.
  */
 int enable_timestamp(struct NotificationBufPair* notification_buf_pair);
 
@@ -82,7 +82,7 @@ int enable_timestamp(struct NotificationBufPair* notification_buf_pair);
  *
  * @param notification_buf_pair Notification buffer to send configuration
  *                              through.
- * @return 0 if configuration was successful.
+ * @return 0 if configuration was successful, -1 otherwise.
  */
 int disable_timestamp(struct NotificationBufPair* notification_buf_pair);
 
@@ -120,7 +120,7 @@ int disable_timestamp(struct NotificationBufPair* notification_buf_pair);
  *                              through.
  * @param num Rate numerator.
  * @param den Rate denominator.
- * @return 0 if configuration was successful.
+ * @return 0 if configuration was successful, -1 otherwise.
  */
 int enable_rate_limit(struct NotificationBufPair* notification_buf_pair,
                       uint16_t num, uint16_t den);
@@ -130,9 +130,38 @@ int enable_rate_limit(struct NotificationBufPair* notification_buf_pair,
  *
  * @param notification_buf_pair Notification buffer to send configuration
  *                              through.
- * @return 0 if configuration was successful.
+ * @return 0 if configuration was successful, -1 otherwise.
  */
 int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * @brief Enables packet round robin for the fallback pipes.
+ *
+ * @param notification_buf_pair Notification buffer pair to send the
+ *                              configuration through.
+ * @return 0 if configuration was successful, -1 otherwise.
+ */
+int enable_round_robin(struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * @brief Disables packet round robin for the fallback pipes. Using a hash of
+ *        the packet's five tuple to select the pipe.
+ *
+ * @param notification_buf_pair Notification buffer pair to send the
+ *                              configuration through.
+ * @return 0 if configuration was successful, -1 otherwise.
+ */
+int disable_round_robin(struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * @brief Update the device's fallback queues configuration.
+ * @param notification_buf_pair Notification buffer pair to send the
+ *                              configuration through.
+ *
+ * @return 0 if configuration was successful, -1 otherwise.
+ */
+int update_fallback_queues_config(
+    struct NotificationBufPair* notification_buf_pair);
 
 }  // namespace enso
 

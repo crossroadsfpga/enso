@@ -328,6 +328,58 @@ class IntelFpgaPcieDev {
    */
   int get_uio_dev_name(char *name);
 
+  /**
+   * Retrieve the number of fallback queues currently in use.
+   * @return The number of fallback queues currently in use. On error, -1 is
+   *         returned and errno is set appropriately.
+   */
+  int get_nb_fallback_queues();
+
+  /**
+   * Set the Round-Robin status.
+   * @param enable_rr If true, enable RR. Otherwise, disable RR.
+   * @return Return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int set_rr_status(bool enable_rr);
+
+  /**
+   * Retrieve the Round-Robin status.
+   * @return If the device has RR enabled, return 1. Otherwise, return 0. On
+   *         error, -1 is returned and errno is set appropriately.
+   */
+  int get_rr_status();
+
+  /**
+   * Allocate a notification buffer.
+   * @return Notification buffer ID. On error, -1 is returned and errno is set
+   *         appropriately.
+   */
+  int allocate_notif_buf();
+
+  /**
+   * Free a notification buffer.
+   * @param id Notification buffer ID.
+   * @return 0 on success. On error, -1 is returned and errno is set
+   *         appropriately.
+   */
+  int free_notif_buf(int id);
+
+  /**
+   * Allocate a pipe.
+   * @param fallback If true, allocate a fallback pipe. Otherwise, allocate a
+   *                 regular pipe.
+   * @return Pipe ID. On error, -1 is returned and errno is set appropriately.
+   */
+  int allocate_pipe(bool fallback = false);
+
+  /**
+   * Free a pipe.
+   * @param id Pipe ID.
+   * @return 0 on success. On error, -1 is returned and errno is set
+   *         appropriately.
+   */
+  int free_pipe(int id);
+
  private:
   /**
    * Class should be instantiated via the Create() factory method.

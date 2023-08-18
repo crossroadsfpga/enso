@@ -78,13 +78,14 @@ localparam PCIE_TX_PKT_FIFO_DEPTH = 1024;
 localparam PCIE_TX_PKT_FIFO_ALM_FULL_THRESH =
     PCIE_TX_PKT_FIFO_DEPTH - 4 * MAX_PKT_SIZE;
 
-// The MAX_NB_APPS determines the max number of descriptor queues, while
-// MAX_NB_FLOWS determines the max number of packet queues.
+// The MAX_NB_APPS determines the max number of notification buffers, while
+// MAX_NB_FLOWS determines the max number of enso pipes.
 // Both MAX_NB_APPS and MAX_NB_FLOWS must be powers of two.
 // These **must be kept in sync** with the variables with the same name on
-// `scripts/hwtest/my_stats.tcl` and `software/include/enso/consts.h`.
-// TODO(sadok): expose these values from JTAG so that software and the tcl
-// script can adapt to the bitstream that is loaded at a given moment.
+// `scripts/hwtest/my_stats.tcl`, `software/include/enso/consts.h`, and
+// `software/kernel/linux/intel_fpga_pcie_setup.h`
+// TODO(sadok): expose these values from JTAG or MMIO so that software and the
+// tcl script can adapt to the bitstream that is loaded at a given moment.
 localparam MAX_NB_APPS = 1024;
 // localparam MAX_NB_FLOWS = 65536;
 localparam MAX_NB_FLOWS = 8192;
@@ -211,7 +212,8 @@ localparam PDU_NUM = 256;
 typedef enum logic [63:0] {
     FLOW_TABLE_CONFIG_ID = 1,
     TIMESTAMP_CONFIG_ID = 2,
-    RATE_LIMIT_CONFIG_ID = 3
+    RATE_LIMIT_CONFIG_ID = 3,
+    FALLBACK_QUEUES_CONFIG_ID = 4
 } config_id_t;
 
 typedef struct packed {
@@ -246,6 +248,21 @@ typedef struct packed {
     logic [63:0]  config_id;
     logic [63:0]  signal;
 } rate_limit_config_t;
+
+// We send packets to fallback queues whenever they don't match an entry in the
+// flow table. We can send these packets either using a hash of the five-tuple
+// or round robin, depending on the value of `enable_rr`.
+// If `nb_fallback_queues` is set to 0, packets that don't match an entry in the
+// flow table will be dropped.
+typedef struct packed {
+    logic [255:0] pad1;
+    logic         enable_rr;  // Set to 1 to enable round-robin among FB queues.
+    logic [62:0]  pad2;
+    logic [31:0]  fallback_queue_mask;
+    logic [31:0]  nb_fallback_queues;
+    logic [63:0]  config_id;
+    logic [63:0]  signal;
+} fallback_queues_config_t;
 
 function logic [511:0] swap_flit_endianness(logic [511:0] flit);
     automatic integer i = 0;

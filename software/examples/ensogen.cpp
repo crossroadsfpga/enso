@@ -754,8 +754,7 @@ int main(int argc, char** argv) {
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
       for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-        int socket_fd =
-            enso::socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
+        int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
 
         if (socket_fd == -1) {
           std::cerr << "Problem creating socket (" << errno
@@ -766,6 +765,7 @@ int main(int argc, char** argv) {
 
       enso::enable_device_rate_limit(parsed_args.rate_num,
                                      parsed_args.rate_den);
+      enso::enable_device_round_robin();
 
       if (parsed_args.enable_rtt) {
         enso::enable_device_timestamp();
@@ -799,7 +799,8 @@ int main(int argc, char** argv) {
 
       rx_done = true;
 
-      // enso::disable_device_rate_limit();
+      enso::disable_device_rate_limit();
+      enso::disable_device_round_robin();
 
       if (parsed_args.enable_rtt) {
         enso::disable_device_timestamp();
@@ -812,37 +813,37 @@ int main(int argc, char** argv) {
       }
     });
 
-    std::thread tx_thread = std::thread([total_bytes_to_send,
-                                         total_good_bytes_to_send,
-                                         pkts_in_last_buffer, &parsed_args,
-                                         &enso_pipes, &tx_stats] {
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::thread tx_thread = std::thread(
+        [total_bytes_to_send, total_good_bytes_to_send, pkts_in_last_buffer,
+         &parsed_args, &enso_pipes, &tx_stats] {
+          std::this_thread::sleep_for(std::chrono::seconds(1));
 
-      int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
+          int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, false);
 
-      if (socket_fd == -1) {
-        std::cerr << "Problem creating socket (" << errno
-                  << "): " << strerror(errno) << std::endl;
-        exit(2);
-      }
+          if (socket_fd == -1) {
+            std::cerr << "Problem creating socket (" << errno
+                      << "): " << strerror(errno) << std::endl;
+            exit(2);
+          }
 
-      while (!rx_ready) continue;
+          while (!rx_ready) continue;
 
-      std::cout << "Running TX on core " << sched_getcpu() << std::endl;
+          std::cout << "Running TX on core " << sched_getcpu() << std::endl;
 
-      TxArgs tx_args(enso_pipes, total_bytes_to_send, total_good_bytes_to_send,
-                     pkts_in_last_buffer, socket_fd);
+          TxArgs tx_args(enso_pipes, total_bytes_to_send,
+                         total_good_bytes_to_send, pkts_in_last_buffer,
+                         socket_fd);
 
-      while (keep_running) {
-        transmit_pkts(tx_args, tx_stats);
-      }
+          while (keep_running) {
+            transmit_pkts(tx_args, tx_stats);
+          }
 
-      tx_done = 1;
+          tx_done = 1;
 
-      while (!rx_done) continue;
+          while (!rx_done) continue;
 
-      reclaim_all_buffers(tx_args);
-    });
+          reclaim_all_buffers(tx_args);
+        });
 
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -874,8 +875,7 @@ int main(int argc, char** argv) {
           std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
           for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-            int socket_fd =
-                enso::socket(AF_INET, SOCK_DGRAM, parsed_args.nb_queues);
+            int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
 
             if (socket_fd == -1) {
               std::cerr << "Problem creating socket (" << errno
@@ -886,6 +886,7 @@ int main(int argc, char** argv) {
 
           enso::enable_device_rate_limit(parsed_args.rate_num,
                                          parsed_args.rate_den);
+          enso::enable_device_round_robin();
 
           if (parsed_args.enable_rtt) {
             enso::enable_device_timestamp();
@@ -928,7 +929,8 @@ int main(int argc, char** argv) {
 
           reclaim_all_buffers(tx_args);
 
-          // enso::disable_device_rate_limit();
+          enso::disable_device_rate_limit();
+          enso::disable_device_round_robin();
 
           if (parsed_args.enable_rtt) {
             enso::disable_device_timestamp();

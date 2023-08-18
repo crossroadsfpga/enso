@@ -136,6 +136,92 @@ class DevBackend {
     return notification->value;
   }
 
+  /**
+   * @brief Retrieves the number of fallback queues currently in use.
+   * @return The number of fallback queues currently in use. On error, -1 is
+   *         returned and errno is set appropriately.
+   */
+  int GetNbFallbackQueues() {
+    // TODO(sadok): Implement.
+    return 0;
+  }
+
+  /**
+   * @brief Sets the Round-Robin status.
+   *
+   * @param enable_rr If true, enable RR. Otherwise, disable RR.
+   *
+   * @return Return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int SetRrStatus(bool enable_rr) {
+    // TODO(sadok): Implement.
+    (void)enable_rr;
+    return 0;
+  }
+
+  /**
+   * @brief Gets the Round-Robin status.
+   *
+   * @return Return 1 if RR is enabled. Otherwise, return 0. On error, -1 is
+   *         returned and errno is set.
+   */
+  int GetRrStatus() {
+    // TODO(sadok): Implement.
+    return 0;
+  }
+
+  /**
+   * @brief Allocates a notification buffer.
+   *
+   * @return Notification buffer ID. On error, -1 is returned and errno is set.
+   */
+  int AllocateNotifBuf() {
+    // TODO(sadok): Implement.
+    int notif_buf_id = notif_buf_cnt_;
+    ++notif_buf_cnt_;
+    return notif_buf_id;
+  }
+
+  /**
+   * @brief Frees a notification buffer.
+   *
+   * @param notif_buf_id Notification buffer ID.
+   *
+   * @return Return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int FreeNotifBuf(int notif_buf_id) {
+    // TODO(sadok): Implement.
+    --notif_buf_cnt_;
+    return 0;
+  }
+
+  /**
+   * @brief Allocates a pipe.
+   *
+   * @param fallback If true, allocates a fallback pipe. Otherwise, allocates a
+   *                regular pipe.
+   * @return Pipe ID. On error, -1 is returned and errno is set.
+   */
+  int AllocatePipe(bool fallback = false) {
+    // TODO(sadok): Implement.
+    int pipe_id = pipe_cnt_;
+    ++pipe_cnt_;
+    return pipe_id;
+  }
+
+  /**
+   * @brief Frees a pipe.
+   *
+   * @param pipe_id Pipe ID to be freed.
+   *
+   * @return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int FreePipe(int pipe_id) {
+    // TODO(sadok): Implement.
+    --pipe_cnt_;
+    return 0;
+  }
+
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
       : bdf_(bdf), bar_(bar) {}
@@ -182,6 +268,8 @@ class DevBackend {
   unsigned int bdf_;
   int bar_;
   int core_id_;
+  int notif_buf_cnt_ = 0;
+  int pipe_cnt_ = 0;
 };
 
 }  // namespace enso

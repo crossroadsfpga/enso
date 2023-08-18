@@ -60,18 +60,13 @@ struct SocketInternal {
  *
  * @param bdf BDF of the PCIe device to use.
  * @param bar PCIe BAR to use (set to -1 to automatically select one).
- * @param core_id Core ID to use.
  * @param notification_buf_pair Notification buffer pair to initialize.
- * @param nb_queues Number of queues that will be used by the application.
- * @param enso_pipe_id_offset Offset to use when initializing the Enso Pipe IDs.
- *                            This is mostly a hack and should be removed in the
- *                            future.
  * @param huge_page_prefix File prefix to use when allocating the huge pages.
+ *
+ * @return 0 on success, -1 on failure.
  */
-int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
+int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
-                          enso_pipe_id_t nb_queues,
-                          enso_pipe_id_t enso_pipe_id_offset,
                           const std::string& huge_page_prefix);
 
 /**
@@ -79,11 +74,13 @@ int notification_buf_init(uint32_t bdf, int32_t bar, int16_t core_id,
  *
  * @param enso_pipe Enso Pipe to initialize.
  * @param notification_buf_pair Notification buffer pair to use.
- * @param enso_pipe_id ID of the Enso Pipe to initialize.
+ * @param fallback Whether the queues is a fallback queue or not.
+ *
+ * @return Pipe ID on success, -1 on failure.
  */
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    struct NotificationBufPair* notification_buf_pair,
-                   enso_pipe_id_t enso_pipe_id);
+                   bool fallback);
 
 /**
  * @brief Initializes an enso pipe and the notification buffer if needed.
@@ -91,9 +88,8 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
  * @deprecated This function is deprecated and will be removed in the future.
  */
 int dma_init(struct NotificationBufPair* notification_buf_pair,
-             struct RxEnsoPipeInternal* enso_pipe, unsigned socket_id,
-             unsigned nb_queues, uint32_t bdf, int32_t bar,
-             const std::string& huge_page_prefix);
+             struct RxEnsoPipeInternal* enso_pipe, uint32_t bdf, int32_t bar,
+             const std::string& huge_page_prefix, bool fallback);
 
 /**
  * @brief Gets latest tails for the pipes associated with the given notification
@@ -240,6 +236,36 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification);
 
 /**
+ * @brief Get number of fallback queues currently in use.
+ *
+ * @param notification_buf_pair Notification buffer pair to use.
+ *
+ * @return Number of fallback queues currently in use or -1 on failure.
+ */
+int get_nb_fallback_queues(struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * @brief Sets the round robin status for the device.
+ *
+ * @param notification_buf_pair Notification buffer pair to use.
+ * @param round_robin Whether to enable or disable round robin.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+int set_round_robin_status(struct NotificationBufPair* notification_buf_pair,
+                           bool round_robin);
+
+/**
+ * @brief Gets the round robin status for the device.
+ *
+ * @param notification_buf_pair Notification buffer pair to use.
+ *
+ * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
+ *         failure.
+ */
+int get_round_robin_status(struct NotificationBufPair* notification_buf_pair);
+
+/**
  * @brief Converts an address in the application's virtual address space to an
  *        address that can be used by the device (typically a physical address).
  *
@@ -260,10 +286,12 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
 /**
  * @brief Frees the Enso Pipe.
  *
+ * @param notification_buf_pair Notification buffer pair to use.
  * @param enso_pipe Enso Pipe to free.
  * @param enso_pipe_id Hardware ID of the Enso Pipe to free.
  */
-void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe,
+void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
+                    struct RxEnsoPipeInternal* enso_pipe,
                     enso_pipe_id_t enso_pipe_id);
 
 /**

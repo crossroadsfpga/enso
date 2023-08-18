@@ -60,31 +60,32 @@ static uint16_t bdf = 0;
 // HACK(sadok): We need a better way to specify the BDF.
 void set_bdf(uint16_t bdf_) { bdf = bdf_; }
 
-int socket(int domain __attribute__((unused)), int type __attribute__((unused)),
-           int nb_queues) noexcept {  // HACK(sadok) using protocol as nb_queues
+int socket([[maybe_unused]] int domain, [[maybe_unused]] int type,
+           [[maybe_unused]] int protocol, bool fallback) noexcept {
   if (unlikely(nb_open_sockets >= MAX_NB_SOCKETS)) {
     std::cerr << "Maximum number of sockets reached" << std::endl;
     return -1;
   }
 
-  // FIXME(sadok): Use __sync_fetch_and_add to update atomically.
-  unsigned int socket_id = nb_open_sockets++;
+  struct SocketInternal socket_entry;
 
-  struct SocketInternal* socket_entry = &open_sockets[socket_id];
+  struct NotificationBufPair* nb_pair = &notification_buf_pair[sched_getcpu()];
+  socket_entry.notification_buf_pair = nb_pair;
 
-  socket_entry->notification_buf_pair = &notification_buf_pair[sched_getcpu()];
-
-  struct NotificationBufPair* notification_buf_pair =
-      socket_entry->notification_buf_pair;
-  struct RxEnsoPipeInternal* enso_pipe = &socket_entry->enso_pipe;
+  struct RxEnsoPipeInternal* enso_pipe = &socket_entry.enso_pipe;
 
   int bar = -1;
-  int result = dma_init(notification_buf_pair, enso_pipe, socket_id, nb_queues,
-                        bdf, bar, std::string(kHugePageDefaultPrefix));
-  if (unlikely(result < 0)) {
+  int socket_id = dma_init(nb_pair, enso_pipe, bdf, bar,
+                           std::string(kHugePageDefaultPrefix), fallback);
+  if (unlikely(socket_id < 0)) {
     std::cerr << "Problem initializing DMA" << std::endl;
     return -1;
   }
+
+  open_sockets[socket_id] = socket_entry;
+
+  // FIXME(sadok): Use __sync_fetch_and_add to update atomically.
+  ++nb_open_sockets;
 
   return socket_id;
 }
@@ -218,6 +219,20 @@ int disable_device_rate_limit() {
     return -2;
   }
   return disable_rate_limit(open_sockets[0].notification_buf_pair);
+}
+
+int enable_device_round_robin() {
+  if (nb_open_sockets == 0) {
+    return -2;
+  }
+  return enable_round_robin(open_sockets[0].notification_buf_pair);
+}
+
+int disable_device_round_robin() {
+  if (nb_open_sockets == 0) {
+    return -2;
+  }
+  return disable_round_robin(open_sockets[0].notification_buf_pair);
 }
 
 int shutdown(int sockfd, int how __attribute__((unused))) noexcept {

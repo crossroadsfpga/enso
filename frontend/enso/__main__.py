@@ -4,7 +4,6 @@ from enso.consts import (
     DEFAULT_DSC_BUF_SIZE,
     DEFAULT_ETH_PORT,
     DEFAULT_FPGA,
-    DEFAULT_NB_FALLBACK_QUEUES,
     DEFAULT_NB_TX_CREDITS,
     DEFAULT_PKT_BUF_SIZE,
 )
@@ -51,25 +50,10 @@ from enso.enso_nic import EnsoNic
     help="Set Ethernet port to use.",
 )
 @click.option(
-    "--fallback-queues",
-    default=DEFAULT_NB_FALLBACK_QUEUES,
-    show_default=True,
-    help="Set number of fallback queues. Fallback queues are used to"
-    " catch packets that are not directed to any of the regular"
-    " queues. If the number of fallback queues is set to 0, packets"
-    " that fail to match any rule are discarded.",
-)
-@click.option(
     "--desc-per-pkt/--reactive-desc",
     default=False,
     show_default=True,
     help="Use a descriptor per packet or reactive" " descriptors (default).",
-)
-@click.option(
-    "--enable-rr/--disable-rr",
-    default=False,
-    show_default=True,
-    help="Enable/Disable packet round robin to fallback queues.",
 )
 @click.option(
     "--latency-opt/--throughput-opt",
@@ -91,9 +75,7 @@ def main(
     pkt_buf_size,
     tx_credits,
     eth_port,
-    fallback_queues,
     desc_per_pkt,
-    enable_rr,
     latency_opt,
     load_bitstream,
 ):
@@ -109,9 +91,7 @@ def main(
         pkt_buf_size=pkt_buf_size,
         tx_credits=tx_credits,
         ethernet_port=eth_port,
-        fallback_queues=fallback_queues,
         desc_per_pkt=desc_per_pkt,
-        enable_rr=enable_rr,
         latency_opt=latency_opt,
         verbose=True,
         log_file=True,

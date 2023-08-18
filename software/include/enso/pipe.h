@@ -82,13 +82,9 @@ uint32_t external_peek_next_batch_from_queue(
  */
 class Device {
  public:
-  // TODO(sadok): nb_rx_pipes should not be needed.
   /**
    * @brief Factory method to create a device.
    *
-   * @param nb_rx_pipes The number of RX Pipes to create.
-   * @param core_id The core ID of the thread that will access the device. If
-   *                -1, uses the current core.
    * @param pcie_addr The PCIe address of the device. If empty, uses the first
    *                  device found.
    * @param huge_page_prefix The prefix to use for huge pages file. If empty,
@@ -97,7 +93,6 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      uint32_t nb_rx_pipes, int16_t core_id = -1,
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
@@ -111,9 +106,21 @@ class Device {
   /**
    * @brief Allocates an RX pipe.
    *
+   * @param fallback Whether this pipe is a fallback pipe. Fallback pipes can
+   *                 receive data from any flow but are also guaranteed to
+   *                 receive data from all flows that they `Bind()` to.
+   *
+   * @note The hardware can only use a number of fallback pipes that is a power
+   *       of two. If the number of fallback pipes is not a power of two, only
+   *       the first power of two pipes allocated will be used.
+   *
+   * @warning Fallback pipes should be used by only one application at a time.
+   *          If multiple applications use fallback pipes at once, the behavior
+   *          is undefined.
+   *
    * @return A pointer to the pipe. May be null if the pipe cannot be created.
    */
-  RxPipe* AllocateRxPipe() noexcept;
+  RxPipe* AllocateRxPipe(bool fallback = false) noexcept;
 
   /**
    * @brief Allocates a TX pipe.
@@ -127,9 +134,21 @@ class Device {
   /**
    * @brief Allocates an RX/TX pipe.
    *
+   * @param fallback Whether this pipe is a fallback pipe. Fallback pipes can
+   *                 receive data from any flow but are also guaranteed to
+   *                 receive data from all flows that they `Bind()` to.
+   *
+   * @note The hardware can only use a number of fallback pipes that is a power
+   *       of two. If the number of fallback pipes is not a power of two, only
+   *       the first power of two pipes allocated will be used.
+   *
+   * @warning Fallback pipes should be used by only one application at a time.
+   *          If multiple applications use fallback pipes at once, the behavior
+   *          is undefined.
+   *
    * @return A pointer to the pipe. May be null if the pipe cannot be created.
    */
-  RxTxPipe* AllocateRxTxPipe() noexcept;
+  RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
 
   /**
    * @brief Gets the next RxPipe that has data pending.
@@ -228,9 +247,37 @@ class Device {
    *
    * @note This setting applies to all pipes that share the same hardware
    *       device.
+   *
    * @see EnableRateLimiting
+   *
+   * @return 0 if configuration was successful.
    */
   int DisableRateLimiting();
+
+  /**
+   * @brief Enables round robing of packets among the fallback pipes.
+   *
+   * @note This setting applies to all pipes that share the same hardware
+   *       device.
+   *
+   * @see DisableRoundRobin
+   *
+   * @return 0 if configuration was successful.
+   */
+  int EnableRoundRobin();
+
+  /**
+   * @brief Disables round robing of packets among the fallback pipes. Will use
+   *        a hash of the five-tuple to direct flows not binded to any pipe.
+   *
+   * @note This setting applies to all pipes that share the same hardware
+   *       device.
+   *
+   * @see EnableRoundRobin
+   *
+   * @return 0 if configuration was successful.
+   */
+  int DisableRoundRobin();
 
  private:
   struct TxPendingRequest {
@@ -241,9 +288,8 @@ class Device {
   /**
    * Use `Create` factory method to instantiate objects externally.
    */
-  Device(uint32_t nb_rx_pipes, int16_t core_id, const std::string& pcie_addr,
-         std::string huge_page_prefix) noexcept
-      : kPcieAddr(pcie_addr), kNbRxPipes(nb_rx_pipes), core_id_(core_id) {
+  Device(const std::string& pcie_addr, std::string huge_page_prefix) noexcept
+      : kPcieAddr(pcie_addr) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
               << std::endl;
@@ -252,8 +298,6 @@ class Device {
       huge_page_prefix = std::string(kHugePageDefaultPrefix);
     }
     huge_page_prefix_ = huge_page_prefix;
-
-    rx_pipes_.reserve(kNbRxPipes);
   }
 
   /**
@@ -279,8 +323,6 @@ class Device {
   friend class RxTxPipe;
 
   const std::string kPcieAddr;
-  const uint32_t kNbRxPipes;
-  const uint32_t kPipeIdMask = kNbRxPipes - 1;
 
   struct NotificationBufPair notification_buf_pair_;
   int16_t core_id_;
@@ -440,7 +482,8 @@ class RxPipe {
    * NIC using all the fields specified in the function arguments (5-tuple). For
    * every incoming packet, the NIC will try to find a matching flow entry. If
    * it does, it will steer the packet to the corresponding RX pipe. If it
-   * does not, it will steer the packet to one of the fallback queues.
+   * does not, it will steer the packet to one of the fallback pipes, or dropped
+   * if there are no fallback pipes.
    *
    * The fields that are used to find a matching entry depend on the incoming
    * packet:
@@ -609,7 +652,7 @@ class RxPipe {
    *
    * @return The pipe's ID.
    */
-  inline enso_pipe_id_t id() const { return kId; }
+  inline enso_pipe_id_t id() const { return id_; }
 
   /**
    * @brief Returns the context associated with the pipe.
@@ -649,11 +692,10 @@ class RxPipe {
    * RxPipes can only be instantiated from a `Device` object, using the
    * `AllocateRxPipe()` method.
    *
-   * @param id The ID of the pipe.
    * @param device The `Device` object that instantiated this pipe.
    */
-  explicit RxPipe(enso_pipe_id_t id, Device* device) noexcept
-      : kId(id), notification_buf_pair_(&(device->notification_buf_pair_)) {}
+  explicit RxPipe(Device* device) noexcept
+      : notification_buf_pair_(&(device->notification_buf_pair_)) {}
 
   /**
    * @note RxPipes cannot be deallocated from outside. The `Device` object is in
@@ -664,18 +706,20 @@ class RxPipe {
   /**
    * @brief Initializes the RX pipe.
    *
+   * @param fallback Whether this pipe is a fallback pipe.
+   *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init() noexcept;
+  int Init(bool fallback) noexcept;
 
   void SetAsNextPipe() noexcept { next_pipe_ = true; }
 
   friend class Device;
 
-  bool next_pipe_ = false;   ///< Whether this pipe is the next pipe to be
-                             ///< processed by the device. This is used in
-                             ///< conjunction with NextRxPipe().
-  const enso_pipe_id_t kId;  ///< The ID of the pipe.
+  bool next_pipe_ = false;  ///< Whether this pipe is the next pipe to be
+                            ///< processed by the device. This is used in
+                            ///< conjunction with NextRxPipe().
+  enso_pipe_id_t id_;       ///< The ID of the pipe.
   void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
@@ -1183,9 +1227,11 @@ class RxTxPipe {
   /**
    * @brief Initializes the RX/TX pipe.
    *
+   * @param fallback Whether this pipe is a fallback pipe.
+   *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init() noexcept;
+  int Init(bool fallback) noexcept;
 
   friend class Device;
 

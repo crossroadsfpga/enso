@@ -95,6 +95,68 @@ class DevBackend {
     return virt_to_phys(virt_addr);
   }
 
+  /**
+   * @brief Retrieves the number of fallback queues currently in use.
+   * @return The number of fallback queues currently in use. On error, -1 is
+   *         returned and errno is set appropriately.
+   */
+  int GetNbFallbackQueues() { return dev_->get_nb_fallback_queues(); }
+
+  /**
+   * @brief Sets the Round-Robin status.
+   *
+   * @param enable_rr If true, enable RR. Otherwise, disable RR.
+   *
+   * @return Return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int SetRrStatus(bool enable_rr) { return dev_->set_rr_status(enable_rr); }
+
+  /**
+   * @brief Gets the Round-Robin status.
+   *
+   * @return Return 1 if RR is enabled. Otherwise, return 0. On error, -1 is
+   *         returned and errno is set.
+   */
+  int GetRrStatus() { return dev_->get_rr_status(); }
+
+  /**
+   * @brief Allocates a notification buffer.
+   *
+   * @return Notification buffer ID. On error, -1 is returned and errno is set.
+   */
+  int AllocateNotifBuf() { return dev_->allocate_notif_buf(); }
+
+  /**
+   * @brief Frees a notification buffer.
+   *
+   * @param notif_buf_id Notification buffer ID.
+   *
+   * @return Return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int FreeNotifBuf(int notif_buf_id) {
+    return dev_->free_notif_buf(notif_buf_id);
+  }
+
+  /**
+   * @brief Allocates a pipe.
+   *
+   * @param fallback If true, allocates a fallback pipe. Otherwise, allocates a
+   *                regular pipe.
+   * @return Pipe ID. On error, -1 is returned and errno is set.
+   */
+  int AllocatePipe(bool fallback = false) {
+    return dev_->allocate_pipe(fallback);
+  }
+
+  /**
+   * @brief Frees a pipe.
+   *
+   * @param pipe_id Pipe ID to be freed.
+   *
+   * @return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
+
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
       : bdf_(bdf), bar_(bar) {}

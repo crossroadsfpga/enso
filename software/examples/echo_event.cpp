@@ -47,8 +47,8 @@ static volatile bool setup_done = false;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void run_echo_event(uint32_t nb_queues, uint32_t core_id,
-                    [[maybe_unused]] uint32_t nb_cycles, enso::stats_t* stats) {
+void run_echo_event(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
+                    enso::stats_t* stats) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
@@ -56,7 +56,7 @@ void run_echo_event(uint32_t nb_queues, uint32_t core_id,
   using enso::Device;
   using enso::RxTxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(nb_queues, core_id);
+  std::unique_ptr<Device> dev = Device::Create();
   std::vector<RxTxPipe*> pipes;
 
   if (!dev) {

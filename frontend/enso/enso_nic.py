@@ -5,7 +5,6 @@ from netexp.helpers import IntelFpga
 from enso.consts import (
     DEFAULT_DSC_BUF_SIZE,
     DEFAULT_ETH_PORT,
-    DEFAULT_NB_FALLBACK_QUEUES,
     DEFAULT_NB_TX_CREDITS,
     DEFAULT_PKT_BUF_SIZE,
     SETUP_SW_CMD,
@@ -33,9 +32,7 @@ class EnsoNic(IntelFpga):
         pkt_buf_size:
         tx_credits:
         ethernet_port:
-        fallback_queues:
         desc_per_pkt:
-        enable_rr:
         skip_config:
         verbose:
         log_file:
@@ -54,9 +51,7 @@ class EnsoNic(IntelFpga):
         pkt_buf_size: int = DEFAULT_PKT_BUF_SIZE,
         tx_credits: int = DEFAULT_NB_TX_CREDITS,
         ethernet_port: int = DEFAULT_ETH_PORT,
-        fallback_queues: int = DEFAULT_NB_FALLBACK_QUEUES,
         desc_per_pkt: bool = False,
-        enable_rr: bool = False,
         latency_opt: bool = False,
         skip_config: bool = False,
         verbose: bool = False,
@@ -96,23 +91,16 @@ class EnsoNic(IntelFpga):
             self._pkt_buf_size = pkt_buf_size
             self._tx_credits = tx_credits
             self._ethernet_port = ethernet_port
-            self._fallback_queues = fallback_queues
         else:
             self.dsc_buf_size = dsc_buf_size
             self.pkt_buf_size = pkt_buf_size
             self.tx_credits = tx_credits
             self.ethernet_port = ethernet_port
-            self.fallback_queues = fallback_queues
 
             if desc_per_pkt:
                 self.enable_desc_per_pkt()
             else:
                 self.disable_desc_per_pkt()
-
-            if enable_rr:
-                self.enable_rr()
-            else:
-                self.disable_rr()
 
         self.latency_opt = latency_opt
 
@@ -185,26 +173,11 @@ class EnsoNic(IntelFpga):
         self._ethernet_port = ethernet_port
         self.run_jtag_commands(f"set_eth_port {ethernet_port}")
 
-    @property
-    def fallback_queues(self):
-        return self._fallback_queues
-
-    @fallback_queues.setter
-    def fallback_queues(self, fallback_queues):
-        self._fallback_queues = fallback_queues
-        self.run_jtag_commands(f"set_nb_fallback_queues {fallback_queues}")
-
     def enable_desc_per_pkt(self):
         self.run_jtag_commands("enable_desc_per_pkt")
 
     def disable_desc_per_pkt(self):
         self.run_jtag_commands("disable_desc_per_pkt")
-
-    def enable_rr(self):
-        self.run_jtag_commands("enable_rr")
-
-    def disable_rr(self):
-        self.run_jtag_commands("disable_rr")
 
     def sw_reset(self):
         self.run_jtag_commands("sw_rst")

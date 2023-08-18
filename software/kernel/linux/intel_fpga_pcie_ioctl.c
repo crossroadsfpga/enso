@@ -66,6 +66,17 @@ static long get_ktimer(struct dev_bookkeep *dev_bk,
                        unsigned int __user *user_addr);
 static long get_uio_dev_name(struct chr_dev_bookkeep *chr_dev_bk,
                              char __user *user_addr);
+static long get_nb_fallback_queues(struct dev_bookkeep *dev_bk,
+                                   unsigned int __user *user_addr);
+static long set_rr_status(struct dev_bookkeep *dev_bk, bool status);
+static long get_rr_status(struct dev_bookkeep *dev_bk, bool __user *user_addr);
+static long alloc_notif_buffer(struct chr_dev_bookkeep *dev_bk,
+                               unsigned int __user *user_addr);
+static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
+                              unsigned long uarg);
+static long alloc_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                       unsigned int __user *user_addr);
+static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 
 /******************************************************************************
  * Device and I/O control function
@@ -168,6 +179,27 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
       break;
     case INTEL_FPGA_PCIE_IOCTL_CHR_GET_UIO_DEV_NAME:
       retval = get_uio_dev_name(chr_dev_bk, (char __user *)uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_GET_NB_FALLBACK_QUEUES:
+      retval = get_nb_fallback_queues(dev_bk, (unsigned int __user *)uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_SET_RR_STATUS:
+      retval = set_rr_status(dev_bk, (bool)uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_GET_RR_STATUS:
+      retval = get_rr_status(dev_bk, (bool __user *)uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUFFER:
+      retval = alloc_notif_buffer(chr_dev_bk, (unsigned int __user *)uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_FREE_NOTIF_BUFFER:
+      retval = free_notif_buffer(chr_dev_bk, uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_ALLOC_PIPE:
+      retval = alloc_pipe(chr_dev_bk, (unsigned int __user *)uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_FREE_PIPE:
+      retval = free_pipe(chr_dev_bk, uarg);
       break;
     default:
       retval = -ENOTTY;
@@ -325,6 +357,316 @@ static long get_uio_dev_name(struct chr_dev_bookkeep *chr_dev_bk,
     INTEL_FPGA_PCIE_DEBUG("couldn't copy uio dev information to user.");
     return -EFAULT;
   }
+
+  return 0;
+}
+
+/**
+ * get_nb_fallback_queues() - Copies the number of fallback queues to userspace.
+ *
+ * @dev_bk:     Pointer to the device bookkeeping structure.
+ * @user_addr:  Address to an unsigned int in user-space to save the result.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long get_nb_fallback_queues(struct dev_bookkeep *dev_bk,
+                                   unsigned int __user *user_addr) {
+  unsigned int nb_fb_queues = dev_bk->nb_fb_queues;
+  if (copy_to_user(user_addr, &nb_fb_queues, sizeof(nb_fb_queues))) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy nb_fb_queues information to user.");
+    return -EFAULT;
+  }
+  return 0;
+}
+
+/**
+ * set_rr_status() - Enables or disables round-robin across fallback queues.
+ *
+ * @dev_bk:  Pointer to the device bookkeeping structure.
+ * @status:  The status to set: true to enable RR, false to disable.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long set_rr_status(struct dev_bookkeep *dev_bk, bool rr_status) {
+  // FIXME(sadok): Right now all this does is to set a variable in the kernel
+  // module so that processes can coordinate the current RR status. User space
+  // is still responsible for sending the configuration to the NIC.
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  dev_bk->enable_rr = rr_status;
+
+  up(&dev_bk->sem);
+
+  return 0;
+}
+
+/**
+ * get_rr_status() - Copies the current RR status to userspace.
+ *
+ * @dev_bk:     Pointer to the device bookkeeping structure.
+ * @user_addr:  Address to a boolean in user-space to save the result.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long get_rr_status(struct dev_bookkeep *dev_bk, bool __user *user_addr) {
+  bool rr_status = dev_bk->enable_rr;
+  if (copy_to_user(user_addr, &rr_status, sizeof(rr_status))) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy rr_status information to user.");
+    return -EFAULT;
+  }
+  return 0;
+}
+
+/**
+ * alloc_notif_buffer() - Allocates a notification buffer for the current
+ *                        device.
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ * @user_addr:  Address to an unsigned int in user-space to save the buffer ID.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long alloc_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
+                               unsigned int __user *user_addr) {
+  int i = 0;
+  int32_t buf_id = -1;
+  struct dev_bookkeep *dev_bk;
+  dev_bk = chr_dev_bk->dev_bk;
+
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  // Find first available notification buffer. If none are available, return
+  // an error.
+  for (i = 0; i < MAX_NB_APPS / 8; ++i) {
+    int32_t set_buf_id = 0;
+    uint8_t set = dev_bk->notif_q_status[i];
+    while (set & 0x1) {
+      ++set_buf_id;
+      set >>= 1;
+    }
+    if (set_buf_id < 8) {
+      // Set status bit for both the device bitvector and the character device
+      // bitvector.
+      dev_bk->notif_q_status[i] |= (1 << set_buf_id);
+      chr_dev_bk->notif_q_status[i] |= (1 << set_buf_id);
+
+      buf_id = i * 8 + set_buf_id;
+      break;
+    }
+  }
+
+  up(&dev_bk->sem);
+
+  if (buf_id < 0) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't allocate notification buffer.");
+    return -ENOMEM;
+  }
+
+  if (copy_to_user(user_addr, &buf_id, sizeof(buf_id))) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy buf_id information to user.");
+    return -EFAULT;
+  }
+
+  return 0;
+}
+
+/**
+ * free_notif_buffer() - Frees a notification buffer for the current
+ *                       device.
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ * @uarg:       The buffer ID to free.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
+                              unsigned long uarg) {
+  int32_t i, j;
+  int32_t buf_id = (int32_t)uarg;
+  struct dev_bookkeep *dev_bk;
+
+  dev_bk = chr_dev_bk->dev_bk;
+
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  // Check that the buffer ID is valid.
+  if (buf_id < 0 || buf_id >= MAX_NB_APPS) {
+    INTEL_FPGA_PCIE_DEBUG("invalid buffer ID.");
+    return -EINVAL;
+  }
+
+  // Clear status bit for both the device bitvector and the character device
+  // bitvector.
+  i = buf_id / 8;
+  j = buf_id % 8;
+  dev_bk->notif_q_status[i] &= ~(1 << j);
+  chr_dev_bk->notif_q_status[i] &= ~(1 << j);
+
+  up(&dev_bk->sem);
+
+  return 0;
+}
+
+/**
+ * alloc_pipe() - Allocates a pipe for the current device.
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ * @user_addr:  Address to an unsigned int in user-space. It is used as input to
+ *              determine if the pipe is a fallback pipe (1 to fallback pipe, 0
+ *              if not) and as output to save the pipe ID.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long alloc_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                       unsigned int __user *user_addr) {
+  int32_t i, j;
+  bool is_fallback;
+  int32_t pipe_id = -1;
+  struct dev_bookkeep *dev_bk;
+  dev_bk = chr_dev_bk->dev_bk;
+
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  if (copy_from_user(&is_fallback, user_addr, 1)) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy is_fallback information from user.");
+    return -EFAULT;
+  }
+
+  if (is_fallback) {  // Fallback pipes are allocated at the front.
+    for (i = 0; i < MAX_NB_FLOWS / 8; ++i) {
+      int32_t set_pipe_id = 0;
+      uint8_t set = dev_bk->pipe_status[i];
+      while (set & 0x1) {
+        ++set_pipe_id;
+        set >>= 1;
+      }
+      if (set_pipe_id < 8) {
+        pipe_id = i * 8 + set_pipe_id;
+        break;
+      }
+    }
+
+    if (pipe_id >= 0) {
+      // Make sure all fallback pipes are contiguously allocated.
+      if (pipe_id != dev_bk->nb_fb_queues) {
+        INTEL_FPGA_PCIE_DEBUG("fallback pipes are not contiguous.");
+        up(&dev_bk->sem);
+        return -EINVAL;
+      }
+
+      ++(dev_bk->nb_fb_queues);
+      ++(chr_dev_bk->nb_fb_queues);
+    }
+
+  } else {  // Non-fallback pipes are allocated at the back.
+    for (i = MAX_NB_FLOWS / 8 - 1; i >= 0; --i) {
+      int32_t set_pipe_id = 7;
+      uint8_t set = dev_bk->pipe_status[i];
+      while (set & 0x80) {
+        --set_pipe_id;
+        set <<= 1;
+      }
+      if (set_pipe_id >= 0) {
+        pipe_id = i * 8 + set_pipe_id;
+        break;
+      }
+    }
+  }
+
+  up(&dev_bk->sem);
+
+  if (pipe_id < 0) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't allocate pipe.");
+    return -ENOMEM;
+  }
+
+  // Set status bit for both the device bitvector and the character device
+  // bitvector.
+  i = pipe_id / 8;
+  j = pipe_id % 8;
+  dev_bk->pipe_status[i] |= (1 << j);
+  chr_dev_bk->pipe_status[i] |= (1 << j);
+
+  if (copy_to_user(user_addr, &pipe_id, sizeof(pipe_id))) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy buf_id information to user.");
+    return -EFAULT;
+  }
+
+  return 0;
+}
+
+/**
+ * free_pipe() - Frees a pipe for the current device.
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ * @uarg:       The pipe ID to free.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
+  int32_t i, j;
+  int32_t pipe_id = (int32_t)uarg;
+  struct dev_bookkeep *dev_bk;
+
+  dev_bk = chr_dev_bk->dev_bk;
+
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  // Check that the pipe ID is valid.
+  if (pipe_id < 0 || pipe_id >= MAX_NB_FLOWS) {
+    INTEL_FPGA_PCIE_DEBUG("invalid pipe ID.");
+    return -EINVAL;
+  }
+
+  // Check that the pipe ID is allocated.
+  i = pipe_id / 8;
+  j = pipe_id % 8;
+  if (!(chr_dev_bk->pipe_status[i] & (1 << j))) {
+    INTEL_FPGA_PCIE_DEBUG("pipe ID is not allocated for this file handle.");
+    return -EINVAL;
+  }
+
+  // Clear status bit for both the device bitvector and the character device
+  // bitvector.
+  dev_bk->pipe_status[i] &= ~(1 << j);
+  chr_dev_bk->pipe_status[i] &= ~(1 << j);
+
+  // Fallback pipes are allocated at the front.
+  if (pipe_id < dev_bk->nb_fb_queues) {
+    --(dev_bk->nb_fb_queues);
+    --(chr_dev_bk->nb_fb_queues);
+  }
+
+  up(&dev_bk->sem);
 
   return 0;
 }

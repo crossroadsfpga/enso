@@ -64,7 +64,7 @@ uint32_t external_peek_next_batch_from_queue(
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
   insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip, src_ip,
-                    protocol, kId);
+                    protocol, id_);
   return 0;
 }
 
@@ -91,10 +91,20 @@ void RxPipe::Prefetch() { prefetch_pipe(&internal_rx_pipe_); }
 
 void RxPipe::Clear() { fully_advance_pipe(&internal_rx_pipe_); }
 
-RxPipe::~RxPipe() { enso_pipe_free(&internal_rx_pipe_, kId); }
+RxPipe::~RxPipe() {
+  enso_pipe_free(notification_buf_pair_, &internal_rx_pipe_, id_);
+}
 
-int RxPipe::Init() noexcept {
-  return enso_pipe_init(&internal_rx_pipe_, notification_buf_pair_, kId);
+int RxPipe::Init(bool fallback) noexcept {
+  int ret =
+      enso_pipe_init(&internal_rx_pipe_, notification_buf_pair_, fallback);
+  if (ret < 0) {
+    return ret;
+  }
+
+  id_ = ret;
+
+  return 0;
 }
 
 TxPipe::~TxPipe() {
@@ -121,8 +131,8 @@ int TxPipe::Init() noexcept {
   return 0;
 }
 
-int RxTxPipe::Init() noexcept {
-  rx_pipe_ = device_->AllocateRxPipe();
+int RxTxPipe::Init(bool fallback) noexcept {
+  rx_pipe_ = device_->AllocateRxPipe(fallback);
   if (rx_pipe_ == nullptr) {
     return -1;
   }
@@ -138,10 +148,10 @@ int RxTxPipe::Init() noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    const uint32_t nb_rx_pipes, int16_t core_id, const std::string& pcie_addr,
+    const std::string& pcie_addr,
     const std::string& huge_page_prefix) noexcept {
-  std::unique_ptr<Device> dev(new (std::nothrow) Device(
-      nb_rx_pipes, core_id, pcie_addr, huge_page_prefix));
+  std::unique_ptr<Device> dev(new (std::nothrow)
+                                  Device(pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
@@ -169,22 +179,14 @@ Device::~Device() {
   notification_buf_free(&notification_buf_pair_);
 }
 
-RxPipe* Device::AllocateRxPipe() noexcept {
-  if (rx_pipes_.size() >= kNbRxPipes) {
-    // No more pipes available.
-    return nullptr;
-  }
-
-  enso_pipe_id_t enso_pipe_id =
-      notification_buf_pair_.id * kNbRxPipes + rx_pipes_.size();
-
-  RxPipe* pipe(new (std::nothrow) RxPipe(enso_pipe_id, this));
+RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
+  RxPipe* pipe(new (std::nothrow) RxPipe(this));
 
   if (unlikely(!pipe)) {
     return nullptr;
   }
 
-  if (pipe->Init()) {
+  if (pipe->Init(fallback)) {
     delete pipe;
     return nullptr;
   }
@@ -211,19 +213,14 @@ TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
   return pipe;
 }
 
-RxTxPipe* Device::AllocateRxTxPipe() noexcept {
-  if (rx_tx_pipes_.size() >= kNbRxPipes) {
-    // No more pipes available.
-    return nullptr;
-  }
-
+RxTxPipe* Device::AllocateRxTxPipe(bool fallback) noexcept {
   RxTxPipe* pipe(new (std::nothrow) RxTxPipe(this));
 
   if (unlikely(!pipe)) {
     return nullptr;
   }
 
-  if (pipe->Init()) {
+  if (pipe->Init(fallback)) {
     delete pipe;
     return nullptr;
   }
@@ -329,20 +326,12 @@ int Device::Init() noexcept {
 
   int bar = -1;
 
-  std::cerr << "Running with NOTIFICATION_BUF_SIZE: " << NOTIFICATION_BUF_SIZE
+  std::cerr << "Running with NOTIFICATION_BUF_SIZE: " << kNotificationBufSize
             << std::endl;
-  std::cerr << "Running with ENSO_PIPE_SIZE: " << ENSO_PIPE_SIZE << std::endl;
+  std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
 
-  // FIXME(sadok) should find a better identifier than core id.
-  uint32_t id = core_id_;
-
-  // HACK(sadok): This only works because pkt queues for the same app are
-  // currently placed back to back.
-  enso_pipe_id_t enso_pipe_id_offset = id * kNbRxPipes;
-
-  int ret =
-      notification_buf_init(bdf, bar, id, &notification_buf_pair_, kNbRxPipes,
-                            enso_pipe_id_offset, huge_page_prefix_);
+  int ret = notification_buf_init(bdf, bar, &notification_buf_pair_,
+                                  huge_page_prefix_);
   if (ret != 0) {
     // Could not initialize notification buffer.
     return 3;
@@ -405,6 +394,14 @@ int Device::EnableRateLimiting(uint16_t num, uint16_t den) {
 
 int Device::DisableRateLimiting() {
   return disable_rate_limit(&notification_buf_pair_);
+}
+
+int Device::EnableRoundRobin() {
+  return enable_round_robin(&notification_buf_pair_);
+}
+
+int Device::DisableRoundRobin() {
+  return disable_round_robin(&notification_buf_pair_);
 }
 
 }  // namespace enso
