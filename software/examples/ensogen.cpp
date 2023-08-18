@@ -289,6 +289,16 @@ static int parse_args(int argc, char** argv,
   parsed_args.rate_num = atoi(argv[optind++]);
   parsed_args.rate_den = atoi(argv[optind++]);
 
+  if (parsed_args.rate_num == 0) {
+    std::cerr << "Rate must be greater than 0" << std::endl;
+    return -1;
+  }
+
+  if (parsed_args.rate_den == 0) {
+    std::cerr << "Rate denominator must be greater than 0" << std::endl;
+    return -1;
+  }
+
   return 0;
 }
 
