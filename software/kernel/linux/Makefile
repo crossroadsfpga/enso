@@ -8,7 +8,7 @@ USE_AVX ?= 0
 PWD       := $(shell pwd)
 KDIR ?= /lib/modules/$(shell uname -r)/build
 CPPFLAGS += -include $(KDIR)/include/generated/autoconf.h
-EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -Wall -Werror
 
 ifeq ($(USE_AVX), 1)
 	# Enable wide accesses up to 32B
