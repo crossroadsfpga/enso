@@ -68,8 +68,6 @@
 | out_config_ready         | input     |                       |             |
 | disable_pcie             | output    |                       |             |
 | sw_reset                 | output    |                       |             |
-| nb_fallback_queues       | output    | [31:0]                |             |
-| enable_rr                | output    |                       |             |
 | eth_port_nb              | output    |                       |             |
 | pcie_core_full_cnt       | output    | [31:0]                |             |
 | rx_dma_dsc_cnt           | output    | [31:0]                |             |
