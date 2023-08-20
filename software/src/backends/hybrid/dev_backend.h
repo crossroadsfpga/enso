@@ -164,7 +164,7 @@ class DevBackend {
    *         returned and errno is set appropriately.
    */
   int GetNbFallbackQueues() {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     return 0;
   }
 
@@ -176,7 +176,7 @@ class DevBackend {
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
   int SetRrStatus(bool enable_rr) {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     (void)enable_rr;
     return 0;
   }
@@ -188,7 +188,7 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     return 0;
   }
 
@@ -198,7 +198,7 @@ class DevBackend {
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
   int AllocateNotifBuf() {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     int notif_buf_id = notif_buf_cnt_;
     ++notif_buf_cnt_;
     return notif_buf_id;
@@ -212,7 +212,7 @@ class DevBackend {
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreeNotifBuf(int notif_buf_id) {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     --notif_buf_cnt_;
     return 0;
   }
@@ -225,7 +225,7 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     int pipe_id = pipe_cnt_;
     ++pipe_cnt_;
     return pipe_id;
@@ -239,7 +239,7 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     --pipe_cnt_;
     return 0;
   }
