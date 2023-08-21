@@ -230,8 +230,19 @@ RxTxPipe* Device::AllocateRxTxPipe(bool fallback) noexcept {
   return pipe;
 }
 
-// TODO(sadok): DRY this code.
-RxPipe* Device::NextRxPipeToRecv() {
+uint32_t Device::NotifQueueIdFromRxPipeId(int32_t pipe_id) {
+  struct RxPipe* rx_pipe = rx_pipes_[pipe_id];
+  uint32_t notif_queue_id =
+      reinterpret_cast<uint64_t>(rx_pipe->buf()) & (enso::kMaxNbApps - 1);
+  return notif_queue_id;
+}
+
+uint32_t Device::RxTailFromRxPipeId(int32_t pipe_id) {
+  RxEnsoPipeInternal& pipe = rx_pipes_[pipe_id]->internal_rx_pipe_;
+  return pipe->rx_tail;
+}
+
+int32_t Device::NextRxPipeIdToRecv() {
   // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);
 
@@ -258,6 +269,16 @@ RxPipe* Device::NextRxPipeToRecv() {
   id = get_next_enso_pipe_id(&notification_buf_pair_);
 
 #endif  // LATENCY_OPT
+
+  return id;
+}
+
+// TODO(sadok): DRY this code.
+RxPipe* Device::NextRxPipeToRecv() {
+  // This function can only be used when there are **no** RxTx pipes.
+  assert(rx_tx_pipes_.size() == 0);
+
+  int32_t id = NextRxPipeIdToRecv();
 
   if (id < 0) {
     return nullptr;

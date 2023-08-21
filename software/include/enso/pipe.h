@@ -150,6 +150,12 @@ class Device {
    */
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
 
+  uint32_t RxTailFromRxPipeId(int32_t pipe_id);
+
+  uint32_t NotifQueueIdFromRxPipeId(int32_t pipe_id);
+
+  int32_t NextRxPipeIdToRecv();
+
   /**
    * @brief Gets the next RxPipe that has data pending.
    *

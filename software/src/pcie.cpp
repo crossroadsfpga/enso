@@ -309,6 +309,12 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
   return enso_pipe_init(enso_pipe, notification_buf_pair, fallback);
 }
 
+/**
+ * @brief
+ *
+ * @param notification_buf_pair
+ * @return _enso_always_inline
+ */
 static _enso_always_inline uint16_t
 __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   struct RxNotification* notification_buf = notification_buf_pair->rx_buf;
@@ -329,10 +335,14 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     cur_notification->signal = 0;
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
 
+    // updates the 'tail', that is, until where you can read,
+    // for the given enso pipe
     enso_pipe_id_t enso_pipe_id = cur_notification->queue_id;
     notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id] =
         (uint32_t)cur_notification->tail;
 
+    // orders the new updates: read pipes from last_rx_ids_head to
+    // last_rx_ids_tail
     notification_buf_pair->next_rx_pipe_ids[last_rx_ids_tail] = enso_pipe_id;
     last_rx_ids_tail = (last_rx_ids_tail + 1) % kNotificationBufSize;
 
