@@ -165,7 +165,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   DevBackend::mmio_write32(&notification_buf_pair_regs->tx_head,
                            notification_buf_pair->tx_head);
 
-  // HACK(sadok): assuming that we know the number of queues beforehand
   notification_buf_pair->pending_rx_pipe_tails = (uint32_t*)malloc(
       sizeof(*(notification_buf_pair->pending_rx_pipe_tails)) * kMaxNbFlows);
   if (notification_buf_pair->pending_rx_pipe_tails == NULL) {
