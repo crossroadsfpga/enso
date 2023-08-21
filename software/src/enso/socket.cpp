@@ -193,46 +193,47 @@ void free_enso_pipe(int sockfd, size_t len) {
   advance_pipe(&(open_sockets[sockfd].enso_pipe), len);
 }
 
-int enable_device_timestamp() {
+int enable_device_timestamp(int ref_sockfd) {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return enable_timestamp(open_sockets[0].notification_buf_pair);
+  return enable_timestamp(open_sockets[ref_sockfd].notification_buf_pair);
 }
 
-int disable_device_timestamp() {
+int disable_device_timestamp(int ref_sockfd) {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return disable_timestamp(open_sockets[0].notification_buf_pair);
+  return disable_timestamp(open_sockets[ref_sockfd].notification_buf_pair);
 }
 
-int enable_device_rate_limit(uint16_t num, uint16_t den) {
+int enable_device_rate_limit(int ref_sockfd, uint16_t num, uint16_t den) {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return enable_rate_limit(open_sockets[0].notification_buf_pair, num, den);
+  return enable_rate_limit(open_sockets[ref_sockfd].notification_buf_pair, num,
+                           den);
 }
 
-int disable_device_rate_limit() {
+int disable_device_rate_limit(int ref_sockfd) {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return disable_rate_limit(open_sockets[0].notification_buf_pair);
+  return disable_rate_limit(open_sockets[ref_sockfd].notification_buf_pair);
 }
 
-int enable_device_round_robin() {
+int enable_device_round_robin(int ref_sockfd) {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return enable_round_robin(open_sockets[0].notification_buf_pair);
+  return enable_round_robin(open_sockets[ref_sockfd].notification_buf_pair);
 }
 
-int disable_device_round_robin() {
+int disable_device_round_robin(int ref_sockfd) {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return disable_round_robin(open_sockets[0].notification_buf_pair);
+  return disable_round_robin(open_sockets[ref_sockfd].notification_buf_pair);
 }
 
 int shutdown(int sockfd, int how __attribute__((unused))) noexcept {

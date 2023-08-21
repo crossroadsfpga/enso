@@ -447,6 +447,7 @@ struct RxStats {
 struct RxArgs {
   bool enable_rtt;
   bool enable_rtt_history;
+  int socket_fd;
 };
 
 struct TxStats {
@@ -530,8 +531,8 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 #else   // IGNORE_RX
   uint8_t* recv_buf;
   int socket_fd;
-  int recv_len =
-      enso::recv_select(0, &socket_fd, (void**)&recv_buf, RECV_BUF_LEN, 0);
+  int recv_len = enso::recv_select(rx_args.socket_fd, &socket_fd,
+                                   (void**)&recv_buf, RECV_BUF_LEN, 0);
 
   if (unlikely(recv_len < 0)) {
     std::cerr << "Error receiving" << std::endl;
@@ -763,29 +764,35 @@ int main(int argc, char** argv) {
     std::thread rx_thread = std::thread([&parsed_args, &rx_stats] {
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
+      std::vector<int> socket_fds;
+
+      int socket_fd = 0;
       for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-        int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
+        socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, false);
 
         if (socket_fd == -1) {
           std::cerr << "Problem creating socket (" << errno
                     << "): " << strerror(errno) << std::endl;
           exit(2);
         }
+
+        socket_fds.push_back(socket_fd);
       }
 
-      enso::enable_device_rate_limit(parsed_args.rate_num,
+      enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
                                      parsed_args.rate_den);
-      enso::enable_device_round_robin();
+      enso::enable_device_round_robin(socket_fd);
 
       if (parsed_args.enable_rtt) {
-        enso::enable_device_timestamp();
+        enso::enable_device_timestamp(socket_fd);
       } else {
-        enso::disable_device_timestamp();
+        enso::disable_device_timestamp(socket_fd);
       }
 
       RxArgs rx_args;
       rx_args.enable_rtt = parsed_args.enable_rtt;
       rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
+      rx_args.socket_fd = socket_fd;
 
       std::cout << "Running RX on core " << sched_getcpu() << std::endl;
 
@@ -809,17 +816,15 @@ int main(int argc, char** argv) {
 
       rx_done = true;
 
-      enso::disable_device_rate_limit();
-      enso::disable_device_round_robin();
+      enso::disable_device_rate_limit(socket_fd);
+      enso::disable_device_round_robin(socket_fd);
 
       if (parsed_args.enable_rtt) {
-        enso::disable_device_timestamp();
+        enso::disable_device_timestamp(socket_fd);
       }
 
-      for (uint32_t socket_fd = 0; socket_fd < parsed_args.nb_queues;
-           ++socket_fd) {
-        // enso::print_sock_stats(socket_fd);
-        enso::shutdown(socket_fd, SHUT_RDWR);
+      for (auto& s : socket_fds) {
+        enso::shutdown(s, SHUT_RDWR);
       }
     });
 
@@ -884,22 +889,27 @@ int main(int argc, char** argv) {
          pkts_in_last_buffer, &enso_pipes, &tx_stats] {
           std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
+          std::vector<int> socket_fds;
+
+          int socket_fd = 0;
           for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-            int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
+            socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
 
             if (socket_fd == -1) {
               std::cerr << "Problem creating socket (" << errno
                         << "): " << strerror(errno) << std::endl;
               exit(2);
             }
+
+            socket_fds.push_back(socket_fd);
           }
 
-          enso::enable_device_rate_limit(parsed_args.rate_num,
+          enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
                                          parsed_args.rate_den);
-          enso::enable_device_round_robin();
+          enso::enable_device_round_robin(socket_fd);
 
           if (parsed_args.enable_rtt) {
-            enso::enable_device_timestamp();
+            enso::enable_device_timestamp(socket_fd);
           }
 
           std::cout << "Running RX and TX on core " << sched_getcpu()
@@ -908,8 +918,8 @@ int main(int argc, char** argv) {
           RxArgs rx_args;
           rx_args.enable_rtt = parsed_args.enable_rtt;
           rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
+          rx_args.socket_fd = socket_fd;
 
-          int socket_fd = 0;  // Using first socket to transmit.
           TxArgs tx_args(enso_pipes, total_bytes_to_send,
                          total_good_bytes_to_send, pkts_in_last_buffer,
                          socket_fd);
@@ -939,16 +949,15 @@ int main(int argc, char** argv) {
 
           reclaim_all_buffers(tx_args);
 
-          enso::disable_device_rate_limit();
-          enso::disable_device_round_robin();
+          enso::disable_device_rate_limit(socket_fd);
+          enso::disable_device_round_robin(socket_fd);
 
           if (parsed_args.enable_rtt) {
-            enso::disable_device_timestamp();
+            enso::disable_device_timestamp(socket_fd);
           }
 
-          for (uint32_t socket_fd = 0; socket_fd < parsed_args.nb_queues;
-               ++socket_fd) {
-            enso::shutdown(socket_fd, SHUT_RDWR);
+          for (auto& s : socket_fds) {
+            enso::shutdown(s, SHUT_RDWR);
           }
         });
 
@@ -985,7 +994,6 @@ int main(int argc, char** argv) {
 
   // Continuously print statistics.
   while (!rx_done) {
-    // auto last_time = std::chrono::high_resolution_clock::now();
     _enso_compiler_memory_barrier();
     uint64_t last_rx_bytes = rx_stats.bytes;
     uint64_t last_rx_pkts = rx_stats.pkts;
