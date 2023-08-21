@@ -188,8 +188,8 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
     return -1;
   }
 
-  notification_buf_pair->last_rx_ids_head = 0;
-  notification_buf_pair->last_rx_ids_tail = 0;
+  notification_buf_pair->next_rx_ids_head = 0;
+  notification_buf_pair->next_rx_ids_tail = 0;
   notification_buf_pair->tx_full_cnt = 0;
   notification_buf_pair->nb_unreported_completions = 0;
   notification_buf_pair->huge_page_prefix = huge_page_prefix;
@@ -314,7 +314,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   uint32_t notification_buf_head = notification_buf_pair->rx_head;
   uint16_t nb_consumed_notifications = 0;
 
-  uint16_t last_rx_ids_tail = notification_buf_pair->last_rx_ids_tail;
+  uint16_t next_rx_ids_tail = notification_buf_pair->next_rx_ids_tail;
 
   for (uint16_t i = 0; i < kBatchSize; ++i) {
     struct RxNotification* cur_notification =
@@ -332,13 +332,13 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id] =
         (uint32_t)cur_notification->tail;
 
-    notification_buf_pair->next_rx_pipe_ids[last_rx_ids_tail] = enso_pipe_id;
-    last_rx_ids_tail = (last_rx_ids_tail + 1) % kNotificationBufSize;
+    notification_buf_pair->next_rx_pipe_ids[next_rx_ids_tail] = enso_pipe_id;
+    next_rx_ids_tail = (next_rx_ids_tail + 1) % kNotificationBufSize;
 
     ++nb_consumed_notifications;
   }
 
-  notification_buf_pair->last_rx_ids_tail = last_rx_ids_tail;
+  notification_buf_pair->next_rx_ids_tail = next_rx_ids_tail;
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
@@ -401,10 +401,10 @@ __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
   // done processing the last batch and can get the next one. Using batches here
   // performs **significantly** better compared to always fetching the latest
   // notification.
-  uint16_t last_rx_ids_head = notification_buf_pair->last_rx_ids_head;
-  uint16_t last_rx_ids_tail = notification_buf_pair->last_rx_ids_tail;
+  uint16_t next_rx_ids_head = notification_buf_pair->next_rx_ids_head;
+  uint16_t next_rx_ids_tail = notification_buf_pair->next_rx_ids_tail;
 
-  if (last_rx_ids_head == last_rx_ids_tail) {
+  if (next_rx_ids_head == next_rx_ids_tail) {
     uint16_t nb_consumed_notifications = __get_new_tails(notification_buf_pair);
     if (unlikely(nb_consumed_notifications == 0)) {
       return -1;
@@ -412,10 +412,10 @@ __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
   }
 
   enso_pipe_id_t enso_pipe_id =
-      notification_buf_pair->next_rx_pipe_ids[last_rx_ids_head];
+      notification_buf_pair->next_rx_pipe_ids[next_rx_ids_head];
 
-  notification_buf_pair->last_rx_ids_head =
-      (last_rx_ids_head + 1) % kNotificationBufSize;
+  notification_buf_pair->next_rx_ids_head =
+      (next_rx_ids_head + 1) % kNotificationBufSize;
 
   return enso_pipe_id;
 }

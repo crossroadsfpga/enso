@@ -90,8 +90,8 @@ struct NotificationBufPair {
   uint32_t rx_head;
   uint32_t tx_head;
   uint32_t tx_tail;
-  uint16_t last_rx_ids_head;
-  uint16_t last_rx_ids_tail;
+  uint16_t next_rx_ids_head;
+  uint16_t next_rx_ids_tail;
   uint32_t nb_unreported_completions;
   uint32_t id;
 
