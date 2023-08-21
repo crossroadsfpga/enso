@@ -65,7 +65,7 @@ void run_echo(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
   }
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    RxTxPipe* pipe = dev->AllocateRxTxPipe(true);
+    RxTxPipe* pipe = dev->AllocateRxTxPipe();
     if (!pipe) {
       std::cerr << "Problem creating RX/TX pipe" << std::endl;
       exit(3);
