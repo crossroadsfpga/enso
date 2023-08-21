@@ -768,7 +768,7 @@ int main(int argc, char** argv) {
 
       int socket_fd = 0;
       for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-        socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, false);
+        socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
 
         if (socket_fd == -1) {
           std::cerr << "Problem creating socket (" << errno
