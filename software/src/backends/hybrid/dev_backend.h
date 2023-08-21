@@ -89,9 +89,21 @@ class DevBackend {
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value) {
     enso::enso_pipe_id_t queue_id = address / enso::kMemorySpacePerQueue;
+    uint32_t offset = address % enso::kMemorySpacePerQueue;
 
     // Updates to RX pipe: write directly
     if (queue_id < enso::kMaxNbFlows) {
+      uint64_t mask = (1 << 32) - 1;
+      // could also push notification to queue
+      switch (offset) {
+        case offsetof(struct enso::QueueRegs, rx_mem_low):
+          uint32_t notif_queue_id = value & mask;
+          while (queue_to_backend_->Push({MmioNotifType::kWrite, (uint64_t)addr,
+                                          notif_queue_id}) != 0) {
+          }
+      }
+      // remove notification queue ID from
+      value = value & ~(mask);
       _enso_compiler_memory_barrier();
       *addr = value;
       return;
@@ -226,8 +238,7 @@ class DevBackend {
    */
   int AllocatePipe(bool fallback = false) {
     // TODO(kaajalg): Implement.
-    int pipe_id = pipe_cnt_;
-    ++pipe_cnt_;
+    int pipe_id = dev_->allocate_pipe(fallback);
     return pipe_id;
   }
 
