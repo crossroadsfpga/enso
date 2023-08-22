@@ -250,7 +250,7 @@ struct RxNotification* Device::NextRxNotif() {
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  notif = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_rx_notif(&notification_buf_pair_);
   int32_t id = notif->queue_id;
 
   while (id >= 0) {
@@ -263,12 +263,12 @@ struct RxNotification* Device::NextRxNotif() {
       break;
     }
 
-    notif = get_next_enso_pipe_id(&notification_buf_pair_);
+    notif = get_next_rx_notif(&notification_buf_pair_);
     id = notif->queue_id;
   }
 
 #else  // !LATENCY_OPT
-  notif = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_rx_notif(&notification_buf_pair_);
 
 #endif  // LATENCY_OPT
 
@@ -299,7 +299,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  notif = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_rx_notif(&notification_buf_pair_);
   int32_t id = notif->queue_id;
 
   while (id >= 0) {
@@ -312,12 +312,12 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
       break;
     }
 
-    notif = get_next_enso_pipe_id(&notification_buf_pair_);
+    notif = get_next_rx_notif(&notification_buf_pair_);
     id = notif->queue_id;
   }
 
 #else  // !LATENCY_OPT
-  notif = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_rx_notif(&notification_buf_pair_);
 
 #endif  // LATENCY_OPT
 

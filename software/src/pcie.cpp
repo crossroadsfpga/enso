@@ -406,7 +406,7 @@ uint32_t peek_next_batch_from_queue(
   return __consume_queue(enso_pipe, notification_buf_pair, buf, true);
 }
 
-static _enso_always_inline struct RxNotification* __get_next_enso_pipe_id(
+static _enso_always_inline struct RxNotification* __get_next_rx_notif(
     struct NotificationBufPair* notification_buf_pair) {
   // Consume up to a batch of notifications at a time. If the number of consumed
   // notifications is the same as the number of pending notifications, we are
@@ -432,17 +432,16 @@ static _enso_always_inline struct RxNotification* __get_next_enso_pipe_id(
   return notification;
 }
 
-struct RxNotification* get_next_enso_pipe_id(
+struct RxNotification* get_next_rx_notif(
     struct NotificationBufPair* notification_buf_pair) {
-  return __get_next_enso_pipe_id(notification_buf_pair);
+  return __get_next_rx_notif(notification_buf_pair);
 }
 
 // Return next batch among all open sockets.
 uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
                         struct SocketInternal* socket_entries,
                         int* enso_pipe_id, void** buf) {
-  int32_t __enso_pipe_id =
-      __get_next_enso_pipe_id(notification_buf_pair)->queue_id;
+  int32_t __enso_pipe_id = __get_next_rx_notif(notification_buf_pair)->queue_id;
 
   if (unlikely(__enso_pipe_id == -1)) {
     return 0;

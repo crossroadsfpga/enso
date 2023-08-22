@@ -135,7 +135,7 @@ uint32_t peek_next_batch_from_queue(
  * @return ID for the next Enso Pipe that has data available, or -1 if no Enso
  *         Pipe has data.
  */
-struct RxNotification* get_next_enso_pipe_id(
+struct RxNotification* get_next_rx_notif(
     struct NotificationBufPair* notification_buf_pair);
 
 /**
