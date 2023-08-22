@@ -242,7 +242,7 @@ uint32_t Device::RxTailFromRxPipeId(int32_t pipe_id) {
   return pipe->rx_tail;
 }
 
-struct RxNotification* Device::NextRxPipeIdToRecv() {
+struct RxNotification* Device::NextRxNotif() {
   // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);
 
@@ -280,7 +280,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);
 
-  int32_t id = NextRxPipeIdToRecv()->queue_id;
+  int32_t id = NextRxNotif()->queue_id;
 
   if (id < 0) {
     return nullptr;

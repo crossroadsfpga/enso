@@ -154,7 +154,7 @@ class Device {
 
   uint32_t NotifQueueIdFromRxPipeId(int32_t pipe_id);
 
-  struct RxNotification* NextRxPipeIdToRecv();
+  struct RxNotification* NextRxNotif();
 
   /**
    * @brief Gets the next RxPipe that has data pending.
