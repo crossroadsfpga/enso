@@ -83,7 +83,8 @@ struct __attribute__((__packed__)) TxNotification {
 struct NotificationBufPair {
   // First cache line:
   struct RxNotification* rx_buf;
-  enso_pipe_id_t* next_rx_pipe_ids;  // Next pipe ids to consume from rx_buf.
+  struct RxNotification**
+      next_rx_pipe_notifs;  // Next pipe ids to consume from rx_buf.
   struct TxNotification* tx_buf;
   uint32_t* rx_head_ptr;
   uint32_t* tx_tail_ptr;

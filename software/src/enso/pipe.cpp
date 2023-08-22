@@ -242,15 +242,16 @@ uint32_t Device::RxTailFromRxPipeId(int32_t pipe_id) {
   return pipe->rx_tail;
 }
 
-int32_t Device::NextRxPipeIdToRecv() {
+struct RxNotification* Device::NextRxPipeIdToRecv() {
   // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);
 
-  int32_t id;
+  struct RxNotification* notif;
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_enso_pipe_id(&notification_buf_pair_);
+  int32_t id = notif->queue_id;
 
   while (id >= 0) {
     RxEnsoPipeInternal& pipe = rx_pipes_[id]->internal_rx_pipe_;
@@ -262,15 +263,16 @@ int32_t Device::NextRxPipeIdToRecv() {
       break;
     }
 
-    id = get_next_enso_pipe_id(&notification_buf_pair_);
+    notif = get_next_enso_pipe_id(&notification_buf_pair_);
+    id = notif->queue_id;
   }
 
 #else  // !LATENCY_OPT
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_enso_pipe_id(&notification_buf_pair_);
 
 #endif  // LATENCY_OPT
 
-  return id;
+  return notif;
 }
 
 // TODO(sadok): DRY this code.
@@ -278,7 +280,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);
 
-  int32_t id = NextRxPipeIdToRecv();
+  int32_t id = NextRxPipeIdToRecv()->queue_id;
 
   if (id < 0) {
     return nullptr;
@@ -293,11 +295,12 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   ProcessCompletions();
   // This function can only be used when there are only RxTx pipes.
   assert(rx_pipes_.size() == rx_tx_pipes_.size());
-  int32_t id;
+  struct RxNotification* notif;
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_enso_pipe_id(&notification_buf_pair_);
+  int32_t id = notif->queue_id;
 
   while (id >= 0) {
     RxEnsoPipeInternal& pipe = rx_tx_pipes_[id]->rx_pipe_->internal_rx_pipe_;
@@ -309,19 +312,20 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
       break;
     }
 
-    id = get_next_enso_pipe_id(&notification_buf_pair_);
+    notif = get_next_enso_pipe_id(&notification_buf_pair_);
+    id = notif->queue_id;
   }
 
 #else  // !LATENCY_OPT
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_enso_pipe_id(&notification_buf_pair_);
 
 #endif  // LATENCY_OPT
 
-  if (id < 0) {
+  if (notif->queue_id < 0) {
     return nullptr;
   }
 
-  RxTxPipe* pipe = rx_tx_pipes_[id];
+  RxTxPipe* pipe = rx_tx_pipes_[notif->queue_id];
   pipe->rx_pipe_->SetAsNextPipe();
   return pipe;
 }
