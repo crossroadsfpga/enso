@@ -314,7 +314,7 @@ int Device::Init() noexcept {
     }
   }
 
-  uint16_t bdf = 0;
+  bdf_ = 0;
   if (kPcieAddr != "") {
     bdf_ = get_bdf_from_pcie_addr(kPcieAddr);
 
@@ -330,7 +330,7 @@ int Device::Init() noexcept {
             << std::endl;
   std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
 
-  int ret = notification_buf_init(bdf, bar, &notification_buf_pair_,
+  int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
                                   huge_page_prefix_);
   if (ret != 0) {
     // Could not initialize notification buffer.
