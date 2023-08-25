@@ -138,8 +138,10 @@ static constexpr std::string_view kIpcQueueFromAppName =
 enum class MmioNotifType : uint64_t {
   kWrite = 0,
   kRead = 1,
-  kTranslAddr = 2  // Used to translate physical address to virtual address in
-                   // the software backend address space.
+  kTranslAddr = 2,  // Used to translate physical address to virtual address in
+                    // the software backend address space.
+  kAllocatePipe = 3,
+  kBindPipe = 4
 };
 
 struct MmioNotification {
