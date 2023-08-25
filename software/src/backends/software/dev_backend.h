@@ -203,10 +203,18 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
-    // TODO(sadok): Implement.
-    int pipe_id = pipe_cnt_;
-    ++pipe_cnt_;
-    return pipe_id;
+    while (queue_to_backend_->Push(
+               {MmioNotifType::kAllocatePipe, 0, fallback}) != 0) {
+    }
+
+    std::optional<MmioNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == MmioNotifType::kAllocatePipe);
+    return notification->value;
   }
 
   /**
