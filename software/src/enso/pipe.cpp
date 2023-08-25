@@ -165,10 +165,12 @@ std::unique_ptr<Device> Device::Create(
 
 Device::~Device() {
   for (auto& pipe : rx_tx_pipes_) {
+    rx_tx_pipes_map_[pipe->rx_id()] = nullptr;
     delete pipe;
   }
 
   for (auto& pipe : rx_pipes_) {
+    rx_pipes_map_[pipe->id()] = nullptr;
     delete pipe;
   }
 
@@ -192,6 +194,7 @@ RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
   }
 
   rx_pipes_.push_back(pipe);
+  rx_pipes_map_[pipe->id()] = pipe;
 
   return pipe;
 }
@@ -226,6 +229,7 @@ RxTxPipe* Device::AllocateRxTxPipe(bool fallback) noexcept {
   }
 
   rx_tx_pipes_.push_back(pipe);
+  rx_tx_pipes_map_[pipe->rx_id()] = pipe;
 
   return pipe;
 }
@@ -254,12 +258,15 @@ struct RxNotification* Device::NextRxNotif() {
   int32_t id = notif->queue_id;
 
   while (id >= 0) {
-    RxEnsoPipeInternal& pipe = rx_pipes_[id]->internal_rx_pipe_;
+    RxPipe* rx_pipe = rx_pipes_map_[id];
+    assert(rx_pipe != nullptr);
+
+    RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
     uint32_t enso_pipe_head = pipe.rx_tail;
     uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
 
     if (enso_pipe_head != enso_pipe_tail) {
-      rx_pipes_[id]->Prefetch();
+      rx_pipe->Prefetch();
       break;
     }
 
@@ -286,9 +293,9 @@ RxPipe* Device::NextRxPipeToRecv() {
     return nullptr;
   }
 
-  RxPipe* pipe = rx_pipes_[id];
-  pipe->SetAsNextPipe();
-  return pipe;
+  RxPipe* rx_pipe = rx_pipes_map_[id];
+  rx_pipe->SetAsNextPipe();
+  return rx_pipe;
 }
 
 RxTxPipe* Device::NextRxTxPipeToRecv() {
@@ -303,12 +310,15 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   int32_t id = notif->queue_id;
 
   while (id >= 0) {
-    RxEnsoPipeInternal& pipe = rx_tx_pipes_[id]->rx_pipe_->internal_rx_pipe_;
+    RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
+    assert(rx_tx_pipe->rx_pipe_ != nullptr);
+
+    RxEnsoPipeInternal& pipe = rx_tx_pipe->rx_pipe_->internal_rx_pipe_;
     uint32_t enso_pipe_head = pipe.rx_tail;
     uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
 
     if (enso_pipe_head != enso_pipe_tail) {
-      rx_tx_pipes_[id]->Prefetch();
+      rx_tx_pipe->Prefetch();
       break;
     }
 
@@ -325,9 +335,9 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
     return nullptr;
   }
 
-  RxTxPipe* pipe = rx_tx_pipes_[notif->queue_id];
-  pipe->rx_pipe_->SetAsNextPipe();
-  return pipe;
+  RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
+  rx_tx_pipe->rx_pipe_->SetAsNextPipe();
+  return rx_tx_pipe;
 }
 
 int Device::Init() noexcept {
@@ -339,7 +349,7 @@ int Device::Init() noexcept {
     }
   }
 
-  uint16_t bdf = 0;
+  bdf_ = 0;
   if (kPcieAddr != "") {
     bdf_ = get_bdf_from_pcie_addr(kPcieAddr);
 
@@ -355,7 +365,7 @@ int Device::Init() noexcept {
             << std::endl;
   std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
 
-  int ret = notification_buf_init(bdf, bar, &notification_buf_pair_,
+  int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
                                   huge_page_prefix_);
   if (ret != 0) {
     // Could not initialize notification buffer.

@@ -339,6 +339,9 @@ class Device {
   std::vector<TxPipe*> tx_pipes_;
   std::vector<RxTxPipe*> rx_tx_pipes_;
 
+  std::array<RxPipe*, kMaxNbFlows> rx_pipes_map_ = {};
+  std::array<RxTxPipe*, kMaxNbFlows> rx_tx_pipes_map_ = {};
+
   int32_t next_pipe_id_ = -1;
 
   uint32_t tx_pr_head_ = 0;
@@ -724,7 +727,7 @@ class RxPipe {
 
   bool next_pipe_ = false;  ///< Whether this pipe is the next pipe to be
                             ///< processed by the device. This is used in
-                            ///< conjunction with NextRxPipe().
+                            ///< conjunction with NextRxPipeToRecv().
   enso_pipe_id_t id_;       ///< The ID of the pipe.
   void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
@@ -1161,12 +1164,16 @@ class RxTxPipe {
   inline uint8_t* buf() const { return rx_pipe_->buf(); }
 
   /**
-   * @copydoc RxPipe::id
+   * @brief Return the pipe's RX ID.
+   *
+   * @return The pipe's RX ID.
    */
   inline enso_pipe_id_t rx_id() const { return rx_pipe_->id(); }
 
   /**
-   * @copydoc TxPipe::id
+   * @brief Return the pipe's TX ID.
+   *
+   * @return The pipe's TX ID.
    */
   inline enso_pipe_id_t tx_id() const { return tx_pipe_->id(); }
 

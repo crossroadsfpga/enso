@@ -1,4 +1,4 @@
-project('enso', 'c', 'cpp', version: '0.4.0', license: 'BSD-3-Clause',
+project('enso', 'c', 'cpp', version: '0.4.1', license: 'BSD-3-Clause',
         meson_version: '>=0.58.0',
         default_options: [
             'prefix=/usr/local',

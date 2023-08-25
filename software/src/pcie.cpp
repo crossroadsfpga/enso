@@ -165,7 +165,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   DevBackend::mmio_write32(&notification_buf_pair_regs->tx_head,
                            notification_buf_pair->tx_head);
 
-  // HACK(sadok): assuming that we know the number of queues beforehand
   notification_buf_pair->pending_rx_pipe_tails = (uint32_t*)malloc(
       sizeof(*(notification_buf_pair->pending_rx_pipe_tails)) * kMaxNbFlows);
   if (notification_buf_pair->pending_rx_pipe_tails == NULL) {
@@ -189,8 +188,8 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
     return -1;
   }
 
-  notification_buf_pair->last_rx_ids_head = 0;
-  notification_buf_pair->last_rx_ids_tail = 0;
+  notification_buf_pair->next_rx_ids_head = 0;
+  notification_buf_pair->next_rx_ids_tail = 0;
   notification_buf_pair->tx_full_cnt = 0;
   notification_buf_pair->nb_unreported_completions = 0;
   notification_buf_pair->huge_page_prefix = huge_page_prefix;
@@ -321,7 +320,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   uint32_t notification_buf_head = notification_buf_pair->rx_head;
   uint16_t nb_consumed_notifications = 0;
 
-  uint16_t last_rx_ids_tail = notification_buf_pair->last_rx_ids_tail;
+  uint16_t next_rx_ids_tail = notification_buf_pair->next_rx_ids_tail;
 
   for (uint16_t i = 0; i < kBatchSize; ++i) {
     struct RxNotification* cur_notification =
@@ -343,14 +342,14 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
     // orders the new updates: read pipes from last_rx_ids_head to
     // last_rx_ids_tail
-    notification_buf_pair->next_rx_pipe_notifs[last_rx_ids_tail] =
+    notification_buf_pair->next_rx_pipe_notifs[next_rx_ids_tail] =
         cur_notification;
-    last_rx_ids_tail = (last_rx_ids_tail + 1) % kNotificationBufSize;
+    next_rx_ids_tail = (next_rx_ids_tail + 1) % kNotificationBufSize;
 
     ++nb_consumed_notifications;
   }
 
-  notification_buf_pair->last_rx_ids_tail = last_rx_ids_tail;
+  notification_buf_pair->next_rx_ids_tail = next_rx_ids_tail;
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
@@ -413,10 +412,10 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
   // done processing the last batch and can get the next one. Using batches here
   // performs **significantly** better compared to always fetching the latest
   // notification.
-  uint16_t last_rx_ids_head = notification_buf_pair->last_rx_ids_head;
-  uint16_t last_rx_ids_tail = notification_buf_pair->last_rx_ids_tail;
+  uint16_t next_rx_ids_head = notification_buf_pair->next_rx_ids_head;
+  uint16_t next_rx_ids_tail = notification_buf_pair->next_rx_ids_tail;
 
-  if (last_rx_ids_head == last_rx_ids_tail) {
+  if (next_rx_ids_head == next_rx_ids_tail) {
     uint16_t nb_consumed_notifications = __get_new_tails(notification_buf_pair);
     if (unlikely(nb_consumed_notifications == 0)) {
       return -1;
@@ -424,10 +423,10 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
   }
 
   struct RxNotification* notification =
-      notification_buf_pair->next_rx_pipe_notifs[last_rx_ids_head];
+      notification_buf_pair->next_rx_pipe_notifs[next_rx_ids_head];
 
-  notification_buf_pair->last_rx_ids_head =
-      (last_rx_ids_head + 1) % kNotificationBufSize;
+  notification_buf_pair->next_rx_ids_head =
+      (next_rx_ids_head + 1) % kNotificationBufSize;
 
   return notification;
 }

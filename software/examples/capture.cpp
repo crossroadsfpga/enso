@@ -50,7 +50,7 @@ static volatile bool setup_done = false;
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
 void capture_packets(uint32_t nb_queues, const std::string& pcap_file,
-                     enso::stats_t* stats) {
+                     const std::string& pcie_addr, enso::stats_t* stats) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
@@ -58,7 +58,7 @@ void capture_packets(uint32_t nb_queues, const std::string& pcap_file,
   using enso::Device;
   using enso::RxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create();
+  std::unique_ptr<Device> dev = Device::Create(pcie_addr);
   std::vector<RxPipe*> rx_pipes;
 
   if (!dev) {
@@ -121,11 +121,13 @@ void capture_packets(uint32_t nb_queues, const std::string& pcap_file,
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 3) {
-    std::cerr << "Usage: " << argv[0] << " NB_QUEUES PCAP_FILE" << std::endl
+  if (argc < 3 || argc > 4) {
+    std::cerr << "Usage: " << argv[0] << " NB_QUEUES PCAP_FILE [PCIE_ADDR]"
+              << std::endl
               << std::endl;
     std::cerr << "NB_QUEUES: Number of queues to use." << std::endl;
     std::cerr << "PCAP_FILE: Path to the pcap file to write to." << std::endl;
+    std::cerr << "PCIE_ADDR: PCIe address of the device to use." << std::endl;
     return 1;
   }
 
@@ -133,12 +135,22 @@ int main(int argc, const char* argv[]) {
   uint32_t nb_queues = atoi(argv[1]);
   std::string pcap_file = argv[2];
 
+  if (nb_queues == 0) {
+    std::cerr << "Invalid number of queues" << std::endl;
+    return 2;
+  }
+
+  std::string pcie_addr;
+  if (argc == 4) {
+    pcie_addr = argv[3];
+  }
+
   signal(SIGINT, int_handler);
 
   std::vector<enso::stats_t> thread_stats(1);
 
-  std::thread socket_thread =
-      std::thread(capture_packets, nb_queues, pcap_file, &(thread_stats[0]));
+  std::thread socket_thread = std::thread(capture_packets, nb_queues, pcap_file,
+                                          pcie_addr, &(thread_stats[0]));
 
   if (enso::set_core_id(socket_thread, kCoreId)) {
     std::cerr << "Error setting CPU affinity" << std::endl;

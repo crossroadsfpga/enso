@@ -104,32 +104,32 @@ uint32_t get_completions(int ref_sockfd);
 /*
  * Enable hardware timestamping for the device. This applies to all sockets.
  */
-int enable_device_timestamp();
+int enable_device_timestamp(int ref_sockfd);
 
 /*
  * Disable hardware timestamping for the device. This applies to all sockets.
  */
-int disable_device_timestamp();
+int disable_device_timestamp(int ref_sockfd);
 
 /*
  * Enable hardware rate limit for the device. This applies to all sockets.
  */
-int enable_device_rate_limit(uint16_t num, uint16_t den);
+int enable_device_rate_limit(int ref_sockfd, uint16_t num, uint16_t den);
 
 /*
  * Disable hardware rate limit for the device. This applies to all sockets.
  */
-int disable_device_rate_limit();
+int disable_device_rate_limit(int ref_sockfd);
 
 /*
  * Enable round robin for the device. This applies to all sockets.
  */
-int enable_device_round_robin();
+int enable_device_round_robin(int ref_sockfd);
 
 /*
  * Disable round robin for the device. This applies to all sockets.
  */
-int disable_device_round_robin();
+int disable_device_round_robin(int ref_sockfd);
 
 /*
  * Free packet buffer. Use this to free received packets.
