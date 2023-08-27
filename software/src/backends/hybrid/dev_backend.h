@@ -122,7 +122,6 @@ class DevBackend {
       *addr = value;
       return;
     }
-
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
