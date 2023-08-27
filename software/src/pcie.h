@@ -91,6 +91,9 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
                           const std::string& huge_page_prefix,
                           uint32_t uthread_id);
 
+int bind_pipe(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+              uint32_t src_ip, uint32_t protocol);
+
 /**
  * @brief Initializes an Enso Pipe.
  *

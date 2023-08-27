@@ -180,6 +180,13 @@ class DevBackend {
     return dev_->allocate_pipe(fallback);
   }
 
+  void BindPipe(struct NotificationBufPair* notification_buf_pair,
+                uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+                uint32_t src_ip, uint32_t protocol, enso_pipe_id_t id) {
+    return insert_flow_entry(notification_buf_pair, dst_port, src_port, dst_ip,
+                             src_ip, protocol, id);
+  }
+
   /**
    * @brief Frees a pipe.
    *
