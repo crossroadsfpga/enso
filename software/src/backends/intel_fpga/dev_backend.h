@@ -155,6 +155,7 @@ class DevBackend {
     return dev_->allocate_pipe(fallback);
   }
 
+  // is it ok to have the notificationbufpair passed in here?
   static int BindPipe(struct NotificationBufPair* notification_buf_pair,
                       uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                       uint32_t src_ip, uint32_t protocol, enso_pipe_id_t id) {
