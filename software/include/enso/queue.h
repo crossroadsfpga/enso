@@ -104,7 +104,6 @@ class Queue {
   struct alignas(kCacheLineSize) Element {
     uint64_t signal;
     T data;
-    uint8_t pad[kElementPadding];
   };
 
   static_assert(sizeof(Element) == kCacheLineSize,
