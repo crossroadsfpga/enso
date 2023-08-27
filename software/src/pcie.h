@@ -75,9 +75,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
                           const std::string& huge_page_prefix,
                           uint32_t application_id);
 
-int bind_pipe(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
-              uint32_t src_ip, uint32_t protocol);
-
 /**
  * @brief Initializes an Enso Pipe.
  *
@@ -99,6 +96,10 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
 int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, uint32_t bdf, int32_t bar,
              const std::string& huge_page_prefix, bool fallback);
+
+int bind_pipe(NotificationBufPair* notification_buf_pair, uint16_t dst_port,
+              uint16_t src_port, uint32_t dst_ip, uint32_t src_ip,
+              uint32_t protocol, enso_pipe_id_t id);
 
 /**
  * @brief Gets latest tails for the pipes associated with the given

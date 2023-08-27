@@ -528,6 +528,13 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
                            enso_pipe->uio_mmap_bar2_addr);
 }
 
+int bind_pipe(struct NotificationBufPair* notification_buf_pair,
+              uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+              uint32_t src_ip, uint32_t protocol, enso_pipe_id_t id) {
+  return DevBackend::BindPipe(notification_buf_pair, dst_port, src_port, dst_ip,
+                              src_ip, protocol, id);
+}
+
 static _enso_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
                 uint64_t phys_addr, uint32_t len) {
@@ -685,11 +692,6 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   notification_buf_pair->nb_unreported_completions = nb_unreported_completions;
 
   return 0;
-}
-
-int bind_pipe(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
-              uint32_t src_ip, uint32_t protocol) {
-  return DevBackend::BindPipe(dst_port, src_port, dst_ip, src_ip, protocol);
 }
 
 int get_nb_fallback_queues(struct NotificationBufPair* notification_buf_pair) {
