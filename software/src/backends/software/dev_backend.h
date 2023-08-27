@@ -98,11 +98,11 @@ class DevBackend {
   }
 
   static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
-    struct PipeNotification notification;
-    notification.type = NotifType::kRead;
-    notification.data[0] = (uint64_t)addr;
-    notification.data[1] = 0;
-    while (queue_to_backend_->Push(notification) != 0) {
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kRead;
+    pipe_notification.data[0] = (uint64_t)addr;
+    pipe_notification.data[1] = 0;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -112,8 +112,8 @@ class DevBackend {
     }
 
     assert(notification->type == notiftype::kRead);
-    assert(notification->address == (uint64_t)addr);
-    return notification->value;
+    assert(notification->data[0] == (uint64_t)addr);
+    return notification->data[1];
   }
 
   /**
@@ -127,11 +127,11 @@ class DevBackend {
 
     _enso_compiler_memory_barrier();
 
-    struct PipeNotification notification;
-    notification.type = NotifType::kTranslAddr;
-    notification.data[0] = (uint64_t)phys_addr;
-    notification.data[1] = 0;
-    while (queue_to_backend_->Push(notification) != 0) {
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kTranslAddr;
+    pipe_notification.data[0] = (uint64_t)phys_addr;
+    pipe_notification.data[1] = 0;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -141,9 +141,9 @@ class DevBackend {
     }
 
     assert(notification->type == notiftype::kTranslAddr);
-    assert(notification->address == (uint64_t)phys_addr);
+    assert(notification->data[0] == (uint64_t)phys_addr);
 
-    return notification->value;
+    return notification->data[1];
   }
 
   /**
@@ -201,6 +201,7 @@ class DevBackend {
    */
   int FreeNotifBuf(int notif_buf_id) {
     // TODO(sadok): Implement.
+    (void)notif_buf_id;
     --notif_buf_cnt_;
     return 0;
   }
@@ -213,10 +214,10 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
-    struct PipeNotification notification;
-    notification.type = NotifType::kAllocatePipe;
-    notification.data[0] = fallback;
-    while (queue_to_backend_->Push(notification) != 0) {
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kAllocatePipe;
+    pipe_notification.data[0] = fallback;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -226,21 +227,22 @@ class DevBackend {
     }
 
     assert(notification->type == notiftype::kAllocatePipe);
-    return notification->value;
+    return notification->data[0];
   }
 
   static int BindPipe(struct NotificationBufPair* notification_buf_pair,
                       uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                       uint32_t src_ip, uint32_t protocol, enso_pipe_id_t id) {
-    struct PipeNotification notification;
-    notification.type = NotifType::kBindPipe;
-    notification.data[0] = dst_port;
-    notification.data[1] = src_port;
-    notification.data[2] = dst_ip;
-    notification.data[3] = src_ip;
-    notification.data[4] = protocol;
-    notification.data[5] = id;
-    while (queue_to_backend_->Push(notification) != 0) {
+    (void)notification_buf_pair;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kBindPipe;
+    pipe_notification.data[0] = dst_port;
+    pipe_notification.data[1] = src_port;
+    pipe_notification.data[2] = dst_ip;
+    pipe_notification.data[3] = src_ip;
+    pipe_notification.data[4] = protocol;
+    pipe_notification.data[5] = id;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -250,7 +252,7 @@ class DevBackend {
     }
 
     assert(notification->type == notiftype::kAllocatePipe);
-    return notification->value;
+    return notification->data[0];
   }
 
   /**
@@ -261,6 +263,7 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) {
+    (void)pipe_id;
     // TODO(sadok): Implement.
     --pipe_cnt_;
     return 0;
