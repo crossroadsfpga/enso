@@ -126,6 +126,8 @@ class Device {
    */
   RxPipe* AllocateRxPipe(bool fallback = false) noexcept;
 
+  RxPipe* GetRxPipe(uint16_t queue_id) noexcept;
+
   /**
     * @brief Returns the RxPipe for the given queue ID.
     *

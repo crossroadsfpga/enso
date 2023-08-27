@@ -424,8 +424,8 @@ void Device::ProcessCompletions() {
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
     if (tx_req.pipe_id < 0) {
-      // on receiving this, shinkansen should update the notification->signal for
-      // applications
+      // on receiving this, shinkansen should update the notification->signal
+      // for applications
       std::invoke(completion_callback_);
     } else {
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
