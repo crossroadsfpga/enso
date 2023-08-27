@@ -135,7 +135,7 @@ static constexpr std::string_view kIpcQueueToAppName = "enso_ipc_queue_to_app";
 static constexpr std::string_view kIpcQueueFromAppName =
     "enso_ipc_queue_from_app";
 
-enum class MmioNotifType : uint64_t {
+enum class NotifType : uint64_t {
   kWrite = 0,
   kRead = 1,
   kTranslAddr = 2,  // Used to translate physical address to virtual address in
@@ -144,11 +144,10 @@ enum class MmioNotifType : uint64_t {
   kBindPipe = 4
 };
 
-struct MmioNotification {
-  MmioNotifType type;
-  uint64_t address;
-  uint64_t value;
-};
+struct PipeNotification {
+  NotifType type;
+  uint64_t data[8];
+}
 
 }  // namespace enso
 
