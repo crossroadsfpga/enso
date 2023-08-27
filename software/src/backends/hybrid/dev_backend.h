@@ -35,11 +35,11 @@
  * @brief Device backend wrapper for software data plane running in a different
  *        process.
  *
- * @author Hugo Sadok <sadok@cmu.edu>
+ * @author Kaajal Gupta <kaajalg@andrew.cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#ifndef SOFTWARE_SRC_BACKENDS_HYBRID_DEV_BACKEND_H_
+#define SOFTWARE_SRC_BACKENDS_HYBRID_DEV_BACKEND_H_
 
 #include <assert.h>
 #include <sched.h>
@@ -88,37 +88,74 @@ class DevBackend {
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value) {
-    // Block if full.
-    struct PipeNotification notification;
-    notification.type = NotifType::kWrite;
-    notification.data[0] = (uint64_t)addr;
-    notification.data[1] = value;
-    while (queue_to_backend_->Push(notification) != 0) {
+    enso::enso_pipe_id_t queue_id = address / enso::kMemorySpacePerQueue;
+    uint32_t offset = address % enso::kMemorySpacePerQueue;
+
+    // Updates to RX pipe: write directly
+    if (queue_id < enso::kMaxNbFlows) {
+      uint64_t mask = (1 << 32) - 1;
+      // could also push notification to queue
+      switch (offset) {
+        case offsetof(struct enso::QueueRegs, rx_mem_low):
+          uint32_t notif_queue_id = value & mask;
+          struct PipeNotification notification;
+          notification.type = NotifType::kWrite;
+          notification.data[0] = (uint64_t)addr;
+          notification.data[1] = notif_queue_id;
+          while (queue_to_backend_->Push(notification) != 0) {
+          }
+      }
+      // remove notification queue ID from
+      value = value & ~(mask);
+      _enso_compiler_memory_barrier();
+      *addr = value;
+      return;
+    }
+    queue_id -= enso::kMaxNbFlows;
+    // Updates to notification buffers.
+    if (queue_id < enso::kMaxNbApps) {
+      // Block if full.
+      struct PipeNotification notification;
+      notification.type = NotifType::kWrite;
+      notification.data[0] = (uint64_t)addr;
+      notification.data[1] = value;
+      while (queue_to_backend_->Push(notification) != 0) {
+      }
     }
   }
 
   static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
-    struct PipeNotification notification;
-    notification.type = NotifType::kRead;
-    notification.data[0] = (uint64_t)addr;
-    notification.data[1] = 0;
-    while (queue_to_backend_->Push(notification) != 0) {
+    enso::enso_pipe_id_t queue_id = address / enso::kMemorySpacePerQueue;
+    // Read from RX pipe: read directly
+    if (queue_id < enso::kMaxNbFlows) {
+      _enso_compiler_memory_barrier();
+      return *addr;
     }
+    queue_id -= enso::kMaxNbFlows;
+    // Reads from notification buffers.
+    if (queue_id < enso::kMaxNbApps) {
+      struct PipeNotification notification;
+      notification.type = NotifType::kRead;
+      notification.data[0] = (uint64_t)addr;
+      notification.data[1] = 0;
+      while (queue_to_backend_->Push(notification) != 0) {
+      }
 
-    std::optional<PipeNotification> notification;
+      std::optional<PipeNotification> notification;
 
-    // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
+      // Block until receive.
+      while (!(notification = queue_from_backend_->Pop())) {
+      }
+
+      assert(notification->type == notiftype::kRead);
+      assert(notification->address == (uint64_t)addr);
+      return notification->value;
     }
-
-    assert(notification->type == notiftype::kRead);
-    assert(notification->address == (uint64_t)addr);
-    return notification->value;
   }
 
   /**
-   * @brief Converts an address in the application's virtual address space to an
-   *        address that can be used by the device.
+   * @brief Converts an address in the application's virtual address space to
+   * an address that can be used by the device.
    * @param virt_addr Address in the application's virtual address space.
    * @return Converted address or 0 if the address cannot be translated.
    */
@@ -152,7 +189,7 @@ class DevBackend {
    *         returned and errno is set appropriately.
    */
   int GetNbFallbackQueues() {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     return 0;
   }
 
@@ -164,7 +201,7 @@ class DevBackend {
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
   int SetRrStatus(bool enable_rr) {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     (void)enable_rr;
     return 0;
   }
@@ -176,17 +213,18 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     return 0;
   }
 
   /**
    * @brief Allocates a notification buffer.
    *
-   * @return Notification buffer ID. On error, -1 is returned and errno is set.
+   * @return Notification buffer ID. On error, -1 is returned and errno is
+   * set.
    */
   int AllocateNotifBuf() {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     int notif_buf_id = notif_buf_cnt_;
     ++notif_buf_cnt_;
     return notif_buf_id;
@@ -200,7 +238,7 @@ class DevBackend {
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreeNotifBuf(int notif_buf_id) {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     --notif_buf_cnt_;
     return 0;
   }
@@ -208,49 +246,14 @@ class DevBackend {
   /**
    * @brief Allocates a pipe.
    *
-   * @param fallback If true, allocates a fallback pipe. Otherwise, allocates a
-   *                regular pipe.
+   * @param fallback If true, allocates a fallback pipe. Otherwise, allocates
+   * a regular pipe.
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
-    struct PipeNotification notification;
-    notification.type = NotifType::kAllocatePipe;
-    notification.data[0] = fallback;
-    while (queue_to_backend_->Push(notification) != 0) {
-    }
-
-    std::optional<PipeNotification> notification;
-
-    // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
-    }
-
-    assert(notification->type == notiftype::kAllocatePipe);
-    return notification->value;
-  }
-
-  void BindPipe(struct NotificationBufPair* notification_buf_pair,
-                uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
-                uint32_t src_ip, uint32_t protocol, enso_pipe_id_t id) {
-    struct PipeNotification notification;
-    notification.type = NotifType::kBindPipe;
-    notification.data[0] = dst_port;
-    notification.data[1] = src_port;
-    notification.data[2] = dst_ip;
-    notification.data[3] = src_ip;
-    notification.data[4] = protocol;
-    notification.data[5] = id;
-    while (queue_to_backend_->Push(notification) != 0) {
-    }
-
-    std::optional<PipeNotification> notification;
-
-    // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
-    }
-
-    assert(notification->type == notiftype::kAllocatePipe);
-    return notification->value;
+    // TODO(kaajalg): Implement.
+    int pipe_id = dev_->allocate_pipe(fallback);
+    return pipe_id;
   }
 
   /**
@@ -261,7 +264,7 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) {
-    // TODO(sadok): Implement.
+    // TODO(kaajalg): Implement.
     --pipe_cnt_;
     return 0;
   }
@@ -318,4 +321,4 @@ class DevBackend {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#endif  // SOFTWARE_SRC_BACKENDS_HYBRID_DEV_BACKEND_H_

@@ -609,6 +609,11 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   return 0;
 }
 
+int bind_pipe(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+              uint32_t src_ip, uint32_t protocol) {
+  return DevBackend::BindPipe(dst_port, src_port, dst_ip, src_ip, protocol);
+}
+
 int get_nb_fallback_queues(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
