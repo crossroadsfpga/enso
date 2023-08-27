@@ -63,8 +63,8 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
-  return DevBackend::BindPipe(notification_buf_pair_, dst_port, src_port,
-                              dst_ip, src_ip, protocol, id_);
+  return bind_pipe(notification_buf_pair_, dst_port, src_port, dst_ip, src_ip,
+                   protocol, id_);
 }
 
 uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
@@ -198,7 +198,9 @@ RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
   return pipe;
 }
 
-RxPipe* Device::GetRxPipe(uint16_t queue_id) { return rx_pipes_map[queue_id]; }
+RxPipe* Device::GetRxPipe(uint16_t queue_id) noexcept {
+  return rx_pipes_map_[queue_id];
+}
 
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
   TxPipe* pipe(new (std::nothrow) TxPipe(tx_pipes_.size(), this, buf));

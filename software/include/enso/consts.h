@@ -147,7 +147,7 @@ enum class NotifType : uint64_t {
 struct PipeNotification {
   NotifType type;
   uint64_t data[8];
-}
+};
 
 }  // namespace enso
 
