@@ -229,9 +229,9 @@ class DevBackend {
     return notification->value;
   }
 
-  void BindPipe(struct NotificationBufPair* notification_buf_pair,
-                uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
-                uint32_t src_ip, uint32_t protocol, enso_pipe_id_t id) {
+  static int BindPipe(struct NotificationBufPair* notification_buf_pair,
+                      uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
+                      uint32_t src_ip, uint32_t protocol, enso_pipe_id_t id) {
     struct PipeNotification notification;
     notification.type = NotifType::kBindPipe;
     notification.data[0] = dst_port;
