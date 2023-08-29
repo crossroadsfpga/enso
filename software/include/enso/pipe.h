@@ -148,6 +148,12 @@ class Device {
    */
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
 
+  int GetNbFallbackQueues() noexcept;
+
+  int SetRrStatus(bool rr_status) noexcept;
+
+  bool GetRrStatus() noexcept;
+
   /**
   * @brief Retrieves the number of fallback queues for this device.
   */
