@@ -91,10 +91,6 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
              struct RxEnsoPipeInternal* enso_pipe, uint32_t bdf, int32_t bar,
              const std::string& huge_page_prefix, bool fallback);
 
-int bind_pipe(NotificationBufPair* notification_buf_pair, uint16_t dst_port,
-              uint16_t src_port, uint32_t dst_ip, uint32_t src_ip,
-              uint32_t protocol, enso_pipe_id_t id);
-
 /**
  * @brief Gets latest tails for the pipes associated with the given
  * notification buffer.

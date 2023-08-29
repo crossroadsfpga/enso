@@ -186,10 +186,19 @@ class DevBackend {
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
   int AllocateNotifBuf() {
-    // TODO(sadok): Implement.
-    int notif_buf_id = notif_buf_cnt_;
-    ++notif_buf_cnt_;
-    return notif_buf_id;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kAllocateNotifBuf;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kAllocateNotifBuf);
+    return notification->data[0];
   }
 
   /**
@@ -217,31 +226,6 @@ class DevBackend {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kAllocatePipe;
     pipe_notification.data[0] = fallback;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
-    }
-
-    std::optional<PipeNotification> notification;
-
-    // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
-    }
-
-    assert(notification->type == notiftype::kAllocatePipe);
-    return notification->data[0];
-  }
-
-  static int BindPipe(struct NotificationBufPair* notification_buf_pair,
-                      uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
-                      uint32_t src_ip, uint32_t protocol, enso_pipe_id_t id) {
-    (void)notification_buf_pair;
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kBindPipe;
-    pipe_notification.data[0] = dst_port;
-    pipe_notification.data[1] = src_port;
-    pipe_notification.data[2] = dst_ip;
-    pipe_notification.data[3] = src_ip;
-    pipe_notification.data[4] = protocol;
-    pipe_notification.data[5] = id;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 

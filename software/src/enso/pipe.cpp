@@ -63,8 +63,8 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
-  return bind_pipe(notification_buf_pair_, dst_port, src_port, dst_ip, src_ip,
-                   protocol, id_);
+  return insert_flow_entry(notification_buf_pair, dst_port, src_port, dst_ip,
+                           src_ip, protocol, id);
 }
 
 uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
