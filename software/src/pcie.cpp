@@ -461,13 +461,6 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_head);
 }
 
-int bind_pipe(struct NotificationBufPair* notification_buf_pair,
-              uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
-              uint32_t src_ip, uint32_t protocol, enso_pipe_id_t id) {
-  return DevBackend::BindPipe(notification_buf_pair, dst_port, src_port, dst_ip,
-                              src_ip, protocol, id);
-}
-
 static _enso_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
                 uint64_t phys_addr, uint32_t len) {
