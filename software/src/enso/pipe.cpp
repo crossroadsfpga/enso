@@ -63,8 +63,8 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
-  return insert_flow_entry(notification_buf_pair, dst_port, src_port, dst_ip,
-                           src_ip, protocol, id);
+  return insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip,
+                           src_ip, protocol, id_);
 }
 
 uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
@@ -200,6 +200,18 @@ RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
 
 RxPipe* Device::GetRxPipe(uint16_t queue_id) noexcept {
   return rx_pipes_map_[queue_id];
+}
+
+int Device::GetNbFallbackQueues() noexcept {
+  return get_nb_fallback_queues(&notification_buf_pair_);
+}
+
+int Device::SetRrStatus(bool rr_status) noexcept {
+  return set_round_robin_status(&notification_buf_pair_, rr_status);
+}
+
+bool Device::GetRrStatus() noexcept {
+  return get_round_robin_status(&notification_buf_pair_);
 }
 
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
