@@ -141,8 +141,7 @@ enum class NotifType : uint8_t {
   kTranslAddr = 2,  // Used to translate physical address to virtual address in
                     // the software backend address space.
   kAllocatePipe = 3,
-  kBindPipe = 4,
-  kAllocateNotifBuf = 5
+  kAllocateNotifBuf = 4
 };
 
 struct PipeNotification {
