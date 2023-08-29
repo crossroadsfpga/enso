@@ -152,8 +152,19 @@ class DevBackend {
    *         returned and errno is set appropriately.
    */
   int GetNbFallbackQueues() {
-    // TODO(sadok): Implement.
-    return 0;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kGetNbFallbackQueues;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kGetNbFallbackQueues);
+    return notification->data[0];
   }
 
   /**
@@ -164,9 +175,19 @@ class DevBackend {
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
   int SetRrStatus(bool enable_rr) {
-    // TODO(sadok): Implement.
-    (void)enable_rr;
-    return 0;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kSetRrStatus;
+    pipe_notification.data[0] = (uint64_t)enable_rr;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kSetRrStatus);
+    return notification->data[0];
   }
 
   /**
@@ -176,8 +197,18 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
-    // TODO(sadok): Implement.
-    return 0;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kGetRrStatus;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kGetRrStatus);
+    return notification->data[0];
   }
 
   /**
@@ -209,10 +240,20 @@ class DevBackend {
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreeNotifBuf(int notif_buf_id) {
-    // TODO(sadok): Implement.
     (void)notif_buf_id;
-    --notif_buf_cnt_;
-    return 0;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kFreeNotifBuf;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kFreeNotifBuf);
+    return notification->data[0];
   }
 
   /**
@@ -247,10 +288,20 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) {
-    (void)pipe_id;
-    // TODO(sadok): Implement.
-    --pipe_cnt_;
-    return 0;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kFreePipe;
+    pipe_notification.data[0] = pipe_id;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kFreePipe);
+    return notification->data[0];
   }
 
  private:
@@ -299,10 +350,7 @@ class DevBackend {
   unsigned int bdf_;
   int bar_;
   int core_id_;
-  int notif_buf_cnt_ = 0;
-  int pipe_cnt_ = 0;
 };
-
 }  // namespace enso
 
 #endif  // SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_

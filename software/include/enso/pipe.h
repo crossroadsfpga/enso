@@ -133,6 +133,12 @@ class Device {
    */
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
 
+  int GetNbFallbackQueues() noexcept;
+
+  int SetRrStatus(bool rr_status) noexcept;
+
+  bool GetRrStatus() noexcept;
+
   /**
    * @brief Allocates an RX/TX pipe.
    *
