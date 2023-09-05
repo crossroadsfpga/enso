@@ -75,6 +75,7 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix) {
+  std::cout << "initializing notification buffer" << std::endl;
   DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
   if (unlikely(fpga_dev == nullptr)) {
     std::cerr << "Could not create device" << std::endl;
@@ -325,6 +326,10 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
+    std::cout << "consumed notification at " << notification_buf_head
+              << " for queue id " << cur_notification->queue_id
+              << " with rx tail " << cur_notification->tail << std::endl;
+
     cur_notification->signal = 0;
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
 
@@ -342,6 +347,8 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
+    std::cout << "old notif rx head: " << notification_buf_pair->rx_head
+              << " new notif rx head: " << notification_buf_head << std::endl;
     DevBackend::mmio_write32(notification_buf_pair->rx_head_ptr,
                              notification_buf_head);
     notification_buf_pair->rx_head = notification_buf_head;
