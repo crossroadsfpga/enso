@@ -290,6 +290,7 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
+    printf("allocate pipe!\n");
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kAllocatePipe;
     pipe_notification.data[0] = fallback;
