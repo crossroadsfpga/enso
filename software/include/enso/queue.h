@@ -249,8 +249,11 @@ class Queue {
                     << existing_size << std::endl;
           return -1;
         }
-        
+
         create_queue = false;
+        if (!create_queue) {
+          std::cout << "no create_queue" << entry.path().string() << std::endl;
+        }
       }
     }
 
