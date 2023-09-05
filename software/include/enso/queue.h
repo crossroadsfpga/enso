@@ -252,7 +252,8 @@ class Queue {
 
         create_queue = false;
         if (!create_queue) {
-          std::cout << "no create_queue" << entry.path().string() << std::endl;
+          std::cout << "no create_queue: " << entry.path().string()
+                    << std::endl;
         }
       }
     }
