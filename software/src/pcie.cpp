@@ -201,6 +201,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
                            (uint32_t)phys_addr);
   DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_high,
                            (uint32_t)(phys_addr >> 32));
+  printf("rx notif buf: %lx", phys_addr);
 
   phys_addr += kAlignedDscBufPairSize / 2;
 
@@ -326,10 +327,6 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
-    std::cout << "consumed notification at " << notification_buf_head
-              << " for queue id " << cur_notification->queue_id
-              << " with rx tail " << cur_notification->tail << std::endl;
-
     cur_notification->signal = 0;
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
 
@@ -347,8 +344,6 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
-    std::cout << "old notif rx head: " << notification_buf_pair->rx_head
-              << " new notif rx head: " << notification_buf_head << std::endl;
     DevBackend::mmio_write32(notification_buf_pair->rx_head_ptr,
                              notification_buf_head);
     notification_buf_pair->rx_head = notification_buf_head;
