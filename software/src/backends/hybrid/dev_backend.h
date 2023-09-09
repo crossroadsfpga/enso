@@ -176,8 +176,19 @@ class DevBackend {
    *         returned and errno is set appropriately.
    */
   int GetNbFallbackQueues() {
-    // TODO(kaajalg): Implement.
-    return 0;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kGetNbFallbackQueues;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kGetNbFallbackQueues);
+    return notification->data[0];
   }
 
   /**
@@ -188,9 +199,19 @@ class DevBackend {
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
   int SetRrStatus(bool enable_rr) {
-    // TODO(kaajalg): Implement.
-    (void)enable_rr;
-    return 0;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kSetRrStatus;
+    pipe_notification.data[0] = (uint64_t)enable_rr;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kSetRrStatus);
+    return notification->data[0];
   }
 
   /**
@@ -200,8 +221,18 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
-    // TODO(kaajalg): Implement.
-    return 0;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kGetRrStatus;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kGetRrStatus);
+    return notification->data[0];
   }
 
   /**
@@ -210,10 +241,19 @@ class DevBackend {
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
   int AllocateNotifBuf() {
-    // TODO(kaajalg): Implement.
-    int notif_buf_id = notif_buf_cnt_;
-    ++notif_buf_cnt_;
-    return notif_buf_id;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kAllocateNotifBuf;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kAllocateNotifBuf);
+    return notification->data[0];
   }
 
   /**
@@ -224,9 +264,20 @@ class DevBackend {
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreeNotifBuf(int notif_buf_id) {
-    // TODO(kaajalg): Implement.
-    --notif_buf_cnt_;
-    return 0;
+    (void)notif_buf_id;
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kFreeNotifBuf;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == notiftype::kFreeNotifBuf);
+    return notification->data[0];
   }
 
   /**
@@ -239,6 +290,12 @@ class DevBackend {
   int AllocatePipe(bool fallback = false) {
     // TODO(kaajalg): Implement.
     int pipe_id = dev_->allocate_pipe(fallback);
+    // notify shinkansen of new pipe that has been allocated
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kAllocatedPipe;
+    pipe_notification.data[0] = pipe_id;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
     return pipe_id;
   }
 
@@ -249,11 +306,7 @@ class DevBackend {
    *
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
-  int FreePipe(int pipe_id) {
-    // TODO(kaajalg): Implement.
-    --pipe_cnt_;
-    return 0;
-  }
+  int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
 
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
