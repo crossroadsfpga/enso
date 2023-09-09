@@ -32,9 +32,9 @@ To change one of the options run:
 meson configure -D<option_name>=<value>
 ```
 
-For instance, to enable latency optimization:
+For instance, to disable latency optimization:
 ```bash
-meson configure -Dlatency_opt=true
+meson configure -Dlatency_opt=false
 ```
 
 ## Build an application with Ensō
