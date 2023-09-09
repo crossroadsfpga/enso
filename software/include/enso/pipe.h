@@ -122,14 +122,24 @@ class Device {
    */
   RxPipe* AllocateRxPipe(bool fallback = false) noexcept;
 
+  RxPipe* GetRxPipe(uint16_t queue_id) noexcept;
+
   /**
    * @brief Allocates a TX pipe.
    *
    * @param buf Buffer address to use for the pipe. It must be a pinned
-   *            hugepage. If not specified, the buffer is allocated internally.
-   * @return A pointer to the pipe. May be null if the pipe cannot be created.
+   *            hugepage. If not specified, the buffer is allocated
+   * internally.
+   * @return A pointer to the pipe. May be null if the pipe cannot be
+   * created.
    */
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
+
+  int GetNbFallbackQueues() noexcept;
+
+  int SetRrStatus(bool rr_status) noexcept;
+
+  bool GetRrStatus() noexcept;
 
   /**
    * @brief Allocates an RX/TX pipe.

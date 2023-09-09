@@ -104,7 +104,6 @@ class Queue {
   struct alignas(kCacheLineSize) Element {
     uint64_t signal;
     T data;
-    uint8_t pad[kElementPadding];
   };
 
   static_assert(sizeof(Element) == kCacheLineSize,
@@ -250,13 +249,16 @@ class Queue {
                     << existing_size << std::endl;
           return -1;
         }
-
         create_queue = false;
+        if (!create_queue) {
+          std::cout << "no create_queue: " << entry.path().string()
+                    << std::endl;
+        }
       }
     }
 
     if (!join_if_exists && !create_queue) {
-      std::cerr << "Queue already exists" << std::endl;
+      std::cerr << "Queue already exists!!" << std::endl;
       return -1;
     }
 

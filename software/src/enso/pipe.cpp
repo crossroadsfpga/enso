@@ -63,9 +63,9 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
-  insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip, src_ip,
-                    protocol, id_);
-  return 0;
+  std::cout << "binding pipe" << id_ << dst_port << std::endl;
+  return insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip,
+                           src_ip, protocol, id_);
 }
 
 uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
@@ -199,6 +199,22 @@ RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
   return pipe;
 }
 
+RxPipe* Device::GetRxPipe(uint16_t queue_id) noexcept {
+  return rx_pipes_map_[queue_id];
+}
+
+int Device::GetNbFallbackQueues() noexcept {
+  return get_nb_fallback_queues(&notification_buf_pair_);
+}
+
+int Device::SetRrStatus(bool rr_status) noexcept {
+  return set_round_robin_status(&notification_buf_pair_, rr_status);
+}
+
+bool Device::GetRrStatus() noexcept {
+  return get_round_robin_status(&notification_buf_pair_);
+}
+
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
   TxPipe* pipe(new (std::nothrow) TxPipe(tx_pipes_.size(), this, buf));
 
@@ -293,6 +309,8 @@ RxPipe* Device::NextRxPipeToRecv() {
     return nullptr;
   }
 
+  // std::cout << "next rx pipe: " << id << std::endl;
+
   RxPipe* rx_pipe = rx_pipes_map_[id];
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
@@ -341,6 +359,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 }
 
 int Device::Init() noexcept {
+  std::cout << "initializing device" << std::endl;
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {

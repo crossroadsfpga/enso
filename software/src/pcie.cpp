@@ -75,6 +75,7 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix) {
+  std::cout << "initializing notification buffer" << std::endl;
   DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
   if (unlikely(fpga_dev == nullptr)) {
     std::cerr << "Could not create device" << std::endl;
@@ -200,6 +201,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
                            (uint32_t)phys_addr);
   DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_high,
                            (uint32_t)(phys_addr >> 32));
+  printf("rx notif buf: %lx", phys_addr);
 
   phys_addr += kAlignedDscBufPairSize / 2;
 
