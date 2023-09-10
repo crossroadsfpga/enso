@@ -287,14 +287,7 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
-    // TODO(kaajalg): Implement.
     int pipe_id = dev_->allocate_pipe(fallback);
-    // notify shinkansen of new pipe that has been allocated
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kAllocatedPipe;
-    pipe_notification.data[0] = pipe_id;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
-    }
     return pipe_id;
   }
 

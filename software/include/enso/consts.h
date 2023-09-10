@@ -147,7 +147,6 @@ enum class NotifType : uint8_t {
   kGetRrStatus = 7,
   kFreeNotifBuf = 8,
   kFreePipe = 9,
-  kAllocatedPipe = 10
 };
 
 struct PipeNotification {
