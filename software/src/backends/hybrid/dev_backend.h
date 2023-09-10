@@ -94,12 +94,11 @@ class DevBackend {
     // Updates to RX pipe: write directly
     if (queue_id < enso::kMaxNbFlows) {
       uint64_t mask = (1 << 32) - 1;
-      // could also push notification to queue
+      // push this to let shinkansen know about queue ID -> notification queue
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
-          uint32_t notif_queue_id = value & mask;
-          while (queue_to_backend_->Push({MmioNotifType::kWrite, (uint64_t)addr,
-                                          notif_queue_id}) != 0) {
+          while (queue_to_backend_->Push(
+                     {MmioNotifType::kWrite, (uint64_t)addr, value}) != 0) {
           }
       }
       // remove notification queue ID from
