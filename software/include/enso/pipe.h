@@ -93,7 +93,7 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      const std::string& pcie_addr = "",
+      uint32_t application_id, const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
   Device(const Device&) = delete;

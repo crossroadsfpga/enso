@@ -148,7 +148,7 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    const std::string& pcie_addr,
+    uint32_t application_id, const std::string& pcie_addr,
     const std::string& huge_page_prefix) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow)
                                   Device(pcie_addr, huge_page_prefix));
@@ -156,7 +156,7 @@ std::unique_ptr<Device> Device::Create(
     return std::unique_ptr<Device>{};
   }
 
-  if (dev->Init()) {
+  if (dev->Init(application_id)) {
     return std::unique_ptr<Device>{};
   }
 
@@ -358,7 +358,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   return rx_tx_pipe;
 }
 
-int Device::Init() noexcept {
+int Device::Init(uint32_t application_id) noexcept {
   std::cout << "initializing device" << std::endl;
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
@@ -385,7 +385,7 @@ int Device::Init() noexcept {
   std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
 
   int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
-                                  huge_page_prefix_);
+                                  huge_page_prefix_, application_id);
   if (ret != 0) {
     // Could not initialize notification buffer.
     return 3;

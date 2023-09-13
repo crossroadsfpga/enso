@@ -48,7 +48,8 @@ static volatile bool setup_done = false;
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
 void run_echo(uint32_t nb_queues, uint32_t core_id,
-              [[maybe_unused]] uint32_t nb_cycles, enso::stats_t* stats) {
+              [[maybe_unused]] uint32_t nb_cycles, enso::stats_t* stats,
+              uint32_t application_id) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
@@ -56,7 +57,7 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
   using enso::Device;
   using enso::RxTxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create();
+  std::unique_ptr<Device> dev = Device::Create(application_id);
   std::vector<RxTxPipe*> pipes;
 
   if (!dev) {
@@ -112,7 +113,7 @@ void run_echo(uint32_t nb_queues, uint32_t core_id,
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 4) {
+  if (argc != 5) {
     std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
               << std::endl
               << std::endl;
@@ -121,12 +122,16 @@ int main(int argc, const char* argv[]) {
     std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
                  " packet."
               << std::endl;
+    std::cerr << "APPLICATION_ID: Count of number of applications started "
+                 "before this application, starting from 0."
+              << std::endl;
     return 1;
   }
 
   uint32_t nb_cores = atoi(argv[1]);
   uint32_t nb_queues = atoi(argv[2]);
   uint32_t nb_cycles = atoi(argv[3]);
+  uint32_t application_id = atoi(argv[4]);
 
   // For this application, nb_queues must be a power of 2.
   if ((nb_queues & (nb_queues - 1)) != 0) {
@@ -141,7 +146,7 @@ int main(int argc, const char* argv[]) {
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
     threads.emplace_back(run_echo, nb_queues, core_id, nb_cycles,
-                         &(thread_stats[core_id]));
+                         &(thread_stats[core_id]), application_id);
     if (enso::set_core_id(threads.back(), core_id)) {
       std::cerr << "Error setting CPU affinity" << std::endl;
       return 6;

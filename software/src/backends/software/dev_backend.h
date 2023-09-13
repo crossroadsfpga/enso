@@ -216,9 +216,10 @@ class DevBackend {
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
-  int AllocateNotifBuf() {
+  int AllocateNotifBuf(uint32_t application_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kAllocateNotifBuf;
+    pipe_notification.data[0] = (uint64_t)application_id;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
