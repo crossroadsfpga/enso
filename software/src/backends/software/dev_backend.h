@@ -220,6 +220,7 @@ class DevBackend {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kAllocateNotifBuf;
     pipe_notification.data[0] = (uint64_t)application_id;
+    pipe_notification.data[1] = std::this_thread::get_id();
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
