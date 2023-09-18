@@ -84,7 +84,9 @@ struct NotificationBufPair {
   // First cache line:
   struct RxNotification* rx_buf;
   struct RxNotification**
-      next_rx_pipe_notifs;  // Next pipe ids to consume from rx_buf.
+      next_rx_pipe_notifs;  // Next pipe notifications to consume from rx_buf:
+                            // stored in ring buffer by next_rx_ids_head and
+                            // next_rx_ids_tail
   struct TxNotification* tx_buf;
   uint32_t* rx_head_ptr;
   uint32_t* tx_tail_ptr;

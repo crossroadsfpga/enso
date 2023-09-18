@@ -53,11 +53,12 @@
 #include "enso/consts.h"
 #include "enso/helpers.h"
 #include "enso/queue.h"
+#include "intel_fpga_pcie_api.hpp"
 
 namespace enso {
 
-thread_local std::unique_ptr<QueueProducer<MmioNotification>> queue_to_backend_;
-thread_local std::unique_ptr<QueueConsumer<MmioNotification>>
+thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
+thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
     queue_from_backend_;
 
 class DevBackend {
@@ -86,23 +87,27 @@ class DevBackend {
     return 0;  // Not a valid address. We use the offset to emulate MMIO access.
   }
 
-  static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
-                                               uint32_t value) {
-    enso::enso_pipe_id_t queue_id = address / enso::kMemorySpacePerQueue;
-    uint32_t offset = address % enso::kMemorySpacePerQueue;
+  _enso_always_inline void mmio_write32(volatile uint32_t* addr,
+                                        uint32_t value) {
+    enso::enso_pipe_id_t queue_id = (uint64_t)addr / enso::kMemorySpacePerQueue;
+    uint32_t offset = (uint64_t)addr % enso::kMemorySpacePerQueue;
 
     // Updates to RX pipe: write directly
     if (queue_id < enso::kMaxNbFlows) {
-      uint64_t mask = (1 << 32) - 1;
+      uint64_t mask = (1L << 32L) - 1L;
       // push this to let shinkansen know about queue ID -> notification queue
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
           while (queue_to_backend_->Push(
-                     {MmioNotifType::kWrite, (uint64_t)addr, value}) != 0) {
+                     {NotifType::kWrite, (uint64_t)addr, value}) != 0) {
           }
+          // remove notification queue ID from value being sent: make
+          // notification buffer ID 0
+          // TODO(kaajalg): make the ID here be the notification buffer ID of
+          // shinkansen
+          value = (value & ~(mask)) | shinkansen_notif_buf_id_;
+          break;
       }
-      // remove notification queue ID from
-      value = value & ~(mask);
       _enso_compiler_memory_barrier();
       *addr = value;
       return;
@@ -112,13 +117,13 @@ class DevBackend {
     if (queue_id < enso::kMaxNbApps) {
       // Block if full.
       while (queue_to_backend_->Push(
-                 {MmioNotifType::kWrite, (uint64_t)addr, value}) != 0) {
+                 {NotifType::kWrite, (uint64_t)addr, value}) != 0) {
       }
     }
   }
 
-  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
-    enso::enso_pipe_id_t queue_id = address / enso::kMemorySpacePerQueue;
+  _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
+    enso::enso_pipe_id_t queue_id = (uint64_t)addr / enso::kMemorySpacePerQueue;
     // Read from RX pipe: read directly
     if (queue_id < enso::kMaxNbFlows) {
       _enso_compiler_memory_barrier();
@@ -127,19 +132,19 @@ class DevBackend {
     queue_id -= enso::kMaxNbFlows;
     // Reads from notification buffers.
     if (queue_id < enso::kMaxNbApps) {
-      while (queue_to_backend_->Push(
-                 {MmioNotifType::kRead, (uint64_t)addr, 0}) != 0) {
+      while (queue_to_backend_->Push({NotifType::kRead, (uint64_t)addr, 0}) !=
+             0) {
       }
 
-      std::optional<MmioNotification> notification;
+      std::optional<PipeNotification> notification;
 
       // Block until receive.
       while (!(notification = queue_from_backend_->Pop())) {
       }
 
-      assert(notification->type == MmioNotifType::kRead);
+      assert(notification->type == NotifType::kRead);
       assert(notification->address == (uint64_t)addr);
-      return notification->value;
+      return notification->data[0];
     }
   }
 
@@ -154,19 +159,19 @@ class DevBackend {
 
     _enso_compiler_memory_barrier();
     while (queue_to_backend_->Push(
-               {MmioNotifType::kTranslAddr, (uint64_t)phys_addr, 0}) != 0) {
+               {NotifType::kTranslAddr, (uint64_t)phys_addr, 0}) != 0) {
     }
 
-    std::optional<MmioNotification> notification;
+    std::optional<PipeNotification> notification;
 
     // Block until receive.
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == MmioNotifType::kTranslAddr);
+    assert(notification->type == NotifType::kTranslAddr);
     assert(notification->address == (uint64_t)phys_addr);
 
-    return notification->value;
+    return notification->data[0];
   }
 
   /**
@@ -186,7 +191,7 @@ class DevBackend {
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kGetNbFallbackQueues);
+    assert(notification->type == NotifType::kGetNbFallbackQueues);
     return notification->data[0];
   }
 
@@ -243,7 +248,7 @@ class DevBackend {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kAllocateNotifBuf;
     pipe_notification.data[0] = application_id;
-    pipe_notification.data[1] = std::this_thread::get_id();
+    pipe_notification.data[1] = (uint64_t)enso::get_tid();
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
@@ -277,7 +282,7 @@ class DevBackend {
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kFreeNotifBuf);
+    assert(notification->type == NotifType::kFreeNotifBuf);
     return notification->data[0];
   }
 
@@ -311,6 +316,22 @@ class DevBackend {
   DevBackend(DevBackend&& other) = delete;
   DevBackend& operator=(DevBackend&& other) = delete;
 
+  uint64_t get_shinkansen_notif_buf_id() {
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kGetShinkansenNotifBufId;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == NotifType::kGetShinkansenNotifBufId);
+    return notification->data[0];
+  }
+
   /**
    * @brief Initializes the backend.
    *
@@ -329,18 +350,25 @@ class DevBackend {
                                       std::to_string(core_id_) + "_";
 
     queue_to_backend_ =
-        QueueProducer<MmioNotification>::Create(queue_from_app_name);
+        QueueProducer<PipeNotification>::Create(queue_from_app_name);
     if (queue_to_backend_ == nullptr) {
       std::cerr << "Could not create queue to backend" << std::endl;
       return -1;
     }
 
     queue_from_backend_ =
-        QueueConsumer<MmioNotification>::Create(queue_to_app_name);
+        QueueConsumer<PipeNotification>::Create(queue_to_app_name);
     if (queue_from_backend_ == nullptr) {
       std::cerr << "Could not create queue from backend" << std::endl;
       return -1;
     }
+
+    dev_ = intel_fpga_pcie_api::IntelFpgaPcieDev::Create(bdf_, bar_);
+    if (dev_ == nullptr) {
+      return -1;
+    }
+
+    shinkansen_notif_buf_id_ = get_shinkansen_notif_buf_id();
 
     return 0;
   }
@@ -350,6 +378,8 @@ class DevBackend {
   int core_id_;
   int notif_buf_cnt_ = 0;
   int pipe_cnt_ = 0;
+  uint64_t shinkansen_notif_buf_id_;
+  intel_fpga_pcie_api::IntelFpgaPcieDev* dev_;
 };
 
 }  // namespace enso

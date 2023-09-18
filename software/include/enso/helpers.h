@@ -128,6 +128,10 @@ void print_pkt_header(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
 
+int set_self_core_id(int core_id);
+
+pid_t get_tid(void);
+
 int set_core_id(std::thread& thread, int core_id);
 
 void show_stats(const std::vector<stats_t>& thread_stats,

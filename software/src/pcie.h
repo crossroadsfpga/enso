@@ -67,7 +67,8 @@ struct SocketInternal {
  */
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
-                          const std::string& huge_page_prefix);
+                          const std::string& huge_page_prefix,
+                          uint32_t application_id);
 
 /**
  * @brief Initializes an Enso Pipe.

@@ -257,11 +257,6 @@ uint32_t Device::NotifQueueIdFromRxPipeId(int32_t pipe_id) {
   return notif_queue_id;
 }
 
-uint32_t Device::RxTailFromRxPipeId(int32_t pipe_id) {
-  RxEnsoPipeInternal& pipe = rx_pipes_[pipe_id]->internal_rx_pipe_;
-  return pipe->rx_tail;
-}
-
 struct RxNotification* Device::NextRxNotif() {
   // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);
@@ -349,7 +344,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 #endif  // LATENCY_OPT
 
-  if (notif->queue_id < 0) {
+  if (!notif) {
     return nullptr;
   }
 
@@ -357,6 +352,8 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   rx_tx_pipe->rx_pipe_->SetAsNextPipe();
   return rx_tx_pipe;
 }
+
+int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
 int Device::Init(uint32_t application_id) noexcept {
   std::cout << "initializing device" << std::endl;

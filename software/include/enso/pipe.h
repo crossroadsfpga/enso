@@ -160,8 +160,6 @@ class Device {
    */
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
 
-  uint32_t RxTailFromRxPipeId(int32_t pipe_id);
-
   uint32_t NotifQueueIdFromRxPipeId(int32_t pipe_id);
 
   struct RxNotification* NextRxNotif();
@@ -321,7 +319,9 @@ class Device {
    *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init() noexcept;
+  int Init(uint32_t application_id) noexcept;
+
+  int GetNotifQueueId() noexcept;
 
   /**
    * @brief Sends a certain number of bytes to the device. This is designed to

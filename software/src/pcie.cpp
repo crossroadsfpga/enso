@@ -184,7 +184,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   memset(notification_buf_pair->wrap_tracker, 0, kNotificationBufSize / 8);
 
   notification_buf_pair->next_rx_pipe_notifs =
-      (enso_pipe_id_t*)malloc(kNotificationBufSize * sizeof(RxNotification*));
+      (RxNotification**)malloc(kNotificationBufSize * sizeof(RxNotification*));
   if (notification_buf_pair->next_rx_pipe_notifs == NULL) {
     std::cerr << "Could not allocate memory" << std::endl;
     return -1;
@@ -300,7 +300,7 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
   // Set notification buffer only for the first socket.
   if (notification_buf_pair->ref_cnt == 0) {
     int ret = notification_buf_init(bdf, bar, notification_buf_pair,
-                                    huge_page_prefix);
+                                    huge_page_prefix, -1);
     if (ret != 0) {
       return ret;
     }
@@ -421,7 +421,7 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
   if (next_rx_ids_head == next_rx_ids_tail) {
     uint16_t nb_consumed_notifications = __get_new_tails(notification_buf_pair);
     if (unlikely(nb_consumed_notifications == 0)) {
-      return -1;
+      return nullptr;
     }
   }
 
@@ -671,7 +671,7 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
 
   free(notification_buf_pair->pending_rx_pipe_tails);
   free(notification_buf_pair->wrap_tracker);
-  free(notification_buf_pair->next_rx_pipe_ids);
+  free(notification_buf_pair->next_rx_pipe_notifs);
 
   delete fpga_dev;
 }

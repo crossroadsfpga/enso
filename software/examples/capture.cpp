@@ -51,7 +51,7 @@ void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
 void capture_packets(uint32_t nb_queues, const std::string& pcap_file,
                      const std::string& pcie_addr, enso::stats_t* stats,
-                     uint32_t application_id) {
+                     uint64_t application_id) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
@@ -122,7 +122,7 @@ void capture_packets(uint32_t nb_queues, const std::string& pcap_file,
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc < 4 || argc > 5) {
+  if (argc < 3 || argc > 4) {
     std::cerr << "Usage: " << argv[0] << " NB_QUEUES PCAP_FILE [PCIE_ADDR]"
               << std::endl
               << std::endl;
@@ -138,7 +138,6 @@ int main(int argc, const char* argv[]) {
   constexpr uint32_t kCoreId = 0;
   uint32_t nb_queues = atoi(argv[1]);
   std::string pcap_file = argv[2];
-  uint32_t application_id = atoi(argv[4]);
 
   if (nb_queues == 0) {
     std::cerr << "Invalid number of queues" << std::endl;
@@ -146,9 +145,10 @@ int main(int argc, const char* argv[]) {
   }
 
   std::string pcie_addr;
-  if (argc == 4) {
+  if (argc == 5) {
     pcie_addr = argv[3];
   }
+  uint32_t application_id = atoi(argv[4]);
 
   signal(SIGINT, int_handler);
 
