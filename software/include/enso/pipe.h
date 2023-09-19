@@ -93,7 +93,8 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      uint32_t application_id, const std::string& pcie_addr = "",
+      uint32_t application_id, CompletionCallback completion_callback,
+      const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
   Device(const Device&) = delete;
@@ -293,36 +294,6 @@ class Device {
    */
   int DisableRoundRobin();
 
- private:
-  struct TxPendingRequest {
-    uint32_t pipe_id;
-    uint32_t nb_bytes;
-  };
-
-  /**
-   * Use `Create` factory method to instantiate objects externally.
-   */
-  Device(const std::string& pcie_addr, std::string huge_page_prefix) noexcept
-      : kPcieAddr(pcie_addr) {
-#ifndef NDEBUG
-    std::cerr << "Warning: assertions are enabled. Performance may be affected."
-              << std::endl;
-#endif  // NDEBUG
-    if (huge_page_prefix == "") {
-      huge_page_prefix = std::string(kHugePageDefaultPrefix);
-    }
-    huge_page_prefix_ = huge_page_prefix;
-  }
-
-  /**
-   * @brief Initializes the device.
-   *
-   * @return 0 on success and a non-zero error code on failure.
-   */
-  int Init(uint32_t application_id) noexcept;
-
-  int GetNotifQueueId() noexcept;
-
   /**
    * @brief Sends a certain number of bytes to the device. This is designed to
    * be used by a TxPipe object.
@@ -334,6 +305,38 @@ class Device {
    */
   void Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
 
+ private:
+  struct TxPendingRequest {
+    uint32_t pipe_id;
+    uint32_t nb_bytes;
+  };
+
+  /**
+   * Use `Create` factory method to instantiate objects externally.
+   */
+  Device(const std::string& pcie_addr, std::string huge_page_prefix,
+         CompletionCallback completion_callback) noexcept
+      : kPcieAddr(pcie_addr) {
+#ifndef NDEBUG
+    std::cerr << "Warning: assertions are enabled. Performance may be affected."
+              << std::endl;
+#endif  // NDEBUG
+    if (huge_page_prefix == "") {
+      huge_page_prefix = std::string(kHugePageDefaultPrefix);
+    }
+    huge_page_prefix_ = huge_page_prefix;
+    completion_callback_ = completion_callback;
+  }
+
+  /**
+   * @brief Initializes the device.
+   *
+   * @return 0 on success and a non-zero error code on failure.
+   */
+  int Init(uint32_t application_id) noexcept;
+
+  int GetNotifQueueId() noexcept;
+
   friend class RxPipe;
   friend class TxPipe;
   friend class RxTxPipe;
@@ -344,6 +347,7 @@ class Device {
   int16_t core_id_;
   uint16_t bdf_;
   std::string huge_page_prefix_;
+  CompletionCallback completion_callback_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;

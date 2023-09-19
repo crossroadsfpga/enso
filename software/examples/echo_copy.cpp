@@ -58,7 +58,7 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
   using enso::RxPipe;
   using enso::TxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(application_id);
+  std::unique_ptr<Device> dev = Device::Create(application_id, NULL);
   std::vector<RxPipe*> rx_pipes;
   std::vector<TxPipe*> tx_pipes;
 

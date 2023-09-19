@@ -59,7 +59,7 @@ void capture_packets(uint32_t nb_queues, const std::string& pcap_file,
   using enso::Device;
   using enso::RxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(application_id, pcie_addr);
+  std::unique_ptr<Device> dev = Device::Create(application_id, NULL, pcie_addr);
   std::vector<RxPipe*> rx_pipes;
 
   if (!dev) {

@@ -50,16 +50,17 @@
 #include <optional>
 #include <string>
 
+#include "../intel_fpga/intel_fpga_pcie_api.hpp"
 #include "enso/consts.h"
 #include "enso/helpers.h"
 #include "enso/queue.h"
-#include "intel_fpga_pcie_api.hpp"
 
 namespace enso {
 
 thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
 thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
     queue_from_backend_;
+thread_local uint64_t shinkansen_notif_buf_id_;
 
 class DevBackend {
  public:
@@ -87,8 +88,8 @@ class DevBackend {
     return 0;  // Not a valid address. We use the offset to emulate MMIO access.
   }
 
-  _enso_always_inline void mmio_write32(volatile uint32_t* addr,
-                                        uint32_t value) {
+  static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
+                                               uint32_t value) {
     enso::enso_pipe_id_t queue_id = (uint64_t)addr / enso::kMemorySpacePerQueue;
     uint32_t offset = (uint64_t)addr % enso::kMemorySpacePerQueue;
 
@@ -122,7 +123,7 @@ class DevBackend {
     }
   }
 
-  _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
+  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
     enso::enso_pipe_id_t queue_id = (uint64_t)addr / enso::kMemorySpacePerQueue;
     // Read from RX pipe: read directly
     if (queue_id < enso::kMaxNbFlows) {
@@ -146,6 +147,7 @@ class DevBackend {
       assert(notification->address == (uint64_t)addr);
       return notification->data[0];
     }
+    return -1;
   }
 
   /**
@@ -378,7 +380,6 @@ class DevBackend {
   int core_id_;
   int notif_buf_cnt_ = 0;
   int pipe_cnt_ = 0;
-  uint64_t shinkansen_notif_buf_id_;
   intel_fpga_pcie_api::IntelFpgaPcieDev* dev_;
 };
 

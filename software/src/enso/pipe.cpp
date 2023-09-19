@@ -54,6 +54,7 @@
 #include "../pcie.h"
 
 namespace enso {
+using CompletionCallback = std::function<void()>;
 
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
@@ -148,10 +149,11 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    uint32_t application_id, const std::string& pcie_addr,
+    uint32_t application_id, CompletionCallback completion_callback,
+    const std::string& pcie_addr,
     const std::string& huge_page_prefix) noexcept {
-  std::unique_ptr<Device> dev(new (std::nothrow)
-                                  Device(pcie_addr, huge_page_prefix));
+  std::unique_ptr<Device> dev(new (std::nothrow) Device(
+      pcie_addr, huge_page_prefix, completion_callback));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
@@ -414,14 +416,27 @@ void Device::Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
 }
 
+/**
+ * @brief Processes the completed transmissions of packets by checking
+ * the TX notification buffer.
+ *
+ */
 void Device::ProcessCompletions() {
   uint32_t tx_completions = get_unreported_completions(&notification_buf_pair_);
   for (uint32_t i = 0; i < tx_completions; ++i) {
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
-    TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
-    pipe->NotifyCompletion(tx_req.nb_bytes);
+    if (tx_req.pipe_id < 0) {
+      // on receiving this, should update the notification->signal for
+      // applications
+      std::invoke(completion_callback_);
+    } else {
+      // TODO (kagupta): how to deal with this part, if we are receiving
+      // notifications for transmission for pipes that we do not have?
+      TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
+      pipe->NotifyCompletion(tx_req.nb_bytes);
+    }
   }
 
   // RxTx pipes need to be explicitly notified so that they can free space for
