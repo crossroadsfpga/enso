@@ -304,8 +304,6 @@ class Device {
    */
   void Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
 
-  int GetNotifQueueId() noexcept;
-
  private:
   struct TxPendingRequest {
     int pipe_id;
