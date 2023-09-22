@@ -252,13 +252,6 @@ RxTxPipe* Device::AllocateRxTxPipe(bool fallback) noexcept {
   return pipe;
 }
 
-uint32_t Device::NotifQueueIdFromRxPipeId(int32_t pipe_id) {
-  struct RxPipe* rx_pipe = rx_pipes_[pipe_id];
-  uint32_t notif_queue_id =
-      reinterpret_cast<uint64_t>(rx_pipe->buf()) & (enso::kMaxNbApps - 1);
-  return notif_queue_id;
-}
-
 struct RxNotification* Device::NextRxNotif() {
   // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);

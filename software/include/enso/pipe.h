@@ -162,8 +162,6 @@ class Device {
    */
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
 
-  uint32_t NotifQueueIdFromRxPipeId(int32_t pipe_id);
-
   struct RxNotification* NextRxNotif();
 
   /**
