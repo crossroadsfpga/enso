@@ -54,7 +54,7 @@
 #include "../pcie.h"
 
 namespace enso {
-using TransmitCallback = std::function<void()>;
+using CompletionCallback = std::function<void()>;
 
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
@@ -149,7 +149,7 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    uint32_t application_id, TransmitCallback completion_callback,
+    uint32_t application_id, CompletionCallback completion_callback,
     const std::string& pcie_addr,
     const std::string& huge_page_prefix) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow) Device(
