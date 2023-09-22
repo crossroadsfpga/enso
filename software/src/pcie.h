@@ -62,6 +62,7 @@ struct SocketInternal {
  * @param bar PCIe BAR to use (set to -1 to automatically select one).
  * @param notification_buf_pair Notification buffer pair to initialize.
  * @param huge_page_prefix File prefix to use when allocating the huge pages.
+ * @param application_id Unique ID of currently running application that owns this kthread.
  *
  * @return 0 on success, -1 on failure.
  */
@@ -130,13 +131,22 @@ uint32_t peek_next_batch_from_queue(
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
 /**
+ * @brief Get next RX notification with pending data.
+ *
+ * @param notification_buf_pair Notification buffer to get data from.
+ * @return Pointer to the RX notification that can be addressed next.
+ */
+struct RxNotification* get_next_rx_notif(
+    struct NotificationBufPair* notification_buf_pair);
+
+/**
  * @brief Get next Enso Pipe with pending data.
  *
  * @param notification_buf_pair Notification buffer to get data from.
  * @return ID for the next Enso Pipe that has data available, or -1 if no Enso
  *         Pipe has data.
  */
-struct RxNotification* get_next_rx_notif(
+int32_t get_next_enso_pipe_id(
     struct NotificationBufPair* notification_buf_pair);
 
 /**

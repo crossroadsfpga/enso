@@ -86,6 +86,9 @@ class Device {
   /**
    * @brief Factory method to create a device.
    *
+   * @param application_id The unique ID of the application creating the device.
+   *                       Should be less than kMaxNbFlows.
+   * @param completion_callback Function to call once a transmission has completed.
    * @param pcie_addr The PCIe address of the device. If empty, uses the first
    *                  device found.
    * @param huge_page_prefix The prefix to use for huge pages file. If empty,

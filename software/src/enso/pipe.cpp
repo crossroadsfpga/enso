@@ -311,13 +311,14 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   // This function can only be used when there are only RxTx pipes.
   assert(rx_pipes_.size() == rx_tx_pipes_.size());
   struct RxNotification* notif;
+  int32_t id;
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
   notif = get_next_rx_notif(&notification_buf_pair_);
-  int32_t id = notif->queue_id;
 
-  while (id >= 0) {
+  while (notif) {
+    id = notif->queue_id;
     RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
     assert(rx_tx_pipe->rx_pipe_ != nullptr);
 
@@ -331,7 +332,6 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
     }
 
     notif = get_next_rx_notif(&notification_buf_pair_);
-    id = notif->queue_id;
   }
 
 #else  // !LATENCY_OPT
@@ -423,8 +423,6 @@ void Device::ProcessCompletions() {
       // applications
       std::invoke(completion_callback_);
     } else {
-      // TODO (kagupta): how to deal with this part, if we are receiving
-      // notifications for transmission for pipes that we do not have?
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
       pipe->NotifyCompletion(tx_req.nb_bytes);
     }

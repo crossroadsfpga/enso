@@ -312,10 +312,12 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
 }
 
 /**
- * @brief
+ * @brief Updates bookkeeping on until where packets are 
+ *        available for each enso RX pipe, adds to ring buffer with 
+ *        next notifications to consume.
  *
  * @param notification_buf_pair
- * @return _enso_always_inline
+ * @return Number of consumed notifications.
  */
 static _enso_always_inline uint16_t
 __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
@@ -343,8 +345,8 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id] =
         (uint32_t)cur_notification->tail;
 
-    // orders the new updates: read pipes from last_rx_ids_head to
-    // last_rx_ids_tail
+    // orders the new updates: read pipes from next_rx_ids_head to
+    // next_rx_ids_tail
     notification_buf_pair->next_rx_pipe_notifs[next_rx_ids_tail] =
         cur_notification;
     next_rx_ids_tail = (next_rx_ids_tail + 1) % kNotificationBufSize;
@@ -437,6 +439,17 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
 struct RxNotification* get_next_rx_notif(
     struct NotificationBufPair* notification_buf_pair) {
   return __get_next_rx_notif(notification_buf_pair);
+}
+
+static _enso_always_inline int32_t
+__get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
+  struct RxNotification* notification = get_next_rx_notif(notification_buf_pair);
+  return notification->pipe_id;
+}
+
+int32_t get_next_enso_pipe_id(
+    struct NotificationBufPair* notification_buf_pair) {
+  return __get_next_enso_pipe_id(notification_buf_pair);
 }
 
 // Return next batch among all open sockets.

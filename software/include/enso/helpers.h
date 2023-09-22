@@ -128,8 +128,18 @@ void print_pkt_header(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
 
+/**
+* @brief Sets the core ID of current thread using C methods.
+* 
+* @param core_id the core ID to set the thread to.
+*
+* @return Success/failure of sched_setaffinity.
+*/
 int set_self_core_id(int core_id);
 
+/**
+* @brief Gets the TID of the current thread.
+*/
 pid_t get_tid(void);
 
 int set_core_id(std::thread& thread, int core_id);

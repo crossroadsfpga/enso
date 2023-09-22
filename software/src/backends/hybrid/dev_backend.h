@@ -104,8 +104,6 @@ class DevBackend {
           }
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
-          // TODO(kaajalg): make the ID here be the notification buffer ID of
-          // shinkansen
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
           break;
       }
@@ -318,6 +316,12 @@ class DevBackend {
   DevBackend(DevBackend&& other) = delete;
   DevBackend& operator=(DevBackend&& other) = delete;
 
+  /**
+  * @brief Gets the notification buffer ID that shinkansen has
+  *        created with the NIC. This will be used to inform the 
+  *        NIC of which notification buffer to send notifications to
+  *        when informing it of new pipes.
+  */
   uint64_t get_shinkansen_notif_buf_id() {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kGetShinkansenNotifBufId;

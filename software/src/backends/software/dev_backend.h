@@ -214,6 +214,8 @@ class DevBackend {
   /**
    * @brief Allocates a notification buffer.
    *
+   * @param application_id ID of currently running application.
+   *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
   int AllocateNotifBuf(uint32_t application_id) {
