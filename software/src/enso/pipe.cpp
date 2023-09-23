@@ -348,6 +348,8 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   return rx_tx_pipe;
 }
 
+int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
+
 int Device::Init(uint32_t application_id) noexcept {
   std::cout << "initializing device" << std::endl;
   if (core_id_ < 0) {

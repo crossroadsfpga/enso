@@ -202,7 +202,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
                            (uint32_t)phys_addr);
   DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_high,
                            (uint32_t)(phys_addr >> 32));
-  printf("rx notif buf: %lx", phys_addr);
 
   phys_addr += kAlignedDscBufPairSize / 2;
 
