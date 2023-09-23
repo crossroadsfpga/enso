@@ -259,11 +259,12 @@ struct RxNotification* Device::NextRxNotif() {
   struct RxNotification* notif;
 
 #ifdef LATENCY_OPT
+  int32_t id;
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
   notif = get_next_rx_notif(&notification_buf_pair_);
-  int32_t id = notif->queue_id;
 
-  while (id >= 0) {
+  while (notif) {
+    id = notif->queue_id;
     RxPipe* rx_pipe = rx_pipes_map_[id];
     assert(rx_pipe != nullptr);
 
@@ -277,7 +278,6 @@ struct RxNotification* Device::NextRxNotif() {
     }
 
     notif = get_next_rx_notif(&notification_buf_pair_);
-    id = notif->queue_id;
   }
 
 #else  // !LATENCY_OPT

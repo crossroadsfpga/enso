@@ -130,8 +130,8 @@ void* run_echo(void* arg) {
 
 int main(int argc, const char* argv[]) {
   if (argc != 5) {
-    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
-              << std::endl
+    std::cerr << "Usage: " << argv[0]
+              << " NB_CORES NB_QUEUES NB_CYCLES APPLICATION_ID" << std::endl
               << std::endl;
     std::cerr << "NB_CORES: Number of cores to use." << std::endl;
     std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;

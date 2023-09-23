@@ -311,8 +311,8 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
 }
 
 /**
- * @brief Updates bookkeeping on until where packets are 
- *        available for each enso RX pipe, adds to ring buffer with 
+ * @brief Updates bookkeeping on until where packets are
+ *        available for each enso RX pipe, adds to ring buffer with
  *        next notifications to consume.
  *
  * @param notification_buf_pair
@@ -442,8 +442,9 @@ struct RxNotification* get_next_rx_notif(
 
 static _enso_always_inline int32_t
 __get_next_enso_pipe_id(struct NotificationBufPair* notification_buf_pair) {
-  struct RxNotification* notification = get_next_rx_notif(notification_buf_pair);
-  return notification->pipe_id;
+  struct RxNotification* notification =
+      get_next_rx_notif(notification_buf_pair);
+  return notification->queue_id;
 }
 
 int32_t get_next_enso_pipe_id(
