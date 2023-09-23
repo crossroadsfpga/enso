@@ -99,6 +99,7 @@ RxPipe::~RxPipe() {
 int RxPipe::Init(bool fallback) noexcept {
   int ret =
       enso_pipe_init(&internal_rx_pipe_, notification_buf_pair_, fallback);
+  std::cout << "finished enso_pipe_init" << std::endl;
   if (ret < 0) {
     return ret;
   }

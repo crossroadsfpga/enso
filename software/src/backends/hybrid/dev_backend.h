@@ -93,18 +93,23 @@ class DevBackend {
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value,
-                                               uint32_t* uio_mmap_bar2_addr) {
-    uint64_t offset_addr = (uint64_t)(addr - uio_mmap_bar2_addr);
+                                               void* uio_mmap_bar2_addr) {
+    uint64_t offset_addr =
+        (uint64_t)((uint8_t*)addr - (uint8_t*)uio_mmap_bar2_addr);
     enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
     uint32_t offset = offset_addr % enso::kMemorySpacePerQueue;
 
     if (queue_id < enso::kMaxNbFlows) {
+      std::cout << "mmio write for rx pipe" << std::endl;
       // Updates to RX pipe: write directly
       // push this to let shinkansen know about queue ID -> notification queue
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
-          while (queue_to_backend_->Push(
-                     {NotifType::kWrite, offset_addr, value}) != 0) {
+          struct PipeNotification pipe_notification;
+          pipe_notification.type = NotifType::kWrite;
+          pipe_notification.data[0] = offset_addr;
+          pipe_notification.data[1] = value;
+          while (queue_to_backend_->Push(pipe_notification) != 0) {
           }
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
@@ -112,7 +117,6 @@ class DevBackend {
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
           break;
       }
-      std::cout << "sent update to shinkansen on new pipe" << std::endl;
       _enso_compiler_memory_barrier();
       *addr = value;
       return;
@@ -122,26 +126,28 @@ class DevBackend {
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
       // Block if full.
-      while (queue_to_backend_->Push({NotifType::kWrite, offset_addr, value}) !=
-             0) {
+      struct PipeNotification pipe_notification;
+      pipe_notification.type = NotifType::kWrite;
+      pipe_notification.data[0] = offset_addr;
+      pipe_notification.data[1] = value;
+      while (queue_to_backend_->Push(pipe_notification) != 0) {
       }
     }
   }
 
-  static _enso_always_inline uint32_t
-  mmio_read32(volatile uint32_t* addr, uint32_t* uio_mmap_bar2_addr) {
-    uint64_t offset_addr = (uint64_t)(addr - uio_mmap_bar2_addr);
+  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr,
+                                                  void* uio_mmap_bar2_addr) {
+    uint64_t offset_addr =
+        (uint64_t)((uint8_t*)addr - (uint8_t*)uio_mmap_bar2_addr);
     enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
     // Read from RX pipe: read directly
     if (queue_id < enso::kMaxNbFlows) {
-      std::cout << "mmio read rx pipe" << std::endl;
       _enso_compiler_memory_barrier();
       return *addr;
     }
     queue_id -= enso::kMaxNbFlows;
     // Reads from notification buffers.
     if (queue_id < enso::kMaxNbApps) {
-      std::cout << "mmio read notif buf" << std::endl;
       while (queue_to_backend_->Push({NotifType::kRead, offset_addr, 0}) != 0) {
       }
 
@@ -181,7 +187,7 @@ class DevBackend {
     assert(notification->type == NotifType::kTranslAddr);
     assert(notification->address == (uint64_t)phys_addr);
 
-    return notification->data[0];
+    return notification->data[1];
   }
 
   /**
@@ -398,8 +404,6 @@ class DevBackend {
   unsigned int bdf_;
   int bar_;
   int core_id_;
-  int notif_buf_cnt_ = 0;
-  int pipe_cnt_ = 0;
   intel_fpga_pcie_api::IntelFpgaPcieDev* dev_;
 };
 

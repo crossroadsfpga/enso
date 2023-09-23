@@ -75,14 +75,14 @@ class DevBackend {
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value,
-                                               uint32_t* uio_mmap_bar2_addr) {
+                                               void* uio_mmap_bar2_addr) {
     (void)uio_mmap_bar2_addr;
     _enso_compiler_memory_barrier();
     *addr = value;
   }
 
-  static _enso_always_inline uint32_t
-  mmio_read32(volatile uint32_t* addr, uint32_t* uio_mmap_bar2_addr) {
+  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr,
+                                                  void* uio_mmap_bar2_addr) {
     (void)uio_mmap_bar2_addr;
     _enso_compiler_memory_barrier();
     return *addr;

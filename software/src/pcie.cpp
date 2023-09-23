@@ -109,44 +109,39 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   volatile struct QueueRegs* notification_buf_pair_regs =
       (struct QueueRegs*)((uint8_t*)uio_mmap_bar2_addr +
                           (notif_pipe_id + kMaxNbFlows) * kMemorySpacePerQueue);
-
   // Make sure the notification buffer is disabled.
-  DevBackend::mmio_write32(
-      &notification_buf_pair_regs->rx_mem_low, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  DevBackend::mmio_write32(
-      &notification_buf_pair_regs->rx_mem_high, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  while (DevBackend::mmio_read32(
-             &notification_buf_pair_regs->rx_mem_low,
-             (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr) != 0)
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_low, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_high, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  while (DevBackend::mmio_read32(&notification_buf_pair_regs->rx_mem_low,
+                                 notification_buf_pair->uio_mmap_bar2_addr) !=
+         0)
     continue;
 
-  while (DevBackend::mmio_read32(
-             &notification_buf_pair_regs->rx_mem_high,
-             (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr) != 0)
+  while (DevBackend::mmio_read32(&notification_buf_pair_regs->rx_mem_high,
+                                 notification_buf_pair->uio_mmap_bar2_addr) !=
+         0)
     continue;
 
-  DevBackend::mmio_write32(
-      &notification_buf_pair_regs->rx_tail, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  while (DevBackend::mmio_read32(
-             &notification_buf_pair_regs->rx_tail,
-             (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr) != 0)
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_tail, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  while (DevBackend::mmio_read32(&notification_buf_pair_regs->rx_tail,
+                                 notification_buf_pair->uio_mmap_bar2_addr) !=
+         0)
     continue;
 
-  DevBackend::mmio_write32(
-      &notification_buf_pair_regs->rx_head, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  while (DevBackend::mmio_read32(
-             &notification_buf_pair_regs->rx_head,
-             (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr) != 0)
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_head, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  while (DevBackend::mmio_read32(&notification_buf_pair_regs->rx_head,
+                                 notification_buf_pair->uio_mmap_bar2_addr) !=
+         0)
     continue;
 
   std::string huge_page_path = huge_page_prefix +
                                std::string(kHugePageNotifBufPathPrefix) +
                                std::to_string(notification_buf_pair->id);
-
+  printf("huge page path: %s\n", huge_page_path.c_str());
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
       (struct RxNotification*)get_huge_page(huge_page_path);
@@ -172,20 +167,20 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   notification_buf_pair->tx_tail_ptr =
       (uint32_t*)&notification_buf_pair_regs->tx_tail;
 
-  notification_buf_pair->rx_head = DevBackend::mmio_read32(
-      notification_buf_pair->rx_head_ptr,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
+  notification_buf_pair->rx_head =
+      DevBackend::mmio_read32(notification_buf_pair->rx_head_ptr,
+                              notification_buf_pair->uio_mmap_bar2_addr);
 
   // Preserve TX DSC tail and make head have the same value.
-  notification_buf_pair->tx_tail = DevBackend::mmio_read32(
-      notification_buf_pair->tx_tail_ptr,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
+  notification_buf_pair->tx_tail =
+      DevBackend::mmio_read32(notification_buf_pair->tx_tail_ptr,
+                              notification_buf_pair->uio_mmap_bar2_addr);
 
   notification_buf_pair->tx_head = notification_buf_pair->tx_tail;
 
-  DevBackend::mmio_write32(
-      &notification_buf_pair_regs->tx_head, notification_buf_pair->tx_head,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->tx_head,
+                           notification_buf_pair->tx_head,
+                           notification_buf_pair->uio_mmap_bar2_addr);
 
   notification_buf_pair->pending_rx_pipe_tails = (uint32_t*)malloc(
       sizeof(*(notification_buf_pair->pending_rx_pipe_tails)) * kMaxNbFlows);
@@ -218,22 +213,23 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
 
   // Setting the address enables the queue. Do this last.
   // Use first half of the huge page for RX and second half for TX.
-  DevBackend::mmio_write32(
-      &notification_buf_pair_regs->rx_mem_low, (uint32_t)phys_addr,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  DevBackend::mmio_write32(
-      &notification_buf_pair_regs->rx_mem_high, (uint32_t)(phys_addr >> 32),
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_low,
+                           (uint32_t)phys_addr,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->rx_mem_high,
+                           (uint32_t)(phys_addr >> 32),
+                           notification_buf_pair->uio_mmap_bar2_addr);
 
   phys_addr += kAlignedDscBufPairSize / 2;
 
-  DevBackend::mmio_write32(
-      &notification_buf_pair_regs->tx_mem_low, (uint32_t)phys_addr,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  DevBackend::mmio_write32(
-      &notification_buf_pair_regs->tx_mem_high, (uint32_t)(phys_addr >> 32),
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-
+  DevBackend::mmio_write32(&notification_buf_pair_regs->tx_mem_low,
+                           (uint32_t)phys_addr,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&notification_buf_pair_regs->tx_mem_high,
+                           (uint32_t)(phys_addr >> 32),
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  std::cout << "sent phys addr for tx notification buffer: " << (void*)phys_addr
+            << std::endl;
   return 0;
 }
 
@@ -258,36 +254,32 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                           enso_pipe_id * kMemorySpacePerQueue);
   enso_pipe->regs = (struct QueueRegs*)enso_pipe_regs;
   enso_pipe->uio_mmap_bar2_addr = uio_mmap_bar2_addr;
+  std::cout << "mmio write time" << std::endl;
   // Make sure the queue is disabled.
-  DevBackend::mmio_write32(
-      &enso_pipe_regs->rx_mem_low, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  DevBackend::mmio_write32(
-      &enso_pipe_regs->rx_mem_high, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  while (DevBackend::mmio_read32(
-             &enso_pipe_regs->rx_mem_low,
-             (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr) != 0 ||
-         DevBackend::mmio_read32(
-             &enso_pipe_regs->rx_mem_high,
-             (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr) != 0)
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_low, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_high, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  while (
+      DevBackend::mmio_read32(&enso_pipe_regs->rx_mem_low,
+                              notification_buf_pair->uio_mmap_bar2_addr) != 0 ||
+      DevBackend::mmio_read32(&enso_pipe_regs->rx_mem_high,
+                              notification_buf_pair->uio_mmap_bar2_addr) != 0)
     continue;
 
   // Make sure head and tail start at zero.
-  DevBackend::mmio_write32(
-      &enso_pipe_regs->rx_tail, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  while (DevBackend::mmio_read32(
-             &enso_pipe_regs->rx_tail,
-             (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr) != 0)
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_tail, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  while (DevBackend::mmio_read32(&enso_pipe_regs->rx_tail,
+                                 notification_buf_pair->uio_mmap_bar2_addr) !=
+         0)
     continue;
 
-  DevBackend::mmio_write32(
-      &enso_pipe_regs->rx_head, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  while (DevBackend::mmio_read32(
-             &enso_pipe_regs->rx_head,
-             (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr) != 0)
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_head, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  while (DevBackend::mmio_read32(&enso_pipe_regs->rx_head,
+                                 notification_buf_pair->uio_mmap_bar2_addr) !=
+         0)
     continue;
 
   std::string huge_page_path = notification_buf_pair->huge_page_prefix +
@@ -317,16 +309,15 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   // Setting the address enables the queue. Do this last.
   // The least significant bits in rx_mem_low are used to keep the notification
   // buffer ID. Therefore we add `notification_buf_pair->id` to the address.
-  DevBackend::mmio_write32(
-      &enso_pipe_regs->rx_mem_low,
-      (uint32_t)phys_addr + notification_buf_pair->id,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  DevBackend::mmio_write32(
-      &enso_pipe_regs->rx_mem_high, (uint32_t)(phys_addr >> 32),
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_low,
+                           (uint32_t)phys_addr + notification_buf_pair->id,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_high,
+                           (uint32_t)(phys_addr >> 32),
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  std::cout << "finished mmio writes for enso_pipe_init" << std::endl;
   update_fallback_queues_config(notification_buf_pair);
-
+  std::cout << "updated fallback queues config" << std::endl;
   return enso_pipe_id;
 }
 
@@ -403,9 +394,9 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
-    DevBackend::mmio_write32(
-        notification_buf_pair->rx_head_ptr, notification_buf_head,
-        (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
+    DevBackend::mmio_write32(notification_buf_pair->rx_head_ptr,
+                             notification_buf_head,
+                             notification_buf_pair->uio_mmap_bar2_addr);
     notification_buf_pair->rx_head = notification_buf_head;
   }
 
@@ -523,19 +514,19 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, rx_pkt_head,
-                           (uint32_t*)enso_pipe->uio_mmap_bar2_addr);
+                           enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = rx_pkt_head;
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
-                           (uint32_t*)enso_pipe->uio_mmap_bar2_addr);
+                           enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 
 void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_head,
-                           (uint32_t*)enso_pipe->uio_mmap_bar2_addr);
+                           enso_pipe->uio_mmap_bar2_addr);
 }
 
 static _enso_always_inline uint32_t
@@ -586,9 +577,8 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
   }
 
   notification_buf_pair->tx_tail = tx_tail;
-  DevBackend::mmio_write32(
-      notification_buf_pair->tx_tail_ptr, tx_tail,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
+                           notification_buf_pair->uio_mmap_bar2_addr);
 
   return len;
 }
@@ -649,11 +639,12 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
 
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification) {
+  std::cout << "sending configuration, signal " << config_notification->signal
+            << std::endl;
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
   uint32_t tx_tail = notification_buf_pair->tx_tail;
   uint32_t free_slots =
       (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
-
   // Make sure it's a config notification.
   if (config_notification->signal < 2) {
     return -1;
@@ -674,9 +665,8 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;
-  DevBackend::mmio_write32(
-      notification_buf_pair->tx_tail_ptr, tx_tail,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
+                           notification_buf_pair->uio_mmap_bar2_addr);
 
   // Wait for request to be consumed.
   uint32_t nb_unreported_completions =
@@ -723,18 +713,14 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
 
   fpga_dev->FreeNotifBuf(notification_buf_pair->id);
 
-  DevBackend::mmio_write32(
-      &notification_buf_pair->regs->rx_mem_low, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  DevBackend::mmio_write32(
-      &notification_buf_pair->regs->rx_mem_high, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  DevBackend::mmio_write32(
-      &notification_buf_pair->regs->tx_mem_low, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  DevBackend::mmio_write32(
-      &notification_buf_pair->regs->tx_mem_high, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_low, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_high, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&notification_buf_pair->regs->tx_mem_low, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&notification_buf_pair->regs->tx_mem_high, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
 
   munmap(notification_buf_pair->rx_buf, kAlignedDscBufPairSize);
 
@@ -757,12 +743,10 @@ void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
-  DevBackend::mmio_write32(
-      &enso_pipe->regs->rx_mem_low, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
-  DevBackend::mmio_write32(
-      &enso_pipe->regs->rx_mem_high, 0,
-      (uint32_t*)notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&enso_pipe->regs->rx_mem_low, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
+  DevBackend::mmio_write32(&enso_pipe->regs->rx_mem_high, 0,
+                           notification_buf_pair->uio_mmap_bar2_addr);
 
   if (enso_pipe->buf) {
     munmap(enso_pipe->buf, kBufPageSize);
