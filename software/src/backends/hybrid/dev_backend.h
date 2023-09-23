@@ -85,54 +85,64 @@ class DevBackend {
 
   void* uio_mmap([[maybe_unused]] size_t size,
                  [[maybe_unused]] unsigned int mapping) {
-    return 0;  // Not a valid address. We use the offset to emulate MMIO access.
+    std::cout << "uio_mmap" << std::endl;
+    // shared mmapped area between applications and NIC: able to communicate
+    // with mmio
+    return dev_->uio_mmap(size, mapping);
   }
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
-                                               uint32_t value) {
-    enso::enso_pipe_id_t queue_id = (uint64_t)addr / enso::kMemorySpacePerQueue;
-    uint32_t offset = (uint64_t)addr % enso::kMemorySpacePerQueue;
+                                               uint32_t value,
+                                               uint32_t* uio_mmap_bar2_addr) {
+    uint64_t offset_addr = (uint64_t)(addr - uio_mmap_bar2_addr);
+    enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
+    uint32_t offset = offset_addr % enso::kMemorySpacePerQueue;
 
-    // Updates to RX pipe: write directly
     if (queue_id < enso::kMaxNbFlows) {
-      uint64_t mask = (1L << 32L) - 1L;
+      // Updates to RX pipe: write directly
       // push this to let shinkansen know about queue ID -> notification queue
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
           while (queue_to_backend_->Push(
-                     {NotifType::kWrite, (uint64_t)addr, value}) != 0) {
+                     {NotifType::kWrite, offset_addr, value}) != 0) {
           }
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
+          uint64_t mask = (1L << 32L) - 1L;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
           break;
       }
+      std::cout << "sent update to shinkansen on new pipe" << std::endl;
       _enso_compiler_memory_barrier();
       *addr = value;
       return;
     }
+
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
       // Block if full.
-      while (queue_to_backend_->Push(
-                 {NotifType::kWrite, (uint64_t)addr, value}) != 0) {
+      while (queue_to_backend_->Push({NotifType::kWrite, offset_addr, value}) !=
+             0) {
       }
     }
   }
 
-  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
-    enso::enso_pipe_id_t queue_id = (uint64_t)addr / enso::kMemorySpacePerQueue;
+  static _enso_always_inline uint32_t
+  mmio_read32(volatile uint32_t* addr, uint32_t* uio_mmap_bar2_addr) {
+    uint64_t offset_addr = (uint64_t)(addr - uio_mmap_bar2_addr);
+    enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
     // Read from RX pipe: read directly
     if (queue_id < enso::kMaxNbFlows) {
+      std::cout << "mmio read rx pipe" << std::endl;
       _enso_compiler_memory_barrier();
       return *addr;
     }
     queue_id -= enso::kMaxNbFlows;
     // Reads from notification buffers.
     if (queue_id < enso::kMaxNbApps) {
-      while (queue_to_backend_->Push({NotifType::kRead, (uint64_t)addr, 0}) !=
-             0) {
+      std::cout << "mmio read notif buf" << std::endl;
+      while (queue_to_backend_->Push({NotifType::kRead, offset_addr, 0}) != 0) {
       }
 
       std::optional<PipeNotification> notification;
@@ -142,8 +152,8 @@ class DevBackend {
       }
 
       assert(notification->type == NotifType::kRead);
-      assert(notification->address == (uint64_t)addr);
-      return notification->data[0];
+      assert(notification->data[0] == offset_addr);
+      return notification->data[1];
     }
     return -1;
   }
@@ -317,12 +327,13 @@ class DevBackend {
   DevBackend& operator=(DevBackend&& other) = delete;
 
   /**
-  * @brief Gets the notification buffer ID that shinkansen has
-  *        created with the NIC. This will be used to inform the 
-  *        NIC of which notification buffer to send notifications to
-  *        when informing it of new pipes.
-  */
+   * @brief Gets the notification buffer ID that shinkansen has
+   *        created with the NIC. This will be used to inform the
+   *        NIC of which notification buffer to send notifications to
+   *        when informing it of new pipes.
+   */
   uint64_t get_shinkansen_notif_buf_id() {
+    std::cout << "getting shinkansen notif buf id" << std::endl;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kGetShinkansenNotifBufId;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
@@ -344,6 +355,7 @@ class DevBackend {
    * @return 0 on success and a non-zero error code on failure.
    */
   int Init() noexcept {
+    std::cout << "initializing hybrid backend" << std::endl;
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
       std::cerr << "Could not get CPU ID" << std::endl;
@@ -369,12 +381,16 @@ class DevBackend {
       return -1;
     }
 
+    std::cout << "created queues" << std::endl;
+
     dev_ = intel_fpga_pcie_api::IntelFpgaPcieDev::Create(bdf_, bar_);
     if (dev_ == nullptr) {
       return -1;
     }
 
     shinkansen_notif_buf_id_ = get_shinkansen_notif_buf_id();
+    std::cout << "got back shinkansen notif buf id: "
+              << shinkansen_notif_buf_id_ << std::endl;
 
     return 0;
   }

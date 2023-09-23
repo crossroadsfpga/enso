@@ -87,7 +87,9 @@ class DevBackend {
   }
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
-                                               uint32_t value) {
+                                               uint32_t value,
+                                               uint32_t* uio_mmap_bar2_addr) {
+    (void)uio_mmap_bar2_addr;
     // Block if full.
     struct PipeNotification notification;
     notification.type = NotifType::kWrite;
@@ -97,7 +99,9 @@ class DevBackend {
     }
   }
 
-  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
+  static _enso_always_inline uint32_t
+  mmio_read32(volatile uint32_t* addr, uint32_t* uio_mmap_bar2_addr) {
+    (void)uio_mmap_bar2_addr;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kRead;
     pipe_notification.data[0] = (uint64_t)addr;

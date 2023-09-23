@@ -161,6 +161,7 @@ std::unique_ptr<Device> Device::Create(
   if (dev->Init(application_id)) {
     return std::unique_ptr<Device>{};
   }
+  std::cout << "finished initalizing" << std::endl;
 
   return dev;
 }
@@ -378,6 +379,7 @@ int Device::Init(uint32_t application_id) noexcept {
 
   int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
                                   huge_page_prefix_, application_id);
+  std::cout << "created notif buffer" << std::endl;
   if (ret != 0) {
     // Could not initialize notification buffer.
     return 3;

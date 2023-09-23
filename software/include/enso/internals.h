@@ -121,6 +121,7 @@ struct RxEnsoPipeInternal {
   uint64_t phys_buf_offset;  // Use to convert between phys and virt address.
   enso_pipe_id_t id;
   std::string huge_page_prefix;
+  void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
 };
 
 }  // namespace enso
