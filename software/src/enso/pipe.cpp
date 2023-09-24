@@ -64,7 +64,7 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
-  std::cout << "binding pipe" << id_ << dst_port << std::endl;
+  std::cout << "binding pipe " << id_ << dst_port << std::endl;
   return insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip,
                            src_ip, protocol, id_);
 }
@@ -260,32 +260,33 @@ struct RxNotification* Device::NextRxNotif() {
 
   struct RxNotification* notif;
 
-#ifdef LATENCY_OPT
-  int32_t id;
-  // When LATENCY_OPT is enabled, we always prefetch the next pipe.
+  // #ifdef LATENCY_OPT
+  //   int32_t id;
+  //   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
+  //   notif = get_next_rx_notif(&notification_buf_pair_);
+
+  //   while (notif) {
+  //     id = notif->queue_id;
+  //     RxPipe* rx_pipe = rx_pipes_map_[id];
+  //     assert(rx_pipe != nullptr);
+
+  //     RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
+  //     uint32_t enso_pipe_head = pipe.rx_tail;
+  //     uint32_t enso_pipe_tail =
+  //     notification_buf_pair_.pending_rx_pipe_tails[id];
+
+  //     if (enso_pipe_head != enso_pipe_tail) {
+  //       rx_pipe->Prefetch();
+  //       break;
+  //     }
+
+  //     notif = get_next_rx_notif(&notification_buf_pair_);
+  //   }
+
+  // #else  // !LATENCY_OPT
   notif = get_next_rx_notif(&notification_buf_pair_);
 
-  while (notif) {
-    id = notif->queue_id;
-    RxPipe* rx_pipe = rx_pipes_map_[id];
-    assert(rx_pipe != nullptr);
-
-    RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
-    uint32_t enso_pipe_head = pipe.rx_tail;
-    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
-
-    if (enso_pipe_head != enso_pipe_tail) {
-      rx_pipe->Prefetch();
-      break;
-    }
-
-    notif = get_next_rx_notif(&notification_buf_pair_);
-  }
-
-#else  // !LATENCY_OPT
-  notif = get_next_rx_notif(&notification_buf_pair_);
-
-#endif  // LATENCY_OPT
+  // #endif  // LATENCY_OPT
 
   return notif;
 }
@@ -295,11 +296,11 @@ RxPipe* Device::NextRxPipeToRecv() {
   // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);
 
-  int32_t id = NextRxNotif()->queue_id;
-
-  if (id < 0) {
+  struct RxNotification* notification = NextRxNotif();
+  if (!notification) {
     return nullptr;
   }
+  int32_t id = notification->queue_id;
 
   // std::cout << "next rx pipe: " << id << std::endl;
 
@@ -380,7 +381,6 @@ int Device::Init(uint32_t application_id) noexcept {
 
   int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
                                   huge_page_prefix_, application_id);
-  std::cout << "created notif buffer" << std::endl;
   if (ret != 0) {
     // Could not initialize notification buffer.
     return 3;
@@ -389,8 +389,7 @@ int Device::Init(uint32_t application_id) noexcept {
   return 0;
 }
 
-void Device::Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
-                  uint32_t nb_bytes) {
+void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
   send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
@@ -423,7 +422,9 @@ void Device::ProcessCompletions() {
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
+    std::cout << "completion occurred!" << std::endl;
     if (tx_req.pipe_id < 0) {
+      std::cout << "negative pipe id" << std::endl;
       // on receiving this, should update the notification->signal for
       // applications
       std::invoke(completion_callback_);

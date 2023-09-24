@@ -315,9 +315,7 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_high,
                            (uint32_t)(phys_addr >> 32),
                            notification_buf_pair->uio_mmap_bar2_addr);
-  std::cout << "finished mmio writes for enso_pipe_init" << std::endl;
   update_fallback_queues_config(notification_buf_pair);
-  std::cout << "updated fallback queues config" << std::endl;
   return enso_pipe_id;
 }
 
@@ -513,6 +511,7 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
+  std::cout << "advancing pipe" << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, rx_pkt_head,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = rx_pkt_head;
@@ -575,6 +574,9 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     tx_tail = (tx_tail + 1) % kNotificationBufSize;
     missing_bytes -= req_length;
   }
+
+  std::cout << "updated notification tx tail from "
+            << notification_buf_pair->tx_tail << " to " << tx_tail << std::endl;
 
   notification_buf_pair->tx_tail = tx_tail;
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,

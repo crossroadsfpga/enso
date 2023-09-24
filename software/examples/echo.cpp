@@ -106,6 +106,7 @@ void* run_echo(void* arg) {
       if (unlikely(batch.available_bytes() == 0)) {
         continue;
       }
+      std::cout << "received packet!" << std::endl;
 
       for (auto pkt : batch) {
         ++pkt[63];  // Increment payload.

@@ -306,7 +306,7 @@ class Device {
    * @param nb_bytes The number of bytes to send.
    * @return The number of bytes sent.
    */
-  void Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+  void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
 
   int GetNotifQueueId() noexcept;
 
