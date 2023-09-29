@@ -50,10 +50,10 @@
 #include <optional>
 #include <string>
 
-#include "../intel_fpga/intel_fpga_pcie_api.hpp"
 #include "enso/consts.h"
 #include "enso/helpers.h"
 #include "enso/queue.h"
+#include "intel_fpga_pcie_api.hpp"
 
 namespace enso {
 
