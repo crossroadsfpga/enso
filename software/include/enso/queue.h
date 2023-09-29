@@ -267,7 +267,7 @@ class Queue {
 
     void* addr = get_huge_page(huge_page_path_, size_);
     if (addr == nullptr) {
-      std::cerr << "Failed to allocate shared memory" << std::endl;
+      std::cerr << "Failed to allocate shared memory: " << size_ << std::endl;
       return -1;
     }
     buf_addr_ = reinterpret_cast<Element*>(addr);

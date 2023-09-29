@@ -518,6 +518,7 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
+  std::cout << "fully advancing pipe rx head" << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = enso_pipe->rx_tail;

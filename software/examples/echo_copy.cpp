@@ -32,6 +32,9 @@
 
 #include <enso/helpers.h>
 #include <enso/pipe.h>
+#include <pthread.h>
+#include <sched.h>
+#include <unistd.h>  // for usleep
 
 #include <chrono>
 #include <csignal>
@@ -39,18 +42,33 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
-#include <thread>
 
 #include "example_helpers.h"
 
 static volatile bool keep_running = true;
 static volatile bool setup_done = false;
 
+struct EchoArgs {
+  uint32_t nb_queues;
+  uint32_t core_id;
+  uint32_t nb_cycles;
+  enso::stats_t* stats;
+  uint32_t application_id;
+};
+
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
-                   enso::stats_t* stats, uint32_t application_id) {
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+void* run_echo_copy(void* arg) {
+  struct EchoArgs* args = (struct EchoArgs*)arg;
+  uint32_t nb_queues = args->nb_queues;
+  uint32_t core_id = args->core_id;
+  uint32_t nb_cycles = args->nb_cycles;
+  enso::stats_t* stats = args->stats;
+  uint32_t application_id = args->application_id;
+
+  enso::set_self_core_id(core_id);
+
+  usleep(1000000);
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
@@ -121,6 +139,8 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
       tx_pipe->SendAndFree(batch_length);
     }
   }
+
+  return NULL;
 }
 
 int main(int argc, const char* argv[]) {
@@ -146,17 +166,20 @@ int main(int argc, const char* argv[]) {
 
   signal(SIGINT, int_handler);
 
-  std::vector<std::thread> threads;
+  std::vector<pthread_t> threads;
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
-    threads.emplace_back(run_echo_copy, nb_queues, core_id, nb_cycles,
-                         &(thread_stats[core_id]), application_id);
-    if (enso::set_core_id(threads.back(), core_id)) {
-      std::cerr << "Error setting CPU affinity" << std::endl;
-      return 6;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    pthread_t thread;
+    struct EchoArgs args;
+    args.nb_queues = nb_queues;
+    args.core_id = core_id;
+    args.nb_cycles = nb_cycles;
+    args.stats = &(thread_stats[core_id]);
+    args.application_id = application_id;
+    pthread_create(&thread, NULL, run_echo_copy, (void*)&args);
+    threads.push_back(thread);
+    usleep(100000);
   }
 
   while (!setup_done) continue;  // Wait for setup to be done.
@@ -164,7 +187,7 @@ int main(int argc, const char* argv[]) {
   show_stats(thread_stats, &keep_running);
 
   for (auto& thread : threads) {
-    thread.join();
+    pthread_join(thread, NULL);
   }
 
   return 0;
