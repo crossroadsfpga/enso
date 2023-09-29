@@ -185,7 +185,7 @@ class DevBackend {
     }
 
     assert(notification->type == NotifType::kTranslAddr);
-    assert(notification->address == (uint64_t)phys_addr);
+    assert(notification->data[0] == (uint64_t)phys_addr);
 
     return notification->data[1];
   }
