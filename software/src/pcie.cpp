@@ -92,6 +92,8 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
     return -1;
   }
 
+  std::cout << "created notif pipe id: " << notif_pipe_id << std::endl;
+
   notification_buf_pair->id = notif_pipe_id;
 
   void* uio_mmap_bar2_addr =
@@ -259,12 +261,16 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                            notification_buf_pair->uio_mmap_bar2_addr);
   DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_high, 0,
                            notification_buf_pair->uio_mmap_bar2_addr);
-  while (
-      DevBackend::mmio_read32(&enso_pipe_regs->rx_mem_low,
-                              notification_buf_pair->uio_mmap_bar2_addr) != 0 ||
-      DevBackend::mmio_read32(&enso_pipe_regs->rx_mem_high,
-                              notification_buf_pair->uio_mmap_bar2_addr) != 0)
+
+  uint64_t mask = (1L << 32L) - 1L;
+  while ((DevBackend::mmio_read32(&enso_pipe_regs->rx_mem_low,
+                                  notification_buf_pair->uio_mmap_bar2_addr) &
+          (~mask)) != 0 ||
+         DevBackend::mmio_read32(&enso_pipe_regs->rx_mem_high,
+                                 notification_buf_pair->uio_mmap_bar2_addr) !=
+             0) {
     continue;
+  }
 
   // Make sure head and tail start at zero.
   DevBackend::mmio_write32(&enso_pipe_regs->rx_tail, 0,
@@ -517,10 +523,8 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
-  uint32_t rx_head = DevBackend::mmio_read32(enso_pipe->buf_head_ptr,
-                                             enso_pipe->uio_mmap_bar2_addr);
-  std::cout << "fully advancing pipe rx head from " << rx_head << " to "
-            << enso_pipe->rx_tail << std::endl;
+  std::cout << "fully advancing pipe rx head from " << enso_pipe->rx_head
+            << " to " << enso_pipe->rx_tail << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = enso_pipe->rx_tail;
@@ -657,6 +661,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   // Block until we can send.
   while (unlikely(free_slots == 0)) {
+    std::cout << "waiting until we can send" << std::endl;
     ++notification_buf_pair->tx_full_cnt;
     update_tx_head(notification_buf_pair);
     free_slots =
@@ -672,10 +677,12 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   notification_buf_pair->tx_tail = tx_tail;
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
                            notification_buf_pair->uio_mmap_bar2_addr);
+  std::cout << "wrote update to tx tail ptr" << std::endl;
 
   // Wait for request to be consumed.
   uint32_t nb_unreported_completions =
       notification_buf_pair->nb_unreported_completions;
+  std::cout << "nb unreported: " << nb_unreported_completions << std::endl;
   while (notification_buf_pair->nb_unreported_completions ==
          nb_unreported_completions) {
     update_tx_head(notification_buf_pair);
