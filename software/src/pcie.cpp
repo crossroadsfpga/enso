@@ -254,7 +254,6 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                           enso_pipe_id * kMemorySpacePerQueue);
   enso_pipe->regs = (struct QueueRegs*)enso_pipe_regs;
   enso_pipe->uio_mmap_bar2_addr = uio_mmap_bar2_addr;
-  std::cout << "mmio write time" << std::endl;
   // Make sure the queue is disabled.
   DevBackend::mmio_write32(&enso_pipe_regs->rx_mem_low, 0,
                            notification_buf_pair->uio_mmap_bar2_addr);
@@ -518,7 +517,10 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
-  std::cout << "fully advancing pipe rx head" << std::endl;
+  uint32_t rx_head = DevBackend::mmio_read32(enso_pipe->buf_head_ptr,
+                                             enso_pipe->uio_mmap_bar2_addr);
+  std::cout << "fully advancing pipe rx head from " << rx_head << " to "
+            << enso_pipe->rx_tail << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = enso_pipe->rx_tail;
@@ -678,7 +680,9 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
          nb_unreported_completions) {
     update_tx_head(notification_buf_pair);
   }
-  notification_buf_pair->nb_unreported_completions = nb_unreported_completions;
+  std::cout << "request for config was consumed!" << std::endl;
+  // notification_buf_pair->nb_unreported_completions =
+  // nb_unreported_completions;
 
   return 0;
 }

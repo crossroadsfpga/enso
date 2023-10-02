@@ -91,6 +91,7 @@ void* run_echo_copy(void* arg) {
       std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);
     }
+    std::cout << "allocated rx pipe" << std::endl;
 
     uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
     rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
@@ -125,6 +126,7 @@ void* run_echo_copy(void* arg) {
 
         ++(stats->nb_pkts);
       }
+      std::cout << "received " << stats->nb_pkts << std::endl;
       uint32_t batch_length = batch.processed_bytes();
       stats->recv_bytes += batch_length;
       ++(stats->nb_batches);

@@ -147,6 +147,8 @@ class Device {
 
   bool GetRrStatus() noexcept;
 
+  int ApplyConfig(struct TxNotification* notification);
+
   /**
    * @brief Allocates an RX/TX pipe.
    *
@@ -363,7 +365,8 @@ class Device {
 
   uint32_t tx_pr_head_ = 0;
   uint32_t tx_pr_tail_ = 0;
-  std::array<TxPendingRequest, kMaxPendingTxRequests + 1> tx_pending_requests_;
+  std::array<TxPendingRequest, kMaxPendingTxRequests + 1> tx_pending_requests_ =
+      {};
   static constexpr uint32_t kPendingTxRequestsBufMask = kMaxPendingTxRequests;
   static_assert((kMaxPendingTxRequests & (kMaxPendingTxRequests + 1)) == 0,
                 "kMaxPendingTxRequests + 1 must be a power of 2");

@@ -389,6 +389,15 @@ int Device::Init(uint32_t application_id) noexcept {
   return 0;
 }
 
+int Device::ApplyConfig(struct TxNotification* notification) {
+  std::cout << "device applying config" << std::endl;
+  tx_pending_requests_[tx_pr_tail_].pipe_id = -1;
+  tx_pending_requests_[tx_pr_tail_].nb_bytes = 0;
+  std::cout << "added pipe id -1 to tx_pr_tail " << tx_pr_tail_ << std::endl;
+  tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
+  return send_config(&notification_buf_pair_, notification);
+}
+
 void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
@@ -408,6 +417,8 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
 
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = nb_bytes;
+  std::cout << "added pipe id " << tx_enso_pipe_id << " to tx_pr_tail "
+            << tx_pr_tail_ << std::endl;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
 }
 
@@ -422,7 +433,8 @@ void Device::ProcessCompletions() {
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
-    std::cout << "completion occurred!" << std::endl;
+    std::cout << "completion occurred! tx_pr_head: " << tx_pr_head_
+              << " tx pr tail: " << tx_pr_tail_ << std::endl;
     if (tx_req.pipe_id < 0) {
       std::cout << "negative pipe id" << std::endl;
       // on receiving this, should update the notification->signal for
