@@ -119,6 +119,7 @@ TxPipe::~TxPipe() {
 
 int TxPipe::Init() noexcept {
   if (internal_buf_) {
+    std::cout << "internal buf!" << std::endl;
     std::string path = GetHugePageFilePath();
     buf_ = (uint8_t*)get_huge_page(path, 0, true);
     if (unlikely(!buf_)) {
@@ -129,7 +130,7 @@ int TxPipe::Init() noexcept {
   struct NotificationBufPair* notif_buf = &(device_->notification_buf_pair_);
 
   buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
-
+  std::cout << "buf phys addr: " << buf_phys_addr_ << std::endl;
   return 0;
 }
 

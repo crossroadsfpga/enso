@@ -172,6 +172,7 @@ class DevBackend {
    */
   uint64_t ConvertVirtAddrToDevAddr(void* virt_addr) {
     uint64_t phys_addr = virt_to_phys(virt_addr);
+    std::cout << "converted phys addr: " << phys_addr << std::endl;
 
     _enso_compiler_memory_barrier();
     while (queue_to_backend_->Push(

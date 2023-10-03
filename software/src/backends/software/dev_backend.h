@@ -134,7 +134,6 @@ class DevBackend {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kTranslAddr;
     pipe_notification.data[0] = (uint64_t)phys_addr;
-    pipe_notification.data[1] = 0;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
