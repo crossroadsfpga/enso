@@ -85,7 +85,6 @@ class DevBackend {
 
   void* uio_mmap([[maybe_unused]] size_t size,
                  [[maybe_unused]] unsigned int mapping) {
-    std::cout << "uio_mmap" << std::endl;
     // shared mmapped area between applications and NIC: able to communicate
     // with mmio
     return dev_->uio_mmap(size, mapping);
@@ -100,7 +99,6 @@ class DevBackend {
     uint32_t offset = offset_addr % enso::kMemorySpacePerQueue;
 
     if (queue_id < enso::kMaxNbFlows) {
-      std::cout << "mmio write for rx pipe" << std::endl;
       // Updates to RX pipe: write directly
       // push this to let shinkansen know about queue ID -> notification queue
       switch (offset) {
@@ -172,7 +170,6 @@ class DevBackend {
    */
   uint64_t ConvertVirtAddrToDevAddr(void* virt_addr) {
     uint64_t phys_addr = virt_to_phys(virt_addr);
-    std::cout << "converted phys addr: " << phys_addr << std::endl;
 
     _enso_compiler_memory_barrier();
     while (queue_to_backend_->Push(

@@ -523,8 +523,7 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
-  std::cout << "fully advancing pipe rx head from " << enso_pipe->rx_head
-            << " to " << enso_pipe->rx_tail << std::endl;
+  std::cout << "fully advancing pipe to " << enso_pipe->rx_tail << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = enso_pipe->rx_tail;
@@ -581,9 +580,6 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     tx_tail = (tx_tail + 1) % kNotificationBufSize;
     missing_bytes -= req_length;
   }
-
-  std::cout << "updated notification tx tail from "
-            << notification_buf_pair->tx_tail << " to " << tx_tail << std::endl;
 
   notification_buf_pair->tx_tail = tx_tail;
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,

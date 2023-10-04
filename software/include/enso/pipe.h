@@ -845,8 +845,6 @@ class TxPipe {
 
     app_begin_ = (app_begin_ + nb_bytes) & kBufMask;
 
-    std::cout << "sending phys addr for tx: " << (uint64_t)phys_addr
-              << std::endl;
     device_->Send(kId, phys_addr, nb_bytes);
   }
 
