@@ -99,8 +99,10 @@ class DevBackend {
     uint32_t offset = offset_addr % enso::kMemorySpacePerQueue;
 
     if (queue_id < enso::kMaxNbFlows) {
+      std::cout << "writing update to rx pipe" << std::endl;
       // Updates to RX pipe: write directly
-      // push this to let shinkansen know about queue ID -> notification queue
+      // push this to let shinkansen know about queue ID -> notification
+      // queue
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
           struct PipeNotification pipe_notification;
@@ -123,6 +125,7 @@ class DevBackend {
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
+      std::cout << "writing update to notif buf" << std::endl;
       // Block if full.
       struct PipeNotification pipe_notification;
       pipe_notification.type = NotifType::kWrite;

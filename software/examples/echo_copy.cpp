@@ -127,6 +127,7 @@ void* run_echo_copy(void* arg) {
         ++(stats->nb_pkts);
       }
       uint32_t batch_length = batch.processed_bytes();
+      std::cout << "received " << batch_length << " bytes" << std::endl;
       stats->recv_bytes += batch_length;
       ++(stats->nb_batches);
 

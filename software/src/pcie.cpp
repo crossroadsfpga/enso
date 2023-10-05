@@ -375,7 +375,14 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
+    uint32_t old_signal = cur_notification->signal;
+
     cur_notification->signal = 0;
+    std::cout << "new notification present at " << notification_buf_head
+              << " for pipe " << cur_notification->queue_id << " and tail "
+              << cur_notification->tail << " with old signal " << old_signal
+              << " and new signal " << cur_notification->signal << std::endl;
+
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
 
     // updates the 'tail', that is, until where you can read,
@@ -529,6 +536,9 @@ void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
             << enso_pipe->rx_head << " to " << enso_pipe->rx_tail << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
+  uint32_t res = DevBackend::mmio_read32(enso_pipe->buf_head_ptr,
+                                         enso_pipe->uio_mmap_bar2_addr);
+  std::cout << "changed pipe rx head to " << res << std::endl;
   enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 

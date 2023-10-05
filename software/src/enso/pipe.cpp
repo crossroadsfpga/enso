@@ -118,7 +118,6 @@ TxPipe::~TxPipe() {
 
 int TxPipe::Init() noexcept {
   if (internal_buf_) {
-    std::cout << "internal buf!" << std::endl;
     std::string path = GetHugePageFilePath();
     buf_ = (uint8_t*)get_huge_page(path, 0, true);
     if (unlikely(!buf_)) {
@@ -430,11 +429,8 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
  *
  */
 void Device::ProcessCompletions() {
-  uint32_t old_nb_unrep = notification_buf_pair_.nb_unreported_completions;
   uint32_t tx_completions = get_unreported_completions(&notification_buf_pair_);
   for (uint32_t i = 0; i < tx_completions; ++i) {
-    std::cout << "old num tx completions: " << old_nb_unrep << std::endl;
-    std::cout << "num tx completions: " << tx_completions << std::endl;
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
     uint32_t old_tx_pr_head = tx_pr_head_;
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
