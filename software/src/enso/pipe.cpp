@@ -54,7 +54,6 @@
 #include "../pcie.h"
 
 namespace enso {
-using CompletionCallback = std::function<void()>;
 
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
@@ -394,7 +393,10 @@ int Device::ApplyConfig(struct TxNotification* notification) {
   tx_pending_requests_[tx_pr_tail_].pipe_id = -1;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = 0;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
-  return send_config(&notification_buf_pair_, notification);
+  std::cout << "Added tx pending request at tail " << tx_pr_tail_
+            << " for nb_bytes " << 0 << " and pipe id " << -1 << std::endl;
+  return send_config(&notification_buf_pair_, notification,
+                     &completion_callback_);
 }
 
 void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
@@ -416,6 +418,9 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
 
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = nb_bytes;
+  std::cout << "Added tx pending request at tail " << tx_pr_tail_
+            << " for nb_bytes " << nb_bytes << " and pipe id "
+            << tx_enso_pipe_id << std::endl;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
 }
 
@@ -425,9 +430,13 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
  *
  */
 void Device::ProcessCompletions() {
+  uint32_t old_nb_unrep = notification_buf_pair_.nb_unreported_completions;
   uint32_t tx_completions = get_unreported_completions(&notification_buf_pair_);
   for (uint32_t i = 0; i < tx_completions; ++i) {
+    std::cout << "old num tx completions: " << old_nb_unrep << std::endl;
+    std::cout << "num tx completions: " << tx_completions << std::endl;
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
+    uint32_t old_tx_pr_head = tx_pr_head_;
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
     if (tx_req.pipe_id < 0) {
@@ -435,6 +444,9 @@ void Device::ProcessCompletions() {
       // applications
       std::invoke(completion_callback_);
     } else {
+      std::cout << "notifying completion of tx notif at tx pr head "
+                << old_tx_pr_head << " with nb bytes " << tx_req.nb_bytes
+                << " and pipe id " << tx_req.pipe_id << std::endl;
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
       pipe->NotifyCompletion(tx_req.nb_bytes);
     }

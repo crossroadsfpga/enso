@@ -400,6 +400,8 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     DevBackend::mmio_write32(notification_buf_pair->rx_head_ptr,
                              notification_buf_head,
                              notification_buf_pair->uio_mmap_bar2_addr);
+    std::cout << "updated notif buf rx head to " << notification_buf_head
+              << std::endl;
     notification_buf_pair->rx_head = notification_buf_head;
   }
 
@@ -523,7 +525,8 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
-  std::cout << "fully advancing pipe to " << enso_pipe->rx_tail << std::endl;
+  std::cout << "fully advancing pipe " << enso_pipe->id << " from "
+            << enso_pipe->rx_head << " to " << enso_pipe->rx_tail << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = enso_pipe->rx_tail;
@@ -585,6 +588,9 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
                            notification_buf_pair->uio_mmap_bar2_addr);
 
+  std::cout << "sent notification at tx tail " << tx_tail << " with nb_bytes "
+            << len << std::endl;
+
   return len;
 }
 
@@ -624,6 +630,9 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
+    std::cout << "tx notification at " << head << " has been consumed by NIC!"
+              << std::endl;
+
     // Requests that wrap around need two notifications but should only signal
     // a single completion notification. Therefore, we only increment
     // `nb_unreported_completions` in the second notification.
@@ -643,7 +652,8 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
 }
 
 int send_config(struct NotificationBufPair* notification_buf_pair,
-                struct TxNotification* config_notification) {
+                struct TxNotification* config_notification,
+                CompletionCallback* completion_callback) {
   std::cout << "sending configuration, signal " << config_notification->signal
             << std::endl;
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
@@ -673,19 +683,24 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   notification_buf_pair->tx_tail = tx_tail;
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
                            notification_buf_pair->uio_mmap_bar2_addr);
-  std::cout << "wrote update to tx tail ptr" << std::endl;
 
   // Wait for request to be consumed.
   uint32_t nb_unreported_completions =
       notification_buf_pair->nb_unreported_completions;
-  std::cout << "nb unreported: " << nb_unreported_completions << std::endl;
   while (notification_buf_pair->nb_unreported_completions ==
          nb_unreported_completions) {
     update_tx_head(notification_buf_pair);
   }
-  std::cout << "request for config was consumed!" << std::endl;
-  // notification_buf_pair->nb_unreported_completions =
-  // nb_unreported_completions;
+  // iterate over all nb_unreported_completions and invoke completion callback?
+  if (completion_callback != nullptr) {
+    uint32_t unreported_config_completions =
+        notification_buf_pair->nb_unreported_completions -
+        nb_unreported_completions;
+    for (uint32_t i = 0; i < unreported_config_completions; i++) {
+      std::invoke(*completion_callback);
+    }
+  }
+  notification_buf_pair->nb_unreported_completions = nb_unreported_completions;
 
   return 0;
 }

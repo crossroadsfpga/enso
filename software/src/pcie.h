@@ -46,9 +46,12 @@
 #include <netinet/ether.h>
 #include <netinet/ip.h>
 
+#include <algorithm>
 #include <string>
 
 namespace enso {
+
+using CompletionCallback = std::function<void()>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
@@ -62,7 +65,8 @@ struct SocketInternal {
  * @param bar PCIe BAR to use (set to -1 to automatically select one).
  * @param notification_buf_pair Notification buffer pair to initialize.
  * @param huge_page_prefix File prefix to use when allocating the huge pages.
- * @param application_id Unique ID of currently running application that owns this kthread.
+ * @param application_id Unique ID of currently running application that owns
+ * this kthread.
  *
  * @return 0 on success, -1 on failure.
  */
@@ -244,7 +248,8 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair);
  * @return 0 on success, -1 on failure.
  */
 int send_config(struct NotificationBufPair* notification_buf_pair,
-                struct TxNotification* config_notification);
+                struct TxNotification* config_notification,
+                CompletionCallback* completion_callback = nullptr);
 
 /**
  * @brief Get number of fallback queues currently in use.
