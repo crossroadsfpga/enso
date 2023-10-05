@@ -76,9 +76,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix,
                           uint32_t application_id) {
-  std::cout << "initializing notification buffer" << std::endl;
   DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
-  std::cout << "created devbackend" << std::endl;
   if (unlikely(fpga_dev == nullptr)) {
     std::cerr << "Could not create device" << std::endl;
     return -1;
@@ -91,8 +89,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
     std::cerr << "Could not allocate notification buffer" << std::endl;
     return -1;
   }
-
-  std::cout << "created notif pipe id: " << notif_pipe_id << std::endl;
 
   notification_buf_pair->id = notif_pipe_id;
 
@@ -230,8 +226,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   DevBackend::mmio_write32(&notification_buf_pair_regs->tx_mem_high,
                            (uint32_t)(phys_addr >> 32),
                            notification_buf_pair->uio_mmap_bar2_addr);
-  std::cout << "sent phys addr for tx notification buffer: " << (void*)phys_addr
-            << std::endl;
   return 0;
 }
 
@@ -243,7 +237,6 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
   int enso_pipe_id = fpga_dev->AllocatePipe(fallback);
-  std::cout << "allocated enso pipe with id " << enso_pipe_id << std::endl;
 
   if (enso_pipe_id < 0) {
     std::cerr << "Could not allocate pipe" << std::endl;
@@ -375,13 +368,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
-    uint32_t old_signal = cur_notification->signal;
-
     cur_notification->signal = 0;
-    std::cout << "new notification present at " << notification_buf_head
-              << " for pipe " << cur_notification->queue_id << " and tail "
-              << cur_notification->tail << " with old signal " << old_signal
-              << " and new signal " << cur_notification->signal << std::endl;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
 
@@ -407,8 +394,6 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     DevBackend::mmio_write32(notification_buf_pair->rx_head_ptr,
                              notification_buf_head,
                              notification_buf_pair->uio_mmap_bar2_addr);
-    std::cout << "updated notif buf rx head to " << notification_buf_head
-              << std::endl;
     notification_buf_pair->rx_head = notification_buf_head;
   }
 
@@ -525,20 +510,14 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
-  std::cout << "advancing pipe" << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, rx_pkt_head,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = rx_pkt_head;
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
-  std::cout << "fully advancing pipe " << enso_pipe->id << " from "
-            << enso_pipe->rx_head << " to " << enso_pipe->rx_tail << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
-  uint32_t res = DevBackend::mmio_read32(enso_pipe->buf_head_ptr,
-                                         enso_pipe->uio_mmap_bar2_addr);
-  std::cout << "changed pipe rx head to " << res << std::endl;
   enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 
@@ -598,9 +577,6 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
                            notification_buf_pair->uio_mmap_bar2_addr);
 
-  std::cout << "sent notification at tx tail " << tx_tail << " with nb_bytes "
-            << len << std::endl;
-
   return len;
 }
 
@@ -640,9 +616,6 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
-    std::cout << "tx notification at " << head << " has been consumed by NIC!"
-              << std::endl;
-
     // Requests that wrap around need two notifications but should only signal
     // a single completion notification. Therefore, we only increment
     // `nb_unreported_completions` in the second notification.
@@ -664,8 +637,6 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification,
                 CompletionCallback* completion_callback) {
-  std::cout << "sending configuration, signal " << config_notification->signal
-            << std::endl;
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
   uint32_t tx_tail = notification_buf_pair->tx_tail;
   uint32_t free_slots =
@@ -677,7 +648,6 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   // Block until we can send.
   while (unlikely(free_slots == 0)) {
-    std::cout << "waiting until we can send" << std::endl;
     ++notification_buf_pair->tx_full_cnt;
     update_tx_head(notification_buf_pair);
     free_slots =

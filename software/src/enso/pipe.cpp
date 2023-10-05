@@ -63,7 +63,6 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
-  std::cout << "binding pipe " << id_ << dst_port << std::endl;
   return insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip,
                            src_ip, protocol, id_);
 }
@@ -98,7 +97,6 @@ RxPipe::~RxPipe() {
 int RxPipe::Init(bool fallback) noexcept {
   int ret =
       enso_pipe_init(&internal_rx_pipe_, notification_buf_pair_, fallback);
-  std::cout << "finished enso_pipe_init" << std::endl;
   if (ret < 0) {
     return ret;
   }
@@ -128,7 +126,6 @@ int TxPipe::Init() noexcept {
   struct NotificationBufPair* notif_buf = &(device_->notification_buf_pair_);
 
   buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
-  std::cout << "buf phys addr: " << buf_phys_addr_ << std::endl;
   return 0;
 }
 
@@ -161,7 +158,6 @@ std::unique_ptr<Device> Device::Create(
   if (dev->Init(application_id)) {
     return std::unique_ptr<Device>{};
   }
-  std::cout << "finished initalizing" << std::endl;
 
   return dev;
 }
@@ -301,8 +297,6 @@ RxPipe* Device::NextRxPipeToRecv() {
   }
   int32_t id = notification->queue_id;
 
-  // std::cout << "next rx pipe: " << id << std::endl;
-
   RxPipe* rx_pipe = rx_pipes_map_[id];
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
@@ -353,7 +347,6 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
 int Device::Init(uint32_t application_id) noexcept {
-  std::cout << "initializing device" << std::endl;
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
@@ -392,8 +385,6 @@ int Device::ApplyConfig(struct TxNotification* notification) {
   tx_pending_requests_[tx_pr_tail_].pipe_id = -1;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = 0;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
-  std::cout << "Added tx pending request at tail " << tx_pr_tail_
-            << " for nb_bytes " << 0 << " and pipe id " << -1 << std::endl;
   return send_config(&notification_buf_pair_, notification,
                      &completion_callback_);
 }
@@ -417,9 +408,6 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
 
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = nb_bytes;
-  std::cout << "Added tx pending request at tail " << tx_pr_tail_
-            << " for nb_bytes " << nb_bytes << " and pipe id "
-            << tx_enso_pipe_id << std::endl;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
 }
 
@@ -432,7 +420,6 @@ void Device::ProcessCompletions() {
   uint32_t tx_completions = get_unreported_completions(&notification_buf_pair_);
   for (uint32_t i = 0; i < tx_completions; ++i) {
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
-    uint32_t old_tx_pr_head = tx_pr_head_;
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
     if (tx_req.pipe_id < 0) {
@@ -440,9 +427,6 @@ void Device::ProcessCompletions() {
       // applications
       std::invoke(completion_callback_);
     } else {
-      std::cout << "notifying completion of tx notif at tx pr head "
-                << old_tx_pr_head << " with nb bytes " << tx_req.nb_bytes
-                << " and pipe id " << tx_req.pipe_id << std::endl;
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
       pipe->NotifyCompletion(tx_req.nb_bytes);
     }

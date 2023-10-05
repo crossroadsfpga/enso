@@ -885,7 +885,6 @@ class TxPipe {
    * @return The new buffer capacity after extending.
    */
   inline uint32_t ExtendBufToTarget(uint32_t target_capacity) {
-    std::cout << "extend buf to target" << std::endl;
     uint32_t _capacity = capacity();
     assert(target_capacity <= kMaxCapacity);
     while (_capacity < target_capacity) {

@@ -99,7 +99,6 @@ class DevBackend {
     uint32_t offset = offset_addr % enso::kMemorySpacePerQueue;
 
     if (queue_id < enso::kMaxNbFlows) {
-      std::cout << "writing update to rx pipe" << std::endl;
       // Updates to RX pipe: write directly
       // push this to let shinkansen know about queue ID -> notification
       // queue
@@ -125,7 +124,6 @@ class DevBackend {
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
-      std::cout << "writing update to notif buf" << std::endl;
       // Block if full.
       struct PipeNotification pipe_notification;
       pipe_notification.type = NotifType::kWrite;
@@ -340,7 +338,6 @@ class DevBackend {
    *        when informing it of new pipes.
    */
   uint64_t get_shinkansen_notif_buf_id() {
-    std::cout << "getting shinkansen notif buf id" << std::endl;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kGetShinkansenNotifBufId;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
@@ -362,7 +359,6 @@ class DevBackend {
    * @return 0 on success and a non-zero error code on failure.
    */
   int Init() noexcept {
-    std::cout << "initializing hybrid backend" << std::endl;
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
       std::cerr << "Could not get CPU ID" << std::endl;
@@ -388,16 +384,12 @@ class DevBackend {
       return -1;
     }
 
-    std::cout << "created queues" << std::endl;
-
     dev_ = intel_fpga_pcie_api::IntelFpgaPcieDev::Create(bdf_, bar_);
     if (dev_ == nullptr) {
       return -1;
     }
 
     shinkansen_notif_buf_id_ = get_shinkansen_notif_buf_id();
-    std::cout << "got back shinkansen notif buf id: "
-              << shinkansen_notif_buf_id_ << std::endl;
 
     return 0;
   }
