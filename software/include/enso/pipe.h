@@ -80,8 +80,6 @@ void* kthread_entry(void* arg);
  *
  * Example:
  * @code
- *    uint16_t core_id = 0;
- *    uint32_t nb_pipes = 4;
  *    std::string pcie_addr = "0000:01:00.0";
  *    auto device = Device::Create(pcie_addr);
  * @endcode
