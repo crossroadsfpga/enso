@@ -170,23 +170,7 @@ class DevBackend {
    * @return Converted address or 0 if the address cannot be translated.
    */
   uint64_t ConvertVirtAddrToDevAddr(void* virt_addr) {
-    uint64_t phys_addr = virt_to_phys(virt_addr);
-
-    _enso_compiler_memory_barrier();
-    while (queue_to_backend_->Push(
-               {NotifType::kTranslAddr, (uint64_t)phys_addr, 0}) != 0) {
-    }
-
-    std::optional<PipeNotification> notification;
-
-    // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
-    }
-
-    assert(notification->type == NotifType::kTranslAddr);
-    assert(notification->data[0] == (uint64_t)phys_addr);
-
-    return notification->data[1];
+    return virt_to_phys(virt_addr);
   }
 
   /**
