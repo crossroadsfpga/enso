@@ -157,6 +157,40 @@ class DevBackend {
    */
   int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
 
+  /**
+   * @brief Allocates a notification buffer pair structure.
+   *
+   * @param notif_buf_id Notification buffer ID.
+   *
+   * @return Return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int AllocNotifBufPair(int notif_buf_id) {
+    return dev_->allocate_notif_buf_pair(notif_buf_id);
+  }
+
+  /**
+   * @brief Transmit data to the network.
+   *
+   * @param phys_addr   start address of the buffer.
+   * @param len         size of the data in bytes.
+   * @param id          notification buffer pair id.
+   *
+   * @return Return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int SendTxPipe(uint64_t phys_addr, uint32_t len, uint32_t id) {
+    return dev_->send_tx_pipe(phys_addr, len, id);
+  }
+
+  /**
+   * @brief Gets the number of Tx notification that have been consumed by the NIC.
+   *
+   * @return Return the number of unreported completions on success.
+   *         On error, -1 is returned and errno is set.
+   */
+  int GetUnreportedCompletions() {
+    return dev_->get_unreported_completions();
+  }
+
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
       : bdf_(bdf), bar_(bar) {}

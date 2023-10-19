@@ -151,9 +151,19 @@ static int chr_open(struct inode *inode, struct file *filp) {
 
   chr_dev_bk->nb_fb_queues = 0;
 
+  chr_dev_bk->notif_buf_pair = kzalloc(sizeof(struct notification_buf_pair),
+                                       GFP_KERNEL);
+  if(chr_dev_bk->notif_buf_pair == NULL) {
+    INTEL_FPGA_PCIE_ERR("couldn't create notification buffer pair");
+    kfree(chr_dev_bk);
+    return -ENOMEM;
+  }
+  chr_dev_bk->notif_buf_pair->allocated = false;
+
   chr_dev_bk->notif_q_status = kzalloc(MAX_NB_APPS / 8, GFP_KERNEL);
   if (chr_dev_bk->notif_q_status == NULL) {
     INTEL_FPGA_PCIE_ERR("couldn't create notification queue status ");
+    kfree(chr_dev_bk->notif_buf_pair);
     kfree(chr_dev_bk);
     return -ENOMEM;
   }
@@ -161,6 +171,7 @@ static int chr_open(struct inode *inode, struct file *filp) {
   chr_dev_bk->pipe_status = kzalloc(MAX_NB_FLOWS / 8, GFP_KERNEL);
   if (chr_dev_bk->pipe_status == NULL) {
     INTEL_FPGA_PCIE_ERR("couldn't create pipe status for device ");
+    kfree(chr_dev_bk->notif_buf_pair);
     kfree(chr_dev_bk->notif_q_status);
     kfree(chr_dev_bk);
     return -ENOMEM;
@@ -196,6 +207,46 @@ static int chr_open(struct inode *inode, struct file *filp) {
   up(&dev_bk->sem);
 
   return result;
+}
+
+/**
+ * free_notif_buf_pair() - Frees a notif_buf_pair structure.
+ *                         Used by chr_release().
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+void free_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk) {
+  size_t rx_tx_buf_size = 512 * PAGE_SIZE;
+  struct rx_notification *rx_notif = NULL;
+  struct notification_buf_pair *notif_buf_pair = NULL;
+  unsigned int page_ind = 0;
+
+  printk("Cleaning up notif buf pair\n");
+  if(chr_dev_bk == NULL) {
+    return;
+  }
+  notif_buf_pair = chr_dev_bk->notif_buf_pair;
+  if(notif_buf_pair == NULL) {
+    return;
+  }
+  if(notif_buf_pair->rx_buf != NULL) {
+    rx_notif = notif_buf_pair->rx_buf;
+    for(;page_ind < rx_tx_buf_size;
+         page_ind += PAGE_SIZE) {
+      ClearPageReserved(virt_to_page(((unsigned long)rx_notif) + page_ind));
+    }
+    kfree(rx_notif);
+  }
+  if(notif_buf_pair->pending_rx_pipe_tails != NULL) {
+    kfree(notif_buf_pair->pending_rx_pipe_tails);
+  }
+  if(notif_buf_pair->wrap_tracker != NULL) {
+    kfree(notif_buf_pair->wrap_tracker);
+  }
+  return;
 }
 
 /**
@@ -238,6 +289,8 @@ static int chr_release(struct inode *inode, struct file *filp) {
 
   up(&dev_bk->sem);
 
+  free_notif_buf_pair(chr_dev_bk);
+  kfree(chr_dev_bk->notif_buf_pair);
   kfree(chr_dev_bk->notif_q_status);
   kfree(chr_dev_bk->pipe_status);
   kfree(chr_dev_bk);

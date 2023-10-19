@@ -89,6 +89,15 @@ struct intel_fpga_pcie_ksize {
   int core_id;
 } __attribute__((packed));
 
+/*
+ * struct enso_send_tx_pipe_params - Structure used to send a TxPipe.
+ * */
+struct enso_send_tx_pipe_params {
+  uint64_t phys_addr;
+  uint32_t len;
+  uint32_t id;
+} __attribute__((packed));
+
 #define INTEL_FPGA_PCIE_IOCTL_MAGIC 0x70
 #define INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV \
   _IOW(INTEL_FPGA_PCIE_IOCTL_MAGIC, 0, unsigned int)
@@ -128,7 +137,13 @@ struct intel_fpga_pcie_ksize {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 17, unsigned int *)
 #define INTEL_FPGA_PCIE_IOCTL_FREE_PIPE \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 18, unsigned int)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 18
+#define INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUF_PAIR \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 19, unsigned int)
+#define INTEL_FPGA_PCIE_IOCTL_SEND_TX_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 20, struct enso_send_tx_pipe_params *)
+#define INTEL_FPGA_PCIE_IOCTL_GET_UNREPORTED_COMPLETIONS \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 21, unsigned int *)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 21
 
 long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
                                     unsigned long arg);

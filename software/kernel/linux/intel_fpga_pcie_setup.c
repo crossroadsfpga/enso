@@ -447,6 +447,10 @@ static int map_bars_default(struct pci_dev *dev) {
       dev_bk->bar[i].len = (ssize_t)len;
       start = pci_resource_start(dev, i);
       flags = pci_resource_flags(dev, i);
+      if(i == 2) {
+        dev_bk->bar2_pcie_start = start;
+        dev_bk->bar2_pcie_len = len;
+      }
 
       if (flags & IORESOURCE_IO) {
         dev_bk->bar[i].base_addr = ioport_map(start, len);

@@ -77,6 +77,9 @@ static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
 static long alloc_pipe(struct chr_dev_bookkeep *chr_dev_bk,
                        unsigned int __user *user_addr);
 static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsigned int __user *user_addr);
 
 /******************************************************************************
  * Device and I/O control function
@@ -200,6 +203,15 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
       break;
     case INTEL_FPGA_PCIE_IOCTL_FREE_PIPE:
       retval = free_pipe(chr_dev_bk, uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUF_PAIR:
+      retval = alloc_notif_buf_pair(chr_dev_bk, uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_SEND_TX_PIPE:
+      retval = send_tx_pipe(chr_dev_bk, uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_GET_UNREPORTED_COMPLETIONS:
+      retval = get_unreported_completions(chr_dev_bk, (unsigned int __user *) uarg);
       break;
     default:
       retval = -ENOTTY;
@@ -665,6 +677,392 @@ static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
     --(dev_bk->nb_fb_queues);
     --(chr_dev_bk->nb_fb_queues);
   }
+
+  up(&dev_bk->sem);
+
+  return 0;
+}
+
+/**
+ * free_rx_tx_buf() - Frees the RX/TX notification buffers.
+ *                    Helper function to alloc_notif_buf_pair.
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ */
+void free_rx_tx_buf(struct chr_dev_bookkeep *chr_dev_bk) {
+  // Each RX/TX notification buffer is 2MB in size. There are
+  // 512 4KB pages in one rx/tx buffer.
+  size_t rx_tx_buf_size = 512 * PAGE_SIZE;
+  struct rx_notification *rx_notif = NULL;
+  unsigned int page_ind = 0;
+  if(chr_dev_bk == NULL) {
+    return;
+  }
+  if(chr_dev_bk->notif_buf_pair == NULL) {
+    return;
+  }
+  rx_notif = chr_dev_bk->notif_buf_pair->rx_buf;
+  for(;page_ind < rx_tx_buf_size;
+       page_ind += PAGE_SIZE) {
+    ClearPageReserved(virt_to_page(((unsigned long)rx_notif) + page_ind));
+  }
+  kfree(rx_notif);
+}
+
+/**
+ * update_tx_head() - Checks which TX notifications have been
+ *                    processed and updated the relevant pointers
+ *                    and variables in the notification_buf_pair.
+ *                    Used by send_tx_pipe and get_unreported_completions.
+ *
+ * @notif_buf_pair: Structure containing information about the notification
+ *                  buffer.
+ */
+// TODO: Fix the magic numbers.
+void update_tx_head(struct notification_buf_pair* notif_buf_pair) {
+  struct tx_notification* tx_buf = notif_buf_pair->tx_buf;
+  uint32_t head = notif_buf_pair->tx_head;
+  uint32_t tail = notif_buf_pair->tx_tail;
+  struct tx_notification* tx_notif;
+  uint16_t i;
+  uint8_t wrap_tracker_mask;
+  uint8_t no_wrap;
+
+  if (head == tail) {
+    return;
+  }
+
+  // Advance pointer for pkt queues that were already sent.
+  for (i = 0; i < 64; ++i) {
+    if (head == tail) {
+      break;
+    }
+    tx_notif = tx_buf + head;
+
+    // Notification has not yet been consumed by hardware.
+    if (tx_notif->signal != 0) {
+      break;
+    }
+
+    // Requests that wrap around need two notifications but should only signal
+    // a single completion notification. Therefore, we only increment
+    // `nb_unreported_completions` in the second notification.
+    // TODO(sadok): If we implement the logic to have two notifications in the
+    // same cache line, we can get rid of `wrap_tracker` and instead check
+    // for two notifications.
+    wrap_tracker_mask = 1 << (head & 0x7);
+    no_wrap =
+        !(notif_buf_pair->wrap_tracker[head / 8] & wrap_tracker_mask);
+    notif_buf_pair->nb_unreported_completions += no_wrap;
+    notif_buf_pair->wrap_tracker[head / 8] &= ~wrap_tracker_mask;
+
+    head = (head + 1) % 16384;
+  }
+
+  notif_buf_pair->tx_head = head;
+}
+
+/**
+ * get_unreported_completions() - Returns a count of the number of unreported
+ *                                TX notifications that have been marked completed
+ *                                by the NIC but the application has not freed their buffer.
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ * @user_addr:  Copy the unreported count to this variable in userspace.
+ */
+static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsigned int __user *user_addr) {
+  struct dev_bookkeep *dev_bk;
+  uint32_t completions;
+  struct notification_buf_pair *notif_buf_pair;
+
+  notif_buf_pair = chr_dev_bk->notif_buf_pair;
+  dev_bk = chr_dev_bk->dev_bk;
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+  if(notif_buf_pair == NULL) {
+    INTEL_FPGA_PCIE_DEBUG("Notification buf pair is NULL");
+    return -EINVAL;
+  }
+
+  // first we update the tx head
+  update_tx_head(notif_buf_pair);
+  completions = notif_buf_pair->nb_unreported_completions;
+  if (copy_to_user(user_addr, &completions, sizeof(completions))) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy information to user.");
+    return -EFAULT;
+  }
+  notif_buf_pair->nb_unreported_completions = 0; // reset
+  up(&dev_bk->sem);
+  return 0;
+}
+
+/**
+ * alloc_notif_buf_pair() - Allocates a notification buffer
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ * @uarg:       The notification buffer ID.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
+  int32_t buf_id = (int32_t)uarg;
+  struct dev_bookkeep *dev_bk;
+  struct notification_buf_pair *notif_buf_pair;
+  uint8_t *bar2_addr;
+  struct queue_regs *nbp_q_regs;
+  unsigned int page_ind = 0;
+  size_t rx_tx_buf_size = 512 * PAGE_SIZE;
+  uint64_t rx_buf_phys_addr;
+  // uint64_t bar2_pci_addr = 0x382f80000000;
+  // uint64_t len = 0x40000000;
+  void *__iomem base_addr;
+
+  notif_buf_pair = chr_dev_bk->notif_buf_pair;
+  dev_bk = chr_dev_bk->dev_bk;
+
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  base_addr = ioremap_nocache(dev_bk->bar2_pcie_start, dev_bk->bar2_pcie_len);
+  if(base_addr == NULL) {
+    printk("Unable to map IO to memory\n");
+    return -ENOMEM;
+  }
+  notif_buf_pair->id = buf_id;
+  // printk("BAR2 len:start %llx:%llx\n", dev_bk->bar2_pcie_len, dev_bk->bar2_pcie_start);
+  // printk("MMIO at %p\n", base_addr);
+
+  // Check that the buffer ID is valid.
+  if (buf_id < 0 || buf_id >= MAX_NB_APPS) {
+    INTEL_FPGA_PCIE_DEBUG("invalid buffer ID.");
+    return -EINVAL;
+  }
+
+  // check if notification buf pair already allocated
+  if(notif_buf_pair->allocated) {
+    printk("Notification buf pair already allocated.\n");
+    return -EINVAL;
+  }
+
+  // 2. Map BAR into queue regs
+  bar2_addr = (uint8_t *) base_addr;
+  nbp_q_regs = (struct queue_regs *)(bar2_addr
+                                   + (notif_buf_pair->id + MAX_NB_FLOWS)
+                                   * (0x1ULL << 12));
+  // TODO:Create wrappers on top of these ioread/write functions
+  // initialize the queue registers
+  smp_wmb();
+  iowrite32(0, &nbp_q_regs->rx_mem_low);
+  smp_wmb();
+  iowrite32(0, &nbp_q_regs->rx_mem_high);
+
+  smp_rmb();
+  while(ioread32(&nbp_q_regs->rx_mem_low) != 0)
+      continue;
+  smp_rmb();
+  while(ioread32(&nbp_q_regs->rx_mem_high) != 0)
+      continue;
+
+  smp_wmb();
+  iowrite32(0, &nbp_q_regs->rx_tail);
+  smp_rmb();
+  while(ioread32(&nbp_q_regs->rx_tail) != 0)
+      continue;
+
+  smp_wmb();
+  iowrite32(0, &nbp_q_regs->rx_head);
+  smp_rmb();
+  while(ioread32(&nbp_q_regs->rx_head) != 0)
+      continue;
+
+  notif_buf_pair->regs = nbp_q_regs;
+
+  // 3. Allocate TX and RX notification buffers
+  notif_buf_pair->rx_buf = (struct rx_notification *)kmalloc(rx_tx_buf_size, GFP_DMA);
+  if(notif_buf_pair->rx_buf == NULL) {
+    INTEL_FPGA_PCIE_DEBUG("RX_TX allocation failed");
+    return -ENOMEM;
+  }
+  // reserve these pages, so that they are not swapped out
+  for(;page_ind <  rx_tx_buf_size;
+        page_ind += PAGE_SIZE) {
+    SetPageReserved(virt_to_page(((unsigned long)notif_buf_pair->rx_buf) + page_ind));
+  }
+  rx_buf_phys_addr = virt_to_phys(notif_buf_pair->rx_buf);
+
+  memset(notif_buf_pair->rx_buf, 0, 16384 * 64);
+
+  notif_buf_pair->tx_buf = (struct tx_notification *)(
+                                    (uint64_t) notif_buf_pair->rx_buf + (rx_tx_buf_size/2));
+  memset(notif_buf_pair->tx_buf, 0, 16384 * 64);
+
+  // 4. Initialize notification buf pair finally
+  notif_buf_pair->rx_head_ptr = (uint32_t *)&nbp_q_regs->rx_head;
+  smp_rmb();
+  notif_buf_pair->rx_head = ioread32(notif_buf_pair->rx_head_ptr);
+
+  notif_buf_pair->tx_tail_ptr = (uint32_t *)&nbp_q_regs->tx_tail;
+  smp_rmb();
+  notif_buf_pair->tx_tail = ioread32(notif_buf_pair->tx_tail_ptr);
+  notif_buf_pair->tx_head = notif_buf_pair->tx_tail;
+  smp_wmb();
+  iowrite32(notif_buf_pair->tx_head, &nbp_q_regs->tx_head);
+
+  notif_buf_pair->pending_rx_pipe_tails = (uint32_t *)kmalloc(
+                    sizeof(*(notif_buf_pair->pending_rx_pipe_tails)) * 8192, GFP_KERNEL);
+  if(notif_buf_pair->pending_rx_pipe_tails == NULL) {
+    INTEL_FPGA_PCIE_DEBUG("Pending RX pipe tails allocation failed");
+    free_rx_tx_buf(chr_dev_bk);
+    return -ENOMEM;
+  }
+  memset(notif_buf_pair->pending_rx_pipe_tails, 0, 8192);
+
+  notif_buf_pair->wrap_tracker = (uint8_t *)kmalloc(16384 / 8, GFP_KERNEL);
+  if(notif_buf_pair->wrap_tracker == NULL) {
+    kfree(notif_buf_pair->pending_rx_pipe_tails);
+    free_rx_tx_buf(chr_dev_bk);
+    return -ENOMEM;
+  }
+  memset(notif_buf_pair->wrap_tracker, 0, 16384 / 8);
+
+  // not initializing next_rx_pipe_ids here
+
+  notif_buf_pair->next_rx_ids_head = 0;
+  notif_buf_pair->next_rx_ids_tail = 0;
+  notif_buf_pair->tx_full_cnt = 0;
+  notif_buf_pair->nb_unreported_completions = 0;
+
+  printk("Rx buf address: %llx\n", rx_buf_phys_addr);
+  smp_wmb();
+  iowrite32((uint32_t)rx_buf_phys_addr, &nbp_q_regs->rx_mem_low);
+  smp_wmb();
+  iowrite32((uint32_t)(rx_buf_phys_addr >> 32), &nbp_q_regs->rx_mem_high);
+
+  rx_buf_phys_addr += rx_tx_buf_size / 2;
+
+  printk("Tx buf address: %llx\n", rx_buf_phys_addr);
+  smp_wmb();
+  iowrite32((uint32_t)rx_buf_phys_addr, &nbp_q_regs->tx_mem_low);
+  smp_wmb();
+  iowrite32((uint32_t)(rx_buf_phys_addr >> 32), &nbp_q_regs->tx_mem_high);
+
+  notif_buf_pair->allocated = true;
+
+  up(&dev_bk->sem);
+
+  return 0;
+}
+
+// TODO: Is there a common file that we can use here for these MACROS
+#define NOTIFICATION_BUF_SIZE   16384
+#define MAX_TRANSFER_LEN        131072
+#define HUGE_PAGE_SIZE          0x1UL << 21
+
+/**
+ * send_tx_pipe() - Send a TxPipe to the NIC.
+ *
+ * @chr_dev_bk: Structure containing information about the current
+ *              character file handle.
+ * @uarg:       struct enso_send_tx_pipe_params sent from the userspace.
+ *
+ * Return: 0 if successful, negative error code otherwise.
+ */
+static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
+  struct enso_send_tx_pipe_params stpp;
+  struct notification_buf_pair *notif_buf_pair = chr_dev_bk->notif_buf_pair;
+  struct tx_notification* tx_buf;
+  struct tx_notification* new_tx_notification;
+  struct dev_bookkeep *dev_bk;
+  uint32_t tx_tail;
+  uint32_t missing_bytes;
+  uint32_t missing_bytes_in_page;
+  uint8_t wrap_tracker_mask;
+
+  uint64_t transf_addr;
+  uint64_t hugepage_mask;
+  uint64_t hugepage_base_addr;
+  uint64_t hugepage_boundary;
+  uint64_t huge_page_offset;
+  uint32_t free_slots;
+  uint32_t req_length;
+
+  uint32_t buf_page_size = HUGE_PAGE_SIZE;
+
+  if (copy_from_user(&stpp, (void __user *)uarg, sizeof(stpp))) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
+    return -EFAULT;
+  }
+
+  if(notif_buf_pair == NULL) {
+    INTEL_FPGA_PCIE_DEBUG("Notification buffer is invalid");
+    return -EFAULT;
+  }
+  dev_bk = chr_dev_bk->dev_bk;
+
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  tx_buf = notif_buf_pair->tx_buf;
+  tx_tail = notif_buf_pair->tx_tail;
+  missing_bytes = stpp.len;
+
+  transf_addr = stpp.phys_addr;
+  hugepage_mask = ~((uint64_t)buf_page_size - 1);
+  hugepage_base_addr = transf_addr & hugepage_mask;
+  hugepage_boundary = hugepage_base_addr + buf_page_size;
+
+  //printk("Send request received from: %llx, %x, %x\n", stpp.phys_addr, stpp.len, stpp.id);
+
+  while (missing_bytes > 0) {
+    free_slots = (notif_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
+
+    // Block until we can send.
+    while (unlikely(free_slots == 0)) {
+      ++notif_buf_pair->tx_full_cnt;
+      update_tx_head(notif_buf_pair);
+      free_slots =
+          (notif_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
+    }
+
+    new_tx_notification = tx_buf + tx_tail;
+    req_length = (missing_bytes < MAX_TRANSFER_LEN) ? missing_bytes : MAX_TRANSFER_LEN;
+    missing_bytes_in_page = hugepage_boundary - transf_addr;
+    req_length = (req_length < missing_bytes_in_page) ? req_length : missing_bytes_in_page;
+
+    // If the transmission needs to be split among multiple requests, we
+    // need to set a bit in the wrap tracker.
+    wrap_tracker_mask = (missing_bytes > req_length) << (tx_tail & 0x7);
+    notif_buf_pair->wrap_tracker[tx_tail / 8] |= wrap_tracker_mask;
+
+    new_tx_notification->length = req_length;
+    new_tx_notification->signal = 1;
+    new_tx_notification->phys_addr = transf_addr;
+
+    huge_page_offset = (transf_addr + req_length) % (HUGE_PAGE_SIZE);
+    transf_addr = hugepage_base_addr + huge_page_offset;
+
+    tx_tail = (tx_tail + 1) % NOTIFICATION_BUF_SIZE;
+    missing_bytes -= req_length;
+  }
+
+  notif_buf_pair->tx_tail = tx_tail;
+  smp_wmb();
+  iowrite32(tx_tail, notif_buf_pair->tx_tail_ptr);
 
   up(&dev_bk->sem);
 

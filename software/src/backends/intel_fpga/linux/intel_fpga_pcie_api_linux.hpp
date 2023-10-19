@@ -84,6 +84,12 @@ struct intel_fpga_pcie_size_app_id {
   uint32_t app_id;
 } __attribute__((packed));
 
+struct enso_send_tx_pipe_params {
+  uint64_t phys_addr;
+  uint32_t len;
+  uint32_t id;
+} __attribute__((packed));
+
 #include <fcntl.h>
 #include <linux/ioctl.h>
 #include <linux/types.h>
@@ -129,7 +135,13 @@ struct intel_fpga_pcie_size_app_id {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 17, unsigned int *)
 #define INTEL_FPGA_PCIE_IOCTL_FREE_PIPE \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 18, unsigned int)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 18
+#define INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUF_PAIR \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 19, unsigned int)
+#define INTEL_FPGA_PCIE_IOCTL_SEND_TX_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 20, struct enso_send_tx_pipe_params *)
+#define INTEL_FPGA_PCIE_IOCTL_GET_UNREPORTED_COMPLETIONS \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 21, unsigned int *)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 21
 
 }  // namespace intel_fpga_pcie_api
 

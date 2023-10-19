@@ -518,4 +518,47 @@ int IntelFpgaPcieDev::free_pipe(int id) {
   return ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_FREE_PIPE, id);
 }
 
+int IntelFpgaPcieDev::allocate_notif_buf_pair(int id) {
+  int result;
+  result =
+      ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUF_PAIR, id);
+
+  if (result != 0) {
+    return -1;
+  }
+
+  return result;
+}
+
+int IntelFpgaPcieDev::send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t buf_id) {
+  int result;
+  struct enso_send_tx_pipe_params stpp;
+  stpp.phys_addr = phys_addr;
+  stpp.len = len;
+  stpp.id = buf_id;
+  result =
+      ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SEND_TX_PIPE, &stpp);
+
+  if (result != 0) {
+    std::cout << "failure at send_tx ioctl " << result << std::endl;
+    return -1;
+  }
+
+  return result;
+}
+
+int IntelFpgaPcieDev::get_unreported_completions() {
+  int result;
+  unsigned int completions;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_GET_UNREPORTED_COMPLETIONS,
+                 &completions);
+
+  if (result != 0) {
+    std::cout << "unreported completions failed" << std::endl;
+    return -1;
+  }
+
+  return completions;
+}
+
 }  // namespace intel_fpga_pcie_api

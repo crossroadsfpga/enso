@@ -185,6 +185,8 @@ struct global_bookkeep {
  */
 struct dev_bookkeep {
   struct pci_dev *dev;
+  uint64_t bar2_pcie_start;
+  uint64_t bar2_pcie_len;
   uint16_t bdf;
   struct bar_info bar[6];
   struct kmem_info kmem_info;
@@ -209,6 +211,7 @@ struct dev_bookkeep {
  * @cur_bar_num:    If @use_cmd is false, indicates the current BAR being
  *                  accessed.
  * @nb_fb_queues:   Number of fallback queues.
+ * @notif_buf_pair: Notification buffer pair specific to this device handle.
  * @notif_q_status: Bit vector to keep track of which notification queue has
  *                  been allocated for this particular character device.
  * @pipe_status:    Bit vector to keep track of which pipe has been allocated
@@ -219,8 +222,59 @@ struct chr_dev_bookkeep {
   bool use_cmd;
   unsigned int cur_bar_num;
   uint32_t nb_fb_queues;
+  struct notification_buf_pair *notif_buf_pair;
   uint8_t *notif_q_status;
   uint8_t *pipe_status;
+};
+
+struct __attribute__((__packed__)) rx_notification {
+  uint64_t signal;
+  uint64_t queue_id;
+  uint64_t tail;
+  uint64_t pad[5];
+};
+
+struct __attribute__((__packed__)) tx_notification {
+  uint64_t signal;
+  uint64_t phys_addr;
+  uint64_t length;  // In bytes (up to 1MB).
+  uint64_t pad[5];
+};
+
+struct queue_regs {
+  uint32_t rx_tail;
+  uint32_t rx_head;
+  uint32_t rx_mem_low;
+  uint32_t rx_mem_high;
+  uint32_t tx_tail;
+  uint32_t tx_head;
+  uint32_t tx_mem_low;
+  uint32_t tx_mem_high;
+  uint32_t padding[8];
+};
+
+struct notification_buf_pair {
+  struct rx_notification* rx_buf;
+  // enso_pipe_id_t* next_rx_pipe_ids;  // Next pipe ids to consume from rx_buf.
+  struct tx_notification* tx_buf;
+  uint32_t* rx_head_ptr;
+  uint32_t* tx_tail_ptr;
+  uint32_t rx_head;
+  uint32_t tx_head;
+  uint32_t tx_tail;
+  uint16_t next_rx_ids_head;
+  uint16_t next_rx_ids_tail;
+  uint32_t nb_unreported_completions;
+  uint32_t id;
+
+  struct queue_regs* regs;
+  uint64_t tx_full_cnt;
+  uint32_t ref_cnt;
+
+  uint8_t* wrap_tracker;
+  uint32_t* pending_rx_pipe_tails;
+
+  bool allocated;
 };
 
 int intel_fpga_pcie_probe(struct pci_dev *dev, const struct pci_device_id *id);
