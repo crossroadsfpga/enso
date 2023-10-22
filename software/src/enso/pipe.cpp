@@ -41,6 +41,7 @@
 #include <enso/helpers.h>
 #include <enso/pipe.h>
 #include <sched.h>
+#include <sys/eventfd.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -123,7 +124,7 @@ int TxPipe::Init() noexcept {
     }
   }
 
-  struct NotificationBufPair* notif_buf = &(device_->notification_buf_pair_);
+  struct NotificationBufPair* notif_buf = (device_->notification_buf_pair_);
 
   buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
   return 0;
@@ -145,17 +146,18 @@ int RxTxPipe::Init(bool fallback) noexcept {
   return 0;
 }
 
-std::unique_ptr<Device> Device::Create(
-    uint32_t application_id, CompletionCallback completion_callback,
-    const std::string& pcie_addr,
-    const std::string& huge_page_prefix) noexcept {
+std::unique_ptr<Device> Device::Create(uint32_t application_id,
+                                       CompletionCallback completion_callback,
+                                       const std::string& pcie_addr,
+                                       const std::string& huge_page_prefix,
+                                       bool kthread) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow) Device(
       pcie_addr, huge_page_prefix, completion_callback));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
 
-  if (dev->Init(application_id)) {
+  if (dev->Init(application_id, kthread)) {
     return std::unique_ptr<Device>{};
   }
 
@@ -177,8 +179,10 @@ Device::~Device() {
     delete pipe;
   }
 
-  notification_buf_free(&notification_buf_pair_);
+  notification_buf_free(notification_buf_pair_);
 }
+
+int Device::CreateNewUthread() {}
 
 RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
   RxPipe* pipe(new (std::nothrow) RxPipe(this));
@@ -203,15 +207,15 @@ RxPipe* Device::GetRxPipe(uint16_t queue_id) noexcept {
 }
 
 int Device::GetNbFallbackQueues() noexcept {
-  return get_nb_fallback_queues(&notification_buf_pair_);
+  return get_nb_fallback_queues(notification_buf_pair_);
 }
 
 int Device::SetRrStatus(bool rr_status) noexcept {
-  return set_round_robin_status(&notification_buf_pair_, rr_status);
+  return set_round_robin_status(notification_buf_pair_, rr_status);
 }
 
 bool Device::GetRrStatus() noexcept {
-  return get_round_robin_status(&notification_buf_pair_);
+  return get_round_robin_status(notification_buf_pair_);
 }
 
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
@@ -258,7 +262,7 @@ struct RxNotification* Device::NextRxNotif() {
   // #ifdef LATENCY_OPT
   //   int32_t id;
   //   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  //   notif = get_next_rx_notif(&notification_buf_pair_);
+  //   notif = get_next_rx_notif(notification_buf_pair_);
 
   //   while (notif) {
   //     id = notif->queue_id;
@@ -275,11 +279,11 @@ struct RxNotification* Device::NextRxNotif() {
   //       break;
   //     }
 
-  //     notif = get_next_rx_notif(&notification_buf_pair_);
+  //     notif = get_next_rx_notif(notification_buf_pair_);
   //   }
 
   // #else  // !LATENCY_OPT
-  notif = get_next_rx_notif(&notification_buf_pair_);
+  notif = get_next_rx_notif(notification_buf_pair_);
 
   // #endif  // LATENCY_OPT
 
@@ -297,6 +301,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   }
   int32_t id = notification->queue_id;
 
+  // TODO (kaajalg): make this safe? if id not in rx_pipes_map_
   RxPipe* rx_pipe = rx_pipes_map_[id];
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
@@ -311,7 +316,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  notif = get_next_rx_notif(&notification_buf_pair_);
+  notif = get_next_rx_notif(notification_buf_pair_);
 
   while (notif) {
     id = notif->queue_id;
@@ -327,11 +332,11 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
       break;
     }
 
-    notif = get_next_rx_notif(&notification_buf_pair_);
+    notif = get_next_rx_notif(notification_buf_pair_);
   }
 
 #else  // !LATENCY_OPT
-  notif = get_next_rx_notif(&notification_buf_pair_);
+  notif = get_next_rx_notif(notification_buf_pair_);
 
 #endif  // LATENCY_OPT
 
@@ -344,9 +349,24 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   return rx_tx_pipe;
 }
 
-int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
+int Device::GetNotifQueueId() noexcept { return notification_buf_pair_->id; }
 
-int Device::Init(uint32_t application_id) noexcept {
+void Device::UpdateNotificationBuffer() {
+  std::string huge_page_path =
+      huge_page_prefix_ + std::string(kHugePageNotifBufPathPrefix) +
+      std::to_string(application_id_) + "_" + std::to_string(sched_getcpu());
+
+  void* addr = get_huge_page(huge_page_path);
+  if (addr == NULL) {
+    std::cerr << "Could not get notification buffer huge page" << std::endl;
+    return -1;
+  }
+  notification_buf_pair_ = reinterpret_cast<NotificationBufPair*>(addr);
+}
+
+int Device::GetEventFd() noexcept { return eventfd_; }
+
+int Device::Init(uint32_t application_id, bool kthread) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
@@ -354,6 +374,8 @@ int Device::Init(uint32_t application_id) noexcept {
       return 1;
     }
   }
+
+  application_id_ = application_id;
 
   bdf_ = 0;
   if (kPcieAddr != "") {
@@ -371,28 +393,37 @@ int Device::Init(uint32_t application_id) noexcept {
             << std::endl;
   std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
 
-  int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
-                                  huge_page_prefix_, application_id);
-  if (ret != 0) {
-    // Could not initialize notification buffer.
-    return 3;
+  // initialize entire notification buf information for uthreads to access
+  UpdateNotificationBuffer();
+
+  if (kthread) {
+    int ret = notification_buf_init(bdf_, bar, notification_buf_pair_,
+                                    huge_page_prefix_, application_id_);
+    if (ret != 0) {
+      // Could not initialize notification buffer.
+      return 3;
+    }
   }
+
+  eventfd_ = eventfd();
 
   return 0;
 }
+
+int Device::Wait() { read(eventfd_, NULL, 0); }
 
 int Device::ApplyConfig(struct TxNotification* notification) {
   tx_pending_requests_[tx_pr_tail_].pipe_id = -1;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = 0;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
-  return send_config(&notification_buf_pair_, notification,
+  return send_config(notification_buf_pair_, notification,
                      &completion_callback_);
 }
 
 void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
-  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
+  send_to_queue(notification_buf_pair_, phys_addr, nb_bytes);
 
   uint32_t nb_pending_requests =
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
@@ -417,7 +448,7 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
  *
  */
 void Device::ProcessCompletions() {
-  uint32_t tx_completions = get_unreported_completions(&notification_buf_pair_);
+  uint32_t tx_completions = get_unreported_completions(notification_buf_pair_);
   for (uint32_t i = 0; i < tx_completions; ++i) {
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
@@ -440,27 +471,27 @@ void Device::ProcessCompletions() {
 }
 
 int Device::EnableTimeStamping() {
-  return enable_timestamp(&notification_buf_pair_);
+  return enable_timestamp(notification_buf_pair_);
 }
 
 int Device::DisableTimeStamping() {
-  return disable_timestamp(&notification_buf_pair_);
+  return disable_timestamp(notification_buf_pair_);
 }
 
 int Device::EnableRateLimiting(uint16_t num, uint16_t den) {
-  return enable_rate_limit(&notification_buf_pair_, num, den);
+  return enable_rate_limit(notification_buf_pair_, num, den);
 }
 
 int Device::DisableRateLimiting() {
-  return disable_rate_limit(&notification_buf_pair_);
+  return disable_rate_limit(notification_buf_pair_);
 }
 
 int Device::EnableRoundRobin() {
-  return enable_round_robin(&notification_buf_pair_);
+  return enable_round_robin(notification_buf_pair_);
 }
 
 int Device::DisableRoundRobin() {
-  return disable_round_robin(&notification_buf_pair_);
+  return disable_round_robin(notification_buf_pair_);
 }
 
 }  // namespace enso

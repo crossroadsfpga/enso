@@ -56,6 +56,8 @@ struct EchoArgs {
   uint32_t application_id;
 };
 
+std::array<int, kMaxNbFlows> pipe_id_to_eventfds_map_ = {};
+
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
 void* run_echo_copy(void* arg) {
@@ -72,13 +74,16 @@ void* run_echo_copy(void* arg) {
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
-  using enso::Device;
   using enso::RxPipe;
   using enso::TxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(application_id, NULL);
-  std::vector<RxPipe*> rx_pipes;
+  std::array<RxPipe*, kMaxNbFlows> rx_pipes_map;
   std::vector<TxPipe*> tx_pipes;
+
+  // for uthreads, do not create a notification buffer!
+  std::unique_ptr<Device> dev =
+      Device::Create(application_id, NULL, false, false);
+  int my_eventfd = dev->GetEventFd();
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -91,11 +96,12 @@ void* run_echo_copy(void* arg) {
       std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);
     }
+    pipe_id_to_eventfds_map_[rx_pipe->id] = my_eventfd;
 
     uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
     rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
 
-    rx_pipes.push_back(rx_pipe);
+    rx_pipes_map[rx_pipe->id] = rx_pipe;
 
     TxPipe* tx_pipe = dev->AllocateTxPipe();
     if (!tx_pipe) {
@@ -107,9 +113,27 @@ void* run_echo_copy(void* arg) {
 
   setup_done = true;
 
+  // need to read from eventfd now
+  dev->Wait();
+
   while (keep_running) {
-    for (uint32_t i = 0; i < nb_queues; ++i) {
-      auto& rx_pipe = rx_pipes[i];
+    int32_t next_enso_pipe_id = dev->next_pipe_id_;
+    if (next_enso_pipe_id < 0) {
+      continue;
+    }
+
+    // get the uthread associated with this pipe ID: store a hashtable mapping
+    // pipe IDs to eventfds then write to the eventfd of that
+    // uthread and read from your own eventfd
+    // need to make sure context switching is disabled here
+    int eventfd = pipe_id_to_eventfds_map_[next_enso_pipe_id];
+    if (eventfd != my_eventfd) {
+      // notification for not my pipe!
+      write(eventfd, NULL, 0);
+      read(eventfd, NULL, 0);
+    } else {
+      // notification for my pipe
+      auto& rx_pipe = rx_pipes_map[next_enso_pipe_id];
       auto batch = rx_pipe->RecvPkts();
 
       if (unlikely(batch.available_bytes() == 0)) {
@@ -138,21 +162,24 @@ void* run_echo_copy(void* arg) {
 
       tx_pipe->SendAndFree(batch_length);
     }
+    // after reawakening, read the new notification buffer information
+    dev->UpdateNotificationBuffer();
   }
 
   return NULL;
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 5) {
-    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
-              << std::endl
+  if (argc != 6) {
+    std::cerr << "Usage: " << argv[0]
+              << " NB_UTHREADS NB_QUEUES NB_CYCLES CORE_ID" << std::endl
               << std::endl;
-    std::cerr << "NB_CORES: Number of cores to use." << std::endl;
-    std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
+    std::cerr << "NB_UTHREADS: Number of uthreads to create." << std::endl;
+    std::cerr << "NB_QUEUES: Number of queues per uthread." << std::endl;
     std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
                  " packet."
               << std::endl;
+    std::cerr << "CORE_ID: Which core to run the uthreads on" << std::endl;
     std::cerr << "APPLICATION_ID: Count of number of applications started "
                  "before this application, starting from 0."
               << std::endl;
@@ -163,26 +190,33 @@ int main(int argc, const char* argv[]) {
   uint32_t nb_queues = atoi(argv[2]);
   uint32_t nb_cycles = atoi(argv[3]);
   uint32_t application_id = atoi(argv[4]);
+  uint32_t core_id = atoi(argv[5]);
 
   signal(SIGINT, int_handler);
 
   std::vector<pthread_t> threads;
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
-  for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
+  std::unique_ptr<Device> dev =
+      Device::Create(application_id, NULL, false, false);
+
+  for (uint32_t i = 0; i < nb_cores; ++i) {
     pthread_t thread;
     struct EchoArgs args;
     args.nb_queues = nb_queues;
-    args.core_id = core_id;
     args.nb_cycles = nb_cycles;
     args.stats = &(thread_stats[core_id]);
     args.application_id = application_id;
     pthread_create(&thread, NULL, run_echo_copy, (void*)&args);
     threads.push_back(thread);
-    usleep(100000);
+    // wait for previous thread to start waiting
+    while (!setup_done) continue;
+    setup_done = false;
   }
 
   while (!setup_done) continue;  // Wait for setup to be done.
+
+  // initialize kthread
 
   show_stats(thread_stats, &keep_running);
 

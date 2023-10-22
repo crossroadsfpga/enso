@@ -70,7 +70,9 @@ struct __attribute__((__packed__)) RxNotification {
   uint64_t signal;
   uint64_t queue_id;
   uint64_t tail;
-  uint64_t pad[5];
+  uint64_t tid;
+  uint64_t eventfd;
+  uint64_t pad[3];
 };
 
 struct __attribute__((__packed__)) TxNotification {

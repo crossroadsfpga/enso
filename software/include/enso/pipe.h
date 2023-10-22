@@ -100,7 +100,7 @@ class Device {
   static std::unique_ptr<Device> Create(
       uint32_t application_id, CompletionCallback completion_callback,
       const std::string& pcie_addr = "",
-      const std::string& huge_page_prefix = "") noexcept;
+      const std::string& huge_page_prefix = "", bool kthread) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -262,6 +262,8 @@ class Device {
    */
   int EnableRateLimiting(uint16_t num, uint16_t den);
 
+  int Device::Wait();
+
   /**
    * @brief Disables hardware rate limiting.
    *
@@ -312,6 +314,8 @@ class Device {
 
   int GetNotifQueueId() noexcept;
 
+  int GetEventFd() noexcept;
+
  private:
   struct TxPendingRequest {
     int pipe_id;
@@ -348,11 +352,13 @@ class Device {
 
   const std::string kPcieAddr;
 
-  struct NotificationBufPair notification_buf_pair_;
+  struct NotificationBufPair* notification_buf_pair_;
   int16_t core_id_;
   uint16_t bdf_;
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_;
+  uint32_t application_id_;
+  int eventfd_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -724,7 +730,7 @@ class RxPipe {
    * @param device The `Device` object that instantiated this pipe.
    */
   explicit RxPipe(Device* device) noexcept
-      : notification_buf_pair_(&(device->notification_buf_pair_)) {}
+      : notification_buf_pair_(device->notification_buf_pair_) {}
 
   /**
    * @note RxPipes cannot be deallocated from outside. The `Device` object is in

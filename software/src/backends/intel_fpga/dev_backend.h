@@ -155,6 +155,8 @@ class DevBackend {
     return dev_->allocate_pipe(fallback);
   }
 
+  int Sleep() { return 0; }
+
   /**
    * @brief Frees a pipe.
    *
