@@ -100,7 +100,7 @@ class Device {
   static std::unique_ptr<Device> Create(
       uint32_t application_id, CompletionCallback completion_callback,
       const std::string& pcie_addr = "",
-      const std::string& huge_page_prefix = "", bool kthread) noexcept;
+      const std::string& huge_page_prefix = "") noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;

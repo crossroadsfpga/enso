@@ -164,6 +164,55 @@ class DevBackend {
   }
 
   /**
+   * @brief New kthreads must register themselves with the IOKernel to share
+   * their waiters queue.
+   *
+   * @param waiter_queue_phys
+   * @param application_id
+   * @return uint32_t
+   */
+  static uint32_t register_kthread(uint64_t waiter_queue_phys,
+                                   uint32_t application_id) {
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kRegisterKthread;
+    pipe_notification.data[0] = (uint64_t)waiter_queue_phys;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == NotifType::kRegisterKthread);
+    return notification->data[0];
+  }
+
+  /**
+   * @brief When uthreads want to start waiting for a new notification in their
+   * notification buffer, must send message to IOKernel.
+   *
+   * @param uthread_id
+   */
+  void register_waiting(uint32_t uthread_id) {
+    struct PipeNotification pipe_notification;
+    pipe_notification.type = NotifType::kWaiting;
+    pipe_notification.data[0] = (uint64_t)uthread_id;
+    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    }
+
+    std::optional<PipeNotification> notification;
+
+    // Block until receive.
+    while (!(notification = queue_from_backend_->Pop())) {
+    }
+
+    assert(notification->type == NotifType::kWaiting);
+    return;
+  }
+
+  /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device.
    * @param virt_addr Address in the application's virtual address space.

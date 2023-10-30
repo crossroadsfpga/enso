@@ -54,11 +54,35 @@ struct EchoArgs {
   uint32_t nb_cycles;
   enso::stats_t* stats;
   uint32_t application_id;
+  uint32_t uthread_id;
 };
 
-std::array<int, kMaxNbFlows> pipe_id_to_eventfds_map_ = {};
+std::array<enso::Device*, kMaxNbFlows> uthread_devices;
+// need to increment this atomically
+uint32_t nb_uthreads;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
+
+void* run_kthread(void* arg) {
+  // initialize the runqueue: what to hold in here?
+  uint32_t rq_head = 0;
+  uint32_t rq_tail = 0;
+
+  std::array<pthread_t, 1000> runqueue = {0};
+
+  // infinite loop:
+  // check runqueue: if empty, then loop over all uthread notification
+  // buffers and see if
+  while (keep_running) {
+    if (rq_head == rq_tail) {
+      // loop over uthread notification buffers
+      continue;
+    }
+    pthread_t th = runqueue[rq_head];
+
+    rq_head += 1;
+  }
+}
 
 void* run_echo_copy(void* arg) {
   struct EchoArgs* args = (struct EchoArgs*)arg;
@@ -67,6 +91,7 @@ void* run_echo_copy(void* arg) {
   uint32_t nb_cycles = args->nb_cycles;
   enso::stats_t* stats = args->stats;
   uint32_t application_id = args->application_id;
+  uint32_t uthread_id = args->uthread_id;
 
   enso::set_self_core_id(core_id);
 
@@ -80,10 +105,10 @@ void* run_echo_copy(void* arg) {
   std::array<RxPipe*, kMaxNbFlows> rx_pipes_map;
   std::vector<TxPipe*> tx_pipes;
 
-  // for uthreads, do not create a notification buffer!
   std::unique_ptr<Device> dev =
-      Device::Create(application_id, NULL, false, false);
-  int my_eventfd = dev->GetEventFd();
+      Device::Create(application_id, uthread_id, NULL, false);
+
+  uthread_devices[uthread_id] = dev;
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -96,7 +121,6 @@ void* run_echo_copy(void* arg) {
       std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);
     }
-    pipe_id_to_eventfds_map_[rx_pipe->id] = my_eventfd;
 
     uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
     rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
@@ -117,23 +141,8 @@ void* run_echo_copy(void* arg) {
   dev->Wait();
 
   while (keep_running) {
-    int32_t next_enso_pipe_id = dev->next_pipe_id_;
-    if (next_enso_pipe_id < 0) {
-      continue;
-    }
-
-    // get the uthread associated with this pipe ID: store a hashtable mapping
-    // pipe IDs to eventfds then write to the eventfd of that
-    // uthread and read from your own eventfd
-    // need to make sure context switching is disabled here
-    int eventfd = pipe_id_to_eventfds_map_[next_enso_pipe_id];
-    if (eventfd != my_eventfd) {
-      // notification for not my pipe!
-      write(eventfd, NULL, 0);
-      read(eventfd, NULL, 0);
-    } else {
-      // notification for my pipe
-      auto& rx_pipe = rx_pipes_map[next_enso_pipe_id];
+    for (uint32_t i = 0; i < nb_queues; ++i) {
+      auto& rx_pipe = rx_pipes[i];
       auto batch = rx_pipe->RecvPkts();
 
       if (unlikely(batch.available_bytes() == 0)) {
@@ -162,8 +171,6 @@ void* run_echo_copy(void* arg) {
 
       tx_pipe->SendAndFree(batch_length);
     }
-    // after reawakening, read the new notification buffer information
-    dev->UpdateNotificationBuffer();
   }
 
   return NULL;
@@ -207,6 +214,7 @@ int main(int argc, const char* argv[]) {
     args.nb_cycles = nb_cycles;
     args.stats = &(thread_stats[core_id]);
     args.application_id = application_id;
+    args.uthread_id = i;
     pthread_create(&thread, NULL, run_echo_copy, (void*)&args);
     threads.push_back(thread);
     // wait for previous thread to start waiting

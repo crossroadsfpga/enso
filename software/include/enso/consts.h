@@ -87,6 +87,9 @@ static constexpr std::string_view kHugePageRxPipePathPrefix = "_rx_pipe:";
 static constexpr std::string_view kHugePagePathPrefix = "_tx_pipe:";
 static constexpr std::string_view kHugePageNotifBufPathPrefix = "_notif_buf:";
 static constexpr std::string_view kHugePageQueuePathPrefix = "_queue:";
+static constexpr std::string_view kHugePageUthreadsPathPrefix = "_uthread:";
+static constexpr std::string_view kHugePageWaitersQueuePathPrefix =
+    "_waiters_queue:";
 
 // We need this to allow the same huge page to be mapped to adjacent memory
 // regions.
@@ -147,7 +150,9 @@ enum class NotifType : uint8_t {
   kGetRrStatus = 7,
   kFreeNotifBuf = 8,
   kFreePipe = 9,
-  kGetShinkansenNotifBufId = 10
+  kGetShinkansenNotifBufId = 10,
+  kRegisterKthread = 11,
+  kWaiting = 12
 };
 
 struct PipeNotification {

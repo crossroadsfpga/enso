@@ -146,18 +146,17 @@ int RxTxPipe::Init(bool fallback) noexcept {
   return 0;
 }
 
-std::unique_ptr<Device> Device::Create(uint32_t application_id,
-                                       CompletionCallback completion_callback,
-                                       const std::string& pcie_addr,
-                                       const std::string& huge_page_prefix,
-                                       bool kthread) noexcept {
+std::unique_ptr<Device> Device::Create(
+    uint32_t application_id, uint32_t uthread_id,
+    CompletionCallback completion_callback, const std::string& pcie_addr,
+    const std::string& huge_page_prefix) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow) Device(
       pcie_addr, huge_page_prefix, completion_callback));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
 
-  if (dev->Init(application_id, kthread)) {
+  if (dev->Init(application_id, uthread_id)) {
     return std::unique_ptr<Device>{};
   }
 
@@ -351,22 +350,9 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_->id; }
 
-void Device::UpdateNotificationBuffer() {
-  std::string huge_page_path =
-      huge_page_prefix_ + std::string(kHugePageNotifBufPathPrefix) +
-      std::to_string(application_id_) + "_" + std::to_string(sched_getcpu());
-
-  void* addr = get_huge_page(huge_page_path);
-  if (addr == NULL) {
-    std::cerr << "Could not get notification buffer huge page" << std::endl;
-    return -1;
-  }
-  notification_buf_pair_ = reinterpret_cast<NotificationBufPair*>(addr);
-}
-
 int Device::GetEventFd() noexcept { return eventfd_; }
 
-int Device::Init(uint32_t application_id, bool kthread) noexcept {
+int Device::Init(uint32_t application_id, uint32_t uthread_id) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
@@ -374,8 +360,6 @@ int Device::Init(uint32_t application_id, bool kthread) noexcept {
       return 1;
     }
   }
-
-  application_id_ = application_id;
 
   bdf_ = 0;
   if (kPcieAddr != "") {
@@ -394,15 +378,22 @@ int Device::Init(uint32_t application_id, bool kthread) noexcept {
   std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
 
   // initialize entire notification buf information for uthreads to access
-  UpdateNotificationBuffer();
+  std::string huge_page_path =
+      huge_page_prefix_ + std::string(kHugePageNotifBufPathPrefix) +
+      std::to_string(application_id) + "_" + std::to_string(uthread_id);
 
-  if (kthread) {
-    int ret = notification_buf_init(bdf_, bar, notification_buf_pair_,
-                                    huge_page_prefix_, application_id_);
-    if (ret != 0) {
-      // Could not initialize notification buffer.
-      return 3;
-    }
+  void* addr = get_huge_page(huge_page_path);
+  if (addr == NULL) {
+    std::cerr << "Could not get notification buffer huge page" << std::endl;
+    return -1;
+  }
+  notification_buf_pair_ = reinterpret_cast<NotificationBufPair*>(addr);
+
+  int ret = notification_buf_init(bdf_, bar, notification_buf_pair_,
+                                  huge_page_prefix_, application_id);
+  if (ret != 0) {
+    // Could not initialize notification buffer.
+    return 3;
   }
 
   eventfd_ = eventfd();
