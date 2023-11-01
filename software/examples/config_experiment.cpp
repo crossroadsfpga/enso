@@ -30,17 +30,15 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <enso/helpers.h>
 #include <enso/pipe.h>
-#include <pthread.h>
-#include <sched.h>
-#include <unistd.h>  // for usleep
 
 #include <chrono>
 #include <csignal>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 #include "example_helpers.h"
 
@@ -49,33 +47,19 @@ static volatile bool setup_done = false;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-struct EchoArgs {
-  uint32_t nb_queues;
-  uint32_t core_id;
-  uint32_t nb_cycles;
-  enso::stats_t* stats;
-};
-
-void* run_echo(void* arg) {
-  struct EchoArgs* args = (struct EchoArgs*)arg;
-  uint32_t nb_queues = args->nb_queues;
-  uint32_t core_id = args->core_id;
-  uint32_t nb_cycles = args->nb_cycles;
-  enso::stats_t* stats = args->stats;
-
-  enso::set_self_core_id(core_id);
-
-  usleep(1000000);
+void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
+                    enso::stats_t* stats, uint32_t dst_ip) {
+  std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
   using enso::Device;
-  using enso::RxTxPipe;
+  using enso::RxPipe;
+  using enso::TxPipe;
 
-  printf("creating device\n");
-  std::unique_ptr<Device> dev = Device::Create(0, NULL);
-  std::cout << "created device\n" << std::endl;
-  std::vector<RxTxPipe*> pipes;
+  Device* dev = Device::Create();
+  std::vector<RxPipe*> rx_pipes;
+  std::vector<TxPipe*> tx_pipes;
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -83,22 +67,31 @@ void* run_echo(void* arg) {
   }
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    RxTxPipe* pipe = dev->AllocateRxTxPipe();
-    if (!pipe) {
-      std::cerr << "Problem creating RX/TX pipe" << std::endl;
+    RxPipe* rx_pipe = dev->AllocateRxPipe();
+    if (!rx_pipe) {
+      std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);
     }
-    uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
-    pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
 
-    pipes.push_back(pipe);
+    rx_pipes.push_back(rx_pipe);
+
+    TxPipe* tx_pipe = dev->AllocateTxPipe();
+    if (!tx_pipe) {
+      std::cerr << "Problem creating TX pipe" << std::endl;
+      exit(3);
+    }
+    tx_pipes.push_back(tx_pipe);
   }
 
   setup_done = true;
 
   while (keep_running) {
-    for (auto& pipe : pipes) {
-      auto batch = pipe->PeekPkts();
+    for (uint32_t i = 0; i < nb_queues; ++i) {
+      auto& rx_pipe = rx_pipes[i];
+      // bind pipes to the same socket
+      rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+
+      auto batch = rx_pipe->RecvPkts();
 
       if (unlikely(batch.available_bytes() == 0)) {
         continue;
@@ -114,29 +107,30 @@ void* run_echo(void* arg) {
         ++(stats->nb_pkts);
       }
       uint32_t batch_length = batch.processed_bytes();
-      pipe->ConfirmBytes(batch_length);
-
       stats->recv_bytes += batch_length;
       ++(stats->nb_batches);
 
-      pipe->SendAndFree(batch_length);
+      auto& tx_pipe = tx_pipes[i];
+      uint8_t* tx_buf = tx_pipe->AllocateBuf(batch_length);
+
+      memcpy(tx_buf, batch.buf(), batch_length);
+
+      rx_pipe->Clear();
+
+      tx_pipe->SendAndFree(batch_length);
     }
   }
-  return NULL;
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 5) {
-    std::cerr << "Usage: " << argv[0]
-              << " NB_CORES NB_QUEUES NB_CYCLES APPLICATION_ID" << std::endl
+  if (argc != 4) {
+    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
+              << std::endl
               << std::endl;
     std::cerr << "NB_CORES: Number of cores to use." << std::endl;
     std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
     std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
                  " packet."
-              << std::endl;
-    std::cerr << "APPLICATION_ID: Count of number of applications started "
-                 "before this application, starting from 0."
               << std::endl;
     return 1;
   }
@@ -147,19 +141,17 @@ int main(int argc, const char* argv[]) {
 
   signal(SIGINT, int_handler);
 
-  std::vector<pthread_t> threads;
+  std::vector<std::thread> threads;
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
-    pthread_t thread;
-    struct EchoArgs args;
-    args.nb_queues = nb_queues;
-    args.core_id = core_id;
-    args.nb_cycles = nb_cycles;
-    args.stats = &(thread_stats[core_id]);
-    pthread_create(&thread, NULL, run_echo, (void*)&args);
-    threads.push_back(thread);
-    usleep(100000);
+    threads.emplace_back(run_experiment, nb_queues, nb_cycles,
+                         &(thread_stats[core_id]), kBaseIpAddress);
+    if (enso::set_core_id(threads.back(), core_id)) {
+      std::cerr << "Error setting CPU affinity" << std::endl;
+      return 6;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   while (!setup_done) continue;  // Wait for setup to be done.
@@ -167,7 +159,7 @@ int main(int argc, const char* argv[]) {
   show_stats(thread_stats, &keep_running);
 
   for (auto& thread : threads) {
-    pthread_join(thread, NULL);
+    thread.join();
   }
 
   return 0;
