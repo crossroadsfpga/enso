@@ -172,7 +172,7 @@ class DevBackend {
    * @return Void
    */
   static void register_kthread(uint64_t waiter_queue_phys,
-                                   uint32_t application_id) {
+                               uint32_t application_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kRegisterKthread;
     pipe_notification.data[0] = (uint64_t)waiter_queue_phys;
@@ -197,7 +197,8 @@ class DevBackend {
    *
    * @param uthread_id
    */
-  void register_waiting(uint32_t uthread_id, uint32_t notif_buf_head, uint32_t notif_buf_id) {
+  static void register_waiting(uint32_t uthread_id, uint32_t notif_buf_head,
+                               uint32_t notif_buf_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kWaiting;
     pipe_notification.data[0] = (uint64_t)uthread_id;

@@ -88,6 +88,15 @@ class DevBackend {
     return *addr;
   }
 
+  static uint32_t register_kthread(uint64_t waiter_queue_phys,
+                                   uint32_t application_id) {
+    return 0;
+  }
+
+  static void register_waiting(uint32_t uthread_id, uint32_t notif_buf_head) {
+    return;
+  }
+
   /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device (typically the physical

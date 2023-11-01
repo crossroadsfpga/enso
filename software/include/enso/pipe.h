@@ -170,6 +170,8 @@ class Device {
 
   struct RxNotification* NextRxNotif();
 
+  uint32_t Device::GetNotifRxHead();
+
   /**
    * @brief Gets the next RxPipe that has data pending.
    *
