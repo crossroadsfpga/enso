@@ -178,7 +178,7 @@ Device::~Device() {
     delete pipe;
   }
 
-  notification_buf_free(notification_buf_pair_);
+  notification_buf_free(&notification_buf_pair_);
 }
 
 RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
@@ -348,8 +348,6 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
-int Device::GetEventFd() noexcept { return eventfd_; }
-
 int Device::Init(uint32_t application_id, uint32_t uthread_id) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
@@ -385,8 +383,6 @@ int Device::Init(uint32_t application_id, uint32_t uthread_id) noexcept {
 
   return 0;
 }
-
-int Device::Wait() { read(eventfd_, NULL, 0); }
 
 int Device::ApplyConfig(struct TxNotification* notification) {
   tx_pending_requests_[tx_pr_tail_].pipe_id = -1;
