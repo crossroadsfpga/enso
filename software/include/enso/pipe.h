@@ -90,9 +90,8 @@ class Device {
    * @return A unique pointer to the device. May be null if the device cannot be
    *         created.
    */
-  static std::unique_ptr<Device> Create(
-      const std::string& pcie_addr = "",
-      const std::string& huge_page_prefix = "") noexcept;
+  static Device* Create(const std::string& pcie_addr = "",
+                        const std::string& huge_page_prefix = "") noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;

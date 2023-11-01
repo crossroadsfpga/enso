@@ -16,3 +16,7 @@ executable('capture', 'capture.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: enso_lib, include_directories: inc)
 executable('l2_forward', 'l2_forward.cpp', dependencies: thread_dep,
            link_with: enso_lib, include_directories: inc)
+executable('notif_experiment', 'notif_experiment.cpp', dependencies: thread_dep,
+           link_with: enso_lib, include_directories: inc)
+executable('config_experiment', 'config_experiment.cpp', dependencies: thread_dep,
+           link_with: enso_lib, include_directories: inc)

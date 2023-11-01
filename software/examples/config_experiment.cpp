@@ -30,7 +30,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <enso/helpers.h>
 #include <enso/pipe.h>
 
 #include <chrono>
@@ -48,8 +47,8 @@ static volatile bool setup_done = false;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
-                   enso::stats_t* stats) {
+void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
+                    enso::stats_t* stats, uint32_t dst_ip) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
@@ -74,9 +73,6 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
       exit(3);
     }
 
-    uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
-    rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
-
     rx_pipes.push_back(rx_pipe);
 
     TxPipe* tx_pipe = dev->AllocateTxPipe();
@@ -92,6 +88,9 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
   while (keep_running) {
     for (uint32_t i = 0; i < nb_queues; ++i) {
       auto& rx_pipe = rx_pipes[i];
+      // bind pipes to the same socket
+      rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+
       auto batch = rx_pipe->RecvPkts();
 
       if (unlikely(batch.available_bytes() == 0)) {
@@ -146,8 +145,8 @@ int main(int argc, const char* argv[]) {
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
-    threads.emplace_back(run_echo_copy, nb_queues, core_id, nb_cycles,
-                         &(thread_stats[core_id]));
+    threads.emplace_back(run_experiment, nb_queues, nb_cycles,
+                         &(thread_stats[core_id]), kBaseIpAddress);
     if (enso::set_core_id(threads.back(), core_id)) {
       std::cerr << "Error setting CPU affinity" << std::endl;
       return 6;

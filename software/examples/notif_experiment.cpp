@@ -58,16 +58,19 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
   using enso::RxPipe;
   using enso::TxPipe;
 
-  Device* dev = Device::Create();
   std::vector<RxPipe*> rx_pipes;
   std::vector<TxPipe*> tx_pipes;
-
-  if (!dev) {
-    std::cerr << "Problem creating device" << std::endl;
-    exit(2);
-  }
+  std::vector<Device*> devices;
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
+    Device* dev = Device::Create();
+    if (!dev) {
+      std::cerr << "Problem creating device" << std::endl;
+      exit(2);
+    }
+    devices.push_back(dev);
+
+    std::cout << "created a device" << std::endl;
     RxPipe* rx_pipe = dev->AllocateRxPipe();
     if (!rx_pipe) {
       std::cerr << "Problem creating RX pipe" << std::endl;

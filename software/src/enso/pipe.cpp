@@ -147,17 +147,15 @@ int RxTxPipe::Init(bool fallback) noexcept {
   return 0;
 }
 
-std::unique_ptr<Device> Device::Create(
-    const std::string& pcie_addr,
-    const std::string& huge_page_prefix) noexcept {
-  std::unique_ptr<Device> dev(new (std::nothrow)
-                                  Device(pcie_addr, huge_page_prefix));
+Device* Device::Create(const std::string& pcie_addr,
+                       const std::string& huge_page_prefix) noexcept {
+  Device* dev = (new (std::nothrow) Device(pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
-    return std::unique_ptr<Device>{};
+    return NULL;
   }
 
   if (dev->Init()) {
-    return std::unique_ptr<Device>{};
+    return NULL;
   }
 
   return dev;

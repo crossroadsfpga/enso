@@ -57,7 +57,7 @@ void run_forward(uint32_t nb_queues, enso::stats_t* stats) {
   using enso::RxPipe;
   using enso::TxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create();
+  Device* dev = Device::Create();
   std::vector<RxPipe*> rx_pipes;
 
   if (!dev) {
