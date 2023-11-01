@@ -136,8 +136,17 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
          0)
     continue;
 
+  std::string huge_page_path = huge_page_prefix +
+                               std::string(kHugePageNotifBufPathPrefix) +
+                               std::to_string(notification_buf_pair->id);
   printf("huge page path: %s\n", huge_page_path.c_str());
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
+  notification_buf_pair->rx_buf =
+      (struct RxNotification*)get_huge_page(huge_page_path);
+  if (notification_buf_pair->rx_buf == NULL) {
+    std::cerr << "Could not get huge page" << std::endl;
+    return -1;
+  }
 
   memset(notification_buf_pair->rx_buf, 0, kNotificationBufSize * 64);
 

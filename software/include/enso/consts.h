@@ -88,6 +88,7 @@ static constexpr std::string_view kHugePagePathPrefix = "_tx_pipe:";
 static constexpr std::string_view kHugePageNotifBufPathPrefix = "_notif_buf:";
 static constexpr std::string_view kHugePageQueuePathPrefix = "_queue:";
 static constexpr std::string_view kHugePageUthreadsPathPrefix = "_uthread:";
+static constexpr std::string_view kHugePageKthreadsPathPrefix = "_kthread:";
 static constexpr std::string_view kHugePageWaitersQueuePathPrefix =
     "_waiters_queue:";
 

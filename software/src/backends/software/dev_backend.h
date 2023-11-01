@@ -313,8 +313,6 @@ class DevBackend {
     return notification->data[0];
   }
 
-  int Sleep() { return 0; }
-
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
       : bdf_(bdf), bar_(bar) {}

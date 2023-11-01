@@ -262,8 +262,6 @@ class Device {
    */
   int EnableRateLimiting(uint16_t num, uint16_t den);
 
-  int Device::Wait();
-
   /**
    * @brief Disables hardware rate limiting.
    *
@@ -312,9 +310,12 @@ class Device {
    */
   void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
 
+  /**
+   * @brief Get the Notif Queue Id object
+   *
+   * @return int
+   */
   int GetNotifQueueId() noexcept;
-
-  int GetEventFd() noexcept;
 
  private:
   struct TxPendingRequest {
@@ -352,7 +353,7 @@ class Device {
 
   const std::string kPcieAddr;
 
-  struct NotificationBufPair* notification_buf_pair_;
+  struct NotificationBufPair notification_buf_pair_;
   int16_t core_id_;
   uint16_t bdf_;
   std::string huge_page_prefix_;
@@ -730,7 +731,7 @@ class RxPipe {
    * @param device The `Device` object that instantiated this pipe.
    */
   explicit RxPipe(Device* device) noexcept
-      : notification_buf_pair_(device->notification_buf_pair_) {}
+      : notification_buf_pair_(&(device->notification_buf_pair_)) {}
 
   /**
    * @note RxPipes cannot be deallocated from outside. The `Device` object is in
