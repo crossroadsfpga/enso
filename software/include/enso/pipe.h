@@ -358,7 +358,6 @@ class Device {
   uint16_t bdf_;
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_;
-  uint32_t application_id_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;

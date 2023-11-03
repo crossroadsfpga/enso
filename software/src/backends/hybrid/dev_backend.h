@@ -169,13 +169,15 @@ class DevBackend {
    *
    * @param waiter_queue_phys
    * @param application_id
-   * @return uint32_t
+   * @return Void
    */
-  static uint32_t register_kthread(uint64_t waiter_queue_phys,
+  static void register_kthread(uint64_t waiter_queue_phys,
                                    uint32_t application_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kRegisterKthread;
     pipe_notification.data[0] = (uint64_t)waiter_queue_phys;
+    pipe_notification.data[1] = (uint64_t)application_id;
+    pipe_notification.data[2] = syscall(SYS_gettid);
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
@@ -186,7 +188,7 @@ class DevBackend {
     }
 
     assert(notification->type == NotifType::kRegisterKthread);
-    return notification->data[0];
+    return;
   }
 
   /**
@@ -195,10 +197,12 @@ class DevBackend {
    *
    * @param uthread_id
    */
-  void register_waiting(uint32_t uthread_id) {
+  void register_waiting(uint32_t uthread_id, uint32_t notif_buf_head, uint32_t notif_buf_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kWaiting;
     pipe_notification.data[0] = (uint64_t)uthread_id;
+    pipe_notification.data[1] = (uint64_t)notif_buf_head;
+    pipe_notification.data[2] = (uint64_t)notif_buf_id;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
