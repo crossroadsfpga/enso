@@ -146,11 +146,11 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    uint32_t application_id, CompletionCallback completion_callback,
-    const std::string& pcie_addr,
+    uint32_t application_id, uint32_t uthread_id,
+    CompletionCallback completion_callback, const std::string& pcie_addr,
     const std::string& huge_page_prefix) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow) Device(
-      pcie_addr, huge_page_prefix, completion_callback));
+      uthread_id, completion_callback, pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
@@ -347,7 +347,10 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
-uint32_t Device::GetNotifRxHead() { return notification_buf_pair_.rx_head; }
+void Device::RegisterWaiting() {
+  DevBackend::register_waiting(uthread_id_, notification_buf_pair_.rx_head,
+                               notification_buf_pair_.id);
+}
 
 int Device::Init(uint32_t application_id) noexcept {
   if (core_id_ < 0) {

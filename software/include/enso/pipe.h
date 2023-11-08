@@ -98,8 +98,8 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      uint32_t application_id, CompletionCallback completion_callback,
-      const std::string& pcie_addr = "",
+      uint32_t application_id, uint32_t uthread_id,
+      CompletionCallback completion_callback, const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
   Device(const Device&) = delete;
@@ -168,9 +168,20 @@ class Device {
    */
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
 
+  /**
+   * @brief Gets the next RX notification object for this device.
+   *
+   * @return struct RxNotification*
+   */
   struct RxNotification* NextRxNotif();
 
-  uint32_t Device::GetNotifRxHead();
+  /**
+   * @brief Informs the IOKernel that the uthread with this device is going to
+   * start waiting.
+   *
+   * @param uthread_id
+   */
+  void Device::RegisterWaiting();
 
   /**
    * @brief Gets the next RxPipe that has data pending.
@@ -328,8 +339,8 @@ class Device {
   /**
    * Use `Create` factory method to instantiate objects externally.
    */
-  Device(const std::string& pcie_addr, std::string huge_page_prefix,
-         CompletionCallback completion_callback) noexcept
+  Device(uint32_t uthread_id, CompletionCallback completion_callback,
+         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
       : kPcieAddr(pcie_addr) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
@@ -340,6 +351,7 @@ class Device {
     }
     huge_page_prefix_ = huge_page_prefix;
     completion_callback_ = completion_callback;
+    uthread_id_ = uthread_id;
   }
 
   /**
@@ -759,6 +771,8 @@ class RxPipe {
   void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
+
+  uint32_t uthread_id_;
 };
 
 /**

@@ -195,6 +195,9 @@ class DevBackend {
    * @brief When uthreads want to start waiting for a new notification in their
    * notification buffer, must send message to IOKernel.
    *
+   * Do not need to wait for a response, the IOKernel can take note
+   * of if new notification must be sent to uthread.
+   *
    * @param uthread_id
    */
   static void register_waiting(uint32_t uthread_id, uint32_t notif_buf_head,
@@ -207,13 +210,6 @@ class DevBackend {
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
-    std::optional<PipeNotification> notification;
-
-    // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
-    }
-
-    assert(notification->type == NotifType::kWaiting);
     return;
   }
 
