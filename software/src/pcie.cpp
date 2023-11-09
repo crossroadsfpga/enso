@@ -712,6 +712,11 @@ uint64_t get_dev_addr_from_virt_addr(
   return dev_addr;
 }
 
+void register_waiting(uint32_t uthread_id, uint32_t notif_rx_head,
+                      uint32_t notif_id) {
+  DevBackend::register_waiting(uthread_id, notif_rx_head, notif_id);
+}
+
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);

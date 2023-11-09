@@ -78,7 +78,8 @@ void* capture_packets(void* arg) {
   using enso::Device;
   using enso::RxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(application_id, NULL, pcie_addr);
+  std::unique_ptr<Device> dev =
+      Device::Create(application_id, 0, NULL, pcie_addr);
   std::vector<RxPipe*> rx_pipes;
 
   if (!dev) {

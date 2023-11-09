@@ -331,6 +331,16 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
  */
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
+/**
+ * @brief
+ *
+ * @param uthread_id
+ * @param notif_rx_head
+ * @param notif_id
+ */
+void register_waiting(uint32_t uthread_id, uint32_t notif_rx_head,
+                      uint32_t notif_id);
+
 }  // namespace enso
 
 #endif  // SOFTWARE_SRC_PCIE_H_

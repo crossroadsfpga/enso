@@ -76,7 +76,7 @@ void* run_echo_copy(void* arg) {
   using enso::RxPipe;
   using enso::TxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(application_id, NULL);
+  std::unique_ptr<Device> dev = Device::Create(application_id, 0, NULL);
   std::vector<RxPipe*> rx_pipes;
   std::vector<TxPipe*> tx_pipes;
 

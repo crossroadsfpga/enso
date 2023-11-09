@@ -181,7 +181,7 @@ class Device {
    *
    * @param uthread_id
    */
-  void Device::RegisterWaiting();
+  void RegisterWaiting();
 
   /**
    * @brief Gets the next RxPipe that has data pending.
@@ -372,6 +372,7 @@ class Device {
   uint16_t bdf_;
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_;
+  uint32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -771,8 +772,6 @@ class RxPipe {
   void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
-
-  uint32_t uthread_id_;
 };
 
 /**

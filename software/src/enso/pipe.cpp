@@ -348,8 +348,8 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
 void Device::RegisterWaiting() {
-  DevBackend::register_waiting(uthread_id_, notification_buf_pair_.rx_head,
-                               notification_buf_pair_.id);
+  register_waiting(uthread_id_, notification_buf_pair_.rx_head,
+                   notification_buf_pair_.id);
 }
 
 int Device::Init(uint32_t application_id) noexcept {

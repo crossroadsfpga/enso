@@ -120,12 +120,19 @@ class DevBackend {
     return notification->data[1];
   }
 
-  static uint32_t register_kthread(uint64_t waiter_queue_phys,
-                                   uint32_t application_id) {
+  static _enso_always_inline uint32_t
+  register_kthread(uint64_t waiter_queue_phys, uint32_t application_id) {
+    (void)waiter_queue_phys;
+    (void)application_id;
     return 0;
   }
 
-  static void register_waiting(uint32_t uthread_id, uint32_t notif_buf_head) {
+  static _enso_always_inline void register_waiting(uint32_t uthread_id,
+                                                   uint32_t notif_buf_head,
+                                                   uint32_t notif_buf_id) {
+    (void)uthread_id;
+    (void)notif_buf_head;
+    (void)notif_buf_id;
     return;
   }
 
