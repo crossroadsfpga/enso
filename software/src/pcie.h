@@ -332,7 +332,7 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
 /**
- * @brief
+ * @brief Registers a waiting uthread with the IOKernel.
  *
  * @param uthread_id
  * @param notif_rx_head
@@ -340,6 +340,15 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global);
  */
 void register_waiting(uint32_t uthread_id, uint32_t notif_rx_head,
                       uint32_t notif_id);
+
+/**
+ * @brief Registers a kthread with the IOKernel.
+ *
+ * @param kthread_waiters_phys_addr
+ * @param application_id
+ */
+void pcie_register_kthread(uint64_t kthread_waiters_phys_addr,
+                           uint32_t application_id);
 
 }  // namespace enso
 

@@ -184,6 +184,13 @@ class Device {
   void RegisterWaiting();
 
   /**
+   * @brief Informs the IOKernel of a new kthread running on a certain core.
+   *
+   */
+  void RegisterKthread(uint64_t kthread_waiters_phys_addr,
+                       uint32_t application_id);
+
+  /**
    * @brief Gets the next RxPipe that has data pending.
    *
    * @warning This function can only be used when there are *only* RX pipes.

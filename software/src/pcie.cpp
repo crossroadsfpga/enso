@@ -717,6 +717,11 @@ void register_waiting(uint32_t uthread_id, uint32_t notif_rx_head,
   DevBackend::register_waiting(uthread_id, notif_rx_head, notif_id);
 }
 
+void pcie_register_kthread(uint64_t kthread_waiters_phys_addr,
+                           uint32_t application_id) {
+  DevBackend::register_kthread(kthread_waiters_phys_addr, application_id);
+}
+
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
