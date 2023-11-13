@@ -787,6 +787,7 @@ class TxPipe {
    * @return The allocated buffer address.
    */
   uint8_t* AllocateBuf(uint32_t target_capacity = 0) {
+    // std::cout << "allocate buf " << target_capacity << std::endl;
     ExtendBufToTarget(target_capacity);
     return buf_ + app_begin_;
   }

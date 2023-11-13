@@ -63,6 +63,7 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
+  // std::cout << "binding" << std::endl;
   insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip, src_ip,
                     protocol, id_);
   return 0;

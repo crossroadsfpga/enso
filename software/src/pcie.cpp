@@ -598,6 +598,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail);
 
   // Wait for request to be consumed.
+  // std::cout << "waiting for request to be consumed" << std::endl;
   uint32_t nb_unreported_completions =
       notification_buf_pair->nb_unreported_completions;
   while (notification_buf_pair->nb_unreported_completions ==
