@@ -45,6 +45,7 @@
 #include <fastscheduler/defs.hpp>
 #include <fastscheduler/kthread.hpp>
 #include <fastscheduler/sched.hpp>
+#include <fastscheduler/uthread.hpp>
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -71,100 +72,102 @@ uint32_t nb_uthreads;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-// void run_echo_copy(void* arg) {
-//   struct EchoArgs* args = (struct EchoArgs*)arg;
-//   uint32_t nb_queues = args->nb_queues;
-//   uint32_t core_id = args->core_id;
-//   uint32_t nb_cycles = args->nb_cycles;
-//   enso::stats_t* stats = args->stats;
-//   uint32_t application_id = args->application_id;
-//   uint32_t uthread_id = args->uthread_id;
+void run_echo_copy(void* arg) {
+  struct EchoArgs* args = (struct EchoArgs*)arg;
+  uint32_t nb_queues = args->nb_queues;
+  uint32_t core_id = args->core_id;
+  uint32_t nb_cycles = args->nb_cycles;
+  enso::stats_t* stats = args->stats;
+  uint32_t application_id = args->application_id;
+  uint32_t uthread_id = args->uthread_id;
 
-//   uthread_t* uthread = thread_self();
+  using sched::uthread_t;
 
-//   usleep(1000000);
+  uthread_t* uthread = sched::uthread_self();
 
-//   std::cout << "Running on core " << sched_getcpu() << std::endl;
+  usleep(1000000);
 
-//   using enso::Device;
-//   using enso::RxPipe;
-//   using enso::TxPipe;
+  std::cout << "Running on core " << sched_getcpu() << std::endl;
 
-//   std::vector<RxPipe*> rx_pipes;
-//   std::vector<TxPipe*> tx_pipes;
+  using enso::Device;
+  using enso::RxPipe;
+  using enso::TxPipe;
 
-//   std::unique_ptr<Device> dev =
-//       Device::Create(application_id, uthread_id, NULL);
+  std::vector<RxPipe*> rx_pipes;
+  std::vector<TxPipe*> tx_pipes;
 
-//   if (!dev) {
-//     std::cerr << "Problem creating device" << std::endl;
-//     exit(2);
-//   }
+  std::unique_ptr<Device> dev =
+      Device::Create(application_id, uthread_id, NULL);
 
-//   for (uint32_t i = 0; i < nb_queues; ++i) {
-//     RxPipe* rx_pipe = dev->AllocateRxPipe();
-//     if (!rx_pipe) {
-//       std::cerr << "Problem creating RX pipe" << std::endl;
-//       exit(3);
-//     }
+  if (!dev) {
+    std::cerr << "Problem creating device" << std::endl;
+    exit(2);
+  }
 
-//     uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
-//     rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+  for (uint32_t i = 0; i < nb_queues; ++i) {
+    RxPipe* rx_pipe = dev->AllocateRxPipe();
+    if (!rx_pipe) {
+      std::cerr << "Problem creating RX pipe" << std::endl;
+      exit(3);
+    }
 
-//     rx_pipes.push_back(rx_pipe);
+    uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
+    rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
 
-//     TxPipe* tx_pipe = dev->AllocateTxPipe();
-//     if (!tx_pipe) {
-//       std::cerr << "Problem creating TX pipe" << std::endl;
-//       exit(3);
-//     }
-//     tx_pipes.push_back(tx_pipe);
-//   }
+    rx_pipes.push_back(rx_pipe);
 
-//   setup_done = true;
+    TxPipe* tx_pipe = dev->AllocateTxPipe();
+    if (!tx_pipe) {
+      std::cerr << "Problem creating TX pipe" << std::endl;
+      exit(3);
+    }
+    tx_pipes.push_back(tx_pipe);
+  }
 
-//   uint32_t num_failed = 0;
-//   while (keep_running) {
-//     for (uint32_t i = 0; i < nb_queues; ++i) {
-//       auto& rx_pipe = rx_pipes[i];
-//       auto batch = rx_pipe->RecvPkts();
+  setup_done = true;
 
-//       if (unlikely(batch.available_bytes() == 0)) {
-//         num_failed += 1;
-//         if (num_failed == MAX_ITERATIONS) {
-//           dev->RegisterWaiting();
-//           enter_schedule(uthread);
+  uint32_t num_failed = 0;
+  while (keep_running) {
+    for (uint32_t i = 0; i < nb_queues; ++i) {
+      auto& rx_pipe = rx_pipes[i];
+      auto batch = rx_pipe->RecvPkts();
 
-//           num_failed = 0;
-//         }
-//         continue;
-//       }
-//       num_failed = 0;
+      if (unlikely(batch.available_bytes() == 0)) {
+        num_failed += 1;
+        if (num_failed == MAX_ITERATIONS) {
+          dev->RegisterWaiting();
+          sched::enter_schedule(uthread);
 
-//       for (auto pkt : batch) {
-//         ++pkt[63];  // Increment payload.
+          num_failed = 0;
+        }
+        continue;
+      }
+      num_failed = 0;
 
-//         for (uint32_t i = 0; i < nb_cycles; ++i) {
-//           asm("nop");
-//         }
+      for (auto pkt : batch) {
+        ++pkt[63];  // Increment payload.
 
-//         ++(stats->nb_pkts);
-//       }
-//       uint32_t batch_length = batch.processed_bytes();
-//       stats->recv_bytes += batch_length;
-//       ++(stats->nb_batches);
+        for (uint32_t i = 0; i < nb_cycles; ++i) {
+          asm("nop");
+        }
 
-//       auto& tx_pipe = tx_pipes[i];
-//       uint8_t* tx_buf = tx_pipe->AllocateBuf(batch_length);
+        ++(stats->nb_pkts);
+      }
+      uint32_t batch_length = batch.processed_bytes();
+      stats->recv_bytes += batch_length;
+      ++(stats->nb_batches);
 
-//       memcpy(tx_buf, batch.buf(), batch_length);
+      auto& tx_pipe = tx_pipes[i];
+      uint8_t* tx_buf = tx_pipe->AllocateBuf(batch_length);
 
-//       rx_pipe->Clear();
+      memcpy(tx_buf, batch.buf(), batch_length);
 
-//       tx_pipe->SendAndFree(batch_length);
-//     }
-//   }
-// }
+      rx_pipe->Clear();
+
+      tx_pipe->SendAndFree(batch_length);
+    }
+  }
+}
 
 int main(int argc, const char* argv[]) {
   if (argc != 6) {
@@ -193,9 +196,9 @@ int main(int argc, const char* argv[]) {
   std::cout << "hi!" << std::endl;
 
   uint32_t nb_cores = atoi(argv[1]);
-  // uint32_t nb_uthreads = atoi(argv[2]);
-  // uint32_t nb_queues = atoi(argv[3]);
-  // uint32_t nb_cycles = atoi(argv[4]);
+  uint32_t nb_uthreads = atoi(argv[2]);
+  uint32_t nb_queues = atoi(argv[3]);
+  uint32_t nb_cycles = atoi(argv[4]);
   uint32_t application_id = atoi(argv[5]);
 
   signal(SIGINT, int_handler);
@@ -204,53 +207,49 @@ int main(int argc, const char* argv[]) {
   std::vector<kthread_t*> kthreads;
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
-  std::cout << "wow" << std::endl;
+  pthread_barrier_t init_barrier;
+  pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
 
   // Create all of the kthreads
   for (uint32_t i = 0; i < nb_cores; ++i) {
     std::cout << "creating kthread on core " << i << std::endl;
     kthread_t* kthread = sched::kthread_create(application_id, i);
+    kthread->barrier = &init_barrier;
     pthread_t thread;
-    pthread_create(&thread, NULL, sched::kthread_entry, (void*)kthread);
+    pthread_create(&thread, NULL, sched::kthread_entry, (void*)(kthread));
     pthreads.push_back(thread);
     kthreads.push_back(kthread);
   }
 
-  // // add all of the uthreads to the kthreads runqueues
-  // uint32_t current_kthread = 0;
-  // for (uint32_t i = 0; i < nb_uthreads; ++i) {
-  //   struct EchoArgs args;
-  //   args.nb_queues = nb_queues;
-  //   args.nb_cycles = nb_cycles;
-  //   args.stats = &(thread_stats[core_id]);
-  //   args.application_id = application_id;
-  //   args.uthread_id = i;
-  //   uthread_t* uthread =
-  //       thread_create(run_echo_copy, (void*)&args, application_id, i);
+  // add all of the uthreads to the kthreads runqueues
+  uint32_t current_kthread = 0;
+  for (uint32_t i = 0; i < nb_uthreads; ++i) {
+    std::cout << "adding uthread " << i << " to kthread " << current_kthread
+              << std::endl;
+    struct EchoArgs args;
+    args.nb_queues = nb_queues;
+    args.nb_cycles = nb_cycles;
+    args.stats = &(thread_stats[current_kthread]);
+    args.application_id = application_id;
+    args.uthread_id = i;
+    uthread_t* th =
+        sched::uthread_create(run_echo_copy, (void*)&args, application_id, i);
+    std::cout << "created thread" << std::endl;
+    // Add the uthread to the kthread's runqueue
+    kthread_t* k = kthreads[current_kthread];
+    uthread_ready_kthread(k, th);
+    current_kthread = (current_kthread + 1) % nb_cores;
+  }
 
-  //   kthread_t* kthread = kthreads[current_kthread];
-  //   if (add_to_runqueue(kthread, uthread) < 0) {
-  //     exit(2);
-  //   }
-  //   current_kthread = (current_kthread + 1) % nb_cores;
-  // }
-
-  // // start up all of the kthreads
-  // for (uint32_t i = 0; i < nb_cores; ++i) {
-  //   kthread_t* kthread = kthreads[i];
-  //   if (kthread_wake_up(kthread) < 0) {
-  //     exit(2);
-  //   }
-  // }
-
-  // while (!setup_done) continue;  // Wait for setup to be done.
-
+  pthread_barrier_wait(&init_barrier);
   // // initialize kthread
 
   // show_stats(thread_stats, &keep_running);
 
-  for (auto& thread : pthreads) {
-    pthread_join(thread, NULL);
+  // for (auto& thread : pthreads) {
+  //   pthread_join(thread, NULL);
+  // }
+  while (true) {
   }
 
   return 0;

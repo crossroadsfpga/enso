@@ -80,8 +80,6 @@ uint64_t virt_to_phys(void* virt) {
 }
 
 void* get_huge_page(const std::string& path, size_t size, bool mirror) {
-  printf("helloooo\n");
-  std::cout << "get hugeee" << std::endl;
   int fd;
   if (size == 0) {
     size = kBufPageSize;
@@ -111,7 +109,6 @@ void* get_huge_page(const std::string& path, size_t size, bool mirror) {
 
   void* virt_addr = (void*)mmap(nullptr, size * 2, PROT_READ | PROT_WRITE,
                                 MAP_SHARED | MAP_HUGETLB, fd, 0);
-  std::cout << "mmap fd: " << fd << std::endl;
   if (virt_addr == (void*)-1) {
     std::cerr << "(" << errno << ") Could not mmap huge page" << std::endl;
     close(fd);
