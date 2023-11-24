@@ -62,7 +62,6 @@ struct EchoArgs {
   uint32_t core_id;
   uint32_t nb_cycles;
   enso::stats_t* stats;
-  uint32_t application_id;
   uint32_t uthread_id;
 };
 
@@ -78,7 +77,6 @@ void run_echo_copy(void* arg) {
   uint32_t core_id = args->core_id;
   uint32_t nb_cycles = args->nb_cycles;
   enso::stats_t* stats = args->stats;
-  uint32_t application_id = args->application_id;
   uint32_t uthread_id = args->uthread_id;
 
   using sched::uthread_t;
@@ -96,8 +94,7 @@ void run_echo_copy(void* arg) {
   std::vector<RxPipe*> rx_pipes;
   std::vector<TxPipe*> tx_pipes;
 
-  std::unique_ptr<Device> dev =
-      Device::Create(application_id, uthread_id, NULL);
+  std::unique_ptr<Device> dev = Device::Create(uthread_id, NULL);
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -230,7 +227,6 @@ int main(int argc, const char* argv[]) {
     args.nb_queues = nb_queues;
     args.nb_cycles = nb_cycles;
     args.stats = &(thread_stats[current_kthread]);
-    args.application_id = application_id;
     args.uthread_id = i;
     uthread_t* th =
         sched::uthread_create(run_echo_copy, (void*)&args, application_id, i);
@@ -242,14 +238,11 @@ int main(int argc, const char* argv[]) {
   }
 
   pthread_barrier_wait(&init_barrier);
-  // // initialize kthread
 
-  // show_stats(thread_stats, &keep_running);
+  show_stats(thread_stats, &keep_running);
 
-  // for (auto& thread : pthreads) {
-  //   pthread_join(thread, NULL);
-  // }
-  while (true) {
+  for (auto& thread : pthreads) {
+    pthread_join(thread, NULL);
   }
 
   return 0;

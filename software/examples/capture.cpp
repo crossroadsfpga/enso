@@ -57,7 +57,6 @@ struct CaptureArgs {
   std::string pcap_file;
   std::string pcie_addr;
   enso::stats_t* stats;
-  uint32_t application_id;
 };
 
 void* capture_packets(void* arg) {
@@ -67,7 +66,6 @@ void* capture_packets(void* arg) {
   std::string pcap_file = args->pcap_file;
   std::string pcie_addr = args->pcie_addr;
   enso::stats_t* stats = args->stats;
-  uint32_t application_id = args->application_id;
 
   enso::set_self_core_id(core_id);
 
@@ -78,8 +76,7 @@ void* capture_packets(void* arg) {
   using enso::Device;
   using enso::RxPipe;
 
-  std::unique_ptr<Device> dev =
-      Device::Create(application_id, 0, NULL, pcie_addr);
+  std::unique_ptr<Device> dev = Device::Create(0, NULL, pcie_addr);
   std::vector<RxPipe*> rx_pipes;
 
   if (!dev) {
@@ -170,8 +167,6 @@ int main(int argc, const char* argv[]) {
     return 2;
   }
 
-  uint32_t application_id = atoi(argv[3]);
-
   std::string pcie_addr;
   if (argc == 5) {
     pcie_addr = argv[4];
@@ -188,7 +183,6 @@ int main(int argc, const char* argv[]) {
   args.pcap_file = pcap_file;
   args.pcie_addr = pcie_addr;
   args.stats = &(thread_stats[0]);
-  args.application_id = application_id;
   pthread_create(&thread, NULL, capture_packets, static_cast<void*>(&args));
 
   while (!setup_done) continue;  // Wait for setup to be done.

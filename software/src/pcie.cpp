@@ -75,7 +75,7 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix,
-                          uint32_t application_id) {
+                          uint32_t uthread_id) {
   DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
   if (unlikely(fpga_dev == nullptr)) {
     std::cerr << "Could not create device" << std::endl;
@@ -83,7 +83,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   }
   notification_buf_pair->fpga_dev = fpga_dev;
 
-  int notif_pipe_id = fpga_dev->AllocateNotifBuf(application_id);
+  int notif_pipe_id = fpga_dev->AllocateNotifBuf(uthread_id);
 
   if (notif_pipe_id < 0) {
     std::cerr << "Could not allocate notification buffer" << std::endl;

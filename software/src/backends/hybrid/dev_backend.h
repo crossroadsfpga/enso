@@ -43,6 +43,7 @@
 
 #include <assert.h>
 #include <sched.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #include <iostream>
@@ -295,11 +296,11 @@ class DevBackend {
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
-  int AllocateNotifBuf(uint32_t application_id) {
+  int AllocateNotifBuf(uint32_t uthread_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kAllocateNotifBuf;
-    pipe_notification.data[0] = application_id;
-    pipe_notification.data[1] = (uint64_t)enso::get_tid();
+    pipe_notification.data[0] = (uint64_t)enso::get_tid();
+    pipe_notification.data[1] = (uint64_t)uthread_id;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 

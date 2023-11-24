@@ -146,8 +146,8 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    uint32_t application_id, uint32_t uthread_id,
-    CompletionCallback completion_callback, const std::string& pcie_addr,
+    uint32_t uthread_id, CompletionCallback completion_callback,
+    const std::string& pcie_addr,
     const std::string& huge_page_prefix) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow) Device(
       uthread_id, completion_callback, pcie_addr, huge_page_prefix));
@@ -155,7 +155,7 @@ std::unique_ptr<Device> Device::Create(
     return std::unique_ptr<Device>{};
   }
 
-  if (dev->Init(application_id)) {
+  if (dev->Init(uthread_id)) {
     return std::unique_ptr<Device>{};
   }
 
@@ -352,7 +352,7 @@ void Device::RegisterWaiting() {
                    notification_buf_pair_.id);
 }
 
-int Device::Init(uint32_t application_id) noexcept {
+int Device::Init(uint32_t uthread_id) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
@@ -379,7 +379,7 @@ int Device::Init(uint32_t application_id) noexcept {
 
   // initialize entire notification buf information for uthreads to access
   int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
-                                  huge_page_prefix_, application_id);
+                                  huge_page_prefix_, uthread_id);
   if (ret != 0) {
     // Could not initialize notification buffer.
     return 3;

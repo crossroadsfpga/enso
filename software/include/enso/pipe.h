@@ -98,8 +98,8 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      uint32_t application_id, uint32_t uthread_id,
-      CompletionCallback completion_callback, const std::string& pcie_addr = "",
+      uint32_t uthread_id, CompletionCallback completion_callback,
+      const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
   Device(const Device&) = delete;
@@ -366,7 +366,7 @@ class Device {
    *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init(uint32_t application_id) noexcept;
+  int Init(uint32_t uthread_id) noexcept;
 
   friend class RxPipe;
   friend class TxPipe;

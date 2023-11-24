@@ -54,7 +54,6 @@ struct EchoArgs {
   uint32_t core_id;
   uint32_t nb_cycles;
   enso::stats_t* stats;
-  uint32_t application_id;
 };
 
 void* run_echo(void* arg) {
@@ -63,7 +62,6 @@ void* run_echo(void* arg) {
   uint32_t core_id = args->core_id;
   uint32_t nb_cycles = args->nb_cycles;
   enso::stats_t* stats = args->stats;
-  uint32_t application_id = args->application_id;
 
   enso::set_self_core_id(core_id);
 
@@ -75,7 +73,7 @@ void* run_echo(void* arg) {
   using enso::RxTxPipe;
 
   printf("creating device\n");
-  std::unique_ptr<Device> dev = Device::Create(application_id, 0, NULL);
+  std::unique_ptr<Device> dev = Device::Create(0, NULL);
   std::cout << "created device\n" << std::endl;
   std::vector<RxTxPipe*> pipes;
 
@@ -148,7 +146,6 @@ int main(int argc, const char* argv[]) {
   uint32_t nb_cores = atoi(argv[1]);
   uint32_t nb_queues = atoi(argv[2]);
   uint32_t nb_cycles = atoi(argv[3]);
-  uint32_t application_id = atoi(argv[4]);
 
   signal(SIGINT, int_handler);
 
@@ -162,7 +159,6 @@ int main(int argc, const char* argv[]) {
     args.core_id = core_id;
     args.nb_cycles = nb_cycles;
     args.stats = &(thread_stats[core_id]);
-    args.application_id = application_id;
     pthread_create(&thread, NULL, run_echo, (void*)&args);
     threads.push_back(thread);
     usleep(100000);
