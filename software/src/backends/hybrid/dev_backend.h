@@ -175,11 +175,10 @@ class DevBackend {
    */
   static _enso_always_inline void register_kthread(
       uint64_t kthread_waiters_phys_addr, uint32_t application_id) {
+    (void)kthread_waiters_phys_addr;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kRegisterKthread;
-    pipe_notification.data[0] = kthread_waiters_phys_addr;
-    pipe_notification.data[1] = (uint64_t)application_id;
-    pipe_notification.data[2] = syscall(SYS_gettid);
+    pipe_notification.data[0] = (uint64_t)application_id;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
@@ -203,13 +202,12 @@ class DevBackend {
    * @param uthread_id
    */
   static _enso_always_inline void register_waiting(uint32_t uthread_id,
-                                                   uint32_t notif_buf_head,
+
                                                    uint32_t notif_buf_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kWaiting;
     pipe_notification.data[0] = (uint64_t)uthread_id;
-    pipe_notification.data[1] = (uint64_t)notif_buf_head;
-    pipe_notification.data[2] = (uint64_t)notif_buf_id;
+    pipe_notification.data[1] = (uint64_t)notif_buf_id;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
@@ -299,8 +297,7 @@ class DevBackend {
   int AllocateNotifBuf(uint32_t uthread_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kAllocateNotifBuf;
-    pipe_notification.data[0] = (uint64_t)enso::get_tid();
-    pipe_notification.data[1] = (uint64_t)uthread_id;
+    pipe_notification.data[0] = (uint64_t)uthread_id;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 

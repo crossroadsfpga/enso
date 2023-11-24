@@ -132,7 +132,7 @@ void run_echo_copy(void* arg) {
       if (unlikely(batch.available_bytes() == 0)) {
         num_failed += 1;
         if (num_failed == MAX_ITERATIONS) {
-          dev->RegisterWaiting();
+          dev->RegisterWaiting(uthread);
           sched::enter_schedule(uthread);
 
           num_failed = 0;

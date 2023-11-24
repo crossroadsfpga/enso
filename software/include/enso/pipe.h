@@ -47,6 +47,7 @@
 
 #include <array>
 #include <cassert>
+#include <fastscheduler/defs.hpp>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -181,7 +182,7 @@ class Device {
    *
    * @param uthread_id
    */
-  void RegisterWaiting();
+  void RegisterWaiting(sched::uthread_t* uthread);
 
   /**
    * @brief Informs the IOKernel of a new kthread running on a certain core.
