@@ -66,7 +66,7 @@ thread_local uint64_t shinkansen_notif_buf_id_;
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
-    std::cerr << "Using software backend" << std::endl;
+    std::cerr << "Using hybrid backend" << std::endl;
 
     DevBackend* dev = new (std::nothrow) DevBackend(bdf, bar);
 
@@ -74,12 +74,23 @@ class DevBackend {
       return nullptr;
     }
 
-    if (dev->Init()) {
+    if (dev->Init(bdf, bar)) {
       delete dev;
       return nullptr;
     }
 
     return dev;
+  }
+
+  static void Init(DevBackend* dev, unsigned int bdf, int bar) noexcept {
+    std::cerr << "Initializing hybrid backend" << std::endl;
+
+    if (dev->Init(bdf, bar)) {
+      delete dev;
+      return;
+    }
+
+    return;
   }
 
   ~DevBackend() noexcept {}
@@ -175,6 +186,7 @@ class DevBackend {
    */
   static _enso_always_inline void register_kthread(
       uint64_t kthread_waiters_phys_addr, uint32_t application_id) {
+    std::cout << "registering kthread" << std::endl;
     (void)kthread_waiters_phys_addr;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kRegisterKthread;
@@ -202,8 +214,8 @@ class DevBackend {
    * @param uthread_id
    */
   static _enso_always_inline void register_waiting(uint32_t uthread_id,
-
                                                    uint32_t notif_buf_id) {
+    std::cout << "registering waiting" << std::endl;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kWaiting;
     pipe_notification.data[0] = (uint64_t)uthread_id;
@@ -392,7 +404,10 @@ class DevBackend {
    *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init() noexcept {
+  int Init(unsigned int bdf, int bar) noexcept {
+    bdf_ = bdf;
+    bar_ = bar;
+
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
       std::cerr << "Could not get CPU ID" << std::endl;

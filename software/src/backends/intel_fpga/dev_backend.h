@@ -63,6 +63,10 @@ class DevBackend {
     return dev;
   }
 
+  static void Init(DevBackend* dev, unsigned int bdf, int bar) noexcept {
+    return;
+  }
+
   ~DevBackend() noexcept {
     if (dev_ != nullptr) {
       delete dev_;

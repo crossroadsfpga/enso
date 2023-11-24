@@ -53,6 +53,9 @@
 
 #include "../pcie.h"
 
+// Automatically points to the device backend configured at compile time.
+#include <dev_backend.h>
+
 namespace enso {
 
 uint32_t external_peek_next_batch_from_queue(
@@ -125,8 +128,9 @@ int TxPipe::Init() noexcept {
 
   struct NotificationBufPair* notif_buf = &(device_->notification_buf_pair_);
 
-  buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
-  return 0;
+  sched::kthread_t* k = sched::getk();
+  buf_phys_addr_ = get_dev_addr_from_virt_addr(k, buf_);
+  sched::putk() return 0;
 }
 
 int RxTxPipe::Init(bool fallback) noexcept {
@@ -143,6 +147,10 @@ int RxTxPipe::Init(bool fallback) noexcept {
   last_tx_pipe_capacity_ = tx_pipe_->capacity();
 
   return 0;
+}
+
+static void init_devbackend(DevBackend* dev, unsigned int bdf, int bar) {
+  pcie_init_devbackend(dev, bdf, bar);
 }
 
 std::unique_ptr<Device> Device::Create(
@@ -203,15 +211,24 @@ RxPipe* Device::GetRxPipe(uint16_t queue_id) noexcept {
 }
 
 int Device::GetNbFallbackQueues() noexcept {
-  return get_nb_fallback_queues(&notification_buf_pair_);
+  sched::kthread_t* k = sched::getk();
+  int res = get_nb_fallback_queues(k);
+  sched::putk();
+  return res;
 }
 
 int Device::SetRrStatus(bool rr_status) noexcept {
-  return set_round_robin_status(&notification_buf_pair_, rr_status);
+  sched::kthread_t* k = sched::getk();
+  int res = set_round_robin_status(k, rr_status);
+  sched::putk();
+  return res;
 }
 
 bool Device::GetRrStatus() noexcept {
-  return get_round_robin_status(&notification_buf_pair_);
+  sched::kthread_t* k = sched::getk();
+  int res = get_round_robin_status(k);
+  sched::putk();
+  return res;
 }
 
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {

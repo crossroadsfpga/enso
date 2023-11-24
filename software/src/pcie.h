@@ -49,6 +49,9 @@
 #include <algorithm>
 #include <string>
 
+// Automatically points to the device backend configured at compile time.
+#include <dev_backend.h>
+
 namespace enso {
 
 using CompletionCallback = std::function<void()>;
@@ -57,6 +60,8 @@ struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
+
+static void init_devbackend(DevBackend* dev, unsigned int bdf, int bar);
 
 /**
  * @brief Initializes the notification buffer pair.
@@ -258,7 +263,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
  *
  * @return Number of fallback queues currently in use or -1 on failure.
  */
-int get_nb_fallback_queues(struct NotificationBufPair* notification_buf_pair);
+int get_nb_fallback_queues(sched::kthread_t* k);
 
 /**
  * @brief Sets the round robin status for the device.
@@ -268,8 +273,7 @@ int get_nb_fallback_queues(struct NotificationBufPair* notification_buf_pair);
  *
  * @return 0 on success, -1 on failure.
  */
-int set_round_robin_status(struct NotificationBufPair* notification_buf_pair,
-                           bool round_robin);
+int set_round_robin_status(sched::kthread_t* k, bool round_robin);
 
 /**
  * @brief Gets the round robin status for the device.
@@ -279,7 +283,7 @@ int set_round_robin_status(struct NotificationBufPair* notification_buf_pair,
  * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
  *         failure.
  */
-int get_round_robin_status(struct NotificationBufPair* notification_buf_pair);
+int get_round_robin_status(sched::kthread_t* k);
 
 /**
  * @brief Converts an address in the application's virtual address space to an
@@ -289,15 +293,14 @@ int get_round_robin_status(struct NotificationBufPair* notification_buf_pair);
  * @param virt_addr Virtual address to convert.
  * @return Converted address or 0 if the address cannot be translated.
  */
-uint64_t get_dev_addr_from_virt_addr(
-    struct NotificationBufPair* notification_buf_pair, void* virt_addr);
+uint64_t get_dev_addr_from_virt_addr(sched::kthread_t* k, void* virt_addr);
 
 /**
  * @brief Frees the notification buffer pair.
  *
  * @param notification_buf_pair Notification buffer pair to free.
  */
-void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
+void notification_buf_free();
 
 /**
  * @brief Frees the Enso Pipe.
@@ -306,8 +309,7 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
  * @param enso_pipe Enso Pipe to free.
  * @param enso_pipe_id Hardware ID of the Enso Pipe to free.
  */
-void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
-                    struct RxEnsoPipeInternal* enso_pipe,
+void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe,
                     enso_pipe_id_t enso_pipe_id);
 
 /**

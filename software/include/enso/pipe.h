@@ -54,6 +54,9 @@
 #include <string>
 #include <vector>
 
+// Automatically points to the device backend configured at compile time.
+#include <dev_backend.h>
+
 namespace enso {
 
 class RxPipe;
@@ -66,6 +69,9 @@ class PeekPktIterator;
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
+
+static void init_devbackend(DevBackend* dev, unsigned int bdf = 0,
+                            int bar = -1);
 
 /**
  * @brief A class that represents a device.
