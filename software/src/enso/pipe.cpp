@@ -57,8 +57,11 @@
 
 namespace enso {
 
+void init_devbackend(void* dev) { pcie_init_devbackend(dev); }
+
 sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id) {
   void* dev = pcie_get_devbackend(core_id);
+  std::cout << "Dev virt addr: " << dev << std::endl;
   return sched::kthread_create(application_id, core_id, dev);
 }
 

@@ -67,6 +67,8 @@ uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
+void init_devbackend(void* dev);
+
 sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id);
 
 void* kthread_entry(void* arg);

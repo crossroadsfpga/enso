@@ -55,7 +55,7 @@ class DevBackend {
       return nullptr;
     }
 
-    if (dev->Init()) {
+    if (dev->Init(bdf, bar)) {
       delete dev;
       return nullptr;
     }
@@ -64,9 +64,13 @@ class DevBackend {
   }
 
   static void Init(DevBackend* dev, unsigned int bdf, int bar) noexcept {
-    (void)dev;
-    (void)bdf;
-    (void)bar;
+    std::cerr << "Initializing Intel FPGA backend" << std::endl;
+
+    if (dev->Init(bdf, bar)) {
+      delete dev;
+      return;
+    }
+
     return;
   }
 
@@ -194,7 +198,10 @@ class DevBackend {
   DevBackend(DevBackend&& other) = delete;
   DevBackend& operator=(DevBackend&& other) = delete;
 
-  int Init() noexcept {
+  int Init(unsigned int bdf, int bar) noexcept {
+    bdf_ = bdf;
+    bar_ = bar;
+
     dev_ = intel_fpga_pcie_api::IntelFpgaPcieDev::Create(bdf_, bar_);
     if (dev_ == nullptr) {
       return -1;

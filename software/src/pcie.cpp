@@ -100,6 +100,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   (void)bar;
   sched::kthread_t* k = sched::getk();
   DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
+  // DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
 
   int notif_pipe_id = fpga_dev->AllocateNotifBuf(uthread_id);
 
