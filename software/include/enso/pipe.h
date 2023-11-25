@@ -54,9 +54,6 @@
 #include <string>
 #include <vector>
 
-// Automatically points to the device backend configured at compile time.
-#include <dev_backend.h>
-
 namespace enso {
 
 class RxPipe;

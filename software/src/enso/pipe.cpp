@@ -161,10 +161,6 @@ int RxTxPipe::Init(bool fallback) noexcept {
   return 0;
 }
 
-static void init_devbackend(DevBackend* dev, unsigned int bdf, int bar) {
-  pcie_init_devbackend(dev, bdf, bar);
-}
-
 std::unique_ptr<Device> Device::Create(
     uint32_t uthread_id, CompletionCallback completion_callback,
     const std::string& pcie_addr,

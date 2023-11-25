@@ -50,9 +50,6 @@
 #include <fastscheduler/defs.hpp>
 #include <string>
 
-// Automatically points to the device backend configured at compile time.
-#include <dev_backend.h>
-
 namespace enso {
 
 using CompletionCallback = std::function<void()>;
@@ -61,8 +58,6 @@ struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
-
-static void init_devbackend(DevBackend* dev, unsigned int bdf, int bar);
 
 /**
  * @brief
@@ -316,7 +311,7 @@ uint64_t get_dev_addr_from_virt_addr(sched::kthread_t* k, void* virt_addr);
  *
  * @param notification_buf_pair Notification buffer pair to free.
  */
-void notification_buf_free();
+void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
 
 /**
  * @brief Frees the Enso Pipe.
@@ -325,7 +320,8 @@ void notification_buf_free();
  * @param enso_pipe Enso Pipe to free.
  * @param enso_pipe_id Hardware ID of the Enso Pipe to free.
  */
-void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe,
+void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
+                    struct RxEnsoPipeInternal* enso_pipe,
                     enso_pipe_id_t enso_pipe_id);
 
 /**

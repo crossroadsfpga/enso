@@ -777,7 +777,8 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   sched::putk();
 }
 
-void enso_pipe_free(struct RxEnsoPipeInternal* enso_pipe,
+void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
+                    struct RxEnsoPipeInternal* enso_pipe,
                     enso_pipe_id_t enso_pipe_id) {
   sched::kthread_t* k = sched::getk();
   DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
