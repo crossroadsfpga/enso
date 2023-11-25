@@ -64,6 +64,9 @@ class DevBackend {
   }
 
   static void Init(DevBackend* dev, unsigned int bdf, int bar) noexcept {
+    (void)dev;
+    (void)bdf;
+    (void)bar;
     return;
   }
 

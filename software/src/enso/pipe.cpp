@@ -47,6 +47,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
+#include <fastscheduler/defs.hpp>
+#include <fastscheduler/kthread.hpp>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -57,6 +59,17 @@
 #include <dev_backend.h>
 
 namespace enso {
+
+sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id) {
+  void* dev = pcie_get_devbackend(core_id);
+  return sched::kthread_create(application_id, core_id, dev);
+}
+
+void* kthread_entry(void* arg) {
+  sched::kthread_t* k = (sched::kthread_t*)arg;
+  pcie_init_devbackend(k->dev);
+  return sched::kthread_entry(arg);
+}
 
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
@@ -126,11 +139,10 @@ int TxPipe::Init() noexcept {
     }
   }
 
-  struct NotificationBufPair* notif_buf = &(device_->notification_buf_pair_);
-
   sched::kthread_t* k = sched::getk();
   buf_phys_addr_ = get_dev_addr_from_virt_addr(k, buf_);
-  sched::putk() return 0;
+  sched::putk();
+  return 0;
 }
 
 int RxTxPipe::Init(bool fallback) noexcept {

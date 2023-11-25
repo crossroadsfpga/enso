@@ -43,7 +43,6 @@
 #include <cstdint>
 #include <cstring>
 #include <fastscheduler/defs.hpp>
-#include <fastscheduler/kthread.hpp>
 #include <fastscheduler/sched.hpp>
 #include <fastscheduler/uthread.hpp>
 #include <iostream>
@@ -210,10 +209,10 @@ int main(int argc, const char* argv[]) {
   // Create all of the kthreads
   for (uint32_t i = 0; i < nb_cores; ++i) {
     std::cout << "creating kthread on core " << i << std::endl;
-    kthread_t* kthread = sched::kthread_create(application_id, i);
+    kthread_t* kthread = enso::kthread_create(application_id, i);
     kthread->barrier = &init_barrier;
     pthread_t thread;
-    pthread_create(&thread, NULL, sched::kthread_entry, (void*)(kthread));
+    pthread_create(&thread, NULL, enso::kthread_entry, (void*)(kthread));
     pthreads.push_back(thread);
     kthreads.push_back(kthread);
   }

@@ -44,6 +44,7 @@
 #include <immintrin.h>
 
 #include <cstdio>
+#include <fastscheduler/defs.hpp>
 
 #include "../pcie.h"
 
@@ -185,15 +186,19 @@ static int configure_fallback_queues(
 
 static int set_round_robin(struct NotificationBufPair* notification_buf_pair,
                            bool enable_rr) {
-  int nb_fallback_queues = get_nb_fallback_queues(notification_buf_pair);
+  sched::kthread_t* k = sched::getk();
+  int nb_fallback_queues = get_nb_fallback_queues(k);
   if (nb_fallback_queues < 0) {
+    sched::putk();
     return nb_fallback_queues;
   }
 
-  if (set_round_robin_status(notification_buf_pair, enable_rr)) {
+  if (set_round_robin_status(k, enable_rr)) {
+    sched::putk();
     return -1;
   }
 
+  sched::putk();
   return configure_fallback_queues(notification_buf_pair, nb_fallback_queues,
                                    enable_rr);
 }
@@ -208,17 +213,21 @@ int disable_round_robin(struct NotificationBufPair* notification_buf_pair) {
 
 int update_fallback_queues_config(
     struct NotificationBufPair* notification_buf_pair) {
-  int enable_rr = get_round_robin_status(notification_buf_pair);
+  sched::kthread_t* k = sched::getk();
+  int enable_rr = get_round_robin_status(k);
 
   if (enable_rr < 0) {
+    sched::putk();
     return enable_rr;
   }
 
-  int nb_fallback_queues = get_nb_fallback_queues(notification_buf_pair);
+  int nb_fallback_queues = get_nb_fallback_queues(k);
   if (nb_fallback_queues < 0) {
+    sched::putk();
     return nb_fallback_queues;
   }
 
+  sched::putk();
   return configure_fallback_queues(notification_buf_pair, nb_fallback_queues,
                                    (bool)enable_rr);
 }

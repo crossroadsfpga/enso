@@ -47,6 +47,7 @@
 #include <netinet/ip.h>
 
 #include <algorithm>
+#include <fastscheduler/defs.hpp>
 #include <string>
 
 // Automatically points to the device backend configured at compile time.
@@ -62,6 +63,21 @@ struct SocketInternal {
 };
 
 static void init_devbackend(DevBackend* dev, unsigned int bdf, int bar);
+
+/**
+ * @brief
+ *
+ * @param core_id
+ * @return void*
+ */
+void* pcie_get_devbackend(uint32_t core_id);
+
+/**
+ * @brief
+ *
+ * @param dev
+ */
+void pcie_init_devbackend(void* dev);
 
 /**
  * @brief Initializes the notification buffer pair.

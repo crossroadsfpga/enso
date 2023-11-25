@@ -70,9 +70,9 @@ uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
-static void init_devbackend(DevBackend* dev, unsigned int bdf = 0,
-                            int bar = -1);
+sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id);
 
+void* kthread_entry(void* arg);
 /**
  * @brief A class that represents a device.
  *
