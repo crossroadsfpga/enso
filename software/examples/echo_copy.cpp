@@ -192,9 +192,9 @@ int main(int argc, const char* argv[]) {
   std::cout << "hi!" << std::endl;
 
   uint32_t nb_cores = atoi(argv[1]);
-  uint32_t nb_uthreads = atoi(argv[2]);
-  uint32_t nb_queues = atoi(argv[3]);
-  uint32_t nb_cycles = atoi(argv[4]);
+  // uint32_t nb_uthreads = atoi(argv[2]);
+  // uint32_t nb_queues = atoi(argv[3]);
+  // uint32_t nb_cycles = atoi(argv[4]);
   uint32_t application_id = atoi(argv[5]);
 
   signal(SIGINT, int_handler);
@@ -218,23 +218,26 @@ int main(int argc, const char* argv[]) {
   }
 
   // add all of the uthreads to the kthreads runqueues
-  uint32_t current_kthread = 0;
-  for (uint32_t i = 0; i < nb_uthreads; ++i) {
-    std::cout << "adding uthread " << i << " to kthread " << current_kthread
-              << std::endl;
-    struct EchoArgs args;
-    args.nb_queues = nb_queues;
-    args.nb_cycles = nb_cycles;
-    args.stats = &(thread_stats[current_kthread]);
-    args.uthread_id = i;
-    uthread_t* th =
-        sched::uthread_create(run_echo_copy, (void*)&args, application_id, i);
-    std::cout << "created thread" << std::endl;
-    // Add the uthread to the kthread's runqueue
-    kthread_t* k = kthreads[current_kthread];
-    uthread_ready_kthread(k, th);
-    current_kthread = (current_kthread + 1) % nb_cores;
-  }
+  // uint32_t current_kthread = 0;
+  // for (uint32_t i = 0; i < nb_uthreads; ++i) {
+  //   std::cout << "adding uthread " << i << " to kthread " << current_kthread
+  //             << std::endl;
+  //   struct EchoArgs args;
+  //   args.nb_queues = nb_queues;
+  //   args.nb_cycles = nb_cycles;
+  //   args.stats = &(thread_stats[current_kthread]);
+  //   args.uthread_id = i;
+  //   uthread_t* th =
+  //       sched::uthread_create(run_echo_copy, (void*)&args, application_id,
+  //       i);
+  //   std::cout << "created thread" << std::endl;
+  //   // Add the uthread to the kthread's runqueue
+  //   kthread_t* k = kthreads[current_kthread];
+  //   uthread_ready_kthread(k, th);
+  //   current_kthread = (current_kthread + 1) % nb_cores;
+  // }
+
+  std::cout << "running on core " << sched_getcpu() << std::endl;
 
   pthread_barrier_wait(&init_barrier);
 

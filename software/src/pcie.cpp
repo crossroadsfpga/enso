@@ -88,6 +88,7 @@ void* pcie_get_devbackend(uint32_t core_id) {
 }
 
 void pcie_init_devbackend(void* devbackend) {
+  std::cout << "in pcie init devbackend" << std::endl;
   DevBackend* dev = reinterpret_cast<DevBackend*>(devbackend);
   DevBackend::Init(dev, 0, -1);
 }
