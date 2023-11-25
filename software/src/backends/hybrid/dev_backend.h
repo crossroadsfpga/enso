@@ -82,8 +82,7 @@ class DevBackend {
     return dev;
   }
 
-  static void Init(DevBackend* dev, unsigned int bdf = 0,
-                   int bar = -1) noexcept {
+  static void Init(DevBackend* dev, unsigned int bdf, int bar) noexcept {
     std::cerr << "Initializing hybrid backend" << std::endl;
 
     if (dev->Init(bdf, bar)) {

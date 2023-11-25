@@ -55,9 +55,6 @@
 
 #include "../pcie.h"
 
-// Automatically points to the device backend configured at compile time.
-#include <dev_backend.h>
-
 namespace enso {
 
 sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id) {
