@@ -78,6 +78,8 @@ void run_echo_copy(void* arg) {
   enso::stats_t* stats = args->stats;
   uint32_t uthread_id = args->uthread_id;
 
+  std::cout << "uthread id: " << uthread_id << std::endl;
+
   using sched::uthread_t;
 
   uthread_t* uthread = sched::uthread_self();
@@ -100,6 +102,7 @@ void run_echo_copy(void* arg) {
     exit(2);
   }
 
+  std::cout << "number of queues: " << nb_queues << std::endl;
   for (uint32_t i = 0; i < nb_queues; ++i) {
     std::cout << "creating pipe " << i << std::endl;
     RxPipe* rx_pipe = dev->AllocateRxPipe();
@@ -107,6 +110,8 @@ void run_echo_copy(void* arg) {
       std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);
     }
+
+    std::cout << "allocated pipe" << std::endl;
 
     uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
     rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
@@ -122,8 +127,6 @@ void run_echo_copy(void* arg) {
   }
 
   setup_done = true;
-
-  std::cout << "setup done!" << std::endl;
 
   uint32_t num_failed = 0;
   while (keep_running) {
@@ -208,7 +211,7 @@ int main(int argc, const char* argv[]) {
 
   pthread_barrier_t init_barrier;
   pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
-
+  std::cout << "actual number of queues: " << nb_queues << std::endl;
   // Create all of the kthreads
   for (uint32_t i = 0; i < nb_cores; ++i) {
     std::cout << "creating kthread on core " << i << std::endl;
@@ -223,18 +226,17 @@ int main(int argc, const char* argv[]) {
   // add all of the uthreads to the kthreads runqueues
   uint32_t current_kthread = 0;
   for (uint32_t i = 0; i < nb_uthreads; ++i) {
-    std::cout << "adding uthread " << i << " to kthread " << current_kthread
-              << std::endl;
-    struct EchoArgs args;
-    args.nb_queues = nb_queues;
-    args.nb_cycles = nb_cycles;
-    args.stats = &(thread_stats[current_kthread]);
-    args.uthread_id = i;
+    struct EchoArgs* args = (struct EchoArgs*)malloc(sizeof(struct EchoArgs));
+    args->nb_queues = nb_queues;
+    args->nb_cycles = nb_cycles;
+    args->stats = &(thread_stats[current_kthread]);
+    args->uthread_id = i;
     uthread_t* th =
-        sched::uthread_create(run_echo_copy, (void*)&args, application_id, i);
-    std::cout << "created thread" << std::endl;
+        sched::uthread_create(run_echo_copy, (void*)args, application_id, i);
     // Add the uthread to the kthread's runqueue
     kthread_t* k = kthreads[current_kthread];
+    std::cout << "adding uthread " << i << " to kthread " << current_kthread
+              << std::endl;
     uthread_ready_kthread(k, th);
     current_kthread = (current_kthread + 1) % nb_cores;
   }

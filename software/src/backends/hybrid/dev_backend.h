@@ -319,6 +319,11 @@ class DevBackend {
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
+    std::cout << "allocate notif buf notif id: " << notification->data[0]
+              << " uthread id: " << notification->data[1]
+              << " type: " << (int)notification->type << std::endl;
+
+    assert((uint32_t)notification->data[1] == uthread_id);
     assert(notification->type == notiftype::kAllocateNotifBuf);
     return notification->data[0];
   }

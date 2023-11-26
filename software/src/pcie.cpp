@@ -101,7 +101,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   (void)bar;
   sched::kthread_t* k = sched::getk();
   DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
-  // DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
 
   int notif_pipe_id = fpga_dev->AllocateNotifBuf(uthread_id);
 
@@ -162,6 +161,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
                                std::string(kHugePageNotifBufPathPrefix) +
                                std::to_string(notification_buf_pair->id);
   printf("huge page path: %s\n", huge_page_path.c_str());
+  printf("notif pipe id: %d\n", notif_pipe_id);
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
       (struct RxNotification*)get_huge_page(huge_page_path);

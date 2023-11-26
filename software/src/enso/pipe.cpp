@@ -65,13 +65,10 @@ sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id) {
 }
 
 void* kthread_entry(void* arg) {
-  std::cout << "hi there!" << std::endl;
   sched::kthread_t* k = (sched::kthread_t*)arg;
   enso::set_self_core_id(k->curr_cpu);
   pcie_init_devbackend(k->dev);
-  std::cout << "running on core " << sched_getcpu() << std::endl;
   register_kthread(0, k->application_id);
-  std::cout << "going to enter!" << std::endl;
   return sched::kthread_entry(arg);
 }
 
