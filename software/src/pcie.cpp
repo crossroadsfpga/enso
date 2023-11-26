@@ -82,8 +82,13 @@ void* pcie_get_devbackend(uint32_t core_id) {
     std::cerr << "Failed to get devbackend huge page." << std::endl;
     exit(2);
   }
+  std::cout << "dev backend size: " << sizeof(DevBackend) << std::endl;
+  std::cout << "dev backend hugepage: " << virt_to_phys(devbackend_hugepage)
+            << std::endl;
   DevBackend* dev =
       &(reinterpret_cast<DevBackend*>(devbackend_hugepage)[core_id]);
+  std::cout << "creating devbackend at " << virt_to_phys(dev) << " for core "
+            << core_id << std::endl;
   return (void*)dev;
 }
 
@@ -160,8 +165,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   std::string huge_page_path = huge_page_prefix +
                                std::string(kHugePageNotifBufPathPrefix) +
                                std::to_string(notification_buf_pair->id);
-  printf("huge page path: %s\n", huge_page_path.c_str());
-  printf("notif pipe id: %d\n", notif_pipe_id);
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
       (struct RxNotification*)get_huge_page(huge_page_path);
@@ -726,6 +729,8 @@ int set_round_robin_status(sched::kthread_t* k, bool round_robin) {
 }
 
 int get_round_robin_status(sched::kthread_t* k) {
+  std::cout << "getting round robin status!" << std::endl;
+  // __asm__("int $3");
   DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
   return fpga_dev->GetRrStatus();
 }

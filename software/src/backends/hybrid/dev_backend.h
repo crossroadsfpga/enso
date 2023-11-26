@@ -287,6 +287,7 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
+    std::cout << "getrrstatus brr" << std::endl;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kGetRrStatus;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
@@ -318,10 +319,6 @@ class DevBackend {
     // Block until receive.
     while (!(notification = queue_from_backend_->Pop())) {
     }
-
-    std::cout << "allocate notif buf notif id: " << notification->data[0]
-              << " uthread id: " << notification->data[1]
-              << " type: " << (int)notification->type << std::endl;
 
     assert((uint32_t)notification->data[1] == uthread_id);
     assert(notification->type == notiftype::kAllocateNotifBuf);
@@ -443,7 +440,11 @@ class DevBackend {
       return -1;
     }
 
+    std::cout << "core " << core_id_ << ": getting sk notif buf id"
+              << std::endl;
     shinkansen_notif_buf_id_ = get_shinkansen_notif_buf_id();
+    std::cout << "core " << core_id_ << ": got: " << shinkansen_notif_buf_id_
+              << std::endl;
 
     return 0;
   }

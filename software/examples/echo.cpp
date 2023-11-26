@@ -83,7 +83,6 @@ void* run_echo(void* arg) {
   }
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    printf("allocating pipe\n");
     RxTxPipe* pipe = dev->AllocateRxTxPipe();
     if (!pipe) {
       std::cerr << "Problem creating RX/TX pipe" << std::endl;

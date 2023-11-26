@@ -78,15 +78,14 @@ void run_echo_copy(void* arg) {
   enso::stats_t* stats = args->stats;
   uint32_t uthread_id = args->uthread_id;
 
-  std::cout << "uthread id: " << uthread_id << std::endl;
-
   using sched::uthread_t;
 
   uthread_t* uthread = sched::uthread_self();
 
   usleep(1000000);
 
-  std::cout << "Running on core " << sched_getcpu() << std::endl;
+  std::cout << "Running " << uthread_id << " on core " << sched_getcpu()
+            << std::endl;
 
   using enso::Device;
   using enso::RxPipe;
@@ -102,16 +101,12 @@ void run_echo_copy(void* arg) {
     exit(2);
   }
 
-  std::cout << "number of queues: " << nb_queues << std::endl;
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    std::cout << "creating pipe " << i << std::endl;
     RxPipe* rx_pipe = dev->AllocateRxPipe();
     if (!rx_pipe) {
       std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);
     }
-
-    std::cout << "allocated pipe" << std::endl;
 
     uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
     rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
@@ -211,7 +206,6 @@ int main(int argc, const char* argv[]) {
 
   pthread_barrier_t init_barrier;
   pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
-  std::cout << "actual number of queues: " << nb_queues << std::endl;
   // Create all of the kthreads
   for (uint32_t i = 0; i < nb_cores; ++i) {
     std::cout << "creating kthread on core " << i << std::endl;
