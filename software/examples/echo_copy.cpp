@@ -42,6 +42,9 @@
 #include <csignal>
 #include <cstdint>
 #include <cstring>
+extern "C" {
+#include <base/log.h>
+}
 #include <fastscheduler/defs.hpp>
 #include <fastscheduler/sched.hpp>
 #include <fastscheduler/uthread.hpp>
@@ -84,8 +87,7 @@ void run_echo_copy(void* arg) {
 
   usleep(1000000);
 
-  std::cout << "Running " << uthread_id << " on core " << sched_getcpu()
-            << std::endl;
+  log_info("Running %u", uthread_id);
 
   using enso::Device;
   using enso::RxPipe;
@@ -104,7 +106,7 @@ void run_echo_copy(void* arg) {
   for (uint32_t i = 0; i < nb_queues; ++i) {
     RxPipe* rx_pipe = dev->AllocateRxPipe();
     if (!rx_pipe) {
-      std::cerr << "Problem creating RX pipe" << std::endl;
+      log_err("Problem creating RX pipe");
       exit(3);
     }
 
@@ -115,7 +117,7 @@ void run_echo_copy(void* arg) {
 
     TxPipe* tx_pipe = dev->AllocateTxPipe();
     if (!tx_pipe) {
-      std::cerr << "Problem creating TX pipe" << std::endl;
+      log_err("Problem creating TX pipe");
       exit(3);
     }
     tx_pipes.push_back(tx_pipe);
@@ -190,8 +192,6 @@ int main(int argc, const char* argv[]) {
   using sched::kthread_t;
   using sched::uthread_t;
 
-  std::cout << "hi!" << std::endl;
-
   uint32_t nb_cores = atoi(argv[1]);
   uint32_t nb_uthreads = atoi(argv[2]);
   uint32_t nb_queues = atoi(argv[3]);
@@ -208,7 +208,7 @@ int main(int argc, const char* argv[]) {
   pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
   // Create all of the kthreads
   for (uint32_t i = 0; i < nb_cores; ++i) {
-    std::cout << "creating kthread on core " << i << std::endl;
+    log_info("Creating kthread on core %d", i);
     kthread_t* kthread = enso::kthread_create(application_id, i);
     kthread->barrier = &init_barrier;
     pthread_t thread;
@@ -229,8 +229,6 @@ int main(int argc, const char* argv[]) {
         sched::uthread_create(run_echo_copy, (void*)args, application_id, i);
     // Add the uthread to the kthread's runqueue
     kthread_t* k = kthreads[current_kthread];
-    std::cout << "adding uthread " << i << " to kthread " << current_kthread
-              << std::endl;
     uthread_ready_kthread(k, th);
     current_kthread = (current_kthread + 1) % nb_cores;
   }

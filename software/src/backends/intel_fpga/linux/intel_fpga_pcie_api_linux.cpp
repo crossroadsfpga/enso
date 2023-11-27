@@ -474,9 +474,6 @@ int IntelFpgaPcieDev::set_rr_status(bool enable_rr) {
 }
 
 int IntelFpgaPcieDev::get_rr_status() {
-  std::cout << "get rr status addr: " << &m_dev_handle << std::endl;
-  std::cout << "get rr status: " << m_dev_handle << std::endl;
-
   int result;
   bool rr_status;
   result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_GET_RR_STATUS, &rr_status);
@@ -491,8 +488,6 @@ int IntelFpgaPcieDev::get_rr_status() {
 int IntelFpgaPcieDev::allocate_notif_buf() {
   int result;
   unsigned int buf_id;
-  std::cout << "allocate notif buf: " << m_dev_handle << " " << &m_dev_handle
-            << std::endl;
   result =
       ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUFFER, &buf_id);
 

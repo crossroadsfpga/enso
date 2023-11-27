@@ -62,6 +62,10 @@
 #include <limits>
 #include <stdexcept>
 
+extern "C" {
+#include <base/log.h>
+}
+
 // Automatically points to the device backend configured at compile time.
 #include <dev_backend.h>
 
@@ -82,18 +86,12 @@ void* pcie_get_devbackend(uint32_t core_id) {
     std::cerr << "Failed to get devbackend huge page." << std::endl;
     exit(2);
   }
-  std::cout << "dev backend size: " << sizeof(DevBackend) << std::endl;
-  std::cout << "dev backend hugepage: " << virt_to_phys(devbackend_hugepage)
-            << std::endl;
   DevBackend* dev =
       &(reinterpret_cast<DevBackend*>(devbackend_hugepage)[core_id]);
-  std::cout << "creating devbackend at " << virt_to_phys(dev) << " for core "
-            << core_id << std::endl;
   return (void*)dev;
 }
 
 void pcie_init_devbackend(void* devbackend) {
-  std::cout << "in pcie init devbackend" << std::endl;
   DevBackend* dev = reinterpret_cast<DevBackend*>(devbackend);
   DevBackend::Init(dev, 0, -1);
 }
@@ -729,8 +727,6 @@ int set_round_robin_status(sched::kthread_t* k, bool round_robin) {
 }
 
 int get_round_robin_status(sched::kthread_t* k) {
-  std::cout << "getting round robin status!" << std::endl;
-  // __asm__("int $3");
   DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
   return fpga_dev->GetRrStatus();
 }
@@ -742,6 +738,7 @@ uint64_t get_dev_addr_from_virt_addr(sched::kthread_t* k, void* virt_addr) {
 }
 
 void register_waiting(uint32_t uthread_id, uint32_t notif_id) {
+  log_info("Uthread %u registered waiting", uthread_id);
   DevBackend::register_waiting(uthread_id, notif_id);
 }
 

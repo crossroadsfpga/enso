@@ -75,7 +75,6 @@ class DevBackend {
   }
 
   ~DevBackend() noexcept {
-    std::cout << "destroying dev_" << std::endl;
     if (dev_ != nullptr) {
       delete dev_;
     }
@@ -147,12 +146,7 @@ class DevBackend {
    * @return Return 1 if RR is enabled. Otherwise, return 0. On error, -1 is
    *         returned and errno is set.
    */
-  int GetRrStatus() {
-    std::cout << "rr dev_ addr: " << &dev_ << std::endl;
-    std::cout << "rr bdf_: " << bdf_ << std::endl;
-    std::cout << "rr dev_: " << dev_ << std::endl;
-    return dev_->get_rr_status();
-  }
+  int GetRrStatus() { return dev_->get_rr_status(); }
 
   /**
    * @brief Allocates a notification buffer.
@@ -161,9 +155,6 @@ class DevBackend {
    */
   int AllocateNotifBuf(uint32_t uthread_id) {
     (void)uthread_id;
-    std::cout << "notif dev_ addr: " << &dev_ << std::endl;
-    std::cout << "notif bdf_: " << bdf_ << std::endl;
-    std::cout << "notif dev_: " << dev_ << std::endl;
     return dev_->allocate_notif_buf();
   }
 
@@ -211,7 +202,6 @@ class DevBackend {
     bdf_ = bdf;
     bar_ = bar;
 
-    std::cout << "dev_ being set" << std::endl;
     dev_ = intel_fpga_pcie_api::IntelFpgaPcieDev::Create(bdf_, bar_);
     if (dev_ == nullptr) {
       return -1;

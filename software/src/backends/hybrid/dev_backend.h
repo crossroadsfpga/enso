@@ -186,7 +186,6 @@ class DevBackend {
    */
   static _enso_always_inline void register_kthread(
       uint64_t kthread_waiters_phys_addr, uint32_t application_id) {
-    std::cout << "registering kthread" << std::endl;
     (void)kthread_waiters_phys_addr;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kRegisterKthread;
@@ -215,7 +214,6 @@ class DevBackend {
    */
   static _enso_always_inline void register_waiting(uint32_t uthread_id,
                                                    uint32_t notif_buf_id) {
-    std::cout << "registering waiting" << std::endl;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kWaiting;
     pipe_notification.data[0] = (uint64_t)uthread_id;
@@ -287,7 +285,6 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
-    std::cout << "getrrstatus brr" << std::endl;
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kGetRrStatus;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
@@ -440,11 +437,7 @@ class DevBackend {
       return -1;
     }
 
-    std::cout << "core " << core_id_ << ": getting sk notif buf id"
-              << std::endl;
     shinkansen_notif_buf_id_ = get_shinkansen_notif_buf_id();
-    std::cout << "core " << core_id_ << ": got: " << shinkansen_notif_buf_id_
-              << std::endl;
 
     return 0;
   }
