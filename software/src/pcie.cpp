@@ -522,11 +522,13 @@ int32_t get_next_enso_pipe_id(
 uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
                         struct SocketInternal* socket_entries,
                         int* enso_pipe_id, void** buf) {
-  int32_t __enso_pipe_id = __get_next_rx_notif(notification_buf_pair)->queue_id;
+  RxNotification* notif = __get_next_rx_notif(notification_buf_pair);
 
-  if (unlikely(__enso_pipe_id == -1)) {
+  if (unlikely(!notif)) {
     return 0;
   }
+
+  int32_t __enso_pipe_id = notif->queue_id;
 
   *enso_pipe_id = __enso_pipe_id;
 
