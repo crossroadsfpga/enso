@@ -49,7 +49,7 @@ void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
 void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
                     enso::stats_t* stats, uint32_t dst_ip_1, uint32_t dst_ip_2,
-                    uint32_t core_id) {
+                    uint32_t core_id, int ms_interval) {
   (void)core_id;
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -58,6 +58,7 @@ void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
   using enso::Device;
   using enso::RxPipe;
   using enso::TxPipe;
+  using namespace std::chrono;
 
   Device* dev = Device::Create();
   std::vector<RxPipe*> rx_pipes;
@@ -86,15 +87,24 @@ void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
   }
 
   setup_done = true;
-
+  milliseconds time =
+      duration_cast<milliseconds>(system_clock::now().time_since_epoch());
   while (keep_running) {
+    milliseconds now =
+        duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+    bool change = false;
+    if (now - time >= ms_interval) {
+      change = true;
+    }
     for (uint32_t i = 0; i < nb_queues; ++i) {
       auto& rx_pipe = rx_pipes[i];
       // bind pipes to the same socket
-      if (i % 2 == 0)
-        rx_pipe->Bind(kDstPort, 0, dst_ip_1, 0, kProtocol);
-      else
-        rx_pipe->Bind(kDstPort, 0, dst_ip_2, 0, kProtocol);
+      if (change) {
+        if (i % 2 == 0)
+          rx_pipe->Bind(kDstPort, 0, dst_ip_1, 0, kProtocol);
+        else
+          rx_pipe->Bind(kDstPort, 0, dst_ip_2, 0, kProtocol);
+      }
 
       auto batch = rx_pipe->RecvPkts();
 
@@ -132,25 +142,30 @@ void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
 
       // std::cout << "sent and freed" << std::endl;
     }
+    time = now;
   }
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 4) {
-    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
-              << std::endl
+  if (argc != 5) {
+    std::cerr << "Usage: " << argv[0]
+              << " NB_CORES NB_QUEUES NB_CYCLES INTERVAL" << std::endl
               << std::endl;
     std::cerr << "NB_CORES: Number of cores to use." << std::endl;
     std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
     std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
                  " packet."
               << std::endl;
+    std::cerr
+        << "INTERVAL: Number of milliseconds between configuration change."
+        << std::endl;
     return 1;
   }
 
   uint32_t nb_cores = atoi(argv[1]);
   uint32_t nb_queues = atoi(argv[2]);
   uint32_t nb_cycles = atoi(argv[3]);
+  uint32_t ms_interval = atoi(argv[4]);
 
   signal(SIGINT, int_handler);
 
@@ -162,7 +177,8 @@ int main(int argc, const char* argv[]) {
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
     threads.emplace_back(run_experiment, nb_queues, nb_cycles,
-                         &(thread_stats[core_id]), dst_ip_1, dst_ip_2, core_id);
+                         &(thread_stats[core_id]), dst_ip_1, dst_ip_2, core_id,
+                         ms_interval);
     if (enso::set_core_id(threads.back(), core_id)) {
       std::cerr << "Error setting CPU affinity" << std::endl;
       return 6;
