@@ -492,6 +492,7 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
     }
   }
 
+  log_info("getting next rx notif at head %u", next_rx_ids_head);
   struct RxNotification* notification =
       notification_buf_pair->next_rx_pipe_notifs[next_rx_ids_head];
 
