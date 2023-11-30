@@ -135,10 +135,12 @@ void run_echo_copy(void* arg) {
         num_failed += 1;
         if (num_failed == MAX_ITERATIONS) {
           dev->RegisterWaiting(uthread);
-          sched::enter_schedule(uthread);
+          sched::uthread_yield(false);
 
+          log_info("awoken from waiting!");
           num_failed = 0;
         }
+
         continue;
       }
       num_failed = 0;
