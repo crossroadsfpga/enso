@@ -123,9 +123,9 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
    */
   if (_IOC_DIR(cmd) & _IOC_READ) {
     // Note: VERIFY_WRITE is a superset of VERIFY_READ
-    retval = !access_ok(VERIFY_WRITE, (void __user *)uarg, _IOC_SIZE(cmd));
+    retval = !access_ok((void __user *)uarg, _IOC_SIZE(cmd));
   } else if (_IOC_DIR(cmd) & _IOC_WRITE) {
-    retval = !access_ok(VERIFY_READ, (void __user *)uarg, _IOC_SIZE(cmd));
+    retval = !access_ok((void __user *)uarg, _IOC_SIZE(cmd));
   }
 #endif
 
