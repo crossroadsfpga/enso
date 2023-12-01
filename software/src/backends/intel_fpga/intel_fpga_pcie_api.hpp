@@ -315,13 +315,6 @@ class IntelFpgaPcieDev {
   int dma_send_all(void);
 
   /**
-   * Retrieve the kernel timer in microseconds.
-   * @return Positive integer representing the timer value in microseconds;
-   *         0 otherwise
-   */
-  unsigned int get_ktimer(void);
-
-  /**
    * Retrieve the UIO device name.
    * @return 0 on success. On error, -1 is returned and errno is set
    *         appropriately.

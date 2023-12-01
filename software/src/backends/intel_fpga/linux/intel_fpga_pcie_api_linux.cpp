@@ -439,18 +439,6 @@ int IntelFpgaPcieDev::dma_send_all(void) {
   return result == 0;
 }
 
-unsigned int IntelFpgaPcieDev::get_ktimer(void) {
-  int result;
-  unsigned int timer_usec;
-  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_GET_KTIMER, &timer_usec);
-
-  if (result != 0) {
-    timer_usec = 0;
-  }
-
-  return timer_usec;
-}
-
 int IntelFpgaPcieDev::get_uio_dev_name(char *uio_dev_name) {
   return ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CHR_GET_UIO_DEV_NAME,
                uio_dev_name);
