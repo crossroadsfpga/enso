@@ -162,7 +162,8 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
 
   std::string huge_page_path = huge_page_prefix +
                                std::string(kHugePageNotifBufPathPrefix) +
-                               std::to_string(notification_buf_pair->id);
+                               std::to_string(notification_buf_pair->id + 2);
+  std::cout << "huge page path: " << huge_page_path << std::endl;
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
       (struct RxNotification*)get_huge_page(huge_page_path);
@@ -395,10 +396,13 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
         notification_buf + notification_buf_head;
 
     // Check if the next notification was updated by the NIC.
-    if (cur_notification->signal == 0) {
+    if (!cur_notification->signal) {
+      // log_info("waiting for notif at phys addr 0x%lx",
+      //          virt_to_phys((void*)cur_notification));
       break;
     }
-
+    std::cout << "received notification for tail " << cur_notification->tail
+              << std::endl;
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
@@ -492,7 +496,6 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
     }
   }
 
-  log_info("getting next rx notif at head %u", next_rx_ids_head);
   struct RxNotification* notification =
       notification_buf_pair->next_rx_pipe_notifs[next_rx_ids_head];
 

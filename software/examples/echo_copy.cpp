@@ -131,6 +131,7 @@ void run_echo_copy(void* arg) {
       auto& rx_pipe = rx_pipes[i];
       auto batch = rx_pipe->RecvPkts();
 
+      num_failed += 1;
       if (unlikely(batch.available_bytes() == 0)) {
         num_failed += 1;
         // if (num_failed == MAX_ITERATIONS) {
@@ -145,6 +146,7 @@ void run_echo_copy(void* arg) {
 
         continue;
       }
+
       num_failed = 0;
 
       for (auto pkt : batch) {
@@ -173,11 +175,13 @@ void run_echo_copy(void* arg) {
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 6) {
+  if (argc != 7) {
     std::cerr << "Usage: " << argv[0]
-              << " NB_CORES NB_UTHREADS NB_QUEUES NB_CYCLES APPLICATION_ID"
+              << " STARTING_CORE NB_CORES NB_UTHREADS NB_QUEUES NB_CYCLES "
+                 "APPLICATION_ID"
               << std::endl
               << std::endl;
+    std::cerr << "STARTING_CORE: Core to start running on." << std::endl;
     std::cerr << "NB_CORES: Number of cores to run on." << std::endl;
     std::cerr << "NB_UTHREADS: Number of uthreads to create." << std::endl;
     std::cerr << "NB_QUEUES: Number of queues per uthread." << std::endl;
@@ -196,11 +200,12 @@ int main(int argc, const char* argv[]) {
   using sched::kthread_t;
   using sched::uthread_t;
 
-  uint32_t nb_cores = atoi(argv[1]);
-  uint32_t nb_uthreads = atoi(argv[2]);
-  uint32_t nb_queues = atoi(argv[3]);
-  uint32_t nb_cycles = atoi(argv[4]);
-  uint32_t application_id = atoi(argv[5]);
+  uint32_t starting_core = atoi(argv[1]);
+  uint32_t nb_cores = atoi(argv[2]);
+  uint32_t nb_uthreads = atoi(argv[3]);
+  uint32_t nb_queues = atoi(argv[4]);
+  uint32_t nb_cycles = atoi(argv[5]);
+  uint32_t application_id = atoi(argv[6]);
 
   signal(SIGINT, int_handler);
 
@@ -212,8 +217,9 @@ int main(int argc, const char* argv[]) {
   pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
   // Create all of the kthreads
   for (uint32_t i = 0; i < nb_cores; ++i) {
-    log_info("Creating kthread on core %d", i);
-    kthread_t* kthread = enso::kthread_create(application_id, i);
+    log_info("Creating kthread on core %d", i + starting_core);
+    kthread_t* kthread =
+        enso::kthread_create(application_id, i + starting_core);
     kthread->barrier = &init_barrier;
     pthread_t thread;
     pthread_create(&thread, NULL, enso::kthread_entry, (void*)(kthread));
@@ -229,6 +235,7 @@ int main(int argc, const char* argv[]) {
     args->nb_cycles = nb_cycles;
     args->stats = &(thread_stats[current_kthread]);
     args->uthread_id = i;
+    args->core_id = i + starting_core;
     uthread_t* th =
         sched::uthread_create(run_echo_copy, (void*)args, application_id, i);
     // Add the uthread to the kthread's runqueue
