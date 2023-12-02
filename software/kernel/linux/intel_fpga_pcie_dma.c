@@ -59,7 +59,8 @@ static void set_desc(struct desc *desc, uint64_t ep_addr, dma_addr_t rp_addr,
 /******************************************************************************
  * Main DMA operation functions
  *****************************************************************************/
-int intel_fpga_pcie_dma_queue(struct dev_bookkeep *dev_bk, unsigned long uarg) {
+int intel_fpga_pcie_dma_queueq(struct dev_bookkeep *dev_bk,
+                               unsigned long uarg) {
   struct intel_fpga_pcie_arg karg;
   uint64_t ep_addr;
   uintptr_t kmem_offset;

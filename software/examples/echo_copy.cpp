@@ -54,7 +54,7 @@ extern "C" {
 
 #include "example_helpers.h"
 
-#define MAX_ITERATIONS 1000000
+#define MAX_ITERATIONS 1000000000
 
 static volatile bool keep_running = true;
 static volatile bool setup_done = false;
@@ -83,7 +83,7 @@ void run_echo_copy(void* arg) {
 
   using sched::uthread_t;
 
-  uthread_t* uthread = sched::uthread_self();
+  // uthread_t* uthread = sched::uthread_self();
 
   usleep(1000000);
 
@@ -125,7 +125,7 @@ void run_echo_copy(void* arg) {
 
   setup_done = true;
 
-  uint32_t num_failed = 0;
+  volatile uint32_t num_failed = 0;
   while (keep_running) {
     for (uint32_t i = 0; i < nb_queues; ++i) {
       auto& rx_pipe = rx_pipes[i];
@@ -133,13 +133,15 @@ void run_echo_copy(void* arg) {
 
       if (unlikely(batch.available_bytes() == 0)) {
         num_failed += 1;
-        if (num_failed == MAX_ITERATIONS) {
-          dev->RegisterWaiting(uthread);
-          sched::uthread_yield(false);
+        // if (num_failed == MAX_ITERATIONS) {
+        //   log_info("no packets :(");
 
-          log_info("awoken from waiting!");
-          num_failed = 0;
-        }
+        //   dev->RegisterWaiting(uthread);
+        //   sched::uthread_yield(false);
+
+        //   log_info("awoken from waiting!");
+        //   num_failed = 0;
+        // }
 
         continue;
       }
