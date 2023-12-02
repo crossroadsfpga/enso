@@ -401,8 +401,6 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
       //          virt_to_phys((void*)cur_notification));
       break;
     }
-    std::cout << "received notification for tail " << cur_notification->tail
-              << std::endl;
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;

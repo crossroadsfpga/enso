@@ -83,7 +83,7 @@ void run_echo_copy(void* arg) {
 
   using sched::uthread_t;
 
-  // uthread_t* uthread = sched::uthread_self();
+  uthread_t* uthread = sched::uthread_self();
 
   usleep(1000000);
 
@@ -134,15 +134,15 @@ void run_echo_copy(void* arg) {
       num_failed += 1;
       if (unlikely(batch.available_bytes() == 0)) {
         num_failed += 1;
-        // if (num_failed == MAX_ITERATIONS) {
-        //   log_info("no packets :(");
+        if (num_failed == MAX_ITERATIONS) {
+          log_info("no packets :(");
 
-        //   dev->RegisterWaiting(uthread);
-        //   sched::uthread_yield(false);
+          dev->RegisterWaiting(uthread);
+          sched::uthread_yield(false);
 
-        //   log_info("awoken from waiting!");
-        //   num_failed = 0;
-        // }
+          log_info("awoken from waiting!");
+          num_failed = 0;
+        }
 
         continue;
       }
@@ -200,7 +200,6 @@ int main(int argc, const char* argv[]) {
   using sched::kthread_t;
   using sched::uthread_t;
 
-  uint32_t starting_core = atoi(argv[1]);
   uint32_t nb_cores = atoi(argv[2]);
   uint32_t nb_uthreads = atoi(argv[3]);
   uint32_t nb_queues = atoi(argv[4]);
@@ -217,9 +216,8 @@ int main(int argc, const char* argv[]) {
   pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
   // Create all of the kthreads
   for (uint32_t i = 0; i < nb_cores; ++i) {
-    log_info("Creating kthread on core %d", i + starting_core);
-    kthread_t* kthread =
-        enso::kthread_create(application_id, i + starting_core);
+    log_info("Creating kthread on core %d", i);
+    kthread_t* kthread = enso::kthread_create(application_id, i);
     kthread->barrier = &init_barrier;
     pthread_t thread;
     pthread_create(&thread, NULL, enso::kthread_entry, (void*)(kthread));
@@ -235,7 +233,7 @@ int main(int argc, const char* argv[]) {
     args->nb_cycles = nb_cycles;
     args->stats = &(thread_stats[current_kthread]);
     args->uthread_id = i;
-    args->core_id = i + starting_core;
+    args->core_id = i;
     uthread_t* th =
         sched::uthread_create(run_echo_copy, (void*)args, application_id, i);
     // Add the uthread to the kthread's runqueue
