@@ -48,21 +48,19 @@ static volatile bool setup_done = false;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
-                   enso::stats_t* stats) {
+void run_echo_copy(uint32_t nb_queues, uint32_t nb_notif_buffers,
+                   uint32_t core_id, uint32_t nb_cycles, enso::stats_t* stats) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
   using enso::Device;
-  using enso::RxPipe;
-  using enso::TxPipe;
+  using enso::RxTxPipe;
 
-  std::vector<RxPipe*> rx_pipes;
-  std::vector<TxPipe*> tx_pipes;
+  std::vector<RxTxPipe*> pipes;
   std::vector<Device*> devices;
 
-  for (uint32_t i = 0; i < nb_queues; ++i) {
+  for (uint32_t i = 0; i < nb_notif_buffers; ++i) {
     Device* dev = Device::Create();
     if (!dev) {
       std::cerr << "Problem creating device" << std::endl;
@@ -71,31 +69,25 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
     devices.push_back(dev);
 
     std::cout << "created a device" << std::endl;
-    RxPipe* rx_pipe = dev->AllocateRxPipe();
-    if (!rx_pipe) {
-      std::cerr << "Problem creating RX pipe" << std::endl;
-      exit(3);
+
+    for (uint32_t j = 0; j < nb_queues; j++) {
+      RxTxPipe* pipe = dev->AllocateRxTxPipe();
+      if (!pipe) {
+        std::cerr << "Problem creating RX/TX pipe" << std::endl;
+        exit(3);
+      }
+      uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
+      pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+
+      pipes.push_back(pipe);
     }
-
-    uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
-    rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
-
-    rx_pipes.push_back(rx_pipe);
-
-    TxPipe* tx_pipe = dev->AllocateTxPipe();
-    if (!tx_pipe) {
-      std::cerr << "Problem creating TX pipe" << std::endl;
-      exit(3);
-    }
-    tx_pipes.push_back(tx_pipe);
   }
 
   setup_done = true;
 
   while (keep_running) {
-    for (uint32_t i = 0; i < nb_queues; ++i) {
-      auto& rx_pipe = rx_pipes[i];
-      auto batch = rx_pipe->RecvPkts();
+    for (auto& pipe : pipes) {
+      auto batch = pipe->RecvPkts();
 
       if (unlikely(batch.available_bytes() == 0)) {
         continue;
@@ -111,28 +103,25 @@ void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
         ++(stats->nb_pkts);
       }
       uint32_t batch_length = batch.processed_bytes();
+      pipe->ConfirmBytes(batch_length);
+
       stats->recv_bytes += batch_length;
       ++(stats->nb_batches);
 
-      auto& tx_pipe = tx_pipes[i];
-      uint8_t* tx_buf = tx_pipe->AllocateBuf(batch_length);
-
-      memcpy(tx_buf, batch.buf(), batch_length);
-
-      rx_pipe->Clear();
-
-      tx_pipe->SendAndFree(batch_length);
+      pipe->SendAndFree(batch_length);
     }
   }
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 4) {
-    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
-              << std::endl
+  if (argc != 5) {
+    std::cerr << "Usage: " << argv[0]
+              << " NB_CORES NB_QUEUES NB_NOTIF_BUFFERS NB_CYCLES" << std::endl
               << std::endl;
     std::cerr << "NB_CORES: Number of cores to use." << std::endl;
     std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
+    std::cerr << "NB_NOTIF_BUFFERS: Number of notification buffers per core."
+              << std::endl;
     std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
                  " packet."
               << std::endl;
@@ -141,7 +130,8 @@ int main(int argc, const char* argv[]) {
 
   uint32_t nb_cores = atoi(argv[1]);
   uint32_t nb_queues = atoi(argv[2]);
-  uint32_t nb_cycles = atoi(argv[3]);
+  uint32_t nb_notif_buffers = atoi(argv[3]);
+  uint32_t nb_cycles = atoi(argv[4]);
 
   signal(SIGINT, int_handler);
 
@@ -149,8 +139,8 @@ int main(int argc, const char* argv[]) {
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
-    threads.emplace_back(run_echo_copy, nb_queues, core_id, nb_cycles,
-                         &(thread_stats[core_id]));
+    threads.emplace_back(run_echo_copy, nb_queues, nb_notif_buffers, core_id,
+                         nb_cycles, &(thread_stats[core_id]));
     if (enso::set_core_id(threads.back(), core_id)) {
       std::cerr << "Error setting CPU affinity" << std::endl;
       return 6;
