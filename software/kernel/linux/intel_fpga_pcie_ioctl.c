@@ -112,6 +112,10 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
     return -ENOTTY;
   }
 
+// Linux 5.0 changed access_ok.
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
+  retval = !access_ok((void __user *)uarg, _IOC_SIZE(cmd));
+#else
   /*
    * The direction is a bitmask, and VERIFY_WRITE catches R/W transfers.
    * `Type' is user-oriented, while access_ok is kernel-oriented, so the
@@ -119,10 +123,12 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
    */
   if (_IOC_DIR(cmd) & _IOC_READ) {
     // Note: VERIFY_WRITE is a superset of VERIFY_READ
-    retval = !access_ok((void __user *)uarg, _IOC_SIZE(cmd));
+    retval = !access_ok(VERIFY_WRITE, (void __user *)uarg, _IOC_SIZE(cmd));
   } else if (_IOC_DIR(cmd) & _IOC_WRITE) {
-    retval = !access_ok((void __user *)uarg, _IOC_SIZE(cmd));
+    retval = !access_ok(VERIFY_READ, (void __user *)uarg, _IOC_SIZE(cmd));
   }
+#endif
+
   if (unlikely(retval)) {
     INTEL_FPGA_PCIE_DEBUG("ioctl access violation.");
     return -EFAULT;
