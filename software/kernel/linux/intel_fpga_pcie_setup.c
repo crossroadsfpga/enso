@@ -460,7 +460,7 @@ static int map_bars_default(struct pci_dev *dev) {
         info->port[i].size = len;
         info->port[i].porttype = UIO_PORT_X86;
       } else {
-        dev_bk->bar[i].base_addr = ioremap_nocache(start, len);
+        dev_bk->bar[i].base_addr = ioremap(start, len);
 
         if (flags & IORESOURCE_PREFETCH) dev_bk->bar[i].is_prefetchable = true;
 
@@ -519,6 +519,5 @@ static void unmap_bars(struct pci_dev *dev) {
 MODULE_AUTHOR("Soon Kyu (Matthew) Lee <matt.sk.lee@intel.com>");
 MODULE_DESCRIPTION("Driver for Intel(R) FPGA PCIe IP");
 MODULE_VERSION("18.0");
-MODULE_SUPPORTED_DEVICE("Intel(R) Stratix 10 FPGA dev kits");
 MODULE_DEVICE_TABLE(pci, intel_fpga_pcie_id_table);
 MODULE_LICENSE("Dual BSD/GPL");

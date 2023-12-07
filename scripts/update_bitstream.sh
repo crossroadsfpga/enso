@@ -25,7 +25,7 @@ cd $SCRIPT_DIR/..
 if [ "$1" == "--download" ]; then
     echo "Downloading bitstream file."
     # Get latest tag.
-    LATEST_TAG=$(git describe --abbrev=0)
+    LATEST_TAG=$(git describe  --tags --abbrev=0)
     echo "Latest tag: $LATEST_TAG"
 
     GH_RELEASE_URL="https://github.com/crossroadsfpga/enso/releases/download"

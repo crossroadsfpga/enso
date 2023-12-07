@@ -26,6 +26,7 @@ else
 fi
 
 cd $REPO_DIR/software/kernel/linux/
+make
 ./install
 cd $REPO_DIR
 
