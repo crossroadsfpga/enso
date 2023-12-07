@@ -1,0 +1,5 @@
+#!/bin/sh
+sudo rmmod enso
+
+# Remove device manually in case udev isn't set up to do so.
+sudo rm -f /dev/enso

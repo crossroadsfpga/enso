@@ -1,0 +1,9 @@
+#!/bin/bash
+make
+if [[ `lsmod | grep -o enso` ]]
+then
+    echo "Unloading previous module"
+    ./unload
+fi
+echo "Loading module"
+./load

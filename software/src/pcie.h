@@ -128,6 +128,10 @@ uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
+uint32_t consume_rx_kernel(
+    struct RxEnsoPipeInternal* enso_pipe,
+    struct NotificationBufPair* notification_buf_pair, void** buf);
+
 /**
  * @brief Get next Enso Pipe with pending data.
  *

@@ -19,6 +19,10 @@
 #ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
 #define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
 
+#include <enso/internals.h>
+
+using enso::TxNotification;
+
 namespace intel_fpga_pcie_api {
 
 /**
@@ -90,6 +94,16 @@ struct enso_send_tx_pipe_params {
   uint32_t id;
 } __attribute__((packed));
 
+struct enso_pipe_init_params {
+  uint64_t phys_addr;
+  uint32_t id;
+} __attribute__((packed));
+
+struct enso_consume_rx_params {
+  uint32_t id;
+  bool peek;
+} __attribute__((packed));
+
 #include <fcntl.h>
 #include <linux/ioctl.h>
 #include <linux/types.h>
@@ -139,7 +153,15 @@ struct enso_send_tx_pipe_params {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 19, struct enso_send_tx_pipe_params *)
 #define INTEL_FPGA_PCIE_IOCTL_GET_UNREPORTED_COMPLETIONS \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 20, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 20
+#define INTEL_FPGA_PCIE_IOCTL_SEND_CONFIG \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 21, struct TxNotification *)
+#define INTEL_FPGA_PCIE_IOCTL_ALLOC_RX_ENSO_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 22, struct enso_pipe_init_params *)
+#define INTEL_FPGA_PCIE_IOCTL_FREE_RX_ENSO_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 23, unsigned int *)
+#define INTEL_FPGA_PCIE_IOCTL_CONSUME_RX \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 24, struct enso_consume_rx_params *)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 24
 
 }  // namespace intel_fpga_pcie_api
 

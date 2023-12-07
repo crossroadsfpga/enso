@@ -98,6 +98,16 @@ struct enso_send_tx_pipe_params {
   uint32_t id;
 } __attribute__((packed));
 
+struct enso_pipe_init_params {
+  uint64_t phys_addr;
+  uint32_t id;
+} __attribute__((packed));
+
+struct enso_consume_rx_params {
+  uint32_t id;
+  bool peek;
+} __attribute__((packed));
+
 #define INTEL_FPGA_PCIE_IOCTL_MAGIC 0x70
 #define INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV \
   _IOW(INTEL_FPGA_PCIE_IOCTL_MAGIC, 0, unsigned int)
@@ -141,7 +151,15 @@ struct enso_send_tx_pipe_params {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 19, struct enso_send_tx_pipe_params *)
 #define INTEL_FPGA_PCIE_IOCTL_GET_UNREPORTED_COMPLETIONS \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 20, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 20
+#define INTEL_FPGA_PCIE_IOCTL_SEND_CONFIG \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 21, struct tx_notification *)
+#define INTEL_FPGA_PCIE_IOCTL_ALLOC_RX_ENSO_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 22, struct enso_pipe_init_params *)
+#define INTEL_FPGA_PCIE_IOCTL_FREE_RX_ENSO_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 23, unsigned int)
+#define INTEL_FPGA_PCIE_IOCTL_CONSUME_RX \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 24, struct enso_consume_rx_params *)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 24
 
 long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
                                     unsigned long arg);

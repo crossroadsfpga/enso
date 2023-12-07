@@ -219,8 +219,10 @@ struct chr_dev_bookkeep {
   unsigned int cur_bar_num;
   uint32_t nb_fb_queues;
   struct notification_buf_pair *notif_buf_pair;
+  struct rx_enso_pipe_internal *enso_pipe_internal;
   uint8_t *notif_q_status;
   uint8_t *pipe_status;
+  wait_queue_head_t waitqueue;
 };
 
 struct __attribute__((__packed__)) rx_notification {
@@ -251,7 +253,7 @@ struct queue_regs {
 
 struct notification_buf_pair {
   struct rx_notification* rx_buf;
-  // enso_pipe_id_t* next_rx_pipe_ids;  // Next pipe ids to consume from rx_buf.
+  uint32_t* next_rx_pipe_ids;  // Next pipe ids to consume from rx_buf.
   struct tx_notification* tx_buf;
   uint32_t* rx_head_ptr;
   uint32_t* tx_tail_ptr;
@@ -270,6 +272,14 @@ struct notification_buf_pair {
   uint8_t* wrap_tracker;
   uint32_t* pending_rx_pipe_tails;
 
+  bool allocated;
+};
+
+struct rx_enso_pipe_internal {
+  struct queue_regs* regs;
+  uint32_t rx_head;
+  uint32_t rx_tail;
+  uint32_t id;
   bool allocated;
 };
 

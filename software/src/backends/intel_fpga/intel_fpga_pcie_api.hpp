@@ -398,6 +398,22 @@ class IntelFpgaPcieDev {
    */
   int get_unreported_completions();
 
+  /**
+   * Send a config notification.
+   * @param txNotification struct TxNotification with the configuration.
+   *
+   * @return 0 on success. On error, -1 is returned and errno is set
+   *         appropriately.
+   */
+  int send_config(struct TxNotification *txNotification);
+  int allocate_enso_rx_pipe(int pipe_id, uint64_t buf_phys_addr);
+  int free_enso_rx_pipe(int pipe_id);
+  int consume_rx_pipe(int pipe_id, bool peek);
+
+  ssize_t get_m_dev_handle() {
+    return m_dev_handle;
+  }
+
  private:
   /**
    * Class should be instantiated via the Create() factory method.

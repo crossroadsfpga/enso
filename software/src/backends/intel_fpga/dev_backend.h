@@ -191,6 +191,33 @@ class DevBackend {
     return dev_->get_unreported_completions();
   }
 
+  /**
+   * @brief Transmit configuration info to the NIC.
+   *
+   * @param txNotification   struct TxNotification for carrying the config info.
+   *
+   * @return Return 0 on success. On error, -1 is returned and errno is set.
+   */
+  int SendConfig(struct TxNotification *txNotification) {
+    return dev_->send_config(txNotification);
+  }
+
+  int AllocateEnsoRxPipe(int pipe_id, uint64_t buf_phys_addr) {
+    return dev_->allocate_enso_rx_pipe(pipe_id, buf_phys_addr);
+  }
+
+  int FreeEnsoRxPipe(int pipe_id) {
+    return dev_->free_enso_rx_pipe(pipe_id);
+  }
+
+  ssize_t GetDevHandle() {
+    return dev_->get_m_dev_handle();
+  }
+
+  int ConsumeRxPipe(int pipe_id, bool peek) {
+    return dev_->consume_rx_pipe(pipe_id, peek);
+  }
+
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
       : bdf_(bdf), bar_(bar) {}

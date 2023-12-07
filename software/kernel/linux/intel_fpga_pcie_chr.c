@@ -46,10 +46,13 @@
 #include "intel_fpga_pcie.h"
 #include "intel_fpga_pcie_ioctl.h"
 #include "intel_fpga_pcie_setup.h"
+#include "enso_defines.h"
+#include <linux/poll.h>
 
 /******************************************************************************
  * Static function prototypes
  *****************************************************************************/
+static uint32_t chr_poll(struct file *filp, struct poll_table_struct *wait);
 static int chr_open(struct inode *inode, struct file *filp);
 static int chr_release(struct inode *inode, struct file *filp);
 static ssize_t chr_read(struct file *filp, char __user *buf, size_t count,
@@ -97,12 +100,28 @@ const struct file_operations intel_fpga_pcie_fops = {
     .write = chr_write,
     .llseek = chr_llseek,
     .unlocked_ioctl = intel_fpga_pcie_unlocked_ioctl,
+    .poll = chr_poll,
     .mmap = chr_mmap,
 };
 
 const struct vm_operations_struct intel_fpga_vm_ops = {
     .close = chr_vma_close,
 };
+
+static uint32_t chr_poll(struct file *filp, struct poll_table_struct *wait) {
+    struct chr_dev_bookkeep *chr_dev_bk = filp->private_data;
+    if(chr_dev_bk == NULL) {
+        printk("chr_poll failure, private data is null\n");
+        return 0;
+    }
+    pr_info("poll\n");
+    poll_wait(filp, &chr_dev_bk->waitqueue, wait);
+    // printk("x is %d\n", x);
+    // if(x) {
+        return POLLIN;
+    // }
+    // return 0;
+}
 
 /**
  * chr_open() - Responds to the system call open(2). Opens the
@@ -160,9 +179,20 @@ static int chr_open(struct inode *inode, struct file *filp) {
   }
   chr_dev_bk->notif_buf_pair->allocated = false;
 
+  chr_dev_bk->enso_pipe_internal = kzalloc(sizeof(struct notification_buf_pair),
+                                        GFP_KERNEL);
+  if(chr_dev_bk->enso_pipe_internal == NULL) {
+    INTEL_FPGA_PCIE_ERR("couldn't create enso_pipe_internal pair");
+    kfree(chr_dev_bk->notif_buf_pair);
+    kfree(chr_dev_bk);
+    return -ENOMEM;
+  }
+  chr_dev_bk->enso_pipe_internal->allocated = false;
+
   chr_dev_bk->notif_q_status = kzalloc(MAX_NB_APPS / 8, GFP_KERNEL);
   if (chr_dev_bk->notif_q_status == NULL) {
     INTEL_FPGA_PCIE_ERR("couldn't create notification queue status ");
+    kfree(chr_dev_bk->enso_pipe_internal);
     kfree(chr_dev_bk->notif_buf_pair);
     kfree(chr_dev_bk);
     return -ENOMEM;
@@ -171,8 +201,9 @@ static int chr_open(struct inode *inode, struct file *filp) {
   chr_dev_bk->pipe_status = kzalloc(MAX_NB_FLOWS / 8, GFP_KERNEL);
   if (chr_dev_bk->pipe_status == NULL) {
     INTEL_FPGA_PCIE_ERR("couldn't create pipe status for device ");
-    kfree(chr_dev_bk->notif_buf_pair);
     kfree(chr_dev_bk->notif_q_status);
+    kfree(chr_dev_bk->enso_pipe_internal);
+    kfree(chr_dev_bk->notif_buf_pair);
     kfree(chr_dev_bk);
     return -ENOMEM;
   }
@@ -261,6 +292,8 @@ static int chr_release(struct inode *inode, struct file *filp) {
   int i;
   struct chr_dev_bookkeep *chr_dev_bk;
   struct dev_bookkeep *dev_bk;
+  //unsigned int page_ind = 0;
+  //size_t enso_pipe_buf_size = 512 * PAGE_SIZE;
 
   chr_dev_bk = filp->private_data;
   dev_bk = chr_dev_bk->dev_bk;
@@ -290,6 +323,14 @@ static int chr_release(struct inode *inode, struct file *filp) {
   up(&dev_bk->sem);
 
   free_notif_buf_pair(chr_dev_bk);
+  if(!chr_dev_bk->enso_pipe_internal->allocated) {
+    kfree(chr_dev_bk->enso_pipe_internal);
+  }
+  else {
+    printk("enso internal pipe free failed\n");
+    ext_free_rx_enso_pipe(chr_dev_bk);
+    kfree(chr_dev_bk->enso_pipe_internal);
+  }
   kfree(chr_dev_bk->notif_buf_pair);
   kfree(chr_dev_bk->notif_q_status);
   kfree(chr_dev_bk->pipe_status);

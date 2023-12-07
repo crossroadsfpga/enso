@@ -159,7 +159,7 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
   char device_name[1000] = "/dev/";
   if (get_uio_dev_name(device_name + 5)) {
     close(m_dev_handle);
-    std::cerr << "could not get uio device name" << std::endl;
+    std::cerr << "could not get uio device name " << device_name << std::endl;
     return -1;
   }
 
@@ -547,6 +547,53 @@ int IntelFpgaPcieDev::get_unreported_completions() {
   }
 
   return completions;
+}
+
+int IntelFpgaPcieDev::send_config(struct TxNotification *txNotification) {
+  int result;
+  result =
+      ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SEND_CONFIG, txNotification);
+
+  if (result != 0) {
+    std::cout << "failure at send_confif ioctl " << result << std::endl;
+    return -1;
+  }
+
+  return result;
+}
+
+int IntelFpgaPcieDev::allocate_enso_rx_pipe(int pipe_id, uint64_t buf_phys_addr) {
+  int result;
+  struct enso_pipe_init_params param;
+  param.phys_addr = buf_phys_addr;
+  param.id = pipe_id;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_ALLOC_RX_ENSO_PIPE, &param);
+
+  if (result != 0) {
+    return -1;
+  }
+
+  return result;
+}
+
+int IntelFpgaPcieDev::free_enso_rx_pipe(int pipe_id) {
+  int result;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_FREE_RX_ENSO_PIPE, pipe_id);
+
+  if (result != 0) {
+    return -1;
+  }
+
+  return 0;
+}
+
+int IntelFpgaPcieDev::consume_rx_pipe(int pipe_id, bool peek) {
+  int result;
+  struct enso_consume_rx_params param;
+  param.id = pipe_id;
+  param.peek = peek;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CONSUME_RX, &param);
+  return result;
 }
 
 }  // namespace intel_fpga_pcie_api

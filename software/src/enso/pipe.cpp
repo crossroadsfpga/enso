@@ -52,6 +52,7 @@
 #include <string>
 
 #include "../pcie.h"
+#include <dev_backend.h>
 
 namespace enso {
 
@@ -75,11 +76,15 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
+  // NOTE: We don't need the get_new_tails function, but commenting it
+  // out results in compiler errors. why?
   if (!next_pipe_) {
     get_new_tails(notification_buf_pair_);
   }
-  uint32_t ret = peek_next_batch_from_queue(
-      &internal_rx_pipe_, notification_buf_pair_, (void**)buf);
+  /*uint32_t ret = peek_next_batch_from_queue(
+      &internal_rx_pipe_, notification_buf_pair_, (void**)buf);*/
+  uint32_t ret = consume_rx_kernel(&internal_rx_pipe_, notification_buf_pair_,
+                                   (void**)buf);
   return std::min(ret, max_nb_bytes);
 }
 
@@ -412,6 +417,12 @@ int Device::EnableRoundRobin() {
 
 int Device::DisableRoundRobin() {
   return disable_round_robin(&notification_buf_pair_);
+}
+
+ssize_t Device::GetDevHandle() {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair_.fpga_dev);
+  return fpga_dev->GetDevHandle();
 }
 
 }  // namespace enso
