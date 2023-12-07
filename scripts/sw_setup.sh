@@ -11,19 +11,12 @@ if [[ "$#" -ne 3 ]]; then
     exit 1
 fi
 
-# Check if hugepages are enabled, and if not, automatically enable them.
-if [ ! -f /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages ]; then
-    # Hugepages are not enabled. Enable them.
-    mkdir -p /mnt/huge
-    (mount | grep /mnt/huge) > /dev/null || mount -t hugetlbfs hugetlbfs /mnt/huge
-    for i in /sys/devices/system/node/node[0-9]*; do
-        echo 4096 > "$i"/hugepages/hugepages-2048kB/nr_hugepages
-    done
-    echo "Hugepages enabled."
-else
-    nb_hugepages=$(cat /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages)
-    echo "Currently there are $nb_hugepages hugepages allocated."
-fi
+
+sudo mkdir -p /mnt/huge
+(sudo mount | grep /mnt/huge) > /dev/null || sudo mount -t hugetlbfs hugetlbfs /mnt/huge
+for i in /sys/devices/system/node/node[0-9]*; do
+    echo 4096 | sudo tee "$i"/hugepages/hugepages-2048kB/nr_hugepages
+done
 
 cd $REPO_DIR/software/kernel/linux/
 make
