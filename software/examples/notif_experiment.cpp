@@ -68,7 +68,7 @@ void run_echo_copy(uint32_t nb_queues, uint32_t nb_notif_buffers,
     }
     devices.push_back(dev);
 
-    std::cout << "created a device" << std::endl;
+    std::cout << "created a device: " << i << std::endl;
 
     for (uint32_t j = 0; j < nb_queues; j++) {
       RxTxPipe* pipe = dev->AllocateRxTxPipe();
