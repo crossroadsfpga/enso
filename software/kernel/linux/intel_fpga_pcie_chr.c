@@ -179,10 +179,10 @@ static int chr_open(struct inode *inode, struct file *filp) {
   }
   chr_dev_bk->notif_buf_pair->allocated = false;
 
-  chr_dev_bk->enso_pipe_internal = kzalloc(sizeof(struct notification_buf_pair),
+  chr_dev_bk->enso_pipe_internal = kzalloc(sizeof(struct rx_enso_pipe_internal),
                                         GFP_KERNEL);
   if(chr_dev_bk->enso_pipe_internal == NULL) {
-    INTEL_FPGA_PCIE_ERR("couldn't create enso_pipe_internal pair");
+    INTEL_FPGA_PCIE_ERR("couldn't create enso_pipe_internal");
     kfree(chr_dev_bk->notif_buf_pair);
     kfree(chr_dev_bk);
     return -ENOMEM;

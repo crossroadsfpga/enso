@@ -173,6 +173,9 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len);
  */
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe);
 
+void fully_advance_pipe_kernel(struct RxEnsoPipeInternal* enso_pipe,
+                               struct NotificationBufPair* notification_buf_pair);
+
 /**
  * @brief Prefetches a given Enso Pipe.
  *

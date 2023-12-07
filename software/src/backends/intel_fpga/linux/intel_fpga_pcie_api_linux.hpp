@@ -102,6 +102,7 @@ struct enso_pipe_init_params {
 struct enso_consume_rx_params {
   uint32_t id;
   bool peek;
+  uint32_t head;
 } __attribute__((packed));
 
 #include <fcntl.h>
@@ -161,7 +162,9 @@ struct enso_consume_rx_params {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 23, unsigned int *)
 #define INTEL_FPGA_PCIE_IOCTL_CONSUME_RX \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 24, struct enso_consume_rx_params *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 24
+#define INTEL_FPGA_PCIE_IOCTL_FULL_ADV_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 25, unsigned int *)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 25
 
 }  // namespace intel_fpga_pcie_api
 

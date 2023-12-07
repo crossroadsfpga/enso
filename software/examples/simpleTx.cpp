@@ -50,7 +50,7 @@
 #define ONE_THOUSAND                    1e3
 #define FPGA_PACKET_OVERHEAD            24
 #define MIN_PACKET_SIZE                 64
-#define PCAP_FILE_PATH                  "/home/kshitij/dev/enso/scripts/sample_pcaps/4_64_1_4.pcap"
+#define PCAP_FILE_PATH                  "/home/kshitij/dev/enso/scripts/sample_pcaps/2_64_1_2.pcap"
 
 using enso::Device;
 using enso::TxPipe;
@@ -178,7 +178,7 @@ void send_tx(TxPipe *pipe, uint8_t *main_buf, uint64_t total_bytes_in_main_buf,
         stats->bytes += total_bytes_in_main_buf;
         stats->pkts += total_pkts_in_main_buf;
         // if(stats->pkts >= 2048) {
-        //     run = 0;
+        //   run = 0;
         // }
     }
     // set this so that the main thread exits

@@ -587,12 +587,20 @@ int IntelFpgaPcieDev::free_enso_rx_pipe(int pipe_id) {
   return 0;
 }
 
-int IntelFpgaPcieDev::consume_rx_pipe(int pipe_id, bool peek) {
+int IntelFpgaPcieDev::consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head) {
   int result;
   struct enso_consume_rx_params param;
   param.id = pipe_id;
   param.peek = peek;
+  param.head = 0;
   result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CONSUME_RX, &param);
+  pipe_head = param.head;
+  return result;
+}
+
+int IntelFpgaPcieDev::full_adv_pipe(int pipe_id) {
+  int result;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_FULL_ADV_PIPE, &pipe_id);
   return result;
 }
 

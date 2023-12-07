@@ -408,7 +408,8 @@ class IntelFpgaPcieDev {
   int send_config(struct TxNotification *txNotification);
   int allocate_enso_rx_pipe(int pipe_id, uint64_t buf_phys_addr);
   int free_enso_rx_pipe(int pipe_id);
-  int consume_rx_pipe(int pipe_id, bool peek);
+  int consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head);
+  int full_adv_pipe(int pipe_id);
 
   ssize_t get_m_dev_handle() {
     return m_dev_handle;

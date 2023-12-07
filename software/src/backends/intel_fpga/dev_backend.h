@@ -214,8 +214,12 @@ class DevBackend {
     return dev_->get_m_dev_handle();
   }
 
-  int ConsumeRxPipe(int pipe_id, bool peek) {
-    return dev_->consume_rx_pipe(pipe_id, peek);
+  int ConsumeRxPipe(int pipe_id, bool peek, uint32_t &pipe_head) {
+    return dev_->consume_rx_pipe(pipe_id, peek, pipe_head);
+  }
+
+  int FullyAdvancePipe(int pipe_id) {
+    return dev_->full_adv_pipe(pipe_id);
   }
 
  private:

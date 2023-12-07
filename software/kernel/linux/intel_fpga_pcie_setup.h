@@ -277,6 +277,7 @@ struct notification_buf_pair {
 
 struct rx_enso_pipe_internal {
   struct queue_regs* regs;
+  uint32_t* buf_head_ptr;
   uint32_t rx_head;
   uint32_t rx_tail;
   uint32_t id;

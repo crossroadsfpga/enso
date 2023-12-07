@@ -87,6 +87,9 @@ void rcv_pkts(RxPipe *rxPipe, RxStats *stats) {
         stats->bytes += batch_length;
         ++(stats->batches);
         rxPipe->Clear();
+        // if(stats->pkts == 2048) {
+        //     run = 0;
+        // }
     }
     // set this so that the main thread exits
     done = 1;

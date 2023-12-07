@@ -275,9 +275,17 @@ __consume_rx_kernel(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
   (void) buf;
+  uint32_t pipe_head = 0;
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  uint32_t flit_aligned_size = fpga_dev->ConsumeRxPipe(enso_pipe->id, peek);
+  uint32_t flit_aligned_size = fpga_dev->ConsumeRxPipe(enso_pipe->id, peek, pipe_head);
+  if(flit_aligned_size > 0)
+  {
+    // std::cout << "flit_aligned_size = " << flit_aligned_size
+    //           << " pipe head = " << pipe_head << std::endl;
+    uint32_t* enso_pipe_buf = enso_pipe->buf;
+    *buf = &enso_pipe_buf[pipe_head * 16];
+  }
   return flit_aligned_size;
 }
 
@@ -388,6 +396,13 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail);
   enso_pipe->rx_head = enso_pipe->rx_tail;
+}
+
+void fully_advance_pipe_kernel(struct RxEnsoPipeInternal* enso_pipe,
+                               struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->FullyAdvancePipe(enso_pipe->id);
 }
 
 void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
@@ -550,7 +565,7 @@ void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
 
   fpga_dev->FreeEnsoRxPipe(enso_pipe_id);
   /*DevBackend::mmio_write32(&enso_pipe->regs->rx_mem_low, 0);
-  DevBackend::mmio_write32(&enso_pipe->regs->rx_mem_high, 0);
+  DevBackend::mmio_write32(&enso_pipe->regs->rx_mem_high, 0);*/
 
   if (enso_pipe->buf) {
     munmap(enso_pipe->buf, kBufPageSize);
@@ -561,7 +576,7 @@ void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
     enso_pipe->buf = nullptr;
   }
 
-  fpga_dev->FreePipe(enso_pipe_id);*/
+  fpga_dev->FreePipe(enso_pipe_id);
 
   update_fallback_queues_config(notification_buf_pair);
 }

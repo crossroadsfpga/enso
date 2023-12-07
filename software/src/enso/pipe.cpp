@@ -94,7 +94,7 @@ void RxPipe::Free(uint32_t nb_bytes) {
 
 void RxPipe::Prefetch() { prefetch_pipe(&internal_rx_pipe_); }
 
-void RxPipe::Clear() { fully_advance_pipe(&internal_rx_pipe_); }
+void RxPipe::Clear() { fully_advance_pipe_kernel(&internal_rx_pipe_, notification_buf_pair_); }
 
 RxPipe::~RxPipe() {
   enso_pipe_free(notification_buf_pair_, &internal_rx_pipe_, id_);
