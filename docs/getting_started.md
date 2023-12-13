@@ -4,7 +4,7 @@ To use Ensō, you first need to make sure that your system meets the requirement
 
 ## System requirements
 
-Ensō currently requires an Intel Stratix 10 MX FPGA. Support for other boards might be added in the future. Ensō's codebase also assumes an x86-64 architecture and that the system is running Linux. Ensō was extensively tested on Ubuntu 16.04, but it should work on other Linux distributions as well.
+Ensō currently requires an Intel Stratix 10 MX FPGA. Support for other boards might be added in the future. Ensō's codebase also assumes an x86-64 architecture and that the system is running Linux. Ensō was extensively tested on Ubuntu 22.04 and 16.04, but it should work on other Linux distributions as well.
 
 In what follows, we describe how to setup the software and install the required dependencies.
 
@@ -22,13 +22,13 @@ Ensō has the following dependencies:
 
 There are also python dependencies listed in `requirements.txt` that can be installed with `pip`.
 
-If you are using Ubuntu 20.04 or other recent Debian-based distribution, you may be able to use the `setup.sh` script to install all the dependencies. The script is located at the root of the [Ensō repository](https://github.com/crossroadsfpga/enso). To run it, simply execute:
+If you are using Ubuntu 22.04 or other recent Debian-based distribution, you may be able to use the `setup.sh` script to install all the dependencies. The script is located at the root of the [Ensō repository](https://github.com/crossroadsfpga/enso). To run it, simply execute:
 
 ```bash
 ./setup.sh
 ```
 
-In Ubuntu 20.04 or other recent Debian-based distributions these dependencies can also be manually installed with the following commands:
+In Ubuntu 22.04 or other recent Debian-based distributions these dependencies can also be manually installed with the following commands:
 ```bash
 sudo apt update
 sudo apt install \
