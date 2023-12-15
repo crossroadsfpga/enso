@@ -105,6 +105,18 @@ struct enso_consume_rx_params {
   uint32_t head;
 } __attribute__((packed));
 
+struct enso_get_next_batch_params {
+  uint32_t notif_id;
+  uint32_t pipe_id;
+  uint32_t head;
+  bool peek;
+};
+
+struct enso_advance_pipe_params {
+  uint32_t id;
+  size_t len;
+};
+
 #include <fcntl.h>
 #include <linux/ioctl.h>
 #include <linux/types.h>
@@ -164,7 +176,11 @@ struct enso_consume_rx_params {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 24, struct enso_consume_rx_params *)
 #define INTEL_FPGA_PCIE_IOCTL_FULL_ADV_PIPE \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 25, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 25
+#define INTEL_FPGA_PCIE_IOCTL_GET_NEXT_BATCH \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 26, struct enso_get_next_batch_params *)
+#define INTEL_FPGA_PCIE_IOCTL_ADVANCE_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 27, struct enso_advance_pipe_params *)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 27
 
 }  // namespace intel_fpga_pcie_api
 

@@ -410,10 +410,8 @@ class IntelFpgaPcieDev {
   int free_enso_rx_pipe(int pipe_id);
   int consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head);
   int full_adv_pipe(int pipe_id);
-
-  ssize_t get_m_dev_handle() {
-    return m_dev_handle;
-  }
+  int get_next_batch(int notif_id, bool peek, int &pipe_id, uint32_t &pipe_head);
+  int advance_pipe(int pipe_id, size_t len);
 
  private:
   /**

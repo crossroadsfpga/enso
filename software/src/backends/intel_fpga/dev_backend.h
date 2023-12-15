@@ -210,16 +210,20 @@ class DevBackend {
     return dev_->free_enso_rx_pipe(pipe_id);
   }
 
-  ssize_t GetDevHandle() {
-    return dev_->get_m_dev_handle();
-  }
-
   int ConsumeRxPipe(int pipe_id, bool peek, uint32_t &pipe_head) {
     return dev_->consume_rx_pipe(pipe_id, peek, pipe_head);
   }
 
   int FullyAdvancePipe(int pipe_id) {
     return dev_->full_adv_pipe(pipe_id);
+  }
+
+  int GetNextBatch(int notif_id, bool peek, int &pipe_id, uint32_t &pipe_head) {
+    return dev_->get_next_batch(notif_id, peek, pipe_id, pipe_head);
+  }
+
+  int AdvancePipe(int pipe_id, size_t len) {
+    return dev_->advance_pipe(pipe_id, len);
   }
 
  private:

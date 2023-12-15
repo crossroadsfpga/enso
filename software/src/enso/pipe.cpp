@@ -89,7 +89,8 @@ inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 void RxPipe::Free(uint32_t nb_bytes) {
-  advance_pipe(&internal_rx_pipe_, nb_bytes);
+  // advance_pipe(&internal_rx_pipe_, nb_bytes);
+  advance_pipe_kernel(notification_buf_pair_, &internal_rx_pipe_, nb_bytes);
 }
 
 void RxPipe::Prefetch() { prefetch_pipe(&internal_rx_pipe_); }
@@ -417,12 +418,6 @@ int Device::EnableRoundRobin() {
 
 int Device::DisableRoundRobin() {
   return disable_round_robin(&notification_buf_pair_);
-}
-
-ssize_t Device::GetDevHandle() {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair_.fpga_dev);
-  return fpga_dev->GetDevHandle();
 }
 
 }  // namespace enso

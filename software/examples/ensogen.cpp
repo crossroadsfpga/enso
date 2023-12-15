@@ -761,6 +761,7 @@ int main(int argc, char** argv) {
   // When using single_core we use the same thread for RX and TX, otherwise we
   // launch separate threads for RX and TX.
   if (!parsed_args.single_core) {
+    std::cout << "Starting on different cores" << std::endl;
     std::thread rx_thread = std::thread([&parsed_args, &rx_stats] {
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
@@ -801,6 +802,7 @@ int main(int argc, char** argv) {
       while (keep_running) {
         receive_pkts(rx_args, rx_stats);
       }
+      std::cout << "Stopped RX receive_pkts" << std::endl;
 
       uint64_t nb_iters_no_pkt = 0;
 
@@ -814,6 +816,7 @@ int main(int argc, char** argv) {
         }
       }
 
+      std::cout << "Marking rx as done" << std::endl;
       rx_done = true;
 
       enso::disable_device_rate_limit(socket_fd);
@@ -826,6 +829,7 @@ int main(int argc, char** argv) {
       for (auto& s : socket_fds) {
         enso::shutdown(s, SHUT_RDWR);
       }
+      std::cout << "RX Thread exited" << std::endl;
     });
 
     std::thread tx_thread = std::thread(
@@ -883,6 +887,7 @@ int main(int argc, char** argv) {
     threads.push_back(std::move(tx_thread));
 
   } else {
+    std::cout << "Started on same core" << std::endl;
     // Send and receive packets within the same thread.
     std::thread rx_tx_thread = std::thread(
         [&parsed_args, &rx_stats, total_bytes_to_send, total_good_bytes_to_send,

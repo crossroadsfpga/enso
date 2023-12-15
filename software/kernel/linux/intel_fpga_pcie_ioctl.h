@@ -109,6 +109,18 @@ struct enso_consume_rx_params {
   uint32_t head;
 } __attribute__((packed));
 
+struct enso_get_next_batch_params {
+  uint32_t notif_id;
+  uint32_t pipe_id;
+  uint32_t head;
+  bool peek;
+};
+
+struct enso_advance_pipe_params {
+  uint32_t id;
+  size_t len;
+};
+
 #define INTEL_FPGA_PCIE_IOCTL_MAGIC 0x70
 #define INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV \
   _IOW(INTEL_FPGA_PCIE_IOCTL_MAGIC, 0, unsigned int)
@@ -162,7 +174,11 @@ struct enso_consume_rx_params {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 24, struct enso_consume_rx_params *)
 #define INTEL_FPGA_PCIE_IOCTL_FULL_ADV_PIPE \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 25, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 25
+#define INTEL_FPGA_PCIE_IOCTL_GET_NEXT_BATCH \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 26, struct enso_get_next_batch_params *)
+#define INTEL_FPGA_PCIE_IOCTL_ADVANCE_PIPE \
+  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 27, struct enso_advance_pipe_params *)
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 27
 
 long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
                                     unsigned long arg);

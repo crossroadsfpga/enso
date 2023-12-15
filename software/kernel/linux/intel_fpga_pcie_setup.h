@@ -159,6 +159,12 @@ struct global_bookkeep {
   event_kthread_data_t event_kthread_data;
 };
 
+struct enso_intel_pcie {
+    uint64_t bar2_pcie_start;
+    uint64_t bar2_pcie_len;
+};
+
+
 /**
  * struct dev_bookkeep - Bookkeeping structure per device.
  *
@@ -219,7 +225,7 @@ struct chr_dev_bookkeep {
   unsigned int cur_bar_num;
   uint32_t nb_fb_queues;
   struct notification_buf_pair *notif_buf_pair;
-  struct rx_enso_pipe_internal *enso_pipe_internal;
+  struct rx_enso_pipe_internal **enso_rx_pipes;
   uint8_t *notif_q_status;
   uint8_t *pipe_status;
   wait_queue_head_t waitqueue;

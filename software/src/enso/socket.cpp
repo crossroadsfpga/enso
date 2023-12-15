@@ -131,6 +131,7 @@ ssize_t recv(int sockfd, void* buf, size_t len, int flags) {
   (void)len;
   (void)flags;
 
+  std::cout << "Entered recv" << std::endl;
   void* ring_buf;
   struct SocketInternal* socket = &open_sockets[sockfd];
   struct RxEnsoPipeInternal* enso_pipe = &socket->enso_pipe;
@@ -174,7 +175,8 @@ ssize_t recv_select(int ref_sockfd, int* sockfd, void** buf, size_t len,
 
   struct NotificationBufPair* notification_buf_pair =
       open_sockets[ref_sockfd].notification_buf_pair;
-  return get_next_batch(notification_buf_pair, open_sockets, sockfd, buf);
+  // return get_next_batch(notification_buf_pair, open_sockets, sockfd, buf);
+  return get_next_batch_kernel(notification_buf_pair, open_sockets, sockfd, buf);
 }
 
 ssize_t send(int sockfd, uint64_t phys_addr, size_t len, int flags) {
@@ -190,7 +192,9 @@ uint32_t get_completions(int ref_sockfd) {
 }
 
 void free_enso_pipe(int sockfd, size_t len) {
-  advance_pipe(&(open_sockets[sockfd].enso_pipe), len);
+  // advance_pipe(&(open_sockets[sockfd].enso_pipe), len);
+  advance_pipe_kernel(open_sockets[sockfd].notification_buf_pair,
+                      &(open_sockets[sockfd].enso_pipe), len);
 }
 
 int enable_device_timestamp(int ref_sockfd) {

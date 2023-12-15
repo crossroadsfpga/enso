@@ -71,6 +71,9 @@ static void __exit intel_fpga_pcie_exit(void);
 
 static int map_bars_default(struct pci_dev *dev);
 static void unmap_bars(struct pci_dev *dev);
+struct enso_intel_pcie* get_intel_fpga_pcie_addr(void);
+
+static struct enso_intel_pcie *intel_enso;
 
 /******************************************************************************
  * PCIe driver functions
@@ -112,6 +115,13 @@ int intel_fpga_pcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
   dev_bk->bdf = bdf;
   dev_bk->nb_fb_queues = 0;
   dev_bk->enable_rr = false;
+
+  intel_enso = kzalloc(sizeof(struct enso_intel_pcie), GFP_KERNEL);
+  if(intel_enso == NULL) {
+    INTEL_FPGA_PCIE_ERR("Enso BAR struct alloc failed\n");
+    retval = -ENOMEM;
+    goto failed_enso_intel_alloc;
+  }
 
   dev_bk->notif_q_status = kzalloc(MAX_NB_APPS / 8, GFP_KERNEL);
   if (dev_bk->notif_q_status == NULL) {
@@ -232,6 +242,8 @@ failed_pipe_status_alloc:
 failed_pcie_enable:
   pci_set_drvdata(dev, NULL);
 failed_notif_q_status_alloc:
+  kfree(intel_enso);
+failed_enso_intel_alloc:
   kfree(dev_bk);
 failed_devbk_alloc:
   return retval;
@@ -283,6 +295,7 @@ void intel_fpga_pcie_remove(struct pci_dev *dev) {
   pci_release_regions(dev);
   pci_disable_device(dev);
   pci_set_drvdata(dev, NULL);
+  kfree(intel_enso);
   kfree(dev_bk->pipe_status);
   kfree(dev_bk->notif_q_status);
   kfree(dev_bk);
@@ -450,6 +463,9 @@ static int map_bars_default(struct pci_dev *dev) {
       if(i == 2) {
         dev_bk->bar2_pcie_start = start;
         dev_bk->bar2_pcie_len = len;
+        intel_enso->bar2_pcie_start = start;
+        intel_enso->bar2_pcie_len = len;
+        printk("Setting PCIE BARs\n");
       }
 
       if (flags & IORESOURCE_IO) {
@@ -514,6 +530,11 @@ static void unmap_bars(struct pci_dev *dev) {
     }
   }
 }
+
+struct enso_intel_pcie* get_intel_fpga_pcie_addr() {
+  return intel_enso;
+}
+EXPORT_SYMBOL(get_intel_fpga_pcie_addr);
 
 // Metadata information
 MODULE_AUTHOR("Soon Kyu (Matthew) Lee <matt.sk.lee@intel.com>");

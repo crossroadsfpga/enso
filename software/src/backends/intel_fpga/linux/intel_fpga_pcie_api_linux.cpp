@@ -604,4 +604,29 @@ int IntelFpgaPcieDev::full_adv_pipe(int pipe_id) {
   return result;
 }
 
+int IntelFpgaPcieDev::get_next_batch(int notif_id, bool peek, int &pipe_id, uint32_t &pipe_head) {
+  int result;
+  struct enso_get_next_batch_params param;
+  param.notif_id = notif_id;
+  param.peek = peek;
+  param.head = 0;
+  param.pipe_id = -1;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_GET_NEXT_BATCH, &param);
+  if(result < 0) {
+    return -1;
+  }
+  pipe_head = param.head;
+  pipe_id = param.pipe_id;
+  return result;
+}
+
+int IntelFpgaPcieDev::advance_pipe(int pipe_id, size_t len) {
+  int result;
+  struct enso_advance_pipe_params param;
+  param.id = pipe_id;
+  param.len = len;
+  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_ADVANCE_PIPE, &param);
+  return result;
+}
+
 }  // namespace intel_fpga_pcie_api

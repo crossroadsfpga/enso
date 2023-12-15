@@ -84,10 +84,12 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
 static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long send_config(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsigned int __user *user_addr);
-static long alloc_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long alloc_enso_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long free_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 
 /******************************************************************************
  * Device and I/O control function
@@ -228,7 +230,7 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
       retval = send_config(chr_dev_bk, uarg);
       break;
     case INTEL_FPGA_PCIE_IOCTL_ALLOC_RX_ENSO_PIPE:
-      retval = alloc_rx_enso_pipe(chr_dev_bk, uarg);
+      retval = alloc_enso_rx_pipe(chr_dev_bk, uarg);
       break;
     case INTEL_FPGA_PCIE_IOCTL_FREE_RX_ENSO_PIPE:
       retval = free_rx_enso_pipe(chr_dev_bk, uarg);
@@ -238,6 +240,12 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
       break;
     case INTEL_FPGA_PCIE_IOCTL_FULL_ADV_PIPE:
       retval = fully_advance_pipe(chr_dev_bk, uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_GET_NEXT_BATCH:
+      retval = get_next_batch(chr_dev_bk, uarg);
+      break;
+    case INTEL_FPGA_PCIE_IOCTL_ADVANCE_PIPE:
+      retval = advance_pipe(chr_dev_bk, uarg);
       break;
     default:
       retval = -ENOTTY;
@@ -860,6 +868,8 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
 
   notif_buf_pair->id = buf_id;
 
+  printk("Creating notif buf pair %d\n", buf_id);
+
   // Check that the buffer ID is valid.
   if (buf_id < 0 || buf_id >= MAX_NB_APPS) {
     INTEL_FPGA_PCIE_DEBUG("invalid buffer ID.");
@@ -1229,20 +1239,19 @@ int32_t alloc_enso_pipe_id(struct chr_dev_bookkeep *chr_dev_bk, bool is_fallback
   return 0;
 }
 
-static long alloc_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+static long alloc_enso_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
                                unsigned long uarg) {
   struct enso_pipe_init_params params;
   struct dev_bookkeep *dev_bk;
-  struct rx_enso_pipe_internal *rx_enso_pipe;
+  struct rx_enso_pipe_internal **enso_rx_pipes;
+  struct rx_enso_pipe_internal *new_enso_rx_pipe;
   uint8_t *bar2_addr;
   struct queue_regs *rep_q_regs;
   int32_t pipe_id;
   uint64_t rx_buf_phys_addr;
 
-  rx_enso_pipe = chr_dev_bk->enso_pipe_internal;
   dev_bk = chr_dev_bk->dev_bk;
 
-  printk("Allocating enso RX pipe\n");
   if (unlikely(down_interruptible(&dev_bk->sem))) {
     INTEL_FPGA_PCIE_DEBUG(
         "interrupted while attempting to obtain "
@@ -1256,20 +1265,32 @@ static long alloc_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   }
 
   pipe_id = params.id;
-  rx_enso_pipe->id = pipe_id;
-
-  // check if notification buf pair already allocated
-  if(rx_enso_pipe->allocated) {
-    printk("Rx enso pipe already allocated.\n");
+  printk("Allocating enso RX pipe with ID = %d\n", pipe_id);
+  enso_rx_pipes = chr_dev_bk->enso_rx_pipes;
+  if(enso_rx_pipes == NULL) {
+    printk("Enso pipes not allocated\n");
     return -EINVAL;
   }
+  // check if pipe already allocated
+  if(enso_rx_pipes[pipe_id]) {
+    if(enso_rx_pipes[pipe_id]->allocated) {
+      printk("Rx enso pipe already allocated.\n");
+      return -EINVAL;
+    }
+  }
+  new_enso_rx_pipe = kzalloc(sizeof(struct rx_enso_pipe_internal), GFP_KERNEL);
+  if(new_enso_rx_pipe == NULL) {
+    printk("Memory failure\n");
+    return -ENOMEM;
+  }
+  new_enso_rx_pipe->id = pipe_id;
 
   // 2. Map BAR into queue regs
   bar2_addr = (uint8_t *) dev_bk->bar[2].base_addr;
   rep_q_regs = (struct queue_regs *)(bar2_addr
-                                   + (rx_enso_pipe->id
+                                   + (pipe_id
                                    * MEM_PER_QUEUE));
-  rx_enso_pipe->regs = (struct queue_regs *) rep_q_regs;
+  new_enso_rx_pipe->regs = (struct queue_regs *) rep_q_regs;
 
   // initialize the queue
   smp_wmb();
@@ -1296,11 +1317,11 @@ static long alloc_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   while(ioread32(&rep_q_regs->rx_head) != 0)
       continue;
 
-  rx_enso_pipe->buf_head_ptr = (uint32_t*)&rep_q_regs->rx_head;
-  rx_enso_pipe->rx_head = 0;
-  rx_enso_pipe->rx_tail = 0;
+  new_enso_rx_pipe->buf_head_ptr = (uint32_t*)&rep_q_regs->rx_head;
+  new_enso_rx_pipe->rx_head = 0;
+  new_enso_rx_pipe->rx_tail = 0;
 
-  chr_dev_bk->notif_buf_pair->pending_rx_pipe_tails[rx_enso_pipe->id] = rx_enso_pipe->rx_head;
+  chr_dev_bk->notif_buf_pair->pending_rx_pipe_tails[pipe_id] = new_enso_rx_pipe->rx_head;
   rx_buf_phys_addr = params.phys_addr;
 
   smp_wmb();
@@ -1309,7 +1330,8 @@ static long alloc_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   smp_wmb();
   iowrite32((uint32_t)(rx_buf_phys_addr >> 32), &rep_q_regs->rx_mem_high);
 
-  rx_enso_pipe->allocated = true;
+  new_enso_rx_pipe->allocated = true;
+  enso_rx_pipes[pipe_id] = new_enso_rx_pipe;
 
   up(&dev_bk->sem);
 
@@ -1351,28 +1373,22 @@ int32_t free_enso_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
 }
 EXPORT_SYMBOL(free_enso_pipe_id);
 
-int ext_free_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk) {
-  struct rx_enso_pipe_internal *rx_enso_pipe;
+int ext_free_rx_enso_pipe(struct rx_enso_pipe_internal *pipe) {
   struct queue_regs *rep_q_regs;
-  int32_t ret;
 
-  rx_enso_pipe = chr_dev_bk->enso_pipe_internal;
-  rep_q_regs = rx_enso_pipe->regs;
-  printk("Freeing enso RX pipe\n");
+  if(!pipe->allocated) {
+    return 0;
+  }
+
+  rep_q_regs = pipe->regs;
+  printk("Freeing enso RX pipe ID = %d\n", pipe->id);
 
   smp_wmb();
   iowrite32(0, &rep_q_regs->rx_mem_low);
   smp_wmb();
   iowrite32(0, &rep_q_regs->rx_mem_high);
 
-  rx_enso_pipe->allocated = false;
-  // printk("Stopping RX tails thread\n");
-
-  ret = free_enso_pipe_id(chr_dev_bk, rx_enso_pipe->id);
-  if(ret < 0) {
-    printk("Couldn't free Enso pipe id\n");
-    return -EFAULT;
-  }
+  pipe->allocated = false;
 
   return 0;
 }
@@ -1381,13 +1397,17 @@ EXPORT_SYMBOL(ext_free_rx_enso_pipe);
 static long free_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk,
                               unsigned long uarg) {
   struct dev_bookkeep *dev_bk;
-  struct rx_enso_pipe_internal *rx_enso_pipe;
+  struct rx_enso_pipe_internal **enso_rx_pipes;
   int32_t pipe_id = (int32_t)uarg;
   struct queue_regs *rep_q_regs;
-  int32_t ret;
+  // int32_t ret;
 
-  rx_enso_pipe = chr_dev_bk->enso_pipe_internal;
-  rep_q_regs = rx_enso_pipe->regs;
+  enso_rx_pipes = chr_dev_bk->enso_rx_pipes;
+  if(enso_rx_pipes[pipe_id] == NULL) {
+    printk("Pipe id %d does not exist\n", pipe_id);
+    return -EFAULT;
+  }
+  rep_q_regs = enso_rx_pipes[pipe_id]->regs;
   dev_bk = chr_dev_bk->dev_bk;
   printk("Freeing enso RX pipe\n");
 
@@ -1403,59 +1423,32 @@ static long free_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   smp_wmb();
   iowrite32(0, &rep_q_regs->rx_mem_high);
 
-  ret = free_enso_pipe_id(chr_dev_bk, pipe_id);
+  /*ret = free_enso_pipe_id(chr_dev_bk, pipe_id);
   if(ret < 0) {
     printk("Couldn't free Enso pipe id\n");
     return -EFAULT;
-  }
-  rx_enso_pipe->allocated = false;
-  // printk("Stopping RX tails thread\n");
+  }*/
+  enso_rx_pipes[pipe_id]->allocated = false;
 
   up(&dev_bk->sem);
 
   return 0;
 }
 
-static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
-                            unsigned long uarg) {
-  struct dev_bookkeep *dev_bk;
+static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair) {
   struct rx_notification* rx_notif;
   struct rx_notification* curr_notif;
   uint32_t notification_buf_head;
   uint16_t next_rx_ids_tail;
   uint16_t nb_consumed_notifications = 0;
-  struct notification_buf_pair *notif_buf_pair;
-  struct rx_enso_pipe_internal *enso_pipe;
-  uint16_t ind = 0;
   uint32_t enso_pipe_id;
-  uint32_t enso_pipe_new_tail;
-  uint32_t flit_aligned_size = 0;
-  uint32_t enso_pipe_head;
-  struct enso_consume_rx_params params;
+  uint16_t ind = 0;
 
-  dev_bk = chr_dev_bk->dev_bk;
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    INTEL_FPGA_PCIE_DEBUG(
-        "interrupted while attempting to obtain "
-        "device semaphore.");
-    return -ERESTARTSYS;
-  }
-
-  if (copy_from_user(&params, (struct enso_consume_rx_params __user *)uarg,
-                    sizeof(struct enso_consume_rx_params))) {
-    INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
-    return -EFAULT;
-  }
-
-  // printk("Consuming packets from RX Enso pipe\n");
-
-  notif_buf_pair = chr_dev_bk->notif_buf_pair;
+  // printk("Entered get_new_tails\n");
   rx_notif = notif_buf_pair->rx_buf;
   notification_buf_head = notif_buf_pair->rx_head;
   next_rx_ids_tail = notif_buf_pair->next_rx_ids_tail;
-  enso_pipe = chr_dev_bk->enso_pipe_internal;
 
-  // we first check for any new notifications
   for (;ind < BATCH_SIZE; ++ind) {
     curr_notif = rx_notif + notification_buf_head;
 
@@ -1485,39 +1478,91 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
     smp_wmb();
     iowrite32(notification_buf_head, notif_buf_pair->rx_head_ptr);
     notif_buf_pair->rx_head = notification_buf_head;
+  }
+  // printk("Exit get_new_tails\n");
+  return nb_consumed_notifications;
+}
 
-    // also get the new rx pipe tail
-    enso_pipe_head = enso_pipe->rx_tail;
-    params.head = enso_pipe_head;
-    enso_pipe_id = params.id; // get the pipe id from the userspace
-    enso_pipe_new_tail = notif_buf_pair->pending_rx_pipe_tails[enso_pipe_id];
-    // printk("Current head %d, current tail %d\n", enso_pipe_head, enso_pipe_new_tail);
-    if(enso_pipe_new_tail == enso_pipe_head) {
-        up(&dev_bk->sem);
-        return 0;
-    }
-    flit_aligned_size = ((enso_pipe_new_tail - enso_pipe_head)
-                                  % ENSO_PIPE_SIZE) * 64;
-    if(!params.peek) {
-        enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64)
-                         % ENSO_PIPE_SIZE;
-        enso_pipe->rx_tail = enso_pipe_head;
-    }
-    if (copy_to_user((struct enso_consume_rx_params __user *)uarg, &params,
+static uint32_t consume_queue(struct notification_buf_pair *notif_buf_pair,
+                              struct rx_enso_pipe_internal *pipe,
+                              bool peek, uint32_t *params_head) {
+  uint32_t enso_pipe_head;
+  uint32_t flit_aligned_size = 0;
+  uint32_t enso_pipe_id;
+  uint32_t enso_pipe_new_tail;
+
+  enso_pipe_head = pipe->rx_tail;
+  *params_head = enso_pipe_head;
+  enso_pipe_id = pipe->id; // get the pipe id from the userspace
+  enso_pipe_new_tail = notif_buf_pair->pending_rx_pipe_tails[enso_pipe_id];
+  // printk("Current head %d, current tail %d\n", enso_pipe_head, enso_pipe_new_tail);
+  if(enso_pipe_new_tail == enso_pipe_head) {
+      return 0;
+  }
+  flit_aligned_size = ((enso_pipe_new_tail - enso_pipe_head)
+                                % ENSO_PIPE_SIZE) * 64;
+  if(!peek) {
+      enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64)
+                       % ENSO_PIPE_SIZE;
+      pipe->rx_tail = enso_pipe_head;
+  }
+  return flit_aligned_size;
+}
+
+static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                            unsigned long uarg) {
+  struct dev_bookkeep *dev_bk;
+  struct notification_buf_pair *notif_buf_pair;
+  struct rx_enso_pipe_internal **enso_rx_pipes;
+  struct rx_enso_pipe_internal *pipe;
+  struct enso_consume_rx_params params;
+  uint32_t flit_aligned_size = 0;
+
+  dev_bk = chr_dev_bk->dev_bk;
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  if (copy_from_user(&params, (struct enso_consume_rx_params __user *)uarg,
                     sizeof(struct enso_consume_rx_params))) {
-      printk("couldn't copy head to user.");
-      return -EFAULT;
-    }
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
+    return -EFAULT;
+  }
+
+  notif_buf_pair = chr_dev_bk->notif_buf_pair;
+  enso_rx_pipes = chr_dev_bk->enso_rx_pipes;
+  pipe = enso_rx_pipes[params.id];
+  if(pipe == NULL) {
+    printk("No pipe with ID = %d\n", params.id);
+    return -EFAULT;
+  }
+
+  // we first check for any new notifications
+  get_new_tails(notif_buf_pair);
+
+  // now get the new rx pipe tail
+  flit_aligned_size = consume_queue(notif_buf_pair, pipe,
+                                    params.peek, &params.head);
+
+  if (copy_to_user((struct enso_consume_rx_params __user *)uarg, &params,
+                  sizeof(struct enso_consume_rx_params))) {
+    printk("couldn't copy head to user.");
+    return -EFAULT;
   }
 
   up(&dev_bk->sem);
+
   return flit_aligned_size;
 }
 
 static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
                             unsigned long uarg) {
   struct dev_bookkeep *dev_bk;
-  struct rx_enso_pipe_internal *enso_pipe;
+  struct rx_enso_pipe_internal **rx_enso_pipes;
+  struct rx_enso_pipe_internal *pipe;
   uint32_t enso_pipe_id;
 
   dev_bk = chr_dev_bk->dev_bk;
@@ -1533,13 +1578,149 @@ static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
     return -EFAULT;
   }
 
-  enso_pipe = chr_dev_bk->enso_pipe_internal;
+  rx_enso_pipes = chr_dev_bk->enso_rx_pipes;
+  pipe = rx_enso_pipes[enso_pipe_id];
+  if(pipe == NULL) {
+      printk("Pipe ID %d is NULL\n", enso_pipe_id);
+      return -EFAULT;
+  }
   smp_wmb();
-  iowrite32(enso_pipe->rx_tail, enso_pipe->buf_head_ptr);
-  enso_pipe->rx_head = enso_pipe->rx_tail;
+  iowrite32(pipe->rx_tail, pipe->buf_head_ptr);
+  pipe->rx_head = pipe->rx_tail;
 
   up(&dev_bk->sem);
   return 0;
+}
+
+static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                         unsigned long uarg) {
+  struct dev_bookkeep *dev_bk;
+  struct rx_enso_pipe_internal **rx_enso_pipes;
+  struct rx_enso_pipe_internal *pipe;
+  uint32_t enso_pipe_id;
+  size_t len;
+  struct enso_advance_pipe_params param;
+  uint32_t rx_pkt_head;
+  uint32_t nb_flits;
+
+  dev_bk = chr_dev_bk->dev_bk;
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  if (copy_from_user(&param, (struct enso_advance_pipe_params __user *)uarg,
+                     sizeof(struct enso_advance_pipe_params))) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
+    return -EFAULT;
+  }
+
+  enso_pipe_id = param.id;
+  len = param.len;
+  rx_enso_pipes = chr_dev_bk->enso_rx_pipes;
+  pipe = rx_enso_pipes[enso_pipe_id];
+  if(pipe == NULL) {
+      printk("Pipe ID %d is NULL\n", enso_pipe_id);
+      return -EFAULT;
+  }
+
+  rx_pkt_head = pipe->rx_head;
+  nb_flits = ((uint64_t)len - 1) / 64 + 1;
+  rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
+
+  smp_wmb();
+  iowrite32(rx_pkt_head, pipe->buf_head_ptr);
+  pipe->rx_head = rx_pkt_head;
+
+  up(&dev_bk->sem);
+  return 0;
+}
+
+static int32_t get_next_enso_pipe_id(struct notification_buf_pair *notif_buf_pair) {
+  uint16_t next_rx_ids_head;
+  uint16_t next_rx_ids_tail;
+  uint16_t nb_consumed_notifications = 0;
+  int32_t enso_pipe_id;
+
+  // printk("Entered get_next_enso_pipe_id\n");
+  next_rx_ids_head = notif_buf_pair->next_rx_ids_head;
+  next_rx_ids_tail = notif_buf_pair->next_rx_ids_tail;
+
+  if (next_rx_ids_head == next_rx_ids_tail) {
+    nb_consumed_notifications = get_new_tails(notif_buf_pair);
+    if (unlikely(nb_consumed_notifications == 0)) {
+      return -1;
+    }
+  }
+
+  enso_pipe_id = notif_buf_pair->next_rx_pipe_ids[next_rx_ids_head];
+
+  notif_buf_pair->next_rx_ids_head =
+                 (next_rx_ids_head + 1) % NOTIFICATION_BUF_SIZE;
+
+  // printk("Exit get_next_enso_pipe_id\n");
+  return enso_pipe_id;
+}
+
+static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk,
+                           unsigned long uarg) {
+  struct dev_bookkeep *dev_bk;
+  struct notification_buf_pair *notif_buf_pair;
+  struct rx_enso_pipe_internal **enso_rx_pipes;
+  struct rx_enso_pipe_internal *pipe;
+  struct enso_get_next_batch_params params;
+  uint32_t flit_aligned_size = 0;
+  // uint32_t notif_buf_id;
+  int32_t enso_pipe_id;
+
+  // printk("Entered get_next_batch\n");
+  dev_bk = chr_dev_bk->dev_bk;
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    INTEL_FPGA_PCIE_DEBUG(
+        "interrupted while attempting to obtain "
+        "device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  if (copy_from_user(&params, (struct enso_get_next_batch_params __user *)uarg,
+                    sizeof(struct enso_get_next_batch_params))) {
+    INTEL_FPGA_PCIE_DEBUG("couldn't copy arg from user.");
+    return -EFAULT;
+  }
+
+  notif_buf_pair = chr_dev_bk->notif_buf_pair;
+
+  enso_pipe_id = get_next_enso_pipe_id(notif_buf_pair);
+  params.pipe_id = enso_pipe_id;
+  if(enso_pipe_id == -1) {
+    // printk("Get next pipe ID failed\n");
+    up(&dev_bk->sem);
+    return -EFAULT;
+  }
+  enso_rx_pipes = chr_dev_bk->enso_rx_pipes;
+  pipe = enso_rx_pipes[enso_pipe_id];
+  if(pipe == NULL) {
+    printk("No pipe with ID = %d\n", enso_pipe_id);
+    up(&dev_bk->sem);
+    return -EFAULT;
+  }
+
+  flit_aligned_size = consume_queue(notif_buf_pair, pipe,
+                                    params.peek, &params.head);
+
+  if (copy_to_user((struct enso_get_next_batch_params __user *)uarg, &params,
+                  sizeof(struct enso_get_next_batch_params))) {
+    printk("couldn't copy head to user.");
+    up(&dev_bk->sem);
+    return -EFAULT;
+  }
+
+  up(&dev_bk->sem);
+
+  // printk("Exit get_next_batch\n");
+  return flit_aligned_size;
 }
 
 /**

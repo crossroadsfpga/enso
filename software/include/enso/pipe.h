@@ -277,8 +277,6 @@ class Device {
    */
   int DisableRoundRobin();
 
-  ssize_t GetDevHandle();
-
  private:
   struct TxPendingRequest {
     uint32_t pipe_id;

@@ -70,26 +70,25 @@ static int run = 1;
 // used to the main thread to detect when the RX thread exits to stop collecting stats
 static int done = 0;
 
-void rcv_pkts(RxPipe *rxPipe, RxStats *stats) {
-
+void rcv_pkts(std::vector<RxPipe*> rxPipes, RxStats *stats) {
     while(run) {
-        auto batch = rxPipe->RecvPkts();
+        for(int i = 0; i < 2; i++) {
+          auto& rxPipe = rxPipes[i];
+          auto batch = rxPipe->RecvPkts();
 
-        if (batch.available_bytes() == 0) {
-            continue;
-        }
+          if (batch.available_bytes() == 0) {
+              continue;
+          }
 
-        for (auto pkt : batch) {
-            (void) pkt;
-            ++(stats->pkts);
+          for (auto pkt : batch) {
+              (void) pkt;
+              ++(stats->pkts);
+          }
+          uint32_t batch_length = batch.processed_bytes();
+          stats->bytes += batch_length;
+          ++(stats->batches);
+          rxPipe->Clear();
         }
-        uint32_t batch_length = batch.processed_bytes();
-        stats->bytes += batch_length;
-        ++(stats->batches);
-        rxPipe->Clear();
-        // if(stats->pkts == 2048) {
-        //     run = 0;
-        // }
     }
     // set this so that the main thread exits
     done = 1;
@@ -114,15 +113,19 @@ int main() {
         std::cerr << "Problem creating device" << std::endl;
         exit(2);
     }
-
-    RxPipe *pipe = dev->AllocateRxPipe();
-    if (!pipe) {
+    std::vector<RxPipe*> rxPipes;
+    for (uint32_t i = 0; i < 2; ++i) {
+      RxPipe* rxPipe = dev->AllocateRxPipe();
+      if (!rxPipe) {
         std::cerr << "Problem creating RX pipe" << std::endl;
-        exit(2);
+        exit(3);
+      }
+
+      uint32_t dst_ip = kBaseIpAddress + i;
+      rxPipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+
+      rxPipes.push_back(rxPipe);
     }
-    std::cout << "Binding to port" << std::endl;
-    uint32_t dst_ip = kBaseIpAddress + 1;
-    pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
 
     // stats to record the metrics
     RxStats *stats = (RxStats *) malloc(sizeof(RxStats));
@@ -130,12 +133,12 @@ int main() {
         std::cerr << "Could not allocate RxStats buffer" << std::endl;
         exit(1);
     }
-    stats->bytes = 0;
     stats->pkts = 0;
+    stats->bytes = 0;
     stats->batches = 0;
 
     // start the RX thread
-    std::thread rx_thread(rcv_pkts, pipe, stats);
+    std::thread rx_thread(rcv_pkts, rxPipes, stats);
     while(!done) {
         uint64_t last_rx_pkts = stats->pkts;
         uint64_t last_rx_bytes = stats->bytes;
@@ -155,9 +158,8 @@ int main() {
         uint64_t rx_tput_mbps = rx_goodput_mbps + FPGA_PACKET_OVERHEAD * 8 * rx_pkt_rate / ONE_MILLION;
 
         std::cout << std::dec << "RX: Throughput: " << rx_tput_mbps << " Mbps"
-                  << "  Rate: " << rx_pkt_rate_kpps << " kpps" << std::endl
-
-                  << "          #bytes: " << rx_bytes << "  #packets: " << rx_pkts
+                  << " Rate: " << rx_pkt_rate_kpps << " kpps"
+                  <<  " #bytes: " << rx_bytes << " #packets: " << rx_pkts
                   << std::endl;
     }
 

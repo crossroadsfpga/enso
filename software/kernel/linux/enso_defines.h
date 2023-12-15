@@ -7,4 +7,4 @@
 #define BATCH_SIZE              64
 
 
-int ext_free_rx_enso_pipe(struct chr_dev_bookkeep *chr_dev_bk);
+int ext_free_rx_enso_pipe(struct rx_enso_pipe_internal *pipe);

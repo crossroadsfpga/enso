@@ -155,6 +155,10 @@ uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
                         struct SocketInternal* socket_entries,
                         int* enso_pipe_id, void** buf);
 
+uint32_t get_next_batch_kernel(struct NotificationBufPair* notification_buf_pair,
+                               struct SocketInternal* socket_entries,
+                               int* enso_pipe_id, void** buf);
+
 /**
  * @brief Frees the next `len` bytes in the buffer associated with the
  * `socket_entry` socket. If `len` is greater than the number of allocated bytes
@@ -164,6 +168,9 @@ uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
  * @param len Number of bytes to free.
  */
 void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len);
+
+void advance_pipe_kernel(struct NotificationBufPair* notification_buf_pair,
+                        struct RxEnsoPipeInternal* enso_pipe, size_t len);
 
 /**
  * @brief Frees all the received bytes in the buffer associated with the

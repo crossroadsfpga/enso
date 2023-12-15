@@ -1,9 +1,18 @@
 #!/bin/bash
 make
+
+if [[ `lsmod | grep -o enso` ]]
+then
+    echo "Unloading previous enso driver module"
+    ./unload_enso_drv
+fi
+
 if [[ `lsmod | grep -o intel_fpga_pcie_drv` ]]
 then
-    echo "Unloading previous module"
-    ./unload
+    echo "Unloading previous intel driver module"
+    ./unload_intel_drv
 fi
+
 echo "Loading module"
-./load
+./load_intel_drv
+./load_enso_drv
