@@ -64,6 +64,8 @@
 // Automatically points to the device backend configured at compile time.
 #include <dev_backend.h>
 
+#include <enso_backend.h>
+
 namespace enso {
 
 static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
@@ -76,21 +78,23 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix) {
   (void) huge_page_prefix;
-  DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
-  if (unlikely(fpga_dev == nullptr)) {
+  (void) bdf;
+  (void) bar;
+  EnsoBackend* enso_dev = EnsoBackend::Create();
+  if (unlikely(enso_dev == nullptr)) {
     std::cerr << "Could not create device" << std::endl;
     return -1;
   }
-  notification_buf_pair->fpga_dev = fpga_dev;
+  notification_buf_pair->fpga_dev = enso_dev;
 
-  int notif_pipe_id = fpga_dev->AllocateNotifBuf();
+  int notif_pipe_id = enso_dev->AllocateNotifBuf();
 
   if (notif_pipe_id < 0) {
     std::cerr << "Could not allocate notification buffer" << std::endl;
     return -1;
   }
 
-  fpga_dev->AllocNotifBufPair(notif_pipe_id);
+  enso_dev->AllocNotifBufPair(notif_pipe_id);
   notification_buf_pair->huge_page_prefix = huge_page_prefix;
 
   return 0;
@@ -101,12 +105,12 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    bool fallback) {
   // void* uio_mmap_bar2_addr = notification_buf_pair->uio_mmap_bar2_addr;
   (void) enso_pipe;
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
 
   // we keep the buffer in the userspace and pass the physical address
   // to the kernel
-  int enso_pipe_id = fpga_dev->AllocatePipe(fallback);
+  int enso_pipe_id = enso_dev->AllocatePipe(fallback);
   if(enso_pipe_id < 0) {
       std::cerr << "Pipe ID allocation failed, err = "
                 << std::strerror(errno) << std::endl;
@@ -123,12 +127,12 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
     std::cerr << "Could not get huge page" << std::endl;
     return -1;
   }
-  uint64_t phys_addr = fpga_dev->ConvertVirtAddrToDevAddr(enso_pipe->buf);
+  uint64_t phys_addr = enso_dev->ConvertVirtAddrToDevAddr(enso_pipe->buf);
 
   enso_pipe->buf_phys_addr = phys_addr;
   enso_pipe->phys_buf_offset = phys_addr - (uint64_t)(enso_pipe->buf);
 
-  int ret = fpga_dev->AllocateEnsoRxPipe(enso_pipe_id, phys_addr);
+  int ret = enso_dev->AllocateEnsoRxPipe(enso_pipe_id, phys_addr);
 
   if (ret < 0) {
     std::cerr << "Could not allocate pipe" << std::endl;
@@ -221,13 +225,11 @@ __consume_rx_kernel(struct RxEnsoPipeInternal* enso_pipe,
                 bool peek = false) {
   (void) buf;
   uint32_t pipe_head = 0;
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  uint32_t flit_aligned_size = fpga_dev->ConsumeRxPipe(enso_pipe->id, peek, pipe_head);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
+  uint32_t flit_aligned_size = enso_dev->ConsumeRxPipe(enso_pipe->id, peek, pipe_head);
   if(flit_aligned_size > 0)
   {
-    // std::cout << "flit_aligned_size = " << flit_aligned_size
-    //           << " pipe head = " << pipe_head << std::endl;
     uint32_t* enso_pipe_buf = enso_pipe->buf;
     *buf = &enso_pipe_buf[pipe_head * 16];
   }
@@ -332,14 +334,14 @@ uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
 uint32_t get_next_batch_kernel(struct NotificationBufPair* notification_buf_pair,
                                struct SocketInternal* socket_entries,
                                int* enso_pipe_id, void** buf) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
   int32_t pipe_id = -1;
   bool peek = false;
   uint32_t pipe_head = 0;
   int64_t flit_aligned_size = 0;
 
-  flit_aligned_size = fpga_dev->GetNextBatch(notification_buf_pair->id,
+  flit_aligned_size = enso_dev->GetNextBatch(notification_buf_pair->id,
                                              peek, pipe_id, pipe_head);
 
   // can there be an issue if the flit_aligned_size is 0?
@@ -368,9 +370,9 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
 
 void advance_pipe_kernel(struct NotificationBufPair* notification_buf_pair,
                         struct RxEnsoPipeInternal* enso_pipe, size_t len) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  fpga_dev->AdvancePipe(enso_pipe->id, len);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
+  enso_dev->AdvancePipe(enso_pipe->id, len);
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
@@ -380,9 +382,9 @@ void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
 
 void fully_advance_pipe_kernel(struct RxEnsoPipeInternal* enso_pipe,
                                struct NotificationBufPair* notification_buf_pair) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  fpga_dev->FullyAdvancePipe(enso_pipe->id);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
+  enso_dev->FullyAdvancePipe(enso_pipe->id);
 }
 
 void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
@@ -393,8 +395,8 @@ static _enso_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
                 uint64_t phys_addr, uint32_t len) {
 
-  DevBackend* fpga_dev = (DevBackend*) notification_buf_pair->fpga_dev;
-  fpga_dev->SendTxPipe(phys_addr, len, notification_buf_pair->id);
+  EnsoBackend* enso_dev = (EnsoBackend*) notification_buf_pair->fpga_dev;
+  enso_dev->SendTxPipe(phys_addr, len, notification_buf_pair->id);
 
   return len;
 }
@@ -407,8 +409,8 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
 uint32_t get_unreported_completions(
     struct NotificationBufPair* notification_buf_pair) {
 
-  DevBackend* fpga_dev = (DevBackend*) notification_buf_pair->fpga_dev;
-  uint32_t completions = fpga_dev->GetUnreportedCompletions();
+  EnsoBackend* enso_dev = (EnsoBackend*) notification_buf_pair->fpga_dev;
+  uint32_t completions = enso_dev->GetUnreportedCompletions();
 
   return completions;
 }
@@ -454,9 +456,9 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
 
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  int ret = fpga_dev->SendConfig(config_notification);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
+  int ret = enso_dev->SendConfig(config_notification);
   if(ret != 0) {
     std::cerr << "Send config failed" << std::endl;
     return ret;
@@ -465,49 +467,49 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 }
 
 int get_nb_fallback_queues(struct NotificationBufPair* notification_buf_pair) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  return fpga_dev->GetNbFallbackQueues();
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
+  return enso_dev->GetNbFallbackQueues();
 }
 
 int set_round_robin_status(struct NotificationBufPair* notification_buf_pair,
                            bool round_robin) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  return fpga_dev->SetRrStatus(round_robin);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
+  return enso_dev->SetRrStatus(round_robin);
 }
 
 int get_round_robin_status(struct NotificationBufPair* notification_buf_pair) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  return fpga_dev->GetRrStatus();
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
+  return enso_dev->GetRrStatus();
 }
 
 uint64_t get_dev_addr_from_virt_addr(
     struct NotificationBufPair* notification_buf_pair, void* virt_addr) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  uint64_t dev_addr = fpga_dev->ConvertVirtAddrToDevAddr(virt_addr);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
+  uint64_t dev_addr = enso_dev->ConvertVirtAddrToDevAddr(virt_addr);
   return dev_addr;
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
 
-  fpga_dev->FreeNotifBuf(notification_buf_pair->id);
+  enso_dev->FreeNotifBuf(notification_buf_pair->id);
 
-  delete fpga_dev;
+  delete enso_dev;
 }
 
 void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
                     struct RxEnsoPipeInternal* enso_pipe,
                     enso_pipe_id_t enso_pipe_id) {
   (void) enso_pipe;
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  EnsoBackend* enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
 
-  fpga_dev->FreeEnsoRxPipe(enso_pipe_id);
+  enso_dev->FreeEnsoRxPipe(enso_pipe_id);
 
   if (enso_pipe->buf) {
     munmap(enso_pipe->buf, kBufPageSize);
@@ -518,7 +520,7 @@ void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
     enso_pipe->buf = nullptr;
   }
 
-  fpga_dev->FreePipe(enso_pipe_id);
+  enso_dev->FreePipe(enso_pipe_id);
 
   update_fallback_queues_config(notification_buf_pair);
 }

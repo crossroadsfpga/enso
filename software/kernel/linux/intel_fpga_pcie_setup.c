@@ -497,6 +497,7 @@ static int map_bars_default(struct pci_dev *dev) {
     unmap_bars(dev);
     return -ENOMEM;
   }
+  intel_enso->base_addr = dev_bk->bar[2].base_addr;
 
   return 0;
 }

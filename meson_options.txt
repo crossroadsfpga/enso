@@ -8,3 +8,5 @@ option('latency_opt', type: 'boolean', value: true,
        description: 'Optimize for latency')
 option('dev_backend', type: 'combo', choices: ['intel_fpga', 'software'],
        value: 'intel_fpga', description: 'Device backend to use')
+option('enso_backend', type: 'combo', choices: ['enso', 'software'],
+       value: 'enso', description: 'Device backend to use')

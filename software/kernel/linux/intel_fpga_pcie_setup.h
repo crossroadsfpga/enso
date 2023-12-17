@@ -160,10 +160,10 @@ struct global_bookkeep {
 };
 
 struct enso_intel_pcie {
+    void *__iomem base_addr;
     uint64_t bar2_pcie_start;
     uint64_t bar2_pcie_len;
 };
-
 
 /**
  * struct dev_bookkeep - Bookkeeping structure per device.
@@ -228,7 +228,6 @@ struct chr_dev_bookkeep {
   struct rx_enso_pipe_internal **enso_rx_pipes;
   uint8_t *notif_q_status;
   uint8_t *pipe_status;
-  wait_queue_head_t waitqueue;
 };
 
 struct __attribute__((__packed__)) rx_notification {

@@ -177,7 +177,7 @@ void send_tx(TxPipe *pipe, uint8_t *main_buf, uint64_t total_bytes_in_main_buf,
         // update the stats
         stats->bytes += total_bytes_in_main_buf;
         stats->pkts += total_pkts_in_main_buf;
-        if(stats->pkts >= 500000000) {
+        if(stats->pkts >= 400000000) {
           run = 0;
         }
     }

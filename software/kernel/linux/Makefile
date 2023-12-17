@@ -7,7 +7,7 @@ USE_AVX ?= 0
 
 ENSO_MODULE_NAME := enso
 obj-m += $(ENSO_MODULE_NAME).o
-$(ENSO_MODULE_NAME)-y := enso_setup.o enso_chr.o
+$(ENSO_MODULE_NAME)-y := enso_setup.o enso_chr.o enso_ioctl.o
 
 PWD       := $(shell pwd)
 KDIR ?= /lib/modules/$(shell uname -r)/build
