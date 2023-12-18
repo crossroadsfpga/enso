@@ -192,11 +192,12 @@ int EnsoDev::free_enso_rx_pipe(int pipe_id) {
   return 0;
 }
 
-int EnsoDev::consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head) {
+int EnsoDev::consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head, bool get_tails) {
   int result;
   struct enso_consume_rx_params param;
   param.id = pipe_id;
   param.peek = peek;
+  param.get_tails = get_tails;
   param.head = 0;
   result = ioctl(m_dev_handle, ENSO_IOCTL_CONSUME_RX, &param);
   pipe_head = param.head;
@@ -231,6 +232,13 @@ int EnsoDev::advance_pipe(int pipe_id, size_t len) {
   param.id = pipe_id;
   param.len = len;
   result = ioctl(m_dev_handle, ENSO_IOCTL_ADVANCE_PIPE, &param);
+  return result;
+}
+
+int EnsoDev::next_rx_pipe_to_recv() {
+  int result;
+  int abcd = 5;
+  result = ioctl(m_dev_handle, ENSO_IOCTL_NEXT_RX_PIPE_RCV, abcd);
   return result;
 }
 

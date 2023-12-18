@@ -222,12 +222,14 @@ uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 static _enso_always_inline uint32_t
 __consume_rx_kernel(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
+                bool get_tails,
                 bool peek = false) {
   (void) buf;
+  // pipe_head gets set by the kernel
   uint32_t pipe_head = 0;
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
-  uint32_t flit_aligned_size = enso_dev->ConsumeRxPipe(enso_pipe->id, peek, pipe_head);
+  uint32_t flit_aligned_size = enso_dev->ConsumeRxPipe(enso_pipe->id, peek, pipe_head, get_tails);
   if(flit_aligned_size > 0)
   {
     uint32_t* enso_pipe_buf = enso_pipe->buf;
@@ -266,8 +268,8 @@ __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
 
 uint32_t consume_rx_kernel(
     struct RxEnsoPipeInternal* enso_pipe,
-    struct NotificationBufPair* notification_buf_pair, void** buf) {
-  return __consume_rx_kernel(enso_pipe, notification_buf_pair, buf);
+    struct NotificationBufPair* notification_buf_pair, void** buf,  bool get_tails) {
+  return __consume_rx_kernel(enso_pipe, notification_buf_pair, buf, get_tails);
 }
 
 uint32_t get_next_batch_from_queue(
@@ -357,6 +359,12 @@ uint32_t get_next_batch_kernel(struct NotificationBufPair* notification_buf_pair
   uint32_t* enso_pipe_buf = enso_pipe->buf;
   *buf = &enso_pipe_buf[pipe_head * 16];
   return flit_aligned_size;
+}
+
+int get_next_enso_pipe_id_kernel(struct NotificationBufPair* notification_buf_pair) {
+  EnsoBackend *enso_dev =
+      static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
+  return enso_dev->NextRxPipeToRecv();
 }
 
 void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {

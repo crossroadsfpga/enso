@@ -130,7 +130,7 @@ uint32_t peek_next_batch_from_queue(
 
 uint32_t consume_rx_kernel(
     struct RxEnsoPipeInternal* enso_pipe,
-    struct NotificationBufPair* notification_buf_pair, void** buf);
+    struct NotificationBufPair* notification_buf_pair, void** buf, bool get_tails);
 
 /**
  * @brief Get next Enso Pipe with pending data.
@@ -328,6 +328,8 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
  * @deprecated This function is deprecated and will be removed in the future.
  */
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
+
+int get_next_enso_pipe_id_kernel(struct NotificationBufPair* notification_buf_pair);
 
 }  // namespace enso
 

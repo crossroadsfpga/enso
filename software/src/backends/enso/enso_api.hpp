@@ -116,10 +116,11 @@ class EnsoDev {
   int send_config(struct TxNotification *txNotification);
   int allocate_enso_rx_pipe(int pipe_id, uint64_t buf_phys_addr);
   int free_enso_rx_pipe(int pipe_id);
-  int consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head);
+  int consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head, bool get_tails);
   int full_adv_pipe(int pipe_id);
   int get_next_batch(int notif_id, bool peek, int &pipe_id, uint32_t &pipe_head);
   int advance_pipe(int pipe_id, size_t len);
+  int next_rx_pipe_to_recv();
  private:
   /**
    * Class should be instantiated via the Create() factory method.

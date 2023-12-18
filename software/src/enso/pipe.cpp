@@ -76,15 +76,20 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
-  // NOTE: We don't need the get_new_tails function, but commenting it
-  // out results in compiler errors. why?
-  if (!next_pipe_) {
+  /*if (!next_pipe_) {
     get_new_tails(notification_buf_pair_);
-  }
+  }*/
   /*uint32_t ret = peek_next_batch_from_queue(
       &internal_rx_pipe_, notification_buf_pair_, (void**)buf);*/
-  uint32_t ret = consume_rx_kernel(&internal_rx_pipe_, notification_buf_pair_,
-                                   (void**)buf);
+  uint32_t ret = 0;
+  if(!next_pipe_) {
+    ret = consume_rx_kernel(&internal_rx_pipe_, notification_buf_pair_,
+                              (void**)buf, true);
+  }
+  else {
+    ret = consume_rx_kernel(&internal_rx_pipe_, notification_buf_pair_,
+                                 (void**)buf, false);
+  }
   return std::min(ret, max_nb_bytes);
 }
 
@@ -249,9 +254,9 @@ RxPipe* Device::NextRxPipeToRecv() {
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  id = get_next_enso_pipe_id_kernel(&notification_buf_pair_);
 
-  while (id >= 0) {
+  /*while (id >= 0) {
     RxPipe* rx_pipe = rx_pipes_map_[id];
     assert(rx_pipe != nullptr);
 
@@ -265,7 +270,7 @@ RxPipe* Device::NextRxPipeToRecv() {
     }
 
     id = get_next_enso_pipe_id(&notification_buf_pair_);
-  }
+  }*/
 
 #else  // !LATENCY_OPT
   id = get_next_enso_pipe_id(&notification_buf_pair_);

@@ -27,6 +27,7 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long u
 static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 
 /* Helpers */
 static void free_rx_tx_buf(struct chr_dev_bookkeep *chr_dev_bk);
@@ -153,6 +154,9 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
       break;
     case ENSO_IOCTL_ADVANCE_PIPE:
       retval = advance_pipe(chr_dev_bk, uarg);
+      break;
+    case ENSO_IOCTL_NEXT_RX_PIPE_RCV:
+      retval = next_rx_pipe_to_recv(chr_dev_bk, uarg);
       break;
     default:
       retval = -ENOTTY;
@@ -996,7 +1000,9 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   }
 
   // we first check for any new notifications
-  get_new_tails(notif_buf_pair);
+  if(params.get_tails) {
+    get_new_tails(notif_buf_pair);
+  }
 
   // now get the new rx pipe tail
   flit_aligned_size = consume_queue(notif_buf_pair, pipe,
@@ -1142,6 +1148,51 @@ static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk,
   return flit_aligned_size;
 }
 
+static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk,
+                                 unsigned long uarg) {
+  struct dev_bookkeep *dev_bk;
+  struct rx_pipe_internal **rx_enso_pipes;
+  struct rx_pipe_internal *pipe;
+  struct notification_buf_pair *notif_buf_pair;
+  int32_t pipe_id;
+  uint32_t enso_pipe_head;
+  uint32_t enso_pipe_tail;
+
+  (void) uarg;
+  dev_bk = chr_dev_bk->dev_bk;
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    printk("interrupted while attempting to obtain device semaphore.");
+    return -ERESTARTSYS;
+  }
+  // printk("enso_drv: entered next_rx_pipe_to_recv\n");
+
+  notif_buf_pair = chr_dev_bk->notif_buf_pair;
+  rx_enso_pipes = chr_dev_bk->rx_pipes;
+
+  pipe_id = get_next_pipe_id(notif_buf_pair);
+  //  printk("enso_drv: pipe_id is %d\n", pipe_id);
+  while(pipe_id >= 0) {
+    pipe = rx_enso_pipes[pipe_id];
+    if(pipe == NULL) {
+      printk("Pipe ID = %d is NULL\n", pipe_id);
+      return -1;
+    }
+    enso_pipe_head = pipe->rx_tail;
+    enso_pipe_tail = notif_buf_pair->pending_rx_pipe_tails[pipe_id];
+    if(enso_pipe_head != enso_pipe_tail) {
+      smp_wmb();
+      iowrite32(pipe->rx_head, pipe->buf_head_ptr);
+      // printk("Get from pipe id = %d\n", pipe_id);
+      break;
+    }
+    pipe_id = get_next_pipe_id(notif_buf_pair);
+  }
+
+  up(&dev_bk->sem);
+  // printk("enso_drv: exit next_rx_pipe_to_recv\n");
+  return pipe_id;
+}
+
 /******************************************************************************
  * Helper functions
  *****************************************************************************/
@@ -1284,6 +1335,7 @@ static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
+    // printk("nb_consumed_notifications = %d\n", nb_consumed_notifications);
     smp_wmb();
     iowrite32(notification_buf_head, notif_buf_pair->rx_head_ptr);
     notif_buf_pair->rx_head = notification_buf_head;
@@ -1332,6 +1384,7 @@ static int32_t get_next_pipe_id(struct notification_buf_pair *notif_buf_pair) {
       return -1;
     }
   }
+  // printk("nb_consumed_notif = %d\n", nb_consumed_notifications);
 
   enso_pipe_id = notif_buf_pair->next_rx_pipe_ids[next_rx_ids_head];
 

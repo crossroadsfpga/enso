@@ -28,6 +28,7 @@ struct enso_consume_rx_params {
   uint32_t id;
   bool peek;
   uint32_t head;
+  bool get_tails;
 } __attribute__((packed));
 
 struct enso_get_next_batch_params {
@@ -79,7 +80,9 @@ struct enso_advance_pipe_params {
   _IOR(ENSO_IOCTL_MAGIC, 16, struct enso_get_next_batch_params *)
 #define ENSO_IOCTL_ADVANCE_PIPE \
   _IOR(ENSO_IOCTL_MAGIC, 17, struct enso_advance_pipe_params *)
-#define ENSO_IOCTL_MAXNR 17
+#define ENSO_IOCTL_NEXT_RX_PIPE_RCV \
+  _IOR(ENSO_IOCTL_MAGIC, 18, unsigned int)
+#define ENSO_IOCTL_MAXNR 18
 
 }  // namespace enso_api
 
