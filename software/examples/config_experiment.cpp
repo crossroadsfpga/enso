@@ -47,13 +47,9 @@ static volatile bool setup_done = false;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
-                    enso::stats_t* stats, uint32_t dst_ip_1, uint32_t dst_ip_2,
-                    uint32_t core_id, int ms_interval) {
-  (void)core_id;
-  std::this_thread::sleep_for(std::chrono::seconds(1));
-
-  std::cout << "Running on core " << sched_getcpu() << std::endl;
+void change_config(uint32_t nb_queues, uint32_t dst_ip_1, uint32_t dst_ip_2,
+                   int ms_interval, uint32_t core_id) {
+  std::cout << "In change config thread!" << std::endl;
 
   using enso::Device;
   using enso::RxPipe;
@@ -79,10 +75,6 @@ void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
     pipes.push_back(pipe);
   }
 
-  setup_done = true;
-
-  std::thread config_thread(change_config, );
-
   nanoseconds last_time =
       duration_cast<nanoseconds>(system_clock::now().time_since_epoch());
 
@@ -90,7 +82,8 @@ void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
     nanoseconds now =
         duration_cast<nanoseconds>(system_clock::now().time_since_epoch());
     bool change = false;
-    if ((now - last_time).count() >= ms_interval) {
+    long long diff = (now - last_time).count();
+    if (diff >= ms_interval) {
       change = true;
     }
 
@@ -98,14 +91,57 @@ void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
     for (auto& pipe : pipes) {
       // bind pipes to the same socket
       if (change) {
+        std::cout << "change: " << diff << std::endl;
         if (i % 2 == 0) {
           pipe->Bind(kDstPort, 0, dst_ip_1, 0, kProtocol);
         } else {
           pipe->Bind(kDstPort, 0, dst_ip_2, 0, kProtocol);
         }
         i++;
+      } else {
+        std::cout << "no change" << std::endl;
       }
+    }
+    if (change) {
+      last_time = now;
+    }
+  }
+}
 
+void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
+                    enso::stats_t* stats, uint32_t core_id) {
+  (void)core_id;
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+
+  std::cout << "Running on core " << sched_getcpu() << std::endl;
+
+  using enso::Device;
+  using enso::RxPipe;
+
+  Device* dev = Device::Create();
+  std::vector<RxPipe*> pipes;
+
+  if (!dev) {
+    std::cerr << "Problem creating device" << std::endl;
+    exit(2);
+  }
+
+  for (uint32_t i = 0; i < nb_queues; ++i) {
+    RxPipe* pipe = dev->AllocateRxPipe();
+    if (!pipe) {
+      std::cerr << "Problem creating RX/TX pipe" << std::endl;
+      exit(3);
+    }
+    uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
+    pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+
+    pipes.push_back(pipe);
+  }
+
+  setup_done = true;
+
+  while (keep_running) {
+    for (auto& pipe : pipes) {
       auto batch = pipe->RecvPkts();
 
       if (unlikely(batch.available_bytes() == 0)) {
@@ -127,9 +163,6 @@ void run_experiment(uint32_t nb_queues, uint32_t nb_cycles,
       ++(stats->nb_batches);
 
       pipe->Clear();
-    }
-    if (change) {
-      last_time = now;
     }
   }
 }
@@ -162,10 +195,16 @@ int main(int argc, const char* argv[]) {
   uint32_t dst_ip_1 = kBaseIpAddress;
   uint32_t dst_ip_2 = kBaseIpAddress + 1;
 
+  threads.emplace_back(change_config, nb_queues, dst_ip_1, dst_ip_2,
+                       ms_interval, nb_cores + 1);
+  if (enso::set_core_id(threads.back(), nb_cores + 1)) {
+    std::cerr << "Error setting CPU affinity" << std::endl;
+    return 6;
+  }
+
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
     threads.emplace_back(run_experiment, nb_queues, nb_cycles,
-                         &(thread_stats[core_id]), dst_ip_1, dst_ip_2, core_id,
-                         ms_interval);
+                         &(thread_stats[core_id]), core_id);
     if (enso::set_core_id(threads.back(), core_id)) {
       std::cerr << "Error setting CPU affinity" << std::endl;
       return 6;
