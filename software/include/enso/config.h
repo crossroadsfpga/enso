@@ -163,8 +163,7 @@ int disable_round_robin(struct NotificationBufPair* notification_buf_pair);
 int update_fallback_queues_config(
     struct NotificationBufPair* notification_buf_pair);
 
-void register_kthread(uint64_t kthread_waiters_phys_addr,
-                      uint32_t application_id);
+void register_kthread(uint32_t application_id);
 
 }  // namespace enso
 

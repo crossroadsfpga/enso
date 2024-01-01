@@ -746,9 +746,8 @@ void register_waiting(uint32_t uthread_id, uint32_t notif_id) {
   DevBackend::register_waiting(uthread_id, notif_id);
 }
 
-void pcie_register_kthread(uint64_t kthread_waiters_phys_addr,
-                           uint32_t application_id) {
-  DevBackend::register_kthread(kthread_waiters_phys_addr, application_id);
+void pcie_register_kthread(uint32_t application_id) {
+  DevBackend::register_kthread(application_id);
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {

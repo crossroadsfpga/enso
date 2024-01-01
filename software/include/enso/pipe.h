@@ -193,8 +193,7 @@ class Device {
    * @brief Informs the IOKernel of a new kthread running on a certain core.
    *
    */
-  void RegisterKthread(uint64_t kthread_waiters_phys_addr,
-                       uint32_t application_id);
+  void RegisterKthread(uint32_t application_id);
 
   /**
    * @brief Gets the next RxPipe that has data pending.

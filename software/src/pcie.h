@@ -357,11 +357,9 @@ void register_waiting(uint32_t uthread_id, uint32_t notif_id);
 /**
  * @brief Registers a kthread with the IOKernel.
  *
- * @param kthread_waiters_phys_addr
  * @param application_id
  */
-void pcie_register_kthread(uint64_t kthread_waiters_phys_addr,
-                           uint32_t application_id);
+void pcie_register_kthread(uint32_t application_id);
 
 }  // namespace enso
 

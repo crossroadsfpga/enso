@@ -176,17 +176,12 @@ class DevBackend {
   }
 
   /**
-   * @brief New kthreads must register themselves with the IOKernel to share
-   * their waiters queue.
+   * @brief New kthreads must register themselves with the IOKernel.
    *
-   * @param kthread_waiters_phys_addr Physical address of kthread's waiting
-   * queue.
    * @param application_id Application ID that is running the kthread.
    * @return Void
    */
-  static _enso_always_inline void register_kthread(
-      uint64_t kthread_waiters_phys_addr, uint32_t application_id) {
-    (void)kthread_waiters_phys_addr;
+  static _enso_always_inline void register_kthread(uint32_t application_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kRegisterKthread;
     pipe_notification.data[0] = (uint64_t)application_id;

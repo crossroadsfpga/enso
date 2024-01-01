@@ -47,7 +47,6 @@ extern "C" {
 }
 #include <fastscheduler/defs.hpp>
 #include <fastscheduler/sched.hpp>
-#include <fastscheduler/uthread.hpp>
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -208,20 +207,17 @@ int main(int argc, const char* argv[]) {
 
   signal(SIGINT, int_handler);
 
-  std::vector<pthread_t> pthreads;
   std::vector<kthread_t*> kthreads;
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
   pthread_barrier_t init_barrier;
   pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
+
   // Create all of the kthreads
   for (uint32_t i = 0; i < nb_cores; ++i) {
     log_info("Creating kthread on core %d", i);
     kthread_t* kthread = enso::kthread_create(application_id, i);
     kthread->barrier = &init_barrier;
-    pthread_t thread;
-    pthread_create(&thread, NULL, enso::kthread_entry, (void*)(kthread));
-    pthreads.push_back(thread);
     kthreads.push_back(kthread);
   }
 
@@ -246,8 +242,8 @@ int main(int argc, const char* argv[]) {
 
   show_stats(thread_stats, &keep_running);
 
-  for (auto& thread : pthreads) {
-    pthread_join(thread, NULL);
+  for (auto& k : kthreads) {
+    kthread_join(k);
   }
 
   return 0;

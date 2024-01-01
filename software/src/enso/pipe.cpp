@@ -375,7 +375,7 @@ int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
 void Device::RegisterWaiting(sched::uthread_t* uthread) {
   uthread->last_rx_notif_head = notification_buf_pair_.rx_head;
-  uthread->waiting = true;
+  uthread->thread_waiting = true;
   register_waiting(uthread_id_, notification_buf_pair_.id);
 }
 
