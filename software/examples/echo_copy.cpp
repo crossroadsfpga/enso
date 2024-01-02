@@ -46,6 +46,7 @@ extern "C" {
 #include <base/log.h>
 }
 #include <fastscheduler/defs.hpp>
+#include <fastscheduler/kthread.hpp>
 #include <fastscheduler/sched.hpp>
 #include <iostream>
 #include <memory>
@@ -234,7 +235,7 @@ int main(int argc, const char* argv[]) {
         sched::uthread_create(run_echo_copy, (void*)args, application_id, i);
     // Add the uthread to the kthread's runqueue
     kthread_t* k = kthreads[current_kthread];
-    uthread_ready_kthread(k, th);
+    sched::uthread_ready_kthread(k, th);
     current_kthread = (current_kthread + 1) % nb_cores;
   }
 
@@ -243,7 +244,7 @@ int main(int argc, const char* argv[]) {
   show_stats(thread_stats, &keep_running);
 
   for (auto& k : kthreads) {
-    kthread_join(k);
+    sched::kthread_join(k);
   }
 
   return 0;

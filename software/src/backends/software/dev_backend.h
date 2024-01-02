@@ -125,8 +125,7 @@ class DevBackend {
   }
 
   static _enso_always_inline uint32_t
-  register_kthread(uint64_t waiter_queue_phys, uint32_t application_id) {
-    (void)waiter_queue_phys;
+  register_kthread(uint32_t application_id) {
     (void)application_id;
     return 0;
   }

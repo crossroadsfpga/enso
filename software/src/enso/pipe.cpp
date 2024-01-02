@@ -61,14 +61,14 @@ void init_devbackend(void* dev) { pcie_init_devbackend(dev); }
 
 sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id) {
   void* dev = pcie_get_devbackend(core_id);
-  return sched::kthread_create(application_id, core_id, dev);
+  return sched::kthread_create(application_id, core_id, dev, kthread_entry);
 }
 
 void* kthread_entry(void* arg) {
   sched::kthread_t* k = (sched::kthread_t*)arg;
   enso::set_self_core_id(k->curr_cpu);
   pcie_init_devbackend(k->dev);
-  register_kthread(0, k->application_id);
+  register_kthread(k->application_id);
   return sched::kthread_entry(arg);
 }
 
