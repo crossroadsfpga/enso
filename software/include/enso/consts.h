@@ -153,7 +153,8 @@ enum class NotifType : uint8_t {
   kFreePipe = 9,
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
-  kWaiting = 12
+  kWaiting = 12,
+  kKthreadYield = 13
 };
 
 struct PipeNotification {
