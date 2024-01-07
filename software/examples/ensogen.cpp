@@ -503,6 +503,7 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
   if (l2_hdr->ether_type != htons(ETHERTYPE_IP)) {
     std::cerr << "Non-IPv4 packets are not supported" << std::endl;
+    free(context->buf);
     exit(8);
   }
   context->nb_pkts++;
