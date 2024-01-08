@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Carnegie Mellon University
+ * Copyright (c) 2024, Carnegie Mellon University
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted (subject to the limitations in the disclaimer
@@ -147,6 +147,7 @@
 #define CMD_OPT_RTT_HIST_OFF "rtt-hist-offset"
 #define CMD_OPT_RTT_HIST_LEN "rtt-hist-len"
 #define CMD_OPT_STATS_DELAY "stats-delay"
+#define CMD_OPT_PCIE_ADDR "pcie-addr"
 
 static volatile int keep_running = 1;
 static volatile int force_stop = 0;
@@ -181,6 +182,7 @@ struct parsed_args_t {
   uint32_t rtt_hist_offset;
   uint32_t rtt_hist_len;
   uint32_t stats_delay;
+  std::string pcie_addr;
 };
 
 /*
@@ -337,6 +339,7 @@ static void print_usage(const char* program_name) {
       " [--rtt-hist-offset HIST_OFFSET]\n"
       " [--rtt-hist-len HIST_LEN]\n"
       " [--stats-delay STATS_DELAY]\n"
+      " [--pcie-addr PCIE_ADDR]\n\n"
 
       "  PCAP_FILE: Pcap file with packets to transmit.\n"
       "  RATE_NUM: Numerator of the rate used to transmit packets.\n"
@@ -357,7 +360,8 @@ static void print_usage(const char* program_name) {
       "                  will still be saved, but there will be a\n"
       "                  performance penalty.\n"
       "  --stats-delay: Delay between displayed stats in milliseconds\n"
-      "                 (default: %d).\n",
+      "                 (default: %d).\n"
+      "  --pcie-addr: Specify the PCIe address of the NIC to use.\n",
       program_name, DEFAULT_CORE_ID, DEFAULT_NB_QUEUES, DEFAULT_HIST_OFFSET,
       DEFAULT_HIST_LEN, DEFAULT_STATS_DELAY);
 }
@@ -378,6 +382,7 @@ enum {
   CMD_OPT_RTT_HIST_OFF_NUM,
   CMD_OPT_RTT_HIST_LEN_NUM,
   CMD_OPT_STATS_DELAY_NUM,
+  CMD_OPT_PCIE_ADDR_NUM,
 };
 
 static const char short_options[] = "";
@@ -394,6 +399,7 @@ static const struct option long_options[] = {
     {CMD_OPT_RTT_HIST_OFF, required_argument, NULL, CMD_OPT_RTT_HIST_OFF_NUM},
     {CMD_OPT_RTT_HIST_LEN, required_argument, NULL, CMD_OPT_RTT_HIST_LEN_NUM},
     {CMD_OPT_STATS_DELAY, required_argument, NULL, CMD_OPT_STATS_DELAY_NUM},
+    {CMD_OPT_PCIE_ADDR, required_argument, NULL, CMD_OPT_PCIE_ADDR_NUM},
     {0, 0, 0, 0}
 };
 
@@ -458,6 +464,9 @@ static int parse_args(int argc, char** argv,
         break;
       case CMD_OPT_STATS_DELAY_NUM:
         parsed_args.stats_delay = atoi(optarg);
+        break;
+      case CMD_OPT_PCIE_ADDR_NUM:
+        parsed_args.pcie_addr = optarg;
         break;
       default:
         return -1;
@@ -712,7 +721,7 @@ int main(int argc, char** argv) {
 
   std::vector<std::thread> threads;
 
-  std::unique_ptr<Device> dev = Device::Create();
+  std::unique_ptr<Device> dev = Device::Create(parsed_args.pcie_addr);
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
     free(pkt_buf);
@@ -1082,5 +1091,6 @@ int main(int argc, char** argv) {
   }
 
   free(pkt_buf);
+  dev.reset();
   return ret;
 }

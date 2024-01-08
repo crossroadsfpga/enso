@@ -14,7 +14,7 @@ GET_PCAP_SIZE_CMD_PATH=$(realpath $GET_PCAP_SIZE_CMD_PATH)
 
 if [ $# -lt 2 ]; then
     echo "Usage: ./ensogen.sh PCAP_FILE RATE_GBPS [OPTIONS]"
-    echo "Example: ./ensogen.sh /tmp/pcap_file.pcap 100"
+    echo "Example: ./ensogen.sh /tmp/pcap_file.pcap 100 --pcie-addr 65:00.0"
     exit 1
 fi
 
