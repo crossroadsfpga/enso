@@ -121,7 +121,6 @@ int intel_fpga_pcie_dma_queue(struct dev_bookkeep *dev_bk, unsigned long uarg) {
 }
 
 int intel_fpga_pcie_dma_send(struct dev_bookkeep *dev_bk, unsigned long uarg) {
-  struct timeval start_tv, end_tv;
   uint32_t timeout;
   bool send_transfer[2];
   bool has_pending[2];
@@ -160,8 +159,6 @@ int intel_fpga_pcie_dma_send(struct dev_bookkeep *dev_bk, unsigned long uarg) {
     return -ENODATA;
   }
 
-  do_gettimeofday(&start_tv);
-
   for (i = 0; i < 2; ++i) {
     if (!send_transfer[i]) continue;
 
@@ -184,9 +181,6 @@ int intel_fpga_pcie_dma_send(struct dev_bookkeep *dev_bk, unsigned long uarg) {
     cpu_relax();
   }
 
-  do_gettimeofday(&end_tv);
-  dev_bk->dma_info.timer = (end_tv.tv_sec - start_tv.tv_sec) * 1000000 +
-                           end_tv.tv_usec - start_tv.tv_usec;
   if (timeout == 0) {
     INTEL_FPGA_PCIE_WARN("DMA operation timed out.");
     return -ETIME;

@@ -113,11 +113,9 @@ struct kmem_info {
 
 /**
  * struct dma_info - Contains information used for DMA operation, including
- *                   pending descriptors. Each field except for the timer
- *                   exists for _each_ direction of DMA operation.
+ *                   pending descriptors. Each field exists for _each_
+ *                   direction of DMA operation.
  *
- * @timer:          Timer, in microseconds. The timer measures the time elapsed
- *                  from the start of DMA operation to the end of DMA operation.
  * @dt_virt_addr:   Kernel virtual addresses for read and write descriptor
  *                  tables. Used to access the DTs from the processor.
  * @dt_bus_addr:    Bus (PCIe) addresses for read and write descriptor
@@ -130,8 +128,6 @@ struct kmem_info {
  * @last_ptr_wrap:  Indicates that the last pointer has wrapped around.
  */
 struct dma_info {
-  unsigned int timer;
-
   // DMA descriptor tables, one for each direction
   struct desc_table *dt_virt_addr[2];
   dma_addr_t dt_bus_addr[2];

@@ -74,10 +74,8 @@ uint32_t external_peek_next_batch_from_queue(
  *
  * Example:
  * @code
- *    uint16_t core_id = 0;
- *    uint32_t nb_pipes = 4;
  *    std::string pcie_addr = "0000:01:00.0";
- *    auto device = Device::Create(core_id, nb_pipes, pcie_addr);
+ *    auto device = Device::Create(pcie_addr);
  * @endcode
  */
 class Device {
@@ -745,8 +743,7 @@ class RxPipe {
  *
  * Example:
  * @code
- *    enso::Device* device = enso::Device::Create(core_id, nb_pipes,
- *                                                    pcie_addr);
+ *    enso::Device* device = enso::Device::Create(pcie_addr);
  *    enso::TxPipe* tx_pipe = device->AllocateTxPipe();
  *    uint8_t* buf = tx_pipe->AllocateBuf(data_size);
  *
