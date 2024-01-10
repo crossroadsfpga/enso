@@ -126,6 +126,13 @@ class Device {
    */
   RxPipe* AllocateRxPipe(bool fallback = false) noexcept;
 
+  /**
+    * @brief Returns the RxPipe for the given queue ID.
+    *
+    * @param queue_id The queue ID of the requested pipe.
+    *
+    * @return A pointer to the pipe.
+  */
   RxPipe* GetRxPipe(uint16_t queue_id) noexcept;
 
   /**
@@ -139,12 +146,33 @@ class Device {
    */
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
 
+  /**
+  * @brief Retrieves the number of fallback queues for this device.
+  */
   int GetNbFallbackQueues() noexcept;
 
+  /**
+  * @brief Sets the round robin status for the device.
+  *
+  * @param round_robin Whether to enable or disable round robin.
+  *
+  * @return 0 on success, -1 on failure.
+  */
   int SetRrStatus(bool rr_status) noexcept;
 
+  /**
+  * @brief Gets the round robin status for the device.
+  *
+  * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
+  *         failure.
+  */
   bool GetRrStatus() noexcept;
 
+  /**
+  * @brief Applies the config described by the given transmission notification.
+  *
+  * @return 0 on success, -1 on failure.
+  */
   int ApplyConfig(struct TxNotification* notification);
 
   /**
@@ -166,6 +194,9 @@ class Device {
    */
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
 
+  /**
+  * @brief Gets the next RX notification received by this device.
+  */
   struct RxNotification* NextRxNotif();
 
   /**
@@ -308,6 +339,9 @@ class Device {
    */
   void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
 
+  /**
+  * @brief Gets the ID of the notification buffer for this device.
+  */
   int GetNotifQueueId() noexcept;
 
  private:
@@ -335,6 +369,8 @@ class Device {
 
   /**
    * @brief Initializes the device.
+   *
+   * @param application_id ID of the application creating this device.
    *
    * @return 0 on success and a non-zero error code on failure.
    */

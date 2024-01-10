@@ -4,4 +4,3 @@ intel_fpga_linux_sources = files(
 )
 
 project_sources += intel_fpga_linux_sources
- 

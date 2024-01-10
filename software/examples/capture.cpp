@@ -106,16 +106,12 @@ void* capture_packets(void* arg) {
 
   setup_done = true;
 
-  std::cout << "setup done!" << std::endl;
-
   while (keep_running) {
     RxPipe* pipe = dev->NextRxPipeToRecv();
 
     if (unlikely(pipe == nullptr)) {
       continue;
     }
-
-    std::cout << "received packets!" << std::endl;
 
     auto batch = pipe->RecvPkts();
 

@@ -63,7 +63,6 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
-  std::cout << "binding pipe" << id_ << dst_port << std::endl;
   return insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip,
                            src_ip, protocol, id_);
 }
@@ -298,8 +297,6 @@ RxPipe* Device::NextRxPipeToRecv() {
   }
   int32_t id = notification->queue_id;
 
-  // std::cout << "next rx pipe: " << id << std::endl;
-
   RxPipe* rx_pipe = rx_pipes_map_[id];
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
@@ -335,6 +332,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 #else  // !LATENCY_OPT
   notif = get_next_rx_notif(&notification_buf_pair_);
+  id = notif->queue_id;
 
 #endif  // LATENCY_OPT
 
@@ -426,7 +424,7 @@ void Device::ProcessCompletions() {
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
     if (tx_req.pipe_id < 0) {
-      // on receiving this, should update the notification->signal for
+      // on receiving this, shinkansen should update the notification->signal for
       // applications
       std::invoke(completion_callback_);
     } else {

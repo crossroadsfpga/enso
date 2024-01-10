@@ -139,7 +139,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   std::string huge_page_path = huge_page_prefix +
                                std::string(kHugePageNotifBufPathPrefix) +
                                std::to_string(notification_buf_pair->id);
-  printf("huge page path: %s\n", huge_page_path.c_str());
+
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
       (struct RxNotification*)get_huge_page(huge_page_path);
@@ -673,7 +673,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
          nb_unreported_completions) {
     update_tx_head(notification_buf_pair);
   }
-  // iterate over all nb_unreported_completions and invoke completion callback?
+  // iterate over all nb_unreported_completions and invoke completion callback
   if (completion_callback != nullptr) {
     uint32_t unreported_config_completions =
         notification_buf_pair->nb_unreported_completions -
