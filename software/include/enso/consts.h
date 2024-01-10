@@ -156,6 +156,12 @@ struct MmioNotification {
   uint64_t value;
 };
 
+struct MmioNotification {
+  NotifType type;
+  uint64_t address;
+  uint64_t value;
+};
+
 struct PipeNotification {
   NotifType type;
   uint64_t data[6];

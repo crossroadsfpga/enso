@@ -131,15 +131,6 @@ class Device {
   RxPipe* AllocateRxPipe(bool fallback = false) noexcept;
 
   /**
-  * @brief Returns the RxPipe for the given queue ID.
-  *
-  * @param queue_id The queue ID of the requested pipe.
-  *
-  * @return A pointer to the pipe.
-  */
-  RxPipe* GetRxPipe(uint16_t queue_id) noexcept;
-
-  /**
    * @brief Allocates a TX pipe.
    *
    * @param buf Buffer address to use for the pipe. It must be a pinned
@@ -151,25 +142,25 @@ class Device {
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
 
   /**
-  * @brief Retrieves the number of fallback queues for this device.
-  */
+   * @brief Retrieves the number of fallback queues for this device.
+   */
   int GetNbFallbackQueues() noexcept;
 
   /**
-  * @brief Sets the round robin status for the device.
-  *
-  * @param round_robin Whether to enable or disable round robin.
-  *
-  * @return 0 on success, -1 on failure.
-  */
+   * @brief Sets the round robin status for the device.
+   *
+   * @param round_robin Whether to enable or disable round robin.
+   *
+   * @return 0 on success, -1 on failure.
+   */
   int SetRrStatus(bool round_robin) noexcept;
 
   /**
-  * @brief Gets the round robin status for the device.
-  *
-  * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
-  *         failure.
-  */
+   * @brief Gets the round robin status for the device.
+   *
+   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
+   *         failure.
+   */
   bool GetRrStatus() noexcept;
 
   /**
