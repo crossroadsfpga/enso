@@ -136,8 +136,7 @@ void run_experiment(void* arg) {
 
   volatile uint32_t num_failed = 0;
   while (keep_running) {
-    microseconds now = get_time_now();
-    if ((now - last_time).count() >= ms_interval) {
+    if ((get_time_now() - last_time).count() >= ms_interval) {
       log_info("yielding!");
       dev->RegisterWaiting(uthread);
       sched::uthread_yield(false);
