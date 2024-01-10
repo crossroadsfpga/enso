@@ -57,17 +57,9 @@
 
 namespace enso {
 
-void init_devbackend(void* dev) { pcie_init_devbackend(dev); }
-
-sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id) {
-  void* dev = pcie_get_devbackend(core_id);
-  return sched::kthread_create(application_id, core_id, dev);
-}
-
 void* kthread_entry(void* arg) {
   sched::kthread_t* k = (sched::kthread_t*)arg;
   enso::set_self_core_id(k->curr_cpu);
-  pcie_init_devbackend(k->dev);
   register_kthread(0, k->application_id);
   return sched::kthread_entry(arg);
 }
@@ -140,9 +132,9 @@ int TxPipe::Init() noexcept {
     }
   }
 
-  sched::kthread_t* k = sched::getk();
-  buf_phys_addr_ = get_dev_addr_from_virt_addr(k, buf_);
-  sched::putk();
+  struct NotificationBufPair* notif_buf = &(device_->notification_buf_pair_);
+
+  buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
   return 0;
 }
 
@@ -220,24 +212,15 @@ RxPipe* Device::GetRxPipe(uint16_t queue_id) noexcept {
 }
 
 int Device::GetNbFallbackQueues() noexcept {
-  sched::kthread_t* k = sched::getk();
-  int res = get_nb_fallback_queues(k);
-  sched::putk();
-  return res;
+  return get_nb_fallback_queues(&notification_buf_pair_);
 }
 
 int Device::SetRrStatus(bool rr_status) noexcept {
-  sched::kthread_t* k = sched::getk();
-  int res = set_round_robin_status(k, rr_status);
-  sched::putk();
-  return res;
+  return set_round_robin_status(&notification_buf_pair_, rr_status);
 }
 
 bool Device::GetRrStatus() noexcept {
-  sched::kthread_t* k = sched::getk();
-  int res = get_round_robin_status(k);
-  sched::putk();
-  return res;
+  return get_round_robin_status(&notification_buf_pair_);
 }
 
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {

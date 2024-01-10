@@ -106,6 +106,7 @@ struct NotificationBufPair {
   uint8_t* wrap_tracker;
   uint32_t* pending_rx_pipe_tails;
 
+  void* fpga_dev;            // Avoid exposing `DevBackend` externally.
   void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
   std::string huge_page_prefix;
 };

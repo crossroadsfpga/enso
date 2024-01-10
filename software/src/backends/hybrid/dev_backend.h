@@ -403,10 +403,7 @@ class DevBackend {
    *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init(unsigned int bdf, int bar) noexcept {
-    bdf_ = bdf;
-    bar_ = bar;
-
+  int Init() noexcept {
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
       std::cerr << "Could not get CPU ID" << std::endl;

@@ -72,7 +72,7 @@ void* run_echo(void* arg) {
   using enso::Device;
   using enso::RxTxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(application_id, NULL);
+  std::unique_ptr<Device> dev = Device::Create(0, NULL);
   std::vector<RxTxPipe*> pipes;
 
   if (!dev) {
