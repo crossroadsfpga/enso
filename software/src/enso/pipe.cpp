@@ -63,7 +63,6 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
-  std::cout << "binding pipe" << id_ << dst_port << std::endl;
   return insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip,
                            src_ip, protocol, id_);
 }
@@ -207,8 +206,8 @@ int Device::GetNbFallbackQueues() noexcept {
   return get_nb_fallback_queues(&notification_buf_pair_);
 }
 
-int Device::SetRrStatus(bool rr_status) noexcept {
-  return set_round_robin_status(&notification_buf_pair_, rr_status);
+int Device::SetRrStatus(bool round_robin) noexcept {
+  return set_round_robin_status(&notification_buf_pair_, round_robin);
 }
 
 bool Device::GetRrStatus() noexcept {
@@ -297,8 +296,6 @@ RxPipe* Device::NextRxPipeToRecv() {
     return nullptr;
   }
   int32_t id = notification->queue_id;
-
-  // std::cout << "next rx pipe: " << id << std::endl;
 
   RxPipe* rx_pipe = rx_pipes_map_[id];
   rx_pipe->SetAsNextPipe();
