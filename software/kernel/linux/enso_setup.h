@@ -20,6 +20,10 @@
 #define MEM_PER_QUEUE           (0x1ULL << 12)
 #define BATCH_SIZE              64
 
+// These determine the maximum number of notification buffers and enso pipes.
+// These macros also exist in hardware and **must be kept in sync**. Update the
+// variables with the same name on `hardware/src/constants.sv`,
+// `software/include/enso/consts.h`, and `scripts/hwtest/my_stats.tcl`.
 #define MAX_NB_APPS 1024
 #define MAX_NB_FLOWS 8192
 
@@ -30,14 +34,9 @@
  *         Intel's drivers. Note: we only use BAR2's information, rest are
  *         unused.
  *
- * @bar2_pcie_start: Starting address of BAR 2.
- * @bar2_pcie_len: Length of the BAR 2.
- *
  * */
 struct enso_intel_pcie {
     void *__iomem base_addr;
-    uint64_t bar2_pcie_start;
-    uint64_t bar2_pcie_len;
 };
 
 /*

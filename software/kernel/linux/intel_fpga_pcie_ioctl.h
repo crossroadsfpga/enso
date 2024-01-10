@@ -89,38 +89,6 @@ struct intel_fpga_pcie_ksize {
   int core_id;
 } __attribute__((packed));
 
-/*
- * struct enso_send_tx_pipe_params - Structure used to send a TxPipe.
- * */
-struct enso_send_tx_pipe_params {
-  uint64_t phys_addr;
-  uint32_t len;
-  uint32_t id;
-} __attribute__((packed));
-
-struct enso_pipe_init_params {
-  uint64_t phys_addr;
-  uint32_t id;
-} __attribute__((packed));
-
-struct enso_consume_rx_params {
-  uint32_t id;
-  bool peek;
-  uint32_t head;
-} __attribute__((packed));
-
-struct enso_get_next_batch_params {
-  uint32_t notif_id;
-  uint32_t pipe_id;
-  uint32_t head;
-  bool peek;
-};
-
-struct enso_advance_pipe_params {
-  uint32_t id;
-  size_t len;
-};
-
 #define INTEL_FPGA_PCIE_IOCTL_MAGIC 0x70
 #define INTEL_FPGA_PCIE_IOCTL_CHR_SEL_DEV \
   _IOW(INTEL_FPGA_PCIE_IOCTL_MAGIC, 0, unsigned int)
@@ -158,27 +126,7 @@ struct enso_advance_pipe_params {
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 16, unsigned int *)
 #define INTEL_FPGA_PCIE_IOCTL_FREE_PIPE \
   _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 17, unsigned int)
-#define INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUF_PAIR \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 18, unsigned int)
-#define INTEL_FPGA_PCIE_IOCTL_SEND_TX_PIPE \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 19, struct enso_send_tx_pipe_params *)
-#define INTEL_FPGA_PCIE_IOCTL_GET_UNREPORTED_COMPLETIONS \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 20, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_SEND_CONFIG \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 21, struct tx_notification *)
-#define INTEL_FPGA_PCIE_IOCTL_ALLOC_RX_ENSO_PIPE \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 22, struct enso_pipe_init_params *)
-#define INTEL_FPGA_PCIE_IOCTL_FREE_RX_ENSO_PIPE \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 23, unsigned int)
-#define INTEL_FPGA_PCIE_IOCTL_CONSUME_RX \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 24, struct enso_consume_rx_params *)
-#define INTEL_FPGA_PCIE_IOCTL_FULL_ADV_PIPE \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 25, unsigned int *)
-#define INTEL_FPGA_PCIE_IOCTL_GET_NEXT_BATCH \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 26, struct enso_get_next_batch_params *)
-#define INTEL_FPGA_PCIE_IOCTL_ADVANCE_PIPE \
-  _IOR(INTEL_FPGA_PCIE_IOCTL_MAGIC, 27, struct enso_advance_pipe_params *)
-#define INTEL_FPGA_PCIE_IOCTL_MAXNR 27
+#define INTEL_FPGA_PCIE_IOCTL_MAXNR 17
 
 long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
                                     unsigned long arg);

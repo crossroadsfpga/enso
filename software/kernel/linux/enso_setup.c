@@ -7,7 +7,7 @@ struct enso_global_bookkeep global_bk __read_mostly;
 extern struct enso_intel_pcie* get_intel_fpga_pcie_addr(void);
 
 /******************************************************************************
- * Kernel Resgitration
+ * Kernel Registration
  *****************************************************************************/
 /*
  * enso_init(void): Registers the Enso driver.
@@ -25,8 +25,7 @@ static __init int enso_init(void) {
     printk("Failed to receive BAR info\n");
     return -1;
   }
-  printk("PCIE ADDR = %llx\n", global_bk.intel_enso->bar2_pcie_start);
-  printk("PCIE LEN = %llx\n", global_bk.intel_enso->bar2_pcie_len);
+
   // initialize a character device
   ret = enso_chr_init();
   if(ret != 0) {

@@ -159,7 +159,7 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
   char device_name[1000] = "/dev/";
   if (get_uio_dev_name(device_name + 5)) {
     close(m_dev_handle);
-    std::cerr << "could not get uio device name " << device_name << std::endl;
+    std::cerr << "could not get uio device name" << std::endl;
     return -1;
   }
 
@@ -504,129 +504,6 @@ int IntelFpgaPcieDev::allocate_pipe(bool fallback) {
 
 int IntelFpgaPcieDev::free_pipe(int id) {
   return ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_FREE_PIPE, id);
-}
-
-int IntelFpgaPcieDev::allocate_notif_buf_pair(int id) {
-  int result;
-  result =
-      ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_ALLOC_NOTIF_BUF_PAIR, id);
-
-  if (result != 0) {
-    return -1;
-  }
-
-  return result;
-}
-
-int IntelFpgaPcieDev::send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t buf_id) {
-  int result;
-  struct enso_send_tx_pipe_params stpp;
-  stpp.phys_addr = phys_addr;
-  stpp.len = len;
-  stpp.id = buf_id;
-  result =
-      ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SEND_TX_PIPE, &stpp);
-
-  if (result != 0) {
-    std::cout << "failure at send_tx ioctl " << result << std::endl;
-    return -1;
-  }
-
-  return result;
-}
-
-int IntelFpgaPcieDev::get_unreported_completions() {
-  int result;
-  unsigned int completions;
-  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_GET_UNREPORTED_COMPLETIONS,
-                 &completions);
-
-  if (result != 0) {
-    std::cout << "unreported completions failed" << std::endl;
-    return -1;
-  }
-
-  return completions;
-}
-
-int IntelFpgaPcieDev::send_config(struct TxNotification *txNotification) {
-  int result;
-  result =
-      ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_SEND_CONFIG, txNotification);
-
-  if (result != 0) {
-    std::cout << "failure at send_confif ioctl " << result << std::endl;
-    return -1;
-  }
-
-  return result;
-}
-
-int IntelFpgaPcieDev::allocate_enso_rx_pipe(int pipe_id, uint64_t buf_phys_addr) {
-  int result;
-  struct enso_pipe_init_params param;
-  param.phys_addr = buf_phys_addr;
-  param.id = pipe_id;
-  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_ALLOC_RX_ENSO_PIPE, &param);
-
-  if (result != 0) {
-    return -1;
-  }
-
-  return result;
-}
-
-int IntelFpgaPcieDev::free_enso_rx_pipe(int pipe_id) {
-  int result;
-  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_FREE_RX_ENSO_PIPE, pipe_id);
-
-  if (result != 0) {
-    return -1;
-  }
-
-  return 0;
-}
-
-int IntelFpgaPcieDev::consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head) {
-  int result;
-  struct enso_consume_rx_params param;
-  param.id = pipe_id;
-  param.peek = peek;
-  param.head = 0;
-  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_CONSUME_RX, &param);
-  pipe_head = param.head;
-  return result;
-}
-
-int IntelFpgaPcieDev::full_adv_pipe(int pipe_id) {
-  int result;
-  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_FULL_ADV_PIPE, &pipe_id);
-  return result;
-}
-
-int IntelFpgaPcieDev::get_next_batch(int notif_id, bool peek, int &pipe_id, uint32_t &pipe_head) {
-  int result;
-  struct enso_get_next_batch_params param;
-  param.notif_id = notif_id;
-  param.peek = peek;
-  param.head = 0;
-  param.pipe_id = -1;
-  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_GET_NEXT_BATCH, &param);
-  if(result < 0) {
-    return -1;
-  }
-  pipe_head = param.head;
-  pipe_id = param.pipe_id;
-  return result;
-}
-
-int IntelFpgaPcieDev::advance_pipe(int pipe_id, size_t len) {
-  int result;
-  struct enso_advance_pipe_params param;
-  param.id = pipe_id;
-  param.len = len;
-  result = ioctl(m_dev_handle, INTEL_FPGA_PCIE_IOCTL_ADVANCE_PIPE, &param);
-  return result;
 }
 
 }  // namespace intel_fpga_pcie_api

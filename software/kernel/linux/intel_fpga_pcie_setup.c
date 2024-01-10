@@ -63,6 +63,8 @@ struct global_bookkeep global_bk __read_mostly;
 static const int bar_types[6] = {BAR0_TYPE, BAR1_TYPE, BAR2_TYPE,
                                  BAR3_TYPE, BAR4_TYPE, BAR5_TYPE};
 
+static struct enso_intel_pcie *intel_enso;
+
 /******************************************************************************
  * Static function prototypes
  *****************************************************************************/
@@ -73,7 +75,6 @@ static int map_bars_default(struct pci_dev *dev);
 static void unmap_bars(struct pci_dev *dev);
 struct enso_intel_pcie* get_intel_fpga_pcie_addr(void);
 
-static struct enso_intel_pcie *intel_enso;
 
 /******************************************************************************
  * PCIe driver functions
@@ -460,13 +461,6 @@ static int map_bars_default(struct pci_dev *dev) {
       dev_bk->bar[i].len = (ssize_t)len;
       start = pci_resource_start(dev, i);
       flags = pci_resource_flags(dev, i);
-      if(i == 2) {
-        dev_bk->bar2_pcie_start = start;
-        dev_bk->bar2_pcie_len = len;
-        intel_enso->bar2_pcie_start = start;
-        intel_enso->bar2_pcie_len = len;
-        printk("Setting PCIE BARs\n");
-      }
 
       if (flags & IORESOURCE_IO) {
         dev_bk->bar[i].base_addr = ioport_map(start, len);
@@ -497,6 +491,7 @@ static int map_bars_default(struct pci_dev *dev) {
     unmap_bars(dev);
     return -ENOMEM;
   }
+
   intel_enso->base_addr = dev_bk->bar[2].base_addr;
 
   return 0;

@@ -373,46 +373,6 @@ class IntelFpgaPcieDev {
    */
   int free_pipe(int id);
 
-  /**
-   * Allocate a notification buffer pair.
-   * @return 0 on success. On error, -1 is returned and errno is set
-   *         appropriately.
-   */
-  int allocate_notif_buf_pair(int id);
-
-  /**
-   * Send a TxPipe buffer.
-   * @param phys_addr starting address of the buffer.
-   * @param len       size of the buffer in bytes.
-   * @param buf_id    notification buffer id.
-   *
-   * @return 0 on success. On error, -1 is returned and errno is set
-   *         appropriately.
-   */
-  int send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t buf_id);
-
-  /**
-   * Get the number of Tx notifications that were consumed by the NIC.
-   * @return the number of unreported completions on success.
-   *         On error, -1 is returned and errno is set appropriately.
-   */
-  int get_unreported_completions();
-
-  /**
-   * Send a config notification.
-   * @param txNotification struct TxNotification with the configuration.
-   *
-   * @return 0 on success. On error, -1 is returned and errno is set
-   *         appropriately.
-   */
-  int send_config(struct TxNotification *txNotification);
-  int allocate_enso_rx_pipe(int pipe_id, uint64_t buf_phys_addr);
-  int free_enso_rx_pipe(int pipe_id);
-  int consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head);
-  int full_adv_pipe(int pipe_id);
-  int get_next_batch(int notif_id, bool peek, int &pipe_id, uint32_t &pipe_head);
-  int advance_pipe(int pipe_id, size_t len);
-
  private:
   /**
    * Class should be instantiated via the Create() factory method.

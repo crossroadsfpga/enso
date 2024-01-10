@@ -46,8 +46,6 @@
 #include "intel_fpga_pcie.h"
 #include "intel_fpga_pcie_ioctl.h"
 #include "intel_fpga_pcie_setup.h"
-#include "enso_defines.h"
-#include <linux/poll.h>
 
 /******************************************************************************
  * Static function prototypes
@@ -126,7 +124,6 @@ static int chr_open(struct inode *inode, struct file *filp) {
   struct dev_bookkeep *dev_bk;
   unsigned int num_dev_bks;
 
-  printk("Opening new char device\n");
   // Look for the device with lowest BDF and select it as default.
   if (unlikely(mutex_lock_interruptible(&global_bk.lock))) {
     INTEL_FPGA_PCIE_DEBUG(
@@ -154,30 +151,9 @@ static int chr_open(struct inode *inode, struct file *filp) {
 
   chr_dev_bk->nb_fb_queues = 0;
 
-  chr_dev_bk->notif_buf_pair = kzalloc(sizeof(struct notification_buf_pair),
-                                       GFP_KERNEL);
-  if(chr_dev_bk->notif_buf_pair == NULL) {
-    INTEL_FPGA_PCIE_ERR("couldn't create notification buffer pair");
-    kfree(chr_dev_bk);
-    return -ENOMEM;
-  }
-  chr_dev_bk->notif_buf_pair->allocated = false;
-
-  chr_dev_bk->enso_rx_pipes = kzalloc(MAX_NB_FLOWS *
-                                      sizeof(struct rx_enso_pipe_internal *),
-                                      GFP_KERNEL);
-  if(chr_dev_bk->enso_rx_pipes == NULL) {
-    INTEL_FPGA_PCIE_ERR("couldn't create enso_rx_pipes");
-    kfree(chr_dev_bk->notif_buf_pair);
-    kfree(chr_dev_bk);
-    return -ENOMEM;
-  }
-
   chr_dev_bk->notif_q_status = kzalloc(MAX_NB_APPS / 8, GFP_KERNEL);
   if (chr_dev_bk->notif_q_status == NULL) {
     INTEL_FPGA_PCIE_ERR("couldn't create notification queue status ");
-    kfree(chr_dev_bk->enso_rx_pipes);
-    kfree(chr_dev_bk->notif_buf_pair);
     kfree(chr_dev_bk);
     return -ENOMEM;
   }
@@ -186,8 +162,6 @@ static int chr_open(struct inode *inode, struct file *filp) {
   if (chr_dev_bk->pipe_status == NULL) {
     INTEL_FPGA_PCIE_ERR("couldn't create pipe status for device ");
     kfree(chr_dev_bk->notif_q_status);
-    kfree(chr_dev_bk->enso_rx_pipes);
-    kfree(chr_dev_bk->notif_buf_pair);
     kfree(chr_dev_bk);
     return -ENOMEM;
   }
@@ -225,70 +199,6 @@ static int chr_open(struct inode *inode, struct file *filp) {
 }
 
 /**
- * free_notif_buf_pair() - Frees a notif_buf_pair structure.
- *                         Used by chr_release().
- *
- * @chr_dev_bk: Structure containing information about the current
- *              character file handle.
- *
- * Return: 0 if successful, negative error code otherwise.
- */
-void free_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk) {
-  size_t rx_tx_buf_size = 512 * PAGE_SIZE;
-  struct rx_notification *rx_notif = NULL;
-  struct notification_buf_pair *notif_buf_pair = NULL;
-  unsigned int page_ind = 0;
-
-  if(chr_dev_bk == NULL) {
-    return;
-  }
-  notif_buf_pair = chr_dev_bk->notif_buf_pair;
-  if(notif_buf_pair == NULL) {
-    printk("How is this possible\n");
-    return;
-  }
-  printk("Cleaning up notif buf pair ID = %d\n", notif_buf_pair->id);
-  if(notif_buf_pair->rx_buf != NULL) {
-    rx_notif = notif_buf_pair->rx_buf;
-    for(;page_ind < rx_tx_buf_size;
-         page_ind += PAGE_SIZE) {
-      ClearPageReserved(virt_to_page(((unsigned long)rx_notif) + page_ind));
-    }
-    kfree(rx_notif);
-  }
-  if(notif_buf_pair->pending_rx_pipe_tails != NULL) {
-    kfree(notif_buf_pair->pending_rx_pipe_tails);
-  }
-  if(notif_buf_pair->wrap_tracker != NULL) {
-    kfree(notif_buf_pair->wrap_tracker);
-  }
-  return;
-}
-
-void free_enso_rx_pipes(struct chr_dev_bookkeep *chr_dev_bk) {
-  unsigned int ind = 0;
-  struct rx_enso_pipe_internal **pipes;
-  if(chr_dev_bk == NULL) {
-    return;
-  }
-
-  pipes = chr_dev_bk->enso_rx_pipes;
-  if(pipes == NULL) {
-    return;
-  }
-  printk("Cleaning up enso rx pipes\n");
-  for(; ind < MAX_NB_FLOWS; ind++) {
-    if(pipes[ind])
-    {
-      ext_free_rx_enso_pipe(pipes[ind]);
-      kfree(pipes[ind]);
-      pipes[ind] = NULL;
-    }
-  }
-  return;
-}
-
-/**
  * chr_release() - Responds to the system call close(2). Clean up character
  *                 device file structure.
  * @inode: Unused.
@@ -300,8 +210,6 @@ static int chr_release(struct inode *inode, struct file *filp) {
   int i;
   struct chr_dev_bookkeep *chr_dev_bk;
   struct dev_bookkeep *dev_bk;
-  //unsigned int page_ind = 0;
-  //size_t enso_pipe_buf_size = 512 * PAGE_SIZE;
 
   chr_dev_bk = filp->private_data;
   dev_bk = chr_dev_bk->dev_bk;
@@ -330,12 +238,6 @@ static int chr_release(struct inode *inode, struct file *filp) {
 
   up(&dev_bk->sem);
 
-  free_notif_buf_pair(chr_dev_bk);
-  free_enso_rx_pipes(chr_dev_bk);
-  kfree(chr_dev_bk->enso_rx_pipes);
-  if(chr_dev_bk->notif_buf_pair) {
-    kfree(chr_dev_bk->notif_buf_pair);
-  }
   kfree(chr_dev_bk->notif_q_status);
   kfree(chr_dev_bk->pipe_status);
   kfree(chr_dev_bk);
