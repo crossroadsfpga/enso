@@ -89,20 +89,20 @@ class DevBackend {
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value) {
     // Block if full.
-    struct PipeNotification notification;
+    struct MmioNotification notification;
     notification.type = NotifType::kWrite;
-    notification.data[0] = (uint64_t)addr;
-    notification.data[1] = value;
-    while (queue_to_backend_->Push(notification) != 0) {
+    notification.address = (uint64_t)addr;
+    notification.value = value;
+    while (queue_to_backend_->Push((PipeNotification)notification) != 0) {
     }
   }
 
   static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kRead;
-    pipe_notification.data[0] = (uint64_t)addr;
-    pipe_notification.data[1] = 0;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct MmioNotification mmio_notificaiton;
+    mmio_notificaiton.type = NotifType::kRead;
+    mmio_notificaiton.address = (uint64_t)addr;
+    mmio_notification.value = 0;
+    while (queue_to_backend_->Push((PipeNotification)pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -111,7 +111,7 @@ class DevBackend {
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kRead);
+    assert(notification->type == NotifType::kRead);
     assert(notification->data[0] == (uint64_t)addr);
     return notification->data[1];
   }
@@ -127,11 +127,11 @@ class DevBackend {
 
     _enso_compiler_memory_barrier();
 
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kTranslAddr;
-    pipe_notification.data[0] = (uint64_t)phys_addr;
-    pipe_notification.data[1] = 0;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct MmioNotification mmio_notification;
+    mmio_notification.type = NotifType::kTranslAddr;
+    mmio_notification.data[0] = (uint64_t)phys_addr;
+    mmio_notification.data[1] = 0;
+    while (queue_to_backend_->Push((PipeNotification)mmio_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -264,7 +264,6 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
-    printf("allocate pipe!\n");
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kAllocatePipe;
     pipe_notification.data[0] = fallback;
