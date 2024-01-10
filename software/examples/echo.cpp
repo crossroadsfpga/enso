@@ -56,9 +56,7 @@ void run_echo(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
   using enso::Device;
   using enso::RxTxPipe;
 
-  printf("creating device\n");
   std::unique_ptr<Device> dev = Device::Create();
-  std::cout << "created device\n" << std::endl;
   std::vector<RxTxPipe*> pipes;
 
   if (!dev) {
@@ -67,7 +65,6 @@ void run_echo(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
   }
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    printf("allocating pipe\n");
     RxTxPipe* pipe = dev->AllocateRxTxPipe();
     if (!pipe) {
       std::cerr << "Problem creating RX/TX pipe" << std::endl;
