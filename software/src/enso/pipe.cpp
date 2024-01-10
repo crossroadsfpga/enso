@@ -198,10 +198,6 @@ RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
   return pipe;
 }
 
-RxPipe* Device::GetRxPipe(uint16_t queue_id) noexcept {
-  return rx_pipes_map_[queue_id];
-}
-
 int Device::GetNbFallbackQueues() noexcept {
   return get_nb_fallback_queues(&notification_buf_pair_);
 }

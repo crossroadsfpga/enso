@@ -150,6 +150,12 @@ enum class NotifType : uint8_t {
   kGetShinkansenNotifBufId = 10
 };
 
+struct MmioNotification {
+  NotifType type;
+  uint64_t address;
+  uint64_t value;
+};
+
 struct PipeNotification {
   NotifType type;
   uint64_t data[6];
