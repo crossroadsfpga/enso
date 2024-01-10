@@ -67,7 +67,7 @@ void run_forward(uint32_t nb_queues, enso::stats_t* stats,
   }
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    RxPipe* rx_pipe = dev->AllocateRxPipe();
+    RxPipe* rx_pipe = dev->AllocateRxPipe(true);
     if (!rx_pipe) {
       std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);

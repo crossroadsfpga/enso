@@ -124,6 +124,9 @@ proc help {} {
     puts "chkmac_stats:           Check stats from Ethernet core."
     puts "enable_desc_per_pkt:    Enable sending a descriptors per packet."
     puts "disable_desc_per_pkt:   Disable sending a descriptors per packet."
+    puts "read_pcie <nb_reg>:     Read nb_reg MMIO registers starting from the first."
+    puts "read_pkt_queue <q_id>:  Read the 4 registers associated with packet queue q_id."
+    puts "read_dsc_queue <q_id>"  Read the 4 registers associated with descriptor queue q_id."
 }
 
 proc set_up {} {
