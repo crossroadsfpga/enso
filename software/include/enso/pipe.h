@@ -67,11 +67,19 @@ uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
-void init_devbackend(void* dev);
+/**
+* @brief Registers a new kthread for the IOKernel.
+*/
+void register_kthread(uint64_t kthread_waiters_phys_addr,
+                      uint32_t application_id);             
 
-sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id);
-
+/**
+* @brief Entry point for kthreads.
+*
+* @param arg Arguments for function: should be the kthread_t* object.
+*/
 void* kthread_entry(void* arg);
+
 /**
  * @brief A class that represents a device.
  *
@@ -133,15 +141,6 @@ class Device {
   RxPipe* AllocateRxPipe(bool fallback = false) noexcept;
 
   /**
-   * @brief Returns the RxPipe for the given queue ID.
-   *
-   * @param queue_id The queue ID of the requested pipe.
-   *
-   * @return A pointer to the pipe.
-   */
-  RxPipe* GetRxPipe(uint16_t queue_id) noexcept;
-
-  /**
    * @brief Allocates a TX pipe.
    *
    * @param buf Buffer address to use for the pipe. It must be a pinned
@@ -175,7 +174,8 @@ class Device {
   bool GetRrStatus() noexcept;
 
   /**
-   * @brief Applies the config described by the given transmission notification.
+   * @brief Applies the config described by the given transmission notification
+   * by sending the notification to the NIC.
    *
    * @return 0 on success, -1 on failure.
    */
@@ -392,7 +392,7 @@ class Device {
   /**
    * @brief Initializes the device.
    *
-   * @param application_id ID of the application creating this device.
+   * @param uthread_id ID of the uthread creating this device.
    *
    * @return 0 on success and a non-zero error code on failure.
    */

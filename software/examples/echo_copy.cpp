@@ -131,7 +131,6 @@ void run_echo_copy(void* arg) {
       auto& rx_pipe = rx_pipes[i];
       auto batch = rx_pipe->RecvPkts();
 
-      num_failed += 1;
       if (unlikely(batch.available_bytes() == 0)) {
         num_failed += 1;
         if (num_failed == MAX_ITERATIONS) {

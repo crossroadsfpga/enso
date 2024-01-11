@@ -57,6 +57,11 @@
 
 namespace enso {
 
+void register_kthread(uint64_t kthread_waiters_phys_addr,
+                      uint32_t application_id) {
+  pcie_register_kthread(kthread_waiters_phys_addr, application_id);
+}
+
 void* kthread_entry(void* arg) {
   sched::kthread_t* k = (sched::kthread_t*)arg;
   enso::set_self_core_id(k->curr_cpu);
@@ -205,10 +210,6 @@ RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
   rx_pipes_map_[pipe->id()] = pipe;
 
   return pipe;
-}
-
-RxPipe* Device::GetRxPipe(uint16_t queue_id) noexcept {
-  return rx_pipes_map_[queue_id];
 }
 
 int Device::GetNbFallbackQueues() noexcept {
@@ -360,7 +361,7 @@ int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 void Device::RegisterWaiting(sched::uthread_t* uthread) {
   uthread->last_rx_notif_head = notification_buf_pair_.rx_head;
   uthread->waiting = true;
-  register_waiting(uthread_id_, notification_buf_pair_.id);
+  pcie_register_waiting(notification_buf_pair_.id);
 }
 
 int Device::Init(uint32_t uthread_id) noexcept {

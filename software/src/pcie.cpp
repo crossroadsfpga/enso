@@ -719,9 +719,8 @@ uint64_t get_dev_addr_from_virt_addr(
   return dev_addr;
 }
 
-void register_waiting(uint32_t uthread_id, uint32_t notif_id) {
-  log_info("Uthread %u registered waiting", uthread_id);
-  DevBackend::register_waiting(uthread_id, notif_id);
+void pcie_register_waiting(uint32_t notif_id) {
+  DevBackend::register_waiting(notif_id);
 }
 
 void pcie_register_kthread(uint64_t kthread_waiters_phys_addr,

@@ -44,7 +44,6 @@
 #include <immintrin.h>
 
 #include <cstdio>
-#include <fastscheduler/defs.hpp>
 
 #include "../pcie.h"
 
@@ -222,11 +221,6 @@ int update_fallback_queues_config(
 
   return configure_fallback_queues(notification_buf_pair, nb_fallback_queues,
                                    (bool)enable_rr);
-}
-
-void register_kthread(uint64_t kthread_waiters_phys_addr,
-                      uint32_t application_id) {
-  pcie_register_kthread(kthread_waiters_phys_addr, application_id);
 }
 
 }  // namespace enso

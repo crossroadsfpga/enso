@@ -335,10 +335,9 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global);
 /**
  * @brief Registers a waiting uthread with the IOKernel.
  *
- * @param uthread_id The ID of the Uthread to register as waiting.
- * @param notif_id Its notification buffer ID.
+ * @param notif_id The uthread's notification buffer ID.
  */
-void register_waiting(uint32_t uthread_id, uint32_t notif_id);
+void pcie_register_waiting(uint32_t notif_id);
 
 /**
  * @brief Registers a kthread with the IOKernel.

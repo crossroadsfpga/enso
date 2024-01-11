@@ -212,12 +212,10 @@ class DevBackend {
    *
    * @param uthread_id
    */
-  static _enso_always_inline void register_waiting(uint32_t uthread_id,
-                                                   uint32_t notif_buf_id) {
+  static _enso_always_inline void register_waiting(uint32_t notif_buf_id) {
     struct PipeNotification pipe_notification;
     pipe_notification.type = NotifType::kWaiting;
-    pipe_notification.data[0] = (uint64_t)uthread_id;
-    pipe_notification.data[1] = (uint64_t)notif_buf_id;
+    pipe_notification.data[0] = (uint64_t)notif_buf_id;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
