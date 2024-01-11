@@ -77,7 +77,6 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 #endif
 }
 
-
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix,

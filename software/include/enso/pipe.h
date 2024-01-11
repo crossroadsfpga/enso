@@ -68,12 +68,6 @@ uint32_t external_peek_next_batch_from_queue(
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
 /**
-* @brief Registers a new kthread for the IOKernel.
-*/
-void register_kthread(uint64_t kthread_waiters_phys_addr,
-                      uint32_t application_id);             
-
-/**
 * @brief Entry point for kthreads.
 *
 * @param arg Arguments for function: should be the kthread_t* object.

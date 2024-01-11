@@ -79,10 +79,6 @@ class DevBackend {
     return dev;
   }
 
-  static void Init(DevBackend* dev) noexcept {
-    return;
-  }
-
   ~DevBackend() noexcept {}
 
   void* uio_mmap([[maybe_unused]] size_t size,

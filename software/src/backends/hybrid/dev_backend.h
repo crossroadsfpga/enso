@@ -74,23 +74,12 @@ class DevBackend {
       return nullptr;
     }
 
-    if (dev->Init(bdf, bar)) {
+    if (dev->Init()) {
       delete dev;
       return nullptr;
     }
 
     return dev;
-  }
-
-  static void Init(DevBackend* dev, unsigned int bdf, int bar) noexcept {
-    std::cerr << "Initializing hybrid backend" << std::endl;
-
-    if (dev->Init(bdf, bar)) {
-      delete dev;
-      return;
-    }
-
-    return;
   }
 
   ~DevBackend() noexcept {}
@@ -132,7 +121,7 @@ class DevBackend {
       *addr = value;
       return;
     }
-    
+
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {

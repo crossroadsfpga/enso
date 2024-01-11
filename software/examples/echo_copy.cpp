@@ -67,10 +67,6 @@ struct EchoArgs {
   uint32_t uthread_id;
 };
 
-std::array<enso::Device*, enso::kMaxNbFlows> uthread_devices;
-// need to increment this atomically
-uint32_t nb_uthreads;
-
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
 void run_echo_copy(void* arg) {

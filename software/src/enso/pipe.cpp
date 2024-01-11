@@ -57,15 +57,10 @@
 
 namespace enso {
 
-void register_kthread(uint64_t kthread_waiters_phys_addr,
-                      uint32_t application_id) {
-  pcie_register_kthread(kthread_waiters_phys_addr, application_id);
-}
-
 void* kthread_entry(void* arg) {
   sched::kthread_t* k = (sched::kthread_t*)arg;
   enso::set_self_core_id(k->curr_cpu);
-  register_kthread(0, k->application_id);
+  pcie_register_kthread(0, k->application_id);
   return sched::kthread_entry(arg);
 }
 
@@ -362,6 +357,11 @@ void Device::RegisterWaiting(sched::uthread_t* uthread) {
   uthread->last_rx_notif_head = notification_buf_pair_.rx_head;
   uthread->waiting = true;
   pcie_register_waiting(notification_buf_pair_.id);
+}
+
+void Device::RegisterKthread(uint64_t kthread_waiters_phys_addr,
+                       uint32_t application_id) {
+  pcie_register_kthread(kthread_waiters_phys_addr, application_id);
 }
 
 int Device::Init(uint32_t uthread_id) noexcept {
