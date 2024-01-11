@@ -215,7 +215,7 @@ int update_fallback_queues_config(
     return enable_rr;
   }
 
-  int nb_fallback_queues = get_nb_fallback_queues(k);
+  int nb_fallback_queues = get_nb_fallback_queues(notification_buf_pair);
   if (nb_fallback_queues < 0) {
     return nb_fallback_queues;
   }
