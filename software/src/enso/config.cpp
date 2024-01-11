@@ -191,7 +191,7 @@ static int set_round_robin(struct NotificationBufPair* notification_buf_pair,
     return nb_fallback_queues;
   }
 
-  if (set_round_robin_status(k, enable_rr)) {
+  if (set_round_robin_status(notification_buf_pair, enable_rr)) {
     return -1;
   }
 
