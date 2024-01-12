@@ -8,7 +8,21 @@ DEVICE_ID="0000"
 
 FPGA_NB=${1:-"1-13"}
 
+BITSTREAM_NAME="enso.sof"
+
 cd $SCRIPT_DIR
+
+# Check and download the bitstream
+if ! [ -f $PWD/$BITSTREAM_NAME ]; then
+    $PWD/update_bitstream.sh --download
+    if [ $? -eq 0 ]; then
+        echo "Programming bitstream now..."
+    else
+        echo "Failed: Could not download bitstream!"
+        exit 1
+    fi
+fi
+
 
 # We use taskset and chrt to benefit from multiple cores even when they are
 # isolated from the linux scheduler. This significantly speeds up loading the
