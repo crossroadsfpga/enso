@@ -33,12 +33,12 @@
  * @file: ensogen.cpp
  *
  * @brief: Packet generator program that uses the Enso library to send and
- * receive packets. It uses libpcap to read packets from a pcap file. The program
- * assumes that the file contains only minimum sized packets.
+ * receive packets. It uses libpcap to read and process packets from a pcap file.
  *
  * Example:
  *
- * sudo ./scripts/ensogen.sh ./scripts/sample_pcaps/2_64_1_2.pcap 100
+ * sudo ./scripts/ensogen.sh ./scripts/sample_pcaps/2_64_1_2.pcap 100 \
+ * --pcie-addr 65:00.0
  *
  * */
 
@@ -90,9 +90,6 @@
 // Minimum size of a packet aligned to cache (in bytes).
 #define MIN_PACKET_ALIGNED_SIZE             64
 
-// Minimum size of a raw packet read from the PCAP file (in bytes).
-#define MIN_PACKET_RAW_SIZE                 60
-
 // If defined, ignore received packets.
 // #define IGNORE_RX
 
@@ -129,9 +126,6 @@
 // Size of the buffer that we keep packets in.
 #define BUFFER_SIZE enso::kMaxTransferLen
 
-// Num of min sized packets that would fit in a BUFFER_SIZE bytes buffer
-#define MAX_PKTS_IN_BUFFER 2048
-
 // Number of transfers required to send a buffer full of packets.
 #define TRANSFERS_PER_BUFFER (((BUFFER_SIZE - 1) / enso::kMaxTransferLen) + 1)
 
@@ -163,7 +157,7 @@ using enso::TxPipe;
  * Structure Definitions
  *****************************************************************************/
 /*
- * @brief: Structure to store the command linde arguments.
+ * @brief: Structure to store the command line arguments.
  *
  * */
 struct parsed_args_t {
@@ -186,19 +180,42 @@ struct parsed_args_t {
 };
 
 /*
- * @brief: Structure to store the PCAP related variables that need
- * to be passed to the callback function.
+ * @brief: Structure to store an Enso TxPipe object and attributes related
+ * to it.
+ *
+ * */
+struct EnsoTxPipe {
+  EnsoTxPipe(TxPipe *pipe)
+            : tx_pipe(pipe), nb_aligned_bytes(0), nb_raw_bytes(0),
+              nb_pkts(0) {}
+  // Enso TxPipe
+  TxPipe *tx_pipe;
+  // Number of cache aligned bytes in the pipe
+  uint32_t nb_aligned_bytes;
+  // Number of raw bytes in the pipe
+  uint32_t nb_raw_bytes;
+  // Number of packets in the pipe
+  uint32_t nb_pkts;
+};
+
+
+/*
+ * @brief: Structure to store variables needed for processing the PCAP
+ * file and are passed to the callback function.
  *
  * */
 struct PcapHandlerContext {
-  // Buffer to store the packet data
+  PcapHandlerContext(std::unique_ptr<Device> &dev_, pcap_t* pcap_) :
+                     dev(dev_), buf(NULL), free_flits_cur_pipe(0),
+                     pcap(pcap_) {}
+  // Pointer to Enso device
+  std::unique_ptr<Device> &dev;
+  // Pipes to store the packets from the PCAP file
+  std::vector<struct EnsoTxPipe> tx_pipes;
+  // Pointer to the buffer of the current pipe
   uint8_t *buf;
-  // Total number of packet bytes aligned to the cache
-  uint32_t nb_bytes;
-  // Total number of raw packet bytes
-  uint32_t nb_good_bytes;
-  // Total number of packets
-  uint32_t nb_pkts;
+  // Total number of free flits in the current pipe
+  uint32_t free_flits_cur_pipe;
   // libpcap object associated with the opened PCAP file
   pcap_t* pcap;
 };
@@ -211,8 +228,8 @@ struct RxStats {
   explicit RxStats(uint32_t rtt_hist_len = 0, uint32_t rtt_hist_offset = 0)
       : pkts(0),
         bytes(0),
-        rtt_sum(0),
         nb_batches(0),
+        rtt_sum(0),
         rtt_hist_len(rtt_hist_len),
         rtt_hist_offset(rtt_hist_offset) {
     if (rtt_hist_len > 0) {
@@ -236,15 +253,20 @@ struct RxStats {
     if (unlikely((rtt >= (rtt_hist_len - rtt_hist_offset)) ||
                  (rtt < rtt_hist_offset))) {
       backup_rtt_hist[rtt]++;
-    } else {
+    }
+    else {
       rtt_hist[rtt - rtt_hist_offset]++;
     }
   }
 
+  // Number of packets received
   uint64_t pkts;
+  // Number of bytes received
   uint64_t bytes;
-  uint64_t rtt_sum;
+  // Number of RxNotifications or batches
   uint64_t nb_batches;
+  // RTT calculation related
+  uint64_t rtt_sum;
   const uint32_t rtt_hist_len;
   const uint32_t rtt_hist_offset;
   uint64_t* rtt_hist;
@@ -261,8 +283,11 @@ struct RxArgs {
         enable_rtt(enbl_rtt),
         enable_rtt_history(enbl_rtt_hist),
         dev(dev_) {}
+  // Check for whether RTT needs to be calculated
   bool enable_rtt;
+  // Check for whether RTT history needs to be calculated
   bool enable_rtt_history;
+  // Pointer to the Enso device
   std::unique_ptr<Device> &dev;
 };
 
@@ -272,7 +297,9 @@ struct RxArgs {
  * */
 struct TxStats {
   TxStats() : pkts(0), bytes(0) {}
+  // Number of packets received
   uint64_t pkts;
+  // Number of bytes received
   uint64_t bytes;
 };
 
@@ -282,20 +309,30 @@ struct TxStats {
  *
  * */
 struct TxArgs {
-  TxArgs(TxPipe *pipe, uint64_t pkts_in_buf, uint64_t total_pkts_to_send,
-         std::unique_ptr<Device> &dev_)
-        : tx_pipe(pipe),
-          pkts_in_pipe(pkts_in_buf),
-          total_remaining_pkts(total_pkts_to_send),
+  TxArgs(std::vector<struct EnsoTxPipe> &pipes, uint64_t total_aligned_bytes,
+         uint64_t total_raw_bytes, uint64_t pkts_in_last_pipe,
+         uint32_t pipes_size, std::unique_ptr<Device> &dev_)
+        : tx_pipes(pipes),
+          total_remaining_aligned_bytes(total_aligned_bytes),
+          total_remaining_raw_bytes(total_raw_bytes),
+          nb_pkts_in_last_pipe(pkts_in_last_pipe),
+          cur_ind(0),
+          total_pipes(pipes_size),
           transmissions_pending(0),
           ignored_reclaims(0),
           dev(dev_) {}
-  // TxPipe associated with the thread
-  TxPipe *tx_pipe;
-  // Total number of packets in the pipe
-  uint64_t pkts_in_pipe;
-  // Total number of pakcets that need to be sent
-  uint64_t total_remaining_pkts;
+  // TxPipes handled by the thread
+  std::vector<struct EnsoTxPipe> &tx_pipes;
+  // Number of aligned bytes that need to be sent
+  uint64_t total_remaining_aligned_bytes;
+  // Number of raw bytes that need to be sent
+  uint64_t total_remaining_raw_bytes;
+  // Number of packets in the last pipe - needed for stats calculation
+  uint64_t nb_pkts_in_last_pipe;
+  // Index in tx_pipes vector. Points to the current pipe being sent
+  uint32_t cur_ind;
+  // Total number of pipes in tx_pipes vector
+  uint32_t total_pipes;
   // Total number of notifications created and sent by the application
   uint32_t transmissions_pending;
   // Used to track the number of times the thread did not check for notification
@@ -496,8 +533,7 @@ static int parse_args(int argc, char** argv,
 
 /*
  * @brief: libpcap callback registered by the main function. Called for each
- * packet present in the PCAP file by libpcap. . We assume that the PCAP file
- * provided by the user has `MAX_PKTS_IN_BUFFER` number of packets at max.
+ * packet present in the PCAP file by libpcap.
  *
  * @param user: Structure allocated in main to read and store relevant information.
  * @param pkt_hdr: Contains packet metadata like timestamp, length, etc. (UNUSED)
@@ -506,7 +542,7 @@ static int parse_args(int argc, char** argv,
  * */
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
-  (void)pkt_hdr;
+  (void) pkt_hdr;
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
 
   const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
@@ -515,19 +551,35 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
     free(context->buf);
     exit(8);
   }
-  context->nb_pkts++;
-  if(context->nb_pkts > MAX_PKTS_IN_BUFFER) {
-    std::cerr << "Only " << MAX_PKTS_IN_BUFFER << " can be in the PCAP file"
-              << std::endl;
-    free(context->buf);
-    exit(9);
-  }
 
   uint32_t len = enso::get_pkt_len(pkt_bytes);
   uint32_t nb_flits = (len - 1) / MIN_PACKET_ALIGNED_SIZE + 1;
-  memcpy(context->buf + context->nb_bytes, pkt_bytes, len);
-  context->nb_bytes += nb_flits * MIN_PACKET_ALIGNED_SIZE;
-  context->nb_good_bytes += len;
+
+  if (nb_flits > context->free_flits_cur_pipe) {
+    // initialize a new pipe
+    TxPipe* tx_pipe = context->dev->AllocateTxPipe();
+    if (!tx_pipe) {
+      std::cerr << "Problem creating TX pipe" << std::endl;
+      pcap_breakloop(context->pcap);
+      return;
+    }
+    struct EnsoTxPipe enso_tx_pipe(tx_pipe);
+    context->tx_pipes.push_back(enso_tx_pipe);
+    context->free_flits_cur_pipe = BUFFER_SIZE / MIN_PACKET_ALIGNED_SIZE;
+    context->buf = tx_pipe->buf();
+  }
+
+  // We copy the packets in the pipe's buffer in multiples of 64 bytes
+  // or MIN_PACKET_ALIGNED SIZE. However, we also keep track of the number
+  // of raw bytes on a per pipe basis since we need it for stats calculation.
+  struct EnsoTxPipe& tx_pipe = context->tx_pipes.back();
+  uint8_t* dest = context->buf + tx_pipe.nb_aligned_bytes;
+  memcpy(dest, pkt_bytes, len);
+
+  tx_pipe.nb_aligned_bytes += nb_flits * MIN_PACKET_ALIGNED_SIZE;
+  tx_pipe.nb_raw_bytes += len;
+  tx_pipe.nb_pkts++;
+  context->free_flits_cur_pipe -= nb_flits;
 }
 
 /*
@@ -567,14 +619,14 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
     }
 
     recv_bytes += pkt_len;
-    ++nb_pkts;
+    nb_pkts++;
   }
 
   uint32_t batch_length = batch.processed_bytes();
   rx_pipe->ConfirmBytes(batch_length);
 
   rx_stats.pkts += nb_pkts;
-  ++(rx_stats.nb_batches);
+  rx_stats.nb_batches++;
   rx_stats.bytes += recv_bytes;
 
   rx_pipe->Clear();
@@ -597,35 +649,50 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
  * */
 inline void transmit_pkts(struct TxArgs& tx_args,
                           struct TxStats& tx_stats) {
-  // decide whether we need to send an entire buffer worth of packets
-  // or less than that based on user request
-  uint32_t nb_pkts_to_send = std::min(tx_args.pkts_in_pipe,
-                                      tx_args.total_remaining_pkts);
-  // the packets are copied in the main buffer based on the minimum packet size
-  uint32_t transmission_length = nb_pkts_to_send * MIN_PACKET_ALIGNED_SIZE;
+  // Avoid transmitting new data when too many TX notifications are pending
+  const uint32_t buf_fill_thresh = enso::kNotificationBufSize
+                                   - TRANSFERS_PER_BUFFER - 1;
+  if (likely(tx_args.transmissions_pending < buf_fill_thresh)) {
+    struct EnsoTxPipe &cur_pipe = tx_args.tx_pipes[tx_args.cur_ind];
+    uint32_t transmission_length = std::min(tx_args.total_remaining_aligned_bytes,
+                                            (uint64_t) cur_pipe.nb_aligned_bytes);
+    uint32_t transmission_raw_length = std::min(tx_args.total_remaining_raw_bytes,
+                                                (uint64_t) cur_pipe.nb_raw_bytes);
 
-  // send the packets
-  uint64_t buf_phys_addr = tx_args.tx_pipe->GetBufPhysAddr();
-  tx_args.dev->SendOnly(buf_phys_addr, transmission_length);
+    uint64_t buf_phys_addr = cur_pipe.tx_pipe->GetBufPhysAddr();
+    tx_args.dev->SendOnly(buf_phys_addr, transmission_length);
+    tx_args.transmissions_pending++;
+    tx_args.total_remaining_aligned_bytes -= transmission_length;
+    tx_args.total_remaining_raw_bytes -= transmission_raw_length;
 
-  // update the stats
-  // the stats need be calculated based on good bytes
-  // rather than the transmission length
-  tx_stats.pkts += nb_pkts_to_send;
-  tx_stats.bytes += nb_pkts_to_send * MIN_PACKET_RAW_SIZE;
-  tx_args.total_remaining_pkts -= nb_pkts_to_send;
-  if(tx_args.total_remaining_pkts == 0) {
-    keep_running = 0;
-    return;
+    // update the stats
+    // the stats need be calculated based on raw bytes
+    tx_stats.bytes += transmission_raw_length;
+    if(tx_args.total_remaining_aligned_bytes == 0) {
+      keep_running = 0;
+      tx_stats.pkts += tx_args.nb_pkts_in_last_pipe;
+      return;
+    }
+    tx_stats.pkts += cur_pipe.nb_pkts;
+
+    // move to the next pipe
+    tx_args.cur_ind = (tx_args.cur_ind + 1) % tx_args.total_pipes;
   }
 
   // Reclaim TX notification buffer space.
   if ((tx_args.transmissions_pending > (enso::kNotificationBufSize / 4))) {
     if (tx_args.ignored_reclaims > TX_RECLAIM_DELAY) {
       tx_args.ignored_reclaims = 0;
-      tx_args.transmissions_pending -= tx_args.dev->ProcessCompletionsOnly();
-    } else {
-      ++tx_args.ignored_reclaims;
+      uint32_t num_processed = tx_args.dev->ProcessCompletionsOnly();
+      if(num_processed > tx_args.transmissions_pending) {
+        tx_args.transmissions_pending = 0;
+      }
+      else {
+        tx_args.transmissions_pending -= num_processed;
+      }
+    }
+    else {
+      tx_args.ignored_reclaims++;
     }
   }
 }
@@ -637,8 +704,13 @@ inline void transmit_pkts(struct TxArgs& tx_args,
  *
  * */
 inline void reclaim_all_buffers(struct TxArgs& tx_args) {
-  while (tx_args.transmissions_pending) {
-    tx_args.transmissions_pending -= tx_args.dev->ProcessCompletionsOnly();
+  while (tx_args.transmissions_pending > 0) {
+    uint32_t num_processed = tx_args.dev->ProcessCompletionsOnly();
+    if(num_processed > tx_args.transmissions_pending) {
+      tx_args.transmissions_pending = 0;
+      break;
+    }
+    tx_args.transmissions_pending -= num_processed;
   }
 }
 
@@ -653,6 +725,12 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  std::unique_ptr<Device> dev = Device::Create(parsed_args.pcie_addr);
+  if (!dev) {
+    std::cerr << "Problem creating device" << std::endl;
+    exit(2);
+  }
+
   char errbuf[PCAP_ERRBUF_SIZE];
 
   pcap_t* pcap = pcap_open_offline(parsed_args.pcap_file.c_str(), errbuf);
@@ -661,21 +739,11 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  // we copy the packets in this buffer using libpcap
-  uint8_t *pkt_buf = (uint8_t *) malloc(BUFFER_SIZE);
-  if(pkt_buf == NULL) {
-    std::cerr << "Could not allocate packet buffer" << std::endl;
-    exit(1);
-  }
+  struct PcapHandlerContext context(dev, pcap);
 
-  struct PcapHandlerContext context;
-  context.pcap = pcap;
-  context.buf = pkt_buf;
-  context.nb_bytes = 0;
-  context.nb_good_bytes = 0;
-  context.nb_pkts = 0;
+  std::vector<struct EnsoTxPipe> &tx_pipes = context.tx_pipes;
 
-  // Initialize packet buffers with packets read from pcap file.
+  // Initialize pipes with packets read from pcap file.
   if (pcap_loop(pcap, 0, pcap_pkt_handler, (u_char*)&context) < 0) {
     std::cerr << "Error while reading pcap (" << pcap_geterr(pcap) << ")"
               << std::endl;
@@ -684,26 +752,78 @@ int main(int argc, char** argv) {
 
   // For small pcaps we copy the same packets over the remaining of the
   // buffer. This reduces the number of transfers that we need to issue.
-  if (context.nb_bytes < BUFFER_SIZE) {
-    uint32_t original_buf_length = context.nb_bytes;
-    uint32_t original_nb_pkts = context.nb_pkts;
-    uint32_t original_good_bytes = context.nb_good_bytes;
-    while ((context.nb_bytes + original_buf_length) <= BUFFER_SIZE) {
-      memcpy(pkt_buf + context.nb_bytes, pkt_buf, original_buf_length);
-      context.nb_bytes += original_buf_length;
-      context.nb_pkts += original_nb_pkts;
-      context.nb_good_bytes += original_good_bytes;
+  // If there is only one pipe, nb_bytes contains the number of bytes
+  // in that pipe only.
+  if ((tx_pipes.size() == 1) &&
+      (tx_pipes.front().nb_aligned_bytes < BUFFER_SIZE / 2)) {
+    struct EnsoTxPipe& tx_pipe = tx_pipes.front();
+    uint8_t *pipe_buf = tx_pipe.tx_pipe->buf();
+    uint32_t cur_buf_length = tx_pipe.nb_aligned_bytes;
+    uint32_t original_buf_length = cur_buf_length;
+    uint32_t original_nb_pkts = tx_pipe.nb_pkts;
+    uint32_t original_raw_bytes = tx_pipe.nb_raw_bytes;
+    while ((cur_buf_length + original_buf_length) <= BUFFER_SIZE) {
+      memcpy(pipe_buf + cur_buf_length, pipe_buf, original_buf_length);
+      cur_buf_length += original_buf_length;
+      tx_pipe.nb_pkts += original_nb_pkts;
+      tx_pipe.nb_raw_bytes += original_raw_bytes;
     }
+    tx_pipe.nb_aligned_bytes = cur_buf_length;
   }
 
-  uint64_t total_pkts_in_buffer = context.nb_pkts;
-  uint64_t total_pkts_to_send;
+  // calculate total aligned bytes, raw bytes and packets in all the pipes
+  uint64_t total_pkts_in_pipes = 0;
+  uint64_t total_aligned_bytes_in_pipes = 0;
+  uint64_t total_raw_bytes_in_pipes = 0;
+  for (auto& pipe : tx_pipes) {
+    total_pkts_in_pipes += pipe.nb_pkts;
+    total_aligned_bytes_in_pipes += pipe.nb_aligned_bytes;
+    total_raw_bytes_in_pipes += pipe.nb_raw_bytes;
+  }
+
+  // Handling the --count option. calculate the number of bytes that
+  // need to be sent. if the user requests 'x' packets, we start sending
+  // from the start of the first pipe (order is the same as the PCAP file)
+  // and wrap around if x is greater than total_pkts_in_pipes.
+  uint64_t total_aligned_bytes_to_send;
+  uint64_t total_raw_bytes_to_send;
+  uint64_t pkts_in_last_pipe = 0;
   if (parsed_args.nb_pkts > 0) {
-    total_pkts_to_send = parsed_args.nb_pkts;
-  } else {
+    uint64_t nb_full_iters = parsed_args.nb_pkts / total_pkts_in_pipes;
+    uint64_t nb_pkts_remaining = parsed_args.nb_pkts % total_pkts_in_pipes;
+
+    total_aligned_bytes_to_send = nb_full_iters * total_aligned_bytes_in_pipes;
+    total_raw_bytes_to_send = nb_full_iters * total_raw_bytes_in_pipes;
+
+    if (nb_pkts_remaining == 0) {
+      pkts_in_last_pipe = tx_pipes.back().nb_pkts;
+    }
+
+    // calculate the length of the first 'x % total_pkts_in_pipes' packets
+    for (auto& pipe : tx_pipes) {
+      if (nb_pkts_remaining < pipe.nb_pkts) {
+        uint8_t* pkt = pipe.tx_pipe->buf();
+        while (nb_pkts_remaining > 0) {
+          uint16_t pkt_len = enso::get_pkt_len(pkt);
+          uint16_t nb_flits = (pkt_len - 1) / 64 + 1;
+
+          total_aligned_bytes_to_send += nb_flits * 64;
+          nb_pkts_remaining--;
+          pkts_in_last_pipe++;
+
+          pkt = enso::get_next_pkt(pkt);
+        }
+        break;
+      }
+      total_aligned_bytes_to_send += pipe.nb_aligned_bytes;
+      nb_pkts_remaining -= pipe.nb_pkts;
+    }
+  }
+  else {
     // Treat nb_pkts == 0 as unbounded. The following value should be enough
     // to send 64-byte packets for around 400 years using Tb Ethernet.
-    total_pkts_to_send = 0xffffffffffffffff;
+    total_aligned_bytes_to_send = 0xffffffffffffffff;
+    total_raw_bytes_to_send = 0xffffffffffffffff;
   }
 
   uint32_t rtt_hist_len = 0;
@@ -721,13 +841,6 @@ int main(int argc, char** argv) {
 
   std::vector<std::thread> threads;
 
-  std::unique_ptr<Device> dev = Device::Create(parsed_args.pcie_addr);
-  if (!dev) {
-    std::cerr << "Problem creating device" << std::endl;
-    free(pkt_buf);
-    exit(2);
-  }
-
   // When using single_core we use the same thread for RX and TX, otherwise we
   // launch separate threads for RX and TX.
   if (!parsed_args.single_core) {
@@ -736,7 +849,7 @@ int main(int argc, char** argv) {
 
       std::vector<RxPipe*> rx_pipes;
 
-      for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
+      for (uint32_t i = 0; i < parsed_args.nb_queues; i++) {
         // we create fallback queues by passing true in AllocateRxPipe
         RxPipe* rx_pipe = dev->AllocateRxPipe(true);
         if (!rx_pipe) {
@@ -774,8 +887,9 @@ int main(int argc, char** argv) {
       while (!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
         uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
         if (unlikely(nb_pkts == 0)) {
-          ++nb_iters_no_pkt;
-        } else {
+          nb_iters_no_pkt++;
+        }
+        else {
           nb_iters_no_pkt = 0;
         }
       }
@@ -792,30 +906,17 @@ int main(int argc, char** argv) {
     });
 
     std::thread tx_thread = std::thread(
-        [pkt_buf, total_pkts_in_buffer, total_pkts_to_send,
-         &parsed_args, &tx_stats, &dev] {
+        [total_aligned_bytes_to_send, total_raw_bytes_to_send,
+         pkts_in_last_pipe, &parsed_args, &tx_stats, &dev, &tx_pipes] {
           std::this_thread::sleep_for(std::chrono::seconds(1));
-
-          TxPipe* tx_pipe = dev->AllocateTxPipe();
-          if (!tx_pipe) {
-            std::cerr << "Problem creating TX pipe" << std::endl;
-            exit(3);
-          }
-          // allocate the bytes in the TX pipe and copy the required
-          // number of bytes from the main buffer
-          uint32_t pipe_alloc_len = total_pkts_in_buffer * MIN_PACKET_ALIGNED_SIZE;
-          uint8_t* pipe_buf = tx_pipe->AllocateBuf(pipe_alloc_len);
-          if(pipe_buf == NULL) {
-            std::cout << "Buffer allocation for TX pipe failed" << std::endl;
-            return;
-          }
-          memcpy(pipe_buf, pkt_buf, pipe_alloc_len);
 
           while (!rx_ready) continue;
 
           std::cout << "Running TX on core " << sched_getcpu() << std::endl;
 
-          TxArgs tx_args(tx_pipe, total_pkts_in_buffer, total_pkts_to_send, dev);
+          TxArgs tx_args(tx_pipes, total_aligned_bytes_to_send,
+                         total_raw_bytes_to_send, pkts_in_last_pipe,
+                         tx_pipes.size(), dev);
 
           while (keep_running) {
             transmit_pkts(tx_args, tx_stats);
@@ -850,17 +951,18 @@ int main(int argc, char** argv) {
 
     threads.push_back(std::move(rx_thread));
     threads.push_back(std::move(tx_thread));
-
-  } else {
+  }
+  else {
     // Send and receive packets within the same thread.
     std::thread rx_tx_thread = std::thread(
-        [pkt_buf, total_pkts_in_buffer, total_pkts_to_send,
-         &parsed_args, &tx_stats, &rx_stats, &dev] {
+        [total_aligned_bytes_to_send, total_raw_bytes_to_send,
+         pkts_in_last_pipe, &parsed_args, &tx_stats, &rx_stats,
+         &dev, &tx_pipes] {
           std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
           std::vector<RxPipe*> rx_pipes;
 
-          for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
+          for (uint32_t i = 0; i < parsed_args.nb_queues; i++) {
             // we create fallback queues by passing true in AllocateRxPipe
             RxPipe* rx_pipe = dev->AllocateRxPipe(true);
             if (!rx_pipe) {
@@ -887,23 +989,9 @@ int main(int argc, char** argv) {
                          parsed_args.enable_rtt_history,
                          dev);
 
-          TxPipe* tx_pipe = dev->AllocateTxPipe();
-          if (!tx_pipe) {
-            std::cerr << "Problem creating TX pipe" << std::endl;
-            exit(3);
-          }
-
-          // allocate the bytes in the TX pipe and copy the required
-          // number of bytes from the main buffer
-          uint32_t pipe_alloc_len = total_pkts_in_buffer * MIN_PACKET_ALIGNED_SIZE;
-          uint8_t* pipe_buf = tx_pipe->AllocateBuf(pipe_alloc_len);
-          if(pipe_buf == NULL) {
-            std::cout << "Buffer allocation for TX pipe failed" << std::endl;
-            return;
-          }
-          memcpy(pipe_buf, pkt_buf, pipe_alloc_len);
-
-          TxArgs tx_args(tx_pipe, total_pkts_in_buffer, total_pkts_to_send, dev);
+          TxArgs tx_args(tx_pipes, total_aligned_bytes_to_send,
+                         total_raw_bytes_to_send, pkts_in_last_pipe,
+                         tx_pipes.size(), dev);
 
           rx_ready = 1;
 
@@ -920,8 +1008,9 @@ int main(int argc, char** argv) {
           while (!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
             uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
             if (unlikely(nb_pkts == 0)) {
-              ++nb_iters_no_pkt;
-            } else {
+              nb_iters_no_pkt++;
+            }
+            else {
               nb_iters_no_pkt = 0;
             }
           }
@@ -957,8 +1046,8 @@ int main(int argc, char** argv) {
     std::ofstream save_file;
     save_file.open(parsed_args.save_file);
     save_file
-        << "rx_goodput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
-           "tx_goodput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
+        << "rx_rawput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
+           "tx_rawput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
     if (parsed_args.enable_rtt) {
       save_file << ",mean_rtt_ns";
     }
@@ -991,15 +1080,15 @@ int main(int argc, char** argv) {
     double interval_s = (double) parsed_args.stats_delay / ONE_THOUSAND;
 
     uint64_t rx_pkt_diff = rx_pkts - last_rx_pkts;
-    uint64_t rx_goodput_mbps =
+    uint64_t rx_rawput_mbps =
         (rx_bytes - last_rx_bytes) * 8. / (ONE_MILLION * interval_s);
     uint64_t rx_pkt_rate = (rx_pkt_diff / interval_s);
     uint64_t rx_pkt_rate_kpps = rx_pkt_rate / ONE_THOUSAND;
-    uint64_t rx_tput_mbps = rx_goodput_mbps + FPGA_PACKET_OVERHEAD
+    uint64_t rx_tput_mbps = rx_rawput_mbps + FPGA_PACKET_OVERHEAD
                             * 8 * rx_pkt_rate / ONE_MILLION;
 
     uint64_t tx_pkt_diff = tx_pkts - last_tx_pkts;
-    uint64_t tx_goodput_mbps =
+    uint64_t tx_rawput_mbps =
         (tx_bytes - last_tx_bytes) * 8. / (ONE_MILLION * interval_s);
     uint64_t tx_tput_mbps =
         (tx_bytes - last_tx_bytes + tx_pkt_diff * FPGA_PACKET_OVERHEAD) * 8.
@@ -1011,7 +1100,8 @@ int main(int argc, char** argv) {
     uint64_t rtt_ns;
     if (rx_pkt_diff != 0) {
       rtt_ns = (rtt_sum_ns - last_aggregated_rtt_ns) / rx_pkt_diff;
-    } else {
+    }
+    else {
       rtt_ns = 0;
     }
 
@@ -1034,9 +1124,9 @@ int main(int argc, char** argv) {
     if (parsed_args.save) {
       std::ofstream save_file;
       save_file.open(parsed_args.save_file, std::ios_base::app);
-      save_file << rx_goodput_mbps << "," << rx_tput_mbps << ","
+      save_file << rx_rawput_mbps << "," << rx_tput_mbps << ","
                 << rx_pkt_rate_kpps << "," << rx_bytes << "," << rx_pkts << ","
-                << tx_goodput_mbps << "," << tx_pkt_rate_kpps << ","
+                << tx_rawput_mbps << "," << tx_pkt_rate_kpps << ","
                 << tx_tput_mbps << "," << tx_bytes << "," << tx_pkts;
       if (parsed_args.enable_rtt) {
         save_file << "," << rtt_ns;
@@ -1058,7 +1148,7 @@ int main(int argc, char** argv) {
     std::ofstream hist_file;
     hist_file.open(parsed_args.hist_file);
 
-    for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
+    for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; rtt++) {
       if (rx_stats.rtt_hist[rtt] != 0) {
         uint32_t corrected_rtt =
             (rtt + parsed_args.rtt_hist_offset) * enso::kNsPerTimestampCycle;
@@ -1090,7 +1180,6 @@ int main(int argc, char** argv) {
     thread.join();
   }
 
-  free(pkt_buf);
   dev.reset();
   return ret;
 }
