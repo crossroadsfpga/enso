@@ -121,6 +121,7 @@ class EnsoDev {
   int get_next_batch(int notif_id, bool peek, int &pipe_id, uint32_t &pipe_head);
   int advance_pipe(int pipe_id, size_t len);
   int next_rx_pipe_to_recv();
+  int prefetch_pipe(int pipe_id);
  private:
   /**
    * Class should be instantiated via the Create() factory method.

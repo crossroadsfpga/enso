@@ -54,25 +54,6 @@ using enso_pipe_id_t = uint16_t;
 using enso_pipe_id_t = uint32_t;
 #endif
 
-struct QueueRegs {
-  uint32_t rx_tail;
-  uint32_t rx_head;
-  uint32_t rx_mem_low;
-  uint32_t rx_mem_high;
-  uint32_t tx_tail;
-  uint32_t tx_head;
-  uint32_t tx_mem_low;
-  uint32_t tx_mem_high;
-  uint32_t padding[8];
-};
-
-struct __attribute__((__packed__)) RxNotification {
-  uint64_t signal;
-  uint64_t queue_id;
-  uint64_t tail;
-  uint64_t pad[5];
-};
-
 struct __attribute__((__packed__)) TxNotification {
   uint64_t signal;
   uint64_t phys_addr;
@@ -81,37 +62,14 @@ struct __attribute__((__packed__)) TxNotification {
 };
 
 struct NotificationBufPair {
-  // First cache line:
-  struct RxNotification* rx_buf;
-  enso_pipe_id_t* next_rx_pipe_ids;  // Next pipe ids to consume from rx_buf.
-  struct TxNotification* tx_buf;
-  uint32_t* rx_head_ptr;
-  uint32_t* tx_tail_ptr;
-  uint32_t rx_head;
-  uint32_t tx_head;
-  uint32_t tx_tail;
-  uint16_t next_rx_ids_head;
-  uint16_t next_rx_ids_tail;
-  uint32_t nb_unreported_completions;
   uint32_t id;
-
-  // Second cache line:
-  struct QueueRegs* regs;
-  uint64_t tx_full_cnt;
-  uint32_t ref_cnt;
-
-  uint8_t* wrap_tracker;
-  uint32_t* pending_rx_pipe_tails;
-
-  void* fpga_dev;            // Avoid exposing `DevBackend` externally.
-  void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
+  void* fpga_dev;
   std::string huge_page_prefix;
 };
 
 struct RxEnsoPipeInternal {
   uint32_t* buf;
   uint64_t buf_phys_addr;
-  struct QueueRegs* regs;
   uint32_t* buf_head_ptr;
   uint32_t rx_head;
   uint32_t rx_tail;

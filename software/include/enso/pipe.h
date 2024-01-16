@@ -62,10 +62,6 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
-uint32_t external_peek_next_batch_from_queue(
-    struct RxEnsoPipeInternal* enso_pipe,
-    struct NotificationBufPair* notification_buf_pair, void** buf);
-
 /**
  * @brief A class that represents a device.
  *

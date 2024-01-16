@@ -237,9 +237,13 @@ int EnsoDev::advance_pipe(int pipe_id, size_t len) {
 
 int EnsoDev::next_rx_pipe_to_recv() {
   int result;
-  int abcd = 5;
-  result = ioctl(m_dev_handle, ENSO_IOCTL_NEXT_RX_PIPE_RCV, abcd);
+  result = ioctl(m_dev_handle, ENSO_IOCTL_NEXT_RX_PIPE_RCV, 0);
   return result;
+}
+
+int EnsoDev::prefetch_pipe(int pipe_id) {
+  (void) pipe_id;
+  return 0;
 }
 
 }  // namespace enso_api

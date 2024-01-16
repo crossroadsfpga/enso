@@ -56,12 +56,6 @@
 
 namespace enso {
 
-uint32_t external_peek_next_batch_from_queue(
-    struct RxEnsoPipeInternal* enso_pipe,
-    struct NotificationBufPair* notification_buf_pair, void** buf) {
-  return peek_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
-}
-
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
   insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip, src_ip,
@@ -76,11 +70,6 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
-  /*if (!next_pipe_) {
-    get_new_tails(notification_buf_pair_);
-  }*/
-  /*uint32_t ret = peek_next_batch_from_queue(
-      &internal_rx_pipe_, notification_buf_pair_, (void**)buf);*/
   uint32_t ret = 0;
   if(!next_pipe_) {
     ret = consume_rx_kernel(&internal_rx_pipe_, notification_buf_pair_,
@@ -94,13 +83,16 @@ inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 void RxPipe::Free(uint32_t nb_bytes) {
-  // advance_pipe(&internal_rx_pipe_, nb_bytes);
   advance_pipe_kernel(notification_buf_pair_, &internal_rx_pipe_, nb_bytes);
 }
 
-void RxPipe::Prefetch() { prefetch_pipe(&internal_rx_pipe_); }
+void RxPipe::Prefetch() {
+  prefetch_pipe(&internal_rx_pipe_, notification_buf_pair_);
+}
 
-void RxPipe::Clear() { fully_advance_pipe_kernel(&internal_rx_pipe_, notification_buf_pair_); }
+void RxPipe::Clear() {
+  fully_advance_pipe_kernel(&internal_rx_pipe_, notification_buf_pair_);
+}
 
 RxPipe::~RxPipe() {
   enso_pipe_free(notification_buf_pair_, &internal_rx_pipe_, id_);
@@ -256,22 +248,6 @@ RxPipe* Device::NextRxPipeToRecv() {
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
   id = get_next_enso_pipe_id_kernel(&notification_buf_pair_);
 
-  /*while (id >= 0) {
-    RxPipe* rx_pipe = rx_pipes_map_[id];
-    assert(rx_pipe != nullptr);
-
-    RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
-    uint32_t enso_pipe_head = pipe.rx_tail;
-    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
-
-    if (enso_pipe_head != enso_pipe_tail) {
-      rx_pipe->Prefetch();
-      break;
-    }
-
-    id = get_next_enso_pipe_id(&notification_buf_pair_);
-  }*/
-
 #else  // !LATENCY_OPT
   id = get_next_enso_pipe_id(&notification_buf_pair_);
 
@@ -286,6 +262,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   return rx_pipe;
 }
 
+// TODO Kshitij: Update this function with the right kernel API
 RxTxPipe* Device::NextRxTxPipeToRecv() {
   ProcessCompletions();
   // This function can only be used when there are only RxTx pipes.
@@ -294,23 +271,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
-
-  while (id >= 0) {
-    RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
-    assert(rx_tx_pipe->rx_pipe_ != nullptr);
-
-    RxEnsoPipeInternal& pipe = rx_tx_pipe->rx_pipe_->internal_rx_pipe_;
-    uint32_t enso_pipe_head = pipe.rx_tail;
-    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
-
-    if (enso_pipe_head != enso_pipe_tail) {
-      rx_tx_pipe->Prefetch();
-      break;
-    }
-
-    id = get_next_enso_pipe_id(&notification_buf_pair_);
-  }
+  id = get_next_enso_pipe_id_kernel(&notification_buf_pair_);
 
 #else  // !LATENCY_OPT
   id = get_next_enso_pipe_id(&notification_buf_pair_);

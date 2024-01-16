@@ -188,7 +188,8 @@ void fully_advance_pipe_kernel(struct RxEnsoPipeInternal* enso_pipe,
  *
  * @param enso_pipe Enso pipe to prefetch.
  */
-void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
+void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe,
+                   struct NotificationBufPair* notification_buf_pair);
 
 /**
  * @brief Sends data through a given queue.

@@ -212,6 +212,10 @@ class EnsoBackend {
     return dev_->next_rx_pipe_to_recv();
   }
 
+  int PrefetchPipe(int pipe_id) {
+    return dev_->prefetch_pipe(pipe_id);
+  }
+
  private:
   explicit EnsoBackend() noexcept {}
 
