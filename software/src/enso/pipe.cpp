@@ -61,6 +61,13 @@ uint32_t external_peek_next_batch_from_queue(
   return peek_next_batch_from_queue(enso_pipe, notification_buf_pair, buf);
 }
 
+void cast_mmio_to_pipe_notification(struct MmioNotification& mmio_notif,
+                                    struct PipeNotification& pipe_notif) {
+  pipe_notif.type = mmio_notif.type;
+  pipe_notif.data[0] = mmio_notif.address;
+  pipe_notif.data[1] = mmio_notif.value;
+}
+
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
   return insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip,
