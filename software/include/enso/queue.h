@@ -249,7 +249,7 @@ class Queue {
                     << existing_size << std::endl;
           return -1;
         }
-        
+
         create_queue = false;
       }
     }
