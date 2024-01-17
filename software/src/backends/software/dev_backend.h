@@ -91,21 +91,24 @@ class DevBackend {
                                                void* uio_mmap_bar2_addr) {
     (void)uio_mmap_bar2_addr;
     // Block if full.
-    struct MmioNotification notification;
-    notification.type = NotifType::kWrite;
-    notification.address = (uint64_t)addr;
-    notification.value = value;
-    while (queue_to_backend_->Push((PipeNotification)notification) != 0) {
+    struct MmioNotification mmio_notif;
+    mmio_notif.type = NotifType::kWrite;
+    mmio_notif.address = (uint64_t)addr;
+    mmio_notif.value = value;
+
+    struct PipeNotification pipe_notif;
+    CastMmioToPipeNotification(mmio_notif, pipe_notif);
+    while (queue_to_backend_->Push(pipe_notif) != 0) {
     }
   }
 
-  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr,
-                                                  void* uio_mmap_bar2_addr) {
-    (void)uio_mmap_bar2_addr;
+  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
+    struct MmioNotification mmio_notification;
+    mmio_notificaiton.type = NotifType::kRead;
+    mmio_notificaiton.address = (uint64_t)addr;
+    mmio_notification.value = 0;
     struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kRead;
-    pipe_notification.data[0] = (uint64_t)addr;
-    pipe_notification.data[1] = 0;
+    CastMmioToPipeNotification(mmio_notification, pipe_notification);
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 
@@ -131,9 +134,13 @@ class DevBackend {
 
     _enso_compiler_memory_barrier();
 
+    struct MmioNotification mmio_notification;
+    mmio_notification.type = NotifType::kTranslAddr;
+    mmio_notification.data[0] = (uint64_t)phys_addr;
+    mmio_notification.data[1] = 0;
+
     struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kTranslAddr;
-    pipe_notification.data[0] = (uint64_t)phys_addr;
+    CastMmioToPipeNotification(mmio_notification, pipe_notification);
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
 

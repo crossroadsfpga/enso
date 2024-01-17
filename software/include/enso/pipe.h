@@ -42,6 +42,7 @@
 #ifndef ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
 #define ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
 
+#include <enso/consts.h>
 #include <enso/helpers.h>
 #include <enso/internals.h>
 
@@ -65,6 +66,9 @@ class PeekPktIterator;
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
+
+void cast_mmio_to_pipe_notification(struct MmioNotification& mmio_notif,
+                                    struct PipeNotification& pipe_notif);
 
 /**
  * @brief A class that represents a device.

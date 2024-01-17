@@ -10,3 +10,5 @@ subdir('backends')
 project_sources += files(
     'pcie.cpp'
 )
+
+install_headers(files('pcie.h'), subdir: 'enso')
