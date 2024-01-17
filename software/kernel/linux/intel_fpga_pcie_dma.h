@@ -41,8 +41,8 @@
  * SOFTWARE.
  */
 
-#ifndef SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_DMA_H_
-#define SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_DMA_H_
+#ifndef ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_DMA_H_
+#define ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_DMA_H_
 
 #include "intel_fpga_pcie_setup.h"
 
@@ -114,4 +114,4 @@ void intel_fpga_pcie_dma_remove(struct dev_bookkeep *dev_bk);
 int intel_fpga_pcie_dma_queue(struct dev_bookkeep *dev_bk, unsigned long uarg);
 int intel_fpga_pcie_dma_send(struct dev_bookkeep *dev_bk, unsigned long uarg);
 
-#endif  // SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_DMA_H_
+#endif  // ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_DMA_H_

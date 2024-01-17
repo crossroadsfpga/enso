@@ -38,8 +38,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#define ENSO_SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
 
 #include <assert.h>
 #include <sched.h>
@@ -353,4 +353,4 @@ class DevBackend {
 };
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_

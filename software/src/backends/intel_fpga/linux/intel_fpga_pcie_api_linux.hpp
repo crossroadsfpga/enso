@@ -16,8 +16,8 @@
 // logic devices manufactured by Intel and sold by Intel or its authorized
 // distributors. Please refer to the applicable agreement for further details.
 
-#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
-#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
+#define ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
 
 namespace intel_fpga_pcie_api {
 
@@ -131,4 +131,4 @@ struct intel_fpga_pcie_size_app_id {
 
 }  // namespace intel_fpga_pcie_api
 
-#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_LINUX_INTEL_FPGA_PCIE_API_LINUX_HPP_

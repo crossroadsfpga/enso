@@ -39,8 +39,8 @@
  */
 
 // TODO(sadok): Do not expose this header.
-#ifndef SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
-#define SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
 
 #include <stdint.h>
 
@@ -122,4 +122,4 @@ struct RxEnsoPipeInternal {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
