@@ -36,8 +36,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_HELPERS_H_
-#define SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_HELPERS_H_
 
 #include <endian.h>
 #include <enso/consts.h>
@@ -194,4 +194,4 @@ _enso_always_inline void memcpy_64_align(void* dst, const void* src, size_t n) {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_HELPERS_H_

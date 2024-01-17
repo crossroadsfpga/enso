@@ -39,8 +39,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_PIPE_H_
-#define SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
 
 #include <enso/helpers.h>
 #include <enso/internals.h>
@@ -1460,4 +1460,4 @@ class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_

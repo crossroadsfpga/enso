@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_PCIE_H_
-#define SOFTWARE_SRC_PCIE_H_
+#ifndef ENSO_SOFTWARE_SRC_PCIE_H_
+#define ENSO_SOFTWARE_SRC_PCIE_H_
 
 #include <endian.h>
 #include <enso/helpers.h>
@@ -333,4 +333,4 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_PCIE_H_
+#endif  // ENSO_SOFTWARE_SRC_PCIE_H_
