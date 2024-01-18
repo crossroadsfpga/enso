@@ -104,8 +104,8 @@ class DevBackend {
 
   static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
     struct MmioNotification mmio_notification;
-    mmio_notificaiton.type = NotifType::kRead;
-    mmio_notificaiton.address = (uint64_t)addr;
+    mmio_notification.type = NotifType::kRead;
+    mmio_notification.address = (uint64_t)addr;
     mmio_notification.value = 0;
     struct PipeNotification pipe_notification;
     CastMmioToPipeNotification(mmio_notification, pipe_notification);

@@ -164,28 +164,6 @@ class Device {
   bool GetRrStatus() noexcept;
 
   /**
-   * @brief Retrieves the number of fallback queues for this device.
-   */
-  int GetNbFallbackQueues() noexcept;
-
-  /**
-   * @brief Sets the round robin status for the device.
-   *
-   * @param round_robin Whether to enable or disable round robin.
-   *
-   * @return 0 on success, -1 on failure.
-   */
-  int SetRrStatus(bool rr_status) noexcept;
-
-  /**
-   * @brief Gets the round robin status for the device.
-   *
-   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
-   *         failure.
-   */
-  bool GetRrStatus() noexcept;
-
-  /**
    * @brief Applies the config described by the given transmission notification.
    *
    * @return 0 on success, -1 on failure.

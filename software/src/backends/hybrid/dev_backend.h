@@ -38,8 +38,8 @@
  * @author Kaajal Gupta <kaajalg@andrew.cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_HYBRID_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_HYBRID_DEV_BACKEND_H_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_HYBRID_DEV_BACKEND_H_
+#define ENSO_SOFTWARE_SRC_BACKENDS_HYBRID_DEV_BACKEND_H_
 
 #include <assert.h>
 #include <sched.h>
@@ -104,11 +104,13 @@ class DevBackend {
       // queue
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
-          struct PipeNotification pipe_notification;
-          pipe_notification.type = NotifType::kWrite;
-          pipe_notification.data[0] = offset_addr;
-          pipe_notification.data[1] = value;
-          while (queue_to_backend_->Push(pipe_notification) != 0) {
+          struct MmioNotification mmio_notification;
+          mmio_notification.type = NotifType::kWrite;
+          mmio_notification.data[0] = offset_addr;
+          mmio_notification.data[1] = value;
+
+          while (queue_to_backend_->Push(
+                     (struct PipeNotification)mmio_notification) != 0) {
           }
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
@@ -125,11 +127,13 @@ class DevBackend {
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
       // Block if full.
-      struct PipeNotification pipe_notification;
-      pipe_notification.type = NotifType::kWrite;
-      pipe_notification.data[0] = offset_addr;
-      pipe_notification.data[1] = value;
-      while (queue_to_backend_->Push(pipe_notification) != 0) {
+      struct MmioNotification mmio_notification;
+      mmio_notification.type = NotifType::kWrite;
+      mmio_notification.address = offset_addr;
+      mmio_notification.value = value;
+
+      while (queue_to_backend_->Push(
+                 (struct PipeNotification)mmio_notification) != 0) {
       }
     }
   }
@@ -147,18 +151,25 @@ class DevBackend {
     queue_id -= enso::kMaxNbFlows;
     // Reads from notification buffers.
     if (queue_id < enso::kMaxNbApps) {
-      while (queue_to_backend_->Push({NotifType::kRead, offset_addr, 0}) != 0) {
+      struct MmioNotification mmio_notification;
+      mmio_notification.type = NotifType::kWrite;
+      mmio_notification.address = offset_addr;
+      mmio_notification.value = value;
+
+      while (queue_to_backend_->Push(
+                 (struct PipeNotification)mmio_notification) != 0) {
       }
 
-      std::optional<PipeNotification> notification;
+      std::optional<struct MmioNotification> notification;
 
       // Block until receive.
-      while (!(notification = queue_from_backend_->Pop())) {
+      while (!(notification =
+                   (struct MmioNotification)queue_from_backend_->Pop())) {
       }
 
       assert(notification->type == NotifType::kRead);
-      assert(notification->data[0] == offset_addr);
-      return notification->data[1];
+      assert(notification->address == offset_addr);
+      return notification->value;
     }
     return -1;
   }
@@ -386,4 +397,4 @@ class DevBackend {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_HYBRID_DEV_BACKEND_H_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_HYBRID_DEV_BACKEND_H_
