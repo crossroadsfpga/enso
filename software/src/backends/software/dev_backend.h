@@ -240,7 +240,7 @@ class DevBackend {
     }
 
     assert(notification->type == NotifType::kAllocateNotifBuf);
-    return notification->result;
+    return notification->notif_buf_id;
   }
 
   /**
