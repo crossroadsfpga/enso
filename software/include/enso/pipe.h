@@ -138,23 +138,6 @@ class Device {
   int GetNbFallbackQueues() noexcept;
 
   /**
-   * @brief Sets the round robin status for the device.
-   *
-   * @param round_robin Whether to enable or disable round robin.
-   *
-   * @return 0 on success, -1 on failure.
-   */
-  int SetRrStatus(bool round_robin) noexcept;
-
-  /**
-   * @brief Gets the round robin status for the device.
-   *
-   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
-   *         failure.
-   */
-  bool GetRrStatus() noexcept;
-
-  /**
    * @brief Allocates an RX/TX pipe.
    *
    * @param fallback Whether this pipe is a fallback pipe. Fallback pipes can
@@ -301,6 +284,14 @@ class Device {
    * @return 0 if configuration was successful.
    */
   int DisableRoundRobin();
+
+  /**
+   * @brief Gets the round robin status for the device.
+   *
+   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
+   *         failure.
+   */
+  bool GetRoundRobinStatus() noexcept;
 
  private:
   struct TxPendingRequest {

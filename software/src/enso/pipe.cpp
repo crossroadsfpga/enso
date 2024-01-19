@@ -202,14 +202,6 @@ int Device::GetNbFallbackQueues() noexcept {
   return get_nb_fallback_queues(&notification_buf_pair_);
 }
 
-int Device::SetRrStatus(bool round_robin) noexcept {
-  return set_round_robin_status(&notification_buf_pair_, round_robin);
-}
-
-bool Device::GetRrStatus() noexcept {
-  return get_round_robin_status(&notification_buf_pair_);
-}
-
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
   TxPipe* pipe(new (std::nothrow) TxPipe(tx_pipes_.size(), this, buf));
 
@@ -419,6 +411,10 @@ int Device::DisableRateLimiting() {
 
 int Device::EnableRoundRobin() {
   return enable_round_robin(&notification_buf_pair_);
+}
+
+bool Device::GetRoundRobinStatus() noexcept {
+  return get_round_robin_status(&notification_buf_pair_);
 }
 
 int Device::DisableRoundRobin() {
