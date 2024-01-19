@@ -155,9 +155,39 @@ struct MmioNotification {
   uint64_t value;
 };
 
-struct PipeNotification {
+struct FallbackNotification {
   NotifType type;
-  uint64_t data[6];
+  int nb_fallback_queues;
+  int result;
+};
+
+struct RoundRobinNotification {
+  NotifType type;
+  int round_robin;
+  uint64_t padding;
+};
+
+struct NotifBufNotification {
+  NotifType type;
+  int result;
+  uint64_t padding;
+};
+
+struct AllocatePipeNotification {
+  NotifType type;
+  bool fallback;
+  int result;
+};
+
+struct FreePipeNotification {
+  NotifType type;
+  int pipe_id;
+  int result;
+};
+
+struct GeneralNotification {
+  NotifType type;
+  uint64_t data[2];
 };
 
 }  // namespace enso
