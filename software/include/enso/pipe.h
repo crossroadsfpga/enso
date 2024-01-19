@@ -67,9 +67,6 @@ uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
-void cast_mmio_to_pipe_notification(struct MmioNotification& mmio_notif,
-                                    struct PipeNotification& pipe_notif);
-
 /**
  * @brief A class that represents a device.
  *
