@@ -144,52 +144,6 @@ class Device {
   int GetNbFallbackQueues() noexcept;
 
   /**
-   * @brief Sets the round robin status for the device.
-   *
-   * @param round_robin Whether to enable or disable round robin.
-   *
-   * @return 0 on success, -1 on failure.
-   */
-  int SetRrStatus(bool round_robin) noexcept;
-
-  /**
-   * @brief Gets the round robin status for the device.
-   *
-   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
-   *         failure.
-   */
-  bool GetRrStatus() noexcept;
-
-  /**
-   * @brief Retrieves the number of fallback queues for this device.
-   */
-  int GetNbFallbackQueues() noexcept;
-
-  /**
-   * @brief Sets the round robin status for the device.
-   *
-   * @param round_robin Whether to enable or disable round robin.
-   *
-   * @return 0 on success, -1 on failure.
-   */
-  int SetRrStatus(bool round_robin) noexcept;
-
-  /**
-   * @brief Gets the round robin status for the device.
-   *
-   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
-   *         failure.
-   */
-  bool GetRrStatus() noexcept;
-
-  /**
-   * @brief Applies the config described by the given transmission notification.
-   *
-   * @return 0 on success, -1 on failure.
-   */
-  int ApplyConfig(struct TxNotification* notification);
-
-  /**
    * @brief Allocates an RX/TX pipe.
    *
    * @param fallback Whether this pipe is a fallback pipe. Fallback pipes can
@@ -343,6 +297,14 @@ class Device {
   int DisableRoundRobin();
 
   /**
+   * @brief Gets the round robin status for the device.
+   *
+   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
+   *         failure.
+   */
+  bool GetRoundRobinStatus() noexcept;
+
+  /**
    * @brief Sends a certain number of bytes to the device. This is designed to
    * be used by a TxPipe object.
    *
@@ -352,6 +314,13 @@ class Device {
    * @return The number of bytes sent.
    */
   void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+
+  /**
+   * @brief Applies the config described by the given transmission notification.
+   *
+   * @return 0 on success, -1 on failure.
+   */
+  int ApplyConfig(struct TxNotification* notification);
 
   /**
    * @brief Gets the ID of the notification buffer for this device.
