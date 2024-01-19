@@ -180,14 +180,14 @@ class DevBackend {
   /**
    * @brief Sets the Round-Robin status.
    *
-   * @param enable_rr If true, enable RR. Otherwise, disable RR.
+   * @param round_robin If true, enable RR. Otherwise, disable RR.
    *
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
-  int SetRrStatus(bool enable_rr) {
+  int SetRrStatus(bool round_robin) {
     struct RoundRobinNotification pipe_notification;
     pipe_notification.type = NotifType::kSetRrStatus;
-    pipe_notification.round_robin = (uint64_t)enable_rr;
+    pipe_notification.round_robin = (uint64_t)round_robin;
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
     std::optional<RoundRobinNotification> notification;
