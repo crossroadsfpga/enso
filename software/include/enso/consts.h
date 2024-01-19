@@ -164,13 +164,13 @@ struct FallbackNotification {
 struct RoundRobinNotification {
   NotifType type;
   int round_robin;
-  uint64_t padding;
+  int result;
 };
 
 struct NotifBufNotification {
   NotifType type;
+  int notif_buf_id;
   int result;
-  uint64_t padding;
 };
 
 struct AllocatePipeNotification {
@@ -185,7 +185,7 @@ struct FreePipeNotification {
   int result;
 };
 
-struct GeneralNotification {
+struct PipeNotification {
   NotifType type;
   uint64_t data[2];
 };

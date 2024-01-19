@@ -109,7 +109,7 @@ class DevBackend {
    *
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
-  int SetRrStatus(bool enable_rr) { return dev_->set_rr_status(enable_rr); }
+  int SetRrStatus(bool round_robin) { return dev_->set_rr_status(round_robin); }
 
   /**
    * @brief Gets the Round-Robin status.
