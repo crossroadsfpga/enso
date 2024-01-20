@@ -41,8 +41,8 @@
  * SOFTWARE.
  */
 
-#ifndef SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_IOCTL_H_
-#define SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_IOCTL_H_
+#ifndef ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_IOCTL_H_
+#define ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_IOCTL_H_
 
 #include "intel_fpga_pcie_setup.h"
 
@@ -131,4 +131,4 @@ struct intel_fpga_pcie_ksize {
 long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
                                     unsigned long arg);
 
-#endif  // SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_IOCTL_H_
+#endif  // ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_IOCTL_H_

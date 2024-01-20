@@ -38,8 +38,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_CONSTS_H_
-#define SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 
 #include <cstdint>
 #include <string>
@@ -154,11 +154,59 @@ enum class NotifType : uint8_t {
   kWaiting = 12
 };
 
+struct MmioNotification {
+  NotifType type;
+  uint64_t address;
+  uint64_t value;
+  uint64_t padding;
+};
+
+struct FallbackNotification {
+  NotifType type;
+  int nb_fallback_queues;
+  int result;
+  uint64_t padding;
+};
+
+struct RoundRobinNotification {
+  NotifType type;
+  int round_robin;
+  int result;
+  uint64_t padding;
+};
+
+struct NotifBufNotification {
+  NotifType type;
+  int notif_buf_id;
+  uint64_t uthread_id;
+  uint64_t padding;
+};
+
+struct AllocatePipeNotification {
+  NotifType type;
+  bool fallback;
+  int result;
+  uint64_t padding;
+};
+
+struct FreePipeNotification {
+  NotifType type;
+  int pipe_id;
+  int result;
+  uint64_t padding;
+};
+
 struct PipeNotification {
   NotifType type;
-  uint64_t data[6];
+  uint64_t data[3];
+};
+
+struct ShinkansenNotification {
+  NotifType type;
+  uint64_t notif_queue_id;
+  uint64_t padding[2];
 };
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_

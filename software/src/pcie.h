@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_PCIE_H_
-#define SOFTWARE_SRC_PCIE_H_
+#ifndef ENSO_SOFTWARE_SRC_PCIE_H_
+#define ENSO_SOFTWARE_SRC_PCIE_H_
 
 #include <endian.h>
 #include <enso/helpers.h>
@@ -350,4 +350,4 @@ void pcie_register_kthread(uint64_t kthread_waiters_phys_addr,
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_PCIE_H_
+#endif  // ENSO_SOFTWARE_SRC_PCIE_H_

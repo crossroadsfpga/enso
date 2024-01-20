@@ -39,9 +39,10 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_PIPE_H_
-#define SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
 
+#include <enso/consts.h>
 #include <enso/helpers.h>
 #include <enso/internals.h>
 
@@ -68,10 +69,10 @@ uint32_t external_peek_next_batch_from_queue(
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
 /**
-* @brief Entry point for kthreads.
-*
-* @param arg Arguments for function: should be the kthread_t* object.
-*/
+ * @brief Entry point for kthreads.
+ *
+ * @param arg Arguments for function: should be the kthread_t* object.
+ */
 void* kthread_entry(void* arg);
 
 /**
@@ -139,41 +140,11 @@ class Device {
    *
    * @param buf Buffer address to use for the pipe. It must be a pinned
    *            hugepage. If not specified, the buffer is allocated
-   * internally.
+   *            internally.
    * @return A pointer to the pipe. May be null if the pipe cannot be
-   * created.
+   *         created.
    */
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
-
-  /**
-   * @brief Retrieves the number of fallback queues for this device.
-   */
-  int GetNbFallbackQueues() noexcept;
-
-  /**
-   * @brief Sets the round robin status for the device.
-   *
-   * @param round_robin Whether to enable or disable round robin.
-   *
-   * @return 0 on success, -1 on failure.
-   */
-  int SetRrStatus(bool rr_status) noexcept;
-
-  /**
-   * @brief Gets the round robin status for the device.
-   *
-   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
-   *         failure.
-   */
-  bool GetRrStatus() noexcept;
-
-  /**
-   * @brief Applies the config described by the given transmission notification
-   * by sending the notification to the NIC.
-   *
-   * @return 0 on success, -1 on failure.
-   */
-  int ApplyConfig(struct TxNotification* notification);
 
   /**
    * @brief Allocates an RX/TX pipe.
@@ -195,7 +166,7 @@ class Device {
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
 
   /**
-   * @brief Gets the next RX notification object for this device.
+   * @brief Gets the next RX notification received by this device.
    */
   struct RxNotification* NextRxNotif();
 
@@ -319,6 +290,11 @@ class Device {
   int DisableRateLimiting();
 
   /**
+   * @brief Retrieves the number of fallback queues for this device.
+   */
+  int GetNbFallbackQueues() noexcept;
+
+  /**
    * @brief Enables round robing of packets among the fallback pipes.
    *
    * @note This setting applies to all pipes that share the same hardware
@@ -344,6 +320,14 @@ class Device {
   int DisableRoundRobin();
 
   /**
+   * @brief Gets the round robin status for the device.
+   *
+   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
+   *         failure.
+   */
+  bool GetRoundRobinStatus() noexcept;
+
+  /**
    * @brief Sends a certain number of bytes to the device. This is designed to
    * be used by a TxPipe object.
    *
@@ -353,6 +337,13 @@ class Device {
    * @return The number of bytes sent.
    */
   void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+
+  /**
+   * @brief Applies the config described by the given transmission notification.
+   *
+   * @return 0 on success, -1 on failure.
+   */
+  int ApplyConfig(struct TxNotification* notification);
 
   /**
    * @brief Gets the ID of the notification buffer for this device.
@@ -1464,4 +1455,4 @@ class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_

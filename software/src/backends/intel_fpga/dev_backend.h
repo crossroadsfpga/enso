@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#define ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
 
 #include <enso/helpers.h>
 
@@ -125,7 +125,7 @@ class DevBackend {
    *
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
-  int SetRrStatus(bool enable_rr) { return dev_->set_rr_status(enable_rr); }
+  int SetRrStatus(bool round_robin) { return dev_->set_rr_status(round_robin); }
 
   /**
    * @brief Gets the Round-Robin status.
@@ -202,4 +202,4 @@ class DevBackend {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_

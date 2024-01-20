@@ -211,14 +211,6 @@ int Device::GetNbFallbackQueues() noexcept {
   return get_nb_fallback_queues(&notification_buf_pair_);
 }
 
-int Device::SetRrStatus(bool rr_status) noexcept {
-  return set_round_robin_status(&notification_buf_pair_, rr_status);
-}
-
-bool Device::GetRrStatus() noexcept {
-  return get_round_robin_status(&notification_buf_pair_);
-}
-
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
   TxPipe* pipe(new (std::nothrow) TxPipe(tx_pipes_.size(), this, buf));
 
@@ -302,7 +294,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   }
   int32_t id = notification->queue_id;
 
-  // TODO (kaajalg): make this safe? if id not in rx_pipes_map_
+  // TODO(kaajalg): make this safe? if id not in rx_pipes_map_
   RxPipe* rx_pipe = rx_pipes_map_[id];
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
@@ -360,7 +352,7 @@ void Device::RegisterWaiting(sched::uthread_t* uthread) {
 }
 
 void Device::RegisterKthread(uint64_t kthread_waiters_phys_addr,
-                       uint32_t application_id) {
+                             uint32_t application_id) {
   pcie_register_kthread(kthread_waiters_phys_addr, application_id);
 }
 
@@ -476,6 +468,10 @@ int Device::DisableRateLimiting() {
 
 int Device::EnableRoundRobin() {
   return enable_round_robin(&notification_buf_pair_);
+}
+
+bool Device::GetRoundRobinStatus() noexcept {
+  return get_round_robin_status(&notification_buf_pair_);
 }
 
 int Device::DisableRoundRobin() {
