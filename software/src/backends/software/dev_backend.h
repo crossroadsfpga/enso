@@ -136,8 +136,8 @@ class DevBackend {
 
     struct MmioNotification mmio_notification;
     mmio_notification.type = NotifType::kTranslAddr;
-    mmio_notification.data[0] = (uint64_t)phys_addr;
-    mmio_notification.data[1] = 0;
+    mmio_notification.address = (uint64_t)phys_addr;
+    mmio_notification.value = 0;
     while (queue_to_backend_->Push(
                (struct PipeNotification)mmio_notification) != 0) {
     }
@@ -233,8 +233,8 @@ class DevBackend {
   int AllocateNotifBuf(uint32_t application_id) {
     struct NotifBufNotification pipe_notification;
     pipe_notification.type = NotifType::kAllocateNotifBuf;
-    pipe_notification.data[0] = (uint64_t)application_id;
-    pipe_notification.data[1] = (uint64_t)enso::get_tid();
+    pipe_notification.application_id = (uint64_t)application_id;
+    pipe_notification.tid = (uint64_t)enso::get_tid();
 
     while (queue_to_backend_->Push(pipe_notification) != 0) {
     }
@@ -247,7 +247,7 @@ class DevBackend {
     }
 
     assert(notification->type == NotifType::kAllocateNotifBuf);
-    return notification->result;
+    return notification->notif_buf_id;
   }
 
   /**
