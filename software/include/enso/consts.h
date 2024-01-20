@@ -154,52 +154,6 @@ struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
-  uint64_t padding;
-};
-
-struct FallbackNotification {
-  NotifType type;
-  int nb_fallback_queues;
-  int result;
-  uint64_t padding;
-};
-
-struct RoundRobinNotification {
-  NotifType type;
-  int round_robin;
-  int result;
-  uint64_t padding;
-};
-
-struct NotifBufNotification {
-  NotifType type;
-  int notif_buf_id;
-  uint64_t application_id;
-  uint64_t tid;
-};
-
-struct AllocatePipeNotification {
-  NotifType type;
-  bool fallback;
-  int result;
-  uint64_t padding;
-};
-
-struct FreePipeNotification {
-  NotifType type;
-  int pipe_id;
-  int result;
-  uint64_t padding;
-};
-
-struct PipeNotification {
-  NotifType type;
-  uint64_t data[3];
-};
-
-struct ShinkansenNotification {
-  NotifType type;
-  uint64_t notif_queue_id;
   uint64_t padding[2];
 };
 
@@ -207,35 +161,47 @@ struct FallbackNotification {
   NotifType type;
   uint64_t nb_fallback_queues;
   uint64_t result;
+  uint64_t padding[2];
 };
 
 struct RoundRobinNotification {
   NotifType type;
   uint64_t round_robin;
   uint64_t result;
+  uint64_t padding[2];
 };
 
 struct NotifBufNotification {
   NotifType type;
   uint64_t notif_buf_id;
+  uint64_t application_id;
+  uint64_t tid;
   uint64_t result;
 };
 
 struct AllocatePipeNotification {
   NotifType type;
   uint64_t fallback;
-  uint64_t pipe_id;
+  uint64_t result;
+  uint64_t padding[2];
 };
 
 struct FreePipeNotification {
   NotifType type;
   uint64_t pipe_id;
   uint64_t result;
+  uint64_t padding[2];
+};
+
+struct ShinkansenNotification {
+  NotifType type;
+  uint64_t notif_queue_id;
+  uint64_t padding[3];
 };
 
 struct PipeNotification {
   NotifType type;
-  uint64_t data[2];
+  uint64_t data[4];
 };
 
 }  // namespace enso
