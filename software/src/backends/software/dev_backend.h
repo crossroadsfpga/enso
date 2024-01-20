@@ -90,12 +90,14 @@ class DevBackend {
                                                uint32_t value) {
     // Block if full.
     struct MmioNotification mmio_notification;
-    mmio_notif.type = NotifType::kWrite;
-    mmio_notif.address = (uint64_t)addr;
-    mmio_notif.value = value;
+    mmio_notification.type = NotifType::kWrite;
+    mmio_notification.address = (uint64_t)addr;
+    mmio_notification.value = value;
 
-    while (queue_to_backend_->Push(
-               (struct PipeNotification)mmio_notification) != 0) {
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&mmio_notification;
+
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
   }
 
@@ -105,20 +107,24 @@ class DevBackend {
     mmio_notification.address = (uint64_t)addr;
     mmio_notification.value = 0;
 
-    while (queue_to_backend_->Push(
-               (struct PipeNotification)mmio_notification) != 0) {
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&mmio_notification;
+
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
-    std::optional<MmioNotification> notification;
+    std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (
-        !(notification = (struct MmioNotification)queue_from_backend_->Pop())) {
+    while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == NotifType::kRead);
-    assert(notification->address == (uint64_t)addr);
-    return notification->value;
+    struct MmioNotification* result =
+        (struct MmioNotification*)&notification.value();
+
+    assert(result->type == NotifType::kRead);
+    assert(result->address == (uint64_t)addr);
+    return result->value;
   }
 
   /**
@@ -134,23 +140,26 @@ class DevBackend {
 
     struct MmioNotification mmio_notification;
     mmio_notification.type = NotifType::kTranslAddr;
-    mmio_notification.data[0] = (uint64_t)phys_addr;
-    mmio_notification.data[1] = 0;
-    while (queue_to_backend_->Push(
-               (struct PipeNotification)mmio_notification) != 0) {
+    mmio_notification.address = (uint64_t)phys_addr;
+    mmio_notification.value = 0;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&mmio_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
-    std::optional<MmioNotification> notification;
+    std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (
-        !(notification = (struct MmioNotification)queue_from_backend_->Pop())) {
+    while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == NotifType::kTranslAddr);
-    assert(notification->address == (uint64_t)phys_addr);
+    struct MmioNotification* result =
+        (struct MmioNotification*)&notification.value();
 
-    return notification->value;
+    assert(result->type == NotifType::kTranslAddr);
+    assert(result->address == (uint64_t)phys_addr);
+    return result->value;
   }
 
   /**
@@ -159,20 +168,24 @@ class DevBackend {
    *         returned and errno is set appropriately.
    */
   int GetNbFallbackQueues() {
-    struct FallbackNotification pipe_notification;
-    pipe_notification.type = NotifType::kGetNbFallbackQueues;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct FallbackNotification fallback_notification;
+    fallback_notification.type = NotifType::kGetNbFallbackQueues;
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&fallback_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
-    std::optional<FallbackNotification> notification;
+    std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification =
-                 (struct FallbackNotification)queue_from_backend_->Pop())) {
+    while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == NotifType::kGetNbFallbackQueues);
-    return notification->nb_fallback_queues;
+    struct FallbackNotification* result =
+        (struct FallbackNotification*)&notification.value();
+
+    assert(result->type == NotifType::kGetNbFallbackQueues);
+    return result->nb_fallback_queues;
   }
 
   /**
@@ -183,20 +196,26 @@ class DevBackend {
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
   int SetRrStatus(bool round_robin) {
-    struct RoundRobinNotification pipe_notification;
-    pipe_notification.type = NotifType::kSetRrStatus;
-    pipe_notification.round_robin = (uint64_t)round_robin;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct RoundRobinNotification rr_notification;
+    rr_notification.type = NotifType::kSetRrStatus;
+    rr_notification.round_robin = (uint64_t)round_robin;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&rr_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
-    std::optional<RoundRobinNotification> notification;
+
+    std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification =
-                 (struct RoundRobinNotification)queue_from_backend_->Pop())) {
+    while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == NotifType::kSetRrStatus);
-    return notification->result;
+    struct RoundRobinNotification* result =
+        (struct RoundRobinNotification*)&notification.value();
+
+    assert(result->type == NotifType::kSetRrStatus);
+    return result->result;
   }
 
   /**
@@ -206,19 +225,26 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
-    struct RoundRobinNotification pipe_notification;
-    pipe_notification.type = NotifType::kGetRrStatus;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct RoundRobinNotification rr_notification;
+    rr_notification.type = NotifType::kGetRrStatus;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&rr_notification;
+
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
-    std::optional<RoundRobinNotification> notification;
+
+    std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification =
-                 (struct RoundRobinNotification)queue_from_backend_->Pop())) {
+    while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == NotifType::kGetRrStatus);
-    return notification->round_robin;
+    struct RoundRobinNotification* result =
+        (struct RoundRobinNotification*)&notification.value();
+
+    assert(result->type == NotifType::kGetRrStatus);
+    return result->round_robin;
   }
 
   /**
@@ -227,20 +253,27 @@ class DevBackend {
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
   int AllocateNotifBuf() {
-    struct NotifBufNotification pipe_notification;
-    pipe_notification.type = NotifType::kAllocateNotifBuf;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct NotifBufNotification nb_notification;
+    nb_notification.type = NotifType::kAllocateNotifBuf;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&nb_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
-    std::optional<NotifBufNotification> notification;
+    std::optional<PipeNotification> queue_value;
 
     // Block until receive.
-    while (!(notification =
-                 (struct NotifBufNotification)queue_from_backend_->Pop())) {
+    while (!(queue_value = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == NotifType::kAllocateNotifBuf);
-    return notification->notif_buf_id;
+    struct PipeNotification notification = queue_value.value();
+
+    struct NotifBufNotification* result =
+        (struct NotifBufNotification*)&notification;
+
+    assert(result->type == NotifType::kAllocateNotifBuf);
+    return result->notif_buf_id;
   }
 
   /**
@@ -252,20 +285,25 @@ class DevBackend {
    */
   int FreeNotifBuf(int notif_buf_id) {
     (void)notif_buf_id;
-    struct NotifBufNotification pipe_notification;
-    pipe_notification.type = NotifType::kFreeNotifBuf;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct NotifBufNotification nb_notification;
+    nb_notification.type = NotifType::kFreeNotifBuf;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&nb_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
-    std::optional<NotifBufNotification> notification;
+    std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification =
-                 (struct NotifBufNotification)queue_from_backend_->Pop())) {
+    while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == NotifType::kFreeNotifBuf);
-    return notification->result;
+    struct NotifBufNotification* result =
+        (struct NotifBufNotification*)&notification.value();
+
+    assert(result->type == NotifType::kFreeNotifBuf);
+    return result->result;
   }
 
   /**
@@ -276,21 +314,25 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
-    struct AllocatePipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kAllocatePipe;
-    pipe_notification.fallback = fallback;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct AllocatePipeNotification alloc_notification;
+    alloc_notification.type = NotifType::kAllocatePipe;
+    alloc_notification.fallback = fallback;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&alloc_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
-    std::optional<AllocatePipeNotification> notification;
+    std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification =
-                 (struct AllocatePipeNotification)queue_from_backend_->Pop())) {
+    while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == NotifType::kAllocatePipe);
-    return notification->result;
+    struct AllocatePipeNotification* result =
+        (struct AllocatePipeNotification*)&notification.value();
+    assert(result->type == NotifType::kAllocatePipe);
+    return result->pipe_id;
   }
 
   /**
@@ -301,21 +343,26 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) {
-    struct FreePipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kFreePipe;
-    pipe_notification.pipe_id = pipe_id;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct FreePipeNotification free_notification;
+    free_notification.type = NotifType::kFreePipe;
+    free_notification.pipe_id = pipe_id;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&free_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
-    std::optional<FreePipeNotification> notification;
+    std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification =
-                 (struct FreePipeNotification)queue_from_backend_->Pop())) {
+    while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == NotifType::kFreePipe);
-    return notification->result;
+    struct FreePipeNotification* result =
+        (struct FreePipeNotification*)&notification.value();
+
+    assert(result->type == NotifType::kFreePipe);
+    return result->result;
   }
 
  private:

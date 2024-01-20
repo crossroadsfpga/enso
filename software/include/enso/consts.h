@@ -157,32 +157,32 @@ struct MmioNotification {
 
 struct FallbackNotification {
   NotifType type;
-  int nb_fallback_queues;
-  int result;
+  uint64_t nb_fallback_queues;
+  uint64_t result;
 };
 
 struct RoundRobinNotification {
   NotifType type;
-  int round_robin;
-  int result;
+  uint64_t round_robin;
+  uint64_t result;
 };
 
 struct NotifBufNotification {
   NotifType type;
-  int notif_buf_id;
-  int result;
+  uint64_t notif_buf_id;
+  uint64_t result;
 };
 
 struct AllocatePipeNotification {
   NotifType type;
-  bool fallback;
-  int result;
+  uint64_t fallback;
+  uint64_t pipe_id;
 };
 
 struct FreePipeNotification {
   NotifType type;
-  int pipe_id;
-  int result;
+  uint64_t pipe_id;
+  uint64_t result;
 };
 
 struct PipeNotification {
