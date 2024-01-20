@@ -139,11 +139,6 @@ class Device {
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
 
   /**
-   * @brief Retrieves the number of fallback queues for this device.
-   */
-  int GetNbFallbackQueues() noexcept;
-
-  /**
    * @brief Allocates an RX/TX pipe.
    *
    * @param fallback Whether this pipe is a fallback pipe. Fallback pipes can
@@ -270,6 +265,11 @@ class Device {
    * @return 0 if configuration was successful.
    */
   int DisableRateLimiting();
+
+  /**
+   * @brief Retrieves the number of fallback queues for this device.
+   */
+  int GetNbFallbackQueues() noexcept;
 
   /**
    * @brief Enables round robing of packets among the fallback pipes.
