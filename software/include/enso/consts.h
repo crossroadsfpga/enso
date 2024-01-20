@@ -182,7 +182,7 @@ struct NotifBufNotification {
 struct AllocatePipeNotification {
   NotifType type;
   uint64_t fallback;
-  uint64_t result;
+  uint64_t pipe_id;
   uint64_t padding[2];
 };
 
