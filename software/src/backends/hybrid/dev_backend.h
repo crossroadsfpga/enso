@@ -155,7 +155,7 @@ class DevBackend {
     // Reads from notification buffers.
     if (queue_id < enso::kMaxNbApps) {
       struct MmioNotification mmio_notification;
-      mmio_notification.type = NotifType::kWrite;
+      mmio_notification.type = NotifType::kRead;
       mmio_notification.address = offset_addr;
 
       enso::PipeNotification* pipe_notification =
