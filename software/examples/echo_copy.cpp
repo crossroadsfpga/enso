@@ -54,8 +54,6 @@ extern "C" {
 
 #include "example_helpers.h"
 
-#define MAX_ITERATIONS 1000000000
-
 static volatile bool keep_running = true;
 static volatile bool setup_done = false;
 
@@ -77,10 +75,6 @@ void run_echo_copy(void* arg) {
   enso::stats_t* stats = args->stats;
   uint32_t uthread_id = args->uthread_id;
 
-  using sched::uthread_t;
-
-  uthread_t* uthread = sched::uthread_self();
-
   usleep(1000000);
 
   log_info("Running %u", uthread_id);
@@ -92,7 +86,7 @@ void run_echo_copy(void* arg) {
   std::vector<RxPipe*> rx_pipes;
   std::vector<TxPipe*> tx_pipes;
 
-  std::unique_ptr<Device> dev = Device::Create(uthread_id, NULL);
+  std::unique_ptr<Device> dev = Device::Create(uthread_id);
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -121,28 +115,14 @@ void run_echo_copy(void* arg) {
 
   setup_done = true;
 
-  volatile uint32_t num_failed = 0;
   while (keep_running) {
     for (uint32_t i = 0; i < nb_queues; ++i) {
       auto& rx_pipe = rx_pipes[i];
       auto batch = rx_pipe->RecvPkts();
 
       if (unlikely(batch.available_bytes() == 0)) {
-        num_failed += 1;
-        if (num_failed == MAX_ITERATIONS) {
-          log_info("no packets :(");
-
-          dev->RegisterWaiting(uthread);
-          sched::uthread_yield(false);
-
-          log_info("awoken from waiting!");
-          num_failed = 0;
-        }
-
         continue;
       }
-
-      num_failed = 0;
 
       for (auto pkt : batch) {
         ++pkt[63];  // Increment payload.
@@ -189,9 +169,6 @@ int main(int argc, const char* argv[]) {
     return 1;
   }
 
-  using enso::Device;
-  using enso::RxPipe;
-  using enso::TxPipe;
   using sched::kthread_t;
   using sched::uthread_t;
 
@@ -206,23 +183,25 @@ int main(int argc, const char* argv[]) {
   std::vector<kthread_t*> kthreads;
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
+  /*
+  Barrier to ensure that all kthreads start looking at their runqueues only
+  after all kthreads have been initialized & all uthreads have been added
+  to runqueues
+  */
   pthread_barrier_t init_barrier;
   pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
 
-  // Create all of the kthreads
+  /* Create all of the kthreads */
   for (uint32_t i = 0; i < nb_cores; ++i) {
     log_info("Creating kthread on core %d", i);
-    kthread_t* kthread = sched::kthread_create(application_id, i);
-    // barrier to ensure that all kthreads start looking at their runqueues only
-    // after all kthreads have been initialized & all uthreads have been added
-    // to runqueues
-    kthread->barrier = &init_barrier;
+    kthread_t* kthread = enso::kthread_create(application_id, i, &init_barrier);
     kthreads.push_back(kthread);
   }
 
-  // add all of the uthreads to the kthreads runqueues
-  uint32_t current_kthread = 0;
+  /* Add all of the uthreads to the kthreads runqueues */
+  uint32_t current_kthread;
   for (uint32_t i = 0; i < nb_uthreads; ++i) {
+    current_kthread = i % nb_cores;
     struct EchoArgs* args = (struct EchoArgs*)malloc(sizeof(struct EchoArgs));
     args->nb_queues = nb_queues;
     args->nb_cycles = nb_cycles;
@@ -231,10 +210,9 @@ int main(int argc, const char* argv[]) {
     args->core_id = i;
     uthread_t* th =
         sched::uthread_create(run_echo_copy, (void*)args, application_id, i);
-    // Add the uthread to the kthread's runqueue
+    /* Add the uthread to the kthread's runqueue */
     kthread_t* k = kthreads[current_kthread];
     sched::uthread_ready_kthread(k, th);
-    current_kthread = (current_kthread + 1) % nb_cores;
   }
 
   pthread_barrier_wait(&init_barrier);

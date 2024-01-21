@@ -211,28 +211,6 @@ class DevBackend {
   }
 
   /**
-   * @brief When uthreads want to start waiting for a new notification in their
-   * notification buffer, must send message to IOKernel.
-   *
-   * Do not need to wait for a response, the IOKernel can take note
-   * of if new notification must be sent to uthread.
-   *
-   * @param uthread_id
-   */
-  static _enso_always_inline void register_waiting(uint32_t notif_buf_id) {
-    struct WaitingNotification waiting_notification;
-    waiting_notification.type = NotifType::kWaiting;
-    waiting_notification.notif_buf_id = (uint64_t)notif_buf_id;
-
-    enso::PipeNotification* pipe_notification =
-        (enso::PipeNotification*)&waiting_notification;
-    while (queue_to_backend_->Push(*pipe_notification) != 0) {
-    }
-
-    return;
-  }
-
-  /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device.
    * @param virt_addr Address in the application's virtual address space.

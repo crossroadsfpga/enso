@@ -64,9 +64,9 @@ void* kthread_entry(void* arg) {
   return sched::kthread_entry(arg);
 }
 
-sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id) {
-  void* dev = pcie_get_devbackend(core_id);
-  return sched::kthread_create(application_id, core_id, dev, kthread_entry);
+sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id,
+                                 pthread_barrier_t* barrier) {
+  return sched::kthread_create(application_id, core_id, kthread_entry, barrier);
 }
 
 uint32_t external_peek_next_batch_from_queue(
@@ -444,14 +444,18 @@ void Device::ProcessCompletions() {
   }
 }
 
-void Device::RegisterWaiting(sched::uthread_t* uthread) {
-  uthread->last_rx_notif_head = notification_buf_pair_.rx_head;
-  uthread->waiting = true;
-  pcie_register_waiting(notification_buf_pair_.id);
+void Device::YieldUthread(bool runnable) {
+  sched::uthread_yield(runnable, notification_buf_pair_.rx_head);
 }
 
-void Device::RegisterKthread(uint32_t application_id) {
-  pcie_register_kthread(application_id);
+void Device::PipeHit() { num_misses_ = 0; }
+
+void Device::PipeMiss() {
+  num_misses_++;
+  if (num_misses_ == max_misses_) {
+    YieldUthread(false);
+    num_misses_ = 0;
+  }
 }
 
 int Device::EnableTimeStamping() {

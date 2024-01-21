@@ -94,11 +94,6 @@ class DevBackend {
     return 0;
   }
 
-  static _enso_always_inline void register_waiting(uint32_t notif_buf_id) {
-    (void)notif_buf_id;
-    return;
-  }
-
   /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device (typically the physical

@@ -209,7 +209,7 @@ struct KthreadNotification {
   uint64_t padding[2];
 };
 
-struct WaitingNotification {
+struct YieldNotification {
   NotifType type;
   uint64_t notif_buf_id;
   uint64_t padding[2];

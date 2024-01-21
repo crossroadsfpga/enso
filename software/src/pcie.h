@@ -333,13 +333,6 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
 /**
- * @brief Registers a waiting uthread with the IOKernel.
- *
- * @param notif_id The uthread's notification buffer ID.
- */
-void pcie_register_waiting(uint32_t notif_id);
-
-/**
  * @brief Registers a kthread with the IOKernel.
  *
  * @param application_id

@@ -64,6 +64,9 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
+/* The maximum number of iterations without packets. */
+#define MAX_ITERATIONS 1000000000
+
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
@@ -105,7 +108,8 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      uint32_t uthread_id, CompletionCallback completion_callback,
+      uint32_t uthread_id, uint32_t max_misses = MAX_ITERATIONS,
+      CompletionCallback completion_callback = NULL,
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
@@ -169,20 +173,6 @@ class Device {
    * @brief Gets the next RX notification received by this device.
    */
   struct RxNotification* NextRxNotif();
-
-  /**
-   * @brief Informs the IOKernel that the uthread with this device is going to
-   * start waiting.
-   *
-   * @param uthread_id
-   */
-  void RegisterWaiting(sched::uthread_t* uthread);
-
-  /**
-   * @brief Informs the IOKernel of a new kthread running on a certain core.
-   *
-   */
-  void RegisterKthread(uint32_t application_id);
 
   /**
    * @brief Gets the next RxPipe that has data pending.
@@ -349,6 +339,29 @@ class Device {
    */
   int GetNotifQueueId() noexcept;
 
+  /**
+   * @brief Yields the current uthread to the running kthread, enabling other
+   * uthreads to run on the current core.
+   *
+   * @param runnable Whether the yielding uthread is runnable or not (that is,
+   * if it should be added back to the runnable queue).
+   */
+  void YieldUthread(bool runnable);
+
+  /**
+   * @brief Called when an RxPipe does not receive any packets when RecvPkts()
+   * is called.
+   *
+   */
+  void PipeMiss();
+
+  /**
+   * @brief Called when an RxPipe receives packets when RecvPkts()
+   * is called.
+   *
+   */
+  void PipeHit();
+
  private:
   struct TxPendingRequest {
     int pipe_id;
@@ -358,9 +371,13 @@ class Device {
   /**
    * Use `Create` factory method to instantiate objects externally.
    */
-  Device(uint32_t uthread_id, CompletionCallback completion_callback,
-         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
-      : kPcieAddr(pcie_addr) {
+  Device(uint32_t uthread_id, uint32_t max_misses,
+         CompletionCallback completion_callback, const std::string& pcie_addr,
+         std::string huge_page_prefix) noexcept
+      : kPcieAddr(pcie_addr),
+        completion_callback_(completion_callback),
+        uthread_id_(uthread_id),
+        max_misses_(max_misses) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
               << std::endl;
@@ -369,8 +386,6 @@ class Device {
       huge_page_prefix = std::string(kHugePageDefaultPrefix);
     }
     huge_page_prefix_ = huge_page_prefix;
-    completion_callback_ = completion_callback;
-    uthread_id_ = uthread_id;
   }
 
   /**
@@ -394,6 +409,9 @@ class Device {
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_;
   uint32_t uthread_id_;
+  uint64_t max_misses_;
+
+  uint64_t num_misses_ = 0;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -667,7 +685,12 @@ class RxPipe {
    *         packets.
    */
   inline MessageBatch<PktIterator> RecvPkts(int32_t max_nb_pkts = -1) {
-    return RecvMessages<PktIterator>(max_nb_pkts);
+    auto batch = RecvMessages<PktIterator>(max_nb_pkts);
+    if (unlikely(batch.available_bytes()) == 0)
+      device_->PipeMiss();
+    else
+      device_->PipeHit();
+    return batch;
   }
 
   /**
@@ -680,7 +703,12 @@ class RxPipe {
    *         packets.
    */
   inline MessageBatch<PeekPktIterator> PeekPkts(int32_t max_nb_pkts = -1) {
-    return RecvMessages<PeekPktIterator>(max_nb_pkts);
+    auto batch = RecvMessages<PeekPktIterator>(max_nb_pkts);
+    if (unlikely(batch.available_bytes()) == 0)
+      device_->PipeMiss();
+    else
+      device_->PipeHit();
+    return batch;
   }
 
   /**
@@ -765,7 +793,8 @@ class RxPipe {
    * @param device The `Device` object that instantiated this pipe.
    */
   explicit RxPipe(Device* device) noexcept
-      : notification_buf_pair_(&(device->notification_buf_pair_)) {}
+      : notification_buf_pair_(&(device->notification_buf_pair_)),
+        device_(device) {}
 
   /**
    * @note RxPipes cannot be deallocated from outside. The `Device` object is in
@@ -793,6 +822,7 @@ class RxPipe {
   void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
+  Device* device_;
 };
 
 /**

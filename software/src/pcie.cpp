@@ -718,10 +718,6 @@ uint64_t get_dev_addr_from_virt_addr(
   return dev_addr;
 }
 
-void pcie_register_waiting(uint32_t notif_id) {
-  DevBackend::register_waiting(notif_id);
-}
-
 void pcie_register_kthread(uint32_t application_id) {
   DevBackend::register_kthread(application_id);
 }
