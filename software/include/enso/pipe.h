@@ -402,9 +402,9 @@ class Device {
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_;
   uint32_t uthread_id_;
-  uint64_t max_misses_;
+  int64_t max_misses_;
 
-  uint64_t num_misses_ = 0;
+  int64_t num_misses_ = 0;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;

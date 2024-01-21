@@ -148,11 +148,12 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    uint32_t uthread_id, CompletionCallback completion_callback,
-    const std::string& pcie_addr,
+    uint32_t uthread_id, uint32_t max_misses,
+    CompletionCallback completion_callback, const std::string& pcie_addr,
     const std::string& huge_page_prefix) noexcept {
-  std::unique_ptr<Device> dev(new (std::nothrow) Device(
-      uthread_id, completion_callback, pcie_addr, huge_page_prefix));
+  std::unique_ptr<Device> dev(
+      new (std::nothrow) Device(uthread_id, max_misses, completion_callback,
+                                pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
@@ -440,7 +441,7 @@ void Device::PipeHit() { num_misses_ = 0; }
 
 void Device::PipeMiss() {
   num_misses_++;
-  if (num_misses_ == max_misses_) {
+  if (max_misses_ >= 0 && num_misses_ == max_misses_) {
     YieldUthread(false);
     num_misses_ = 0;
   }

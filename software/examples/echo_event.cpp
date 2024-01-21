@@ -56,7 +56,7 @@ void run_echo_event(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
   using enso::Device;
   using enso::RxTxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(0, NULL);
+  std::unique_ptr<Device> dev = Device::Create(0, -1, NULL);
   std::vector<RxTxPipe*> pipes;
 
   if (!dev) {
