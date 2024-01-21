@@ -39,8 +39,8 @@
  */
 
 // TODO(sadok): Do not expose this header.
-#ifndef SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
-#define SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
 
 #include <stdint.h>
 
@@ -106,6 +106,7 @@ struct NotificationBufPair {
   uint8_t* wrap_tracker;
   uint32_t* pending_rx_pipe_tails;
 
+  void* fpga_dev;            // Avoid exposing `DevBackend` externally.
   void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
   std::string huge_page_prefix;
 };
@@ -125,4 +126,4 @@ struct RxEnsoPipeInternal {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_INTERNALS_H_

@@ -38,8 +38,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#define ENSO_SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
 
 #include <assert.h>
 #include <sched.h>
@@ -79,10 +79,6 @@ class DevBackend {
     return dev;
   }
 
-  static void Init(DevBackend* dev, unsigned int bdf, int bar) noexcept {
-    return;
-  }
-
   ~DevBackend() noexcept {}
 
   void* uio_mmap([[maybe_unused]] size_t size,
@@ -95,33 +91,43 @@ class DevBackend {
                                                void* uio_mmap_bar2_addr) {
     (void)uio_mmap_bar2_addr;
     // Block if full.
-    struct PipeNotification notification;
-    notification.type = NotifType::kWrite;
-    notification.data[0] = (uint64_t)addr;
-    notification.data[1] = value;
-    while (queue_to_backend_->Push(notification) != 0) {
+    struct MmioNotification mmio_notification;
+    mmio_notification.type = NotifType::kWrite;
+    mmio_notification.address = (uint64_t)addr;
+    mmio_notification.value = value;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&mmio_notification;
+
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
   }
 
-  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr,
-                                                  void* uio_mmap_bar2_addr) {
-    (void)uio_mmap_bar2_addr;
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kRead;
-    pipe_notification.data[0] = (uint64_t)addr;
-    pipe_notification.data[1] = 0;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
+    struct MmioNotification mmio_notification;
+    mmio_notification.type = NotifType::kRead;
+    mmio_notification.address = (uint64_t)addr;
+    mmio_notification.value = 0;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&mmio_notification;
+
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
+    while (
+        !(notification = (struct MmioNotification)queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kRead);
-    assert(notification->data[0] == (uint64_t)addr);
-    return notification->data[1];
+    struct MmioNotification* result =
+        (struct MmioNotification*)&notification.value();
+
+    assert(result->type == NotifType::kRead);
+    assert(result->address == (uint64_t)addr);
+    return result->value;
   }
 
   static _enso_always_inline uint32_t
@@ -130,9 +136,7 @@ class DevBackend {
     return 0;
   }
 
-  static _enso_always_inline void register_waiting(uint32_t uthread_id,
-                                                   uint32_t notif_buf_id) {
-    (void)uthread_id;
+  static _enso_always_inline void register_waiting(uint32_t notif_buf_id) {
     (void)notif_buf_id;
     return;
   }
@@ -148,22 +152,29 @@ class DevBackend {
 
     _enso_compiler_memory_barrier();
 
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kTranslAddr;
-    pipe_notification.data[0] = (uint64_t)phys_addr;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct MmioNotification mmio_notification;
+    mmio_notification.type = NotifType::kTranslAddr;
+    mmio_notification.address = (uint64_t)phys_addr;
+    mmio_notification.value = 0;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&mmio_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
+    while (
+        !(notification = (struct MmioNotification)queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kTranslAddr);
-    assert(notification->data[0] == (uint64_t)phys_addr);
+    struct MmioNotification* result =
+        (struct MmioNotification*)&notification.value();
 
-    return notification->data[1];
+    assert(result->type == NotifType::kTranslAddr);
+    assert(result->address == (uint64_t)phys_addr);
+    return result->value;
   }
 
   /**
@@ -172,9 +183,11 @@ class DevBackend {
    *         returned and errno is set appropriately.
    */
   int GetNbFallbackQueues() {
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kGetNbFallbackQueues;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct FallbackNotification fallback_notification;
+    fallback_notification.type = NotifType::kGetNbFallbackQueues;
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&fallback_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -183,31 +196,41 @@ class DevBackend {
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kGetNbFallbackQueues);
-    return notification->data[0];
+    struct FallbackNotification* result =
+        (struct FallbackNotification*)&notification.value();
+
+    assert(result->type == NotifType::kGetNbFallbackQueues);
+    return result->nb_fallback_queues;
   }
 
   /**
    * @brief Sets the Round-Robin status.
    *
-   * @param enable_rr If true, enable RR. Otherwise, disable RR.
+   * @param round_robin If true, enable RR. Otherwise, disable RR.
    *
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
-  int SetRrStatus(bool enable_rr) {
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kSetRrStatus;
-    pipe_notification.data[0] = (uint64_t)enable_rr;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+  int SetRrStatus(bool round_robin) {
+    struct RoundRobinNotification rr_notification;
+    rr_notification.type = NotifType::kSetRrStatus;
+    rr_notification.round_robin = (uint64_t)round_robin;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&rr_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
+
     std::optional<PipeNotification> notification;
 
     // Block until receive.
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kSetRrStatus);
-    return notification->data[0];
+    struct RoundRobinNotification* result =
+        (struct RoundRobinNotification*)&notification.value();
+
+    assert(result->type == NotifType::kSetRrStatus);
+    return result->result;
   }
 
   /**
@@ -217,18 +240,26 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kGetRrStatus;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct RoundRobinNotification rr_notification;
+    rr_notification.type = NotifType::kGetRrStatus;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&rr_notification;
+
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
+
     std::optional<PipeNotification> notification;
 
     // Block until receive.
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kGetRrStatus);
-    return notification->data[0];
+    struct RoundRobinNotification* result =
+        (struct RoundRobinNotification*)&notification.value();
+
+    assert(result->type == NotifType::kGetRrStatus);
+    return result->round_robin;
   }
 
   /**
@@ -239,22 +270,28 @@ class DevBackend {
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
   int AllocateNotifBuf(uint32_t uthread_id) {
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kAllocateNotifBuf;
-    pipe_notification.data[0] = (uint64_t)enso::get_tid();
-    pipe_notification.data[1] = (uint64_t)uthread_id;
+    struct NotifBufNotification nb_notification;
+    nb_notification.type = NotifType::kAllocateNotifBuf;
+    nb_notification.uthread_id = (uint64_t)uthread_id;
 
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&nb_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
-    std::optional<PipeNotification> notification;
+    std::optional<PipeNotification> queue_value;
 
     // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
+    while (!(queue_value = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kAllocateNotifBuf);
-    return notification->data[0];
+    struct PipeNotification notification = queue_value.value();
+
+    struct NotifBufNotification* result =
+        (struct NotifBufNotification*)&notification;
+
+    assert(result->type == NotifType::kAllocateNotifBuf);
+    return result->notif_buf_id;
   }
 
   /**
@@ -266,9 +303,12 @@ class DevBackend {
    */
   int FreeNotifBuf(int notif_buf_id) {
     (void)notif_buf_id;
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kFreeNotifBuf;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct NotifBufNotification nb_notification;
+    nb_notification.type = NotifType::kFreeNotifBuf;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&nb_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -277,8 +317,11 @@ class DevBackend {
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kFreeNotifBuf);
-    return notification->data[0];
+    struct NotifBufNotification* result =
+        (struct NotifBufNotification*)&notification.value();
+
+    assert(result->type == NotifType::kFreeNotifBuf);
+    return result->result;
   }
 
   /**
@@ -289,11 +332,13 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
-    printf("allocate pipe!\n");
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kAllocatePipe;
-    pipe_notification.data[0] = fallback;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct AllocatePipeNotification alloc_notification;
+    alloc_notification.type = NotifType::kAllocatePipe;
+    alloc_notification.fallback = fallback;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&alloc_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -302,8 +347,10 @@ class DevBackend {
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kAllocatePipe);
-    return notification->data[0];
+    struct AllocatePipeNotification* result =
+        (struct AllocatePipeNotification*)&notification.value();
+    assert(result->type == NotifType::kAllocatePipe);
+    return result->pipe_id;
   }
 
   /**
@@ -314,10 +361,13 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) {
-    struct PipeNotification pipe_notification;
-    pipe_notification.type = NotifType::kFreePipe;
-    pipe_notification.data[0] = pipe_id;
-    while (queue_to_backend_->Push(pipe_notification) != 0) {
+    struct FreePipeNotification free_notification;
+    free_notification.type = NotifType::kFreePipe;
+    free_notification.pipe_id = pipe_id;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&free_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
     std::optional<PipeNotification> notification;
@@ -326,8 +376,11 @@ class DevBackend {
     while (!(notification = queue_from_backend_->Pop())) {
     }
 
-    assert(notification->type == notiftype::kFreePipe);
-    return notification->data[0];
+    struct FreePipeNotification* result =
+        (struct FreePipeNotification*)&notification.value();
+
+    assert(result->type == NotifType::kFreePipe);
+    return result->result;
   }
 
  private:
@@ -379,4 +432,4 @@ class DevBackend {
 };
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_

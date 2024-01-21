@@ -57,13 +57,10 @@
 
 namespace enso {
 
-void init_devbackend(void* dev) { pcie_init_devbackend(dev); }
-
 void* kthread_entry(void* arg) {
   sched::kthread_t* k = (sched::kthread_t*)arg;
   enso::set_self_core_id(k->curr_cpu);
-  pcie_init_devbackend(k->dev);
-  register_kthread(k->application_id);
+  pcie_register_kthread(0, k->application_id);
   return sched::kthread_entry(arg);
 }
 
@@ -140,9 +137,9 @@ int TxPipe::Init() noexcept {
     }
   }
 
-  sched::kthread_t* k = sched::getk();
-  buf_phys_addr_ = get_dev_addr_from_virt_addr(k, buf_);
-  sched::putk();
+  struct NotificationBufPair* notif_buf = &(device_->notification_buf_pair_);
+
+  buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
   return 0;
 }
 
@@ -215,29 +212,8 @@ RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
   return pipe;
 }
 
-RxPipe* Device::GetRxPipe(uint16_t queue_id) noexcept {
-  return rx_pipes_map_[queue_id];
-}
-
 int Device::GetNbFallbackQueues() noexcept {
-  sched::kthread_t* k = sched::getk();
-  int res = get_nb_fallback_queues(k);
-  sched::putk();
-  return res;
-}
-
-int Device::SetRrStatus(bool rr_status) noexcept {
-  sched::kthread_t* k = sched::getk();
-  int res = set_round_robin_status(k, rr_status);
-  sched::putk();
-  return res;
-}
-
-bool Device::GetRrStatus() noexcept {
-  sched::kthread_t* k = sched::getk();
-  int res = get_round_robin_status(k);
-  sched::putk();
-  return res;
+  return get_nb_fallback_queues(&notification_buf_pair_);
 }
 
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
@@ -323,7 +299,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   }
   int32_t id = notification->queue_id;
 
-  // TODO (kaajalg): make this safe? if id not in rx_pipes_map_
+  // TODO(kaajalg): make this safe? if id not in rx_pipes_map_
   RxPipe* rx_pipe = rx_pipes_map_[id];
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
@@ -359,6 +335,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 #else  // !LATENCY_OPT
   notif = get_next_rx_notif(&notification_buf_pair_);
+  id = notif->queue_id;
 
 #endif  // LATENCY_OPT
 
@@ -372,12 +349,6 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 }
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
-
-void Device::RegisterWaiting(sched::uthread_t* uthread) {
-  uthread->last_rx_notif_head = notification_buf_pair_.rx_head;
-  uthread->thread_waiting = true;
-  register_waiting(uthread_id_, notification_buf_pair_.id);
-}
 
 int Device::Init(uint32_t uthread_id) noexcept {
   if (core_id_ < 0) {
@@ -457,8 +428,8 @@ void Device::ProcessCompletions() {
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
     if (tx_req.pipe_id < 0) {
-      // on receiving this, should update the notification->signal for
-      // applications
+      // on receiving this, shinkansen should update the notification->signal
+      // for applications
       std::invoke(completion_callback_);
     } else {
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
@@ -471,6 +442,16 @@ void Device::ProcessCompletions() {
   for (RxTxPipe* pipe : rx_tx_pipes_) {
     pipe->ProcessCompletions();
   }
+}
+
+void Device::RegisterWaiting(sched::uthread_t* uthread) {
+  uthread->last_rx_notif_head = notification_buf_pair_.rx_head;
+  uthread->waiting = true;
+  pcie_register_waiting(notification_buf_pair_.id);
+}
+
+void Device::RegisterKthread(uint32_t application_id) {
+  pcie_register_kthread(application_id);
 }
 
 int Device::EnableTimeStamping() {
@@ -491,6 +472,10 @@ int Device::DisableRateLimiting() {
 
 int Device::EnableRoundRobin() {
   return enable_round_robin(&notification_buf_pair_);
+}
+
+bool Device::GetRoundRobinStatus() noexcept {
+  return get_round_robin_status(&notification_buf_pair_);
 }
 
 int Device::DisableRoundRobin() {

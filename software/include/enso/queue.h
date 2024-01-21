@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_QUEUE_H_
-#define SOFTWARE_INCLUDE_ENSO_QUEUE_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_QUEUE_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_QUEUE_H_
 
 #include <enso/consts.h>
 #include <enso/helpers.h>
@@ -249,6 +249,7 @@ class Queue {
                     << existing_size << std::endl;
           return -1;
         }
+
         create_queue = false;
       }
     }
@@ -263,7 +264,7 @@ class Queue {
 
     void* addr = get_huge_page(huge_page_path_, size_);
     if (addr == nullptr) {
-      std::cerr << "Failed to allocate shared memory: " << size_ << std::endl;
+      std::cerr << "Failed to allocate shared memory" << std::endl;
       return -1;
     }
     buf_addr_ = reinterpret_cast<Element*>(addr);
@@ -460,4 +461,4 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_QUEUE_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_QUEUE_H_

@@ -62,8 +62,6 @@ static long get_bar(struct chr_dev_bookkeep *chr_dev_bk,
                     unsigned int __user *user_addr);
 static long checked_cfg_access(struct pci_dev *dev, unsigned long uarg);
 static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg);
-static long get_ktimer(struct dev_bookkeep *dev_bk,
-                       unsigned int __user *user_addr);
 static long get_uio_dev_name(struct chr_dev_bookkeep *chr_dev_bk,
                              char __user *user_addr);
 static long get_nb_fallback_queues(struct dev_bookkeep *dev_bk,
@@ -114,6 +112,10 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
     return -ENOTTY;
   }
 
+// Linux 5.0 changed access_ok.
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
+  retval = !access_ok((void __user *)uarg, _IOC_SIZE(cmd));
+#else
   /*
    * The direction is a bitmask, and VERIFY_WRITE catches R/W transfers.
    * `Type' is user-oriented, while access_ok is kernel-oriented, so the
@@ -125,6 +127,8 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
   } else if (_IOC_DIR(cmd) & _IOC_WRITE) {
     retval = !access_ok(VERIFY_READ, (void __user *)uarg, _IOC_SIZE(cmd));
   }
+#endif
+
   if (unlikely(retval)) {
     INTEL_FPGA_PCIE_DEBUG("ioctl access violation.");
     return -EFAULT;
@@ -173,9 +177,6 @@ long intel_fpga_pcie_unlocked_ioctl(struct file *filp, unsigned int cmd,
       break;
     case INTEL_FPGA_PCIE_IOCTL_DMA_SEND:
       retval = intel_fpga_pcie_dma_send(dev_bk, uarg);
-      break;
-    case INTEL_FPGA_PCIE_IOCTL_GET_KTIMER:
-      retval = get_ktimer(dev_bk, (unsigned int __user *)uarg);
       break;
     case INTEL_FPGA_PCIE_IOCTL_CHR_GET_UIO_DEV_NAME:
       retval = get_uio_dev_name(chr_dev_bk, (char __user *)uarg);
@@ -891,7 +892,7 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg) {
       printk(KERN_INFO "dma_set_mask returned: %li\n", retval);
       return -EIO;
     }
-    dev_bk->kmem_info.virt_addr = dma_zalloc_coherent(
+    dev_bk->kmem_info.virt_addr = dma_alloc_coherent(
         &dev_bk->dev->dev, size, &dev_bk->kmem_info.bus_addr, GFP_KERNEL);
     if (!dev_bk->kmem_info.virt_addr) {
       INTEL_FPGA_PCIE_DEBUG("couldn't obtain kernel buffer.");
@@ -932,28 +933,4 @@ static long set_kmem_size(struct dev_bookkeep *dev_bk, unsigned long uarg) {
   }
 
   return retval;
-}
-
-/**
- * get_ktimer() - Copies the currently selected device BAR to the user.
- *
- * @dev_bk:     Pointer to the device bookkeeping structure. The structure
- *              is accessed to retrieve the timer which was recorded for
- *              the last DMA transaction.
- * @user_addr:  Address to an unsigned int in user-space.
- *
- * Return: 0 if successful, negative error code otherwise.
- */
-static long get_ktimer(struct dev_bookkeep *dev_bk,
-                       unsigned int __user *user_addr) {
-  unsigned int timer;
-
-  timer = dev_bk->dma_info.timer;
-
-  if (copy_to_user(user_addr, &timer, sizeof(timer))) {
-    INTEL_FPGA_PCIE_DEBUG("couldn't copy kernel timer information to user.");
-    return -EFAULT;
-  }
-
-  return 0;
 }

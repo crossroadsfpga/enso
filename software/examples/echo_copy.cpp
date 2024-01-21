@@ -67,10 +67,6 @@ struct EchoArgs {
   uint32_t uthread_id;
 };
 
-std::array<enso::Device*, enso::kMaxNbFlows> uthread_devices;
-// need to increment this atomically
-uint32_t nb_uthreads;
-
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
 void run_echo_copy(void* arg) {
@@ -131,7 +127,6 @@ void run_echo_copy(void* arg) {
       auto& rx_pipe = rx_pipes[i];
       auto batch = rx_pipe->RecvPkts();
 
-      num_failed += 1;
       if (unlikely(batch.available_bytes() == 0)) {
         num_failed += 1;
         if (num_failed == MAX_ITERATIONS) {
@@ -217,7 +212,10 @@ int main(int argc, const char* argv[]) {
   // Create all of the kthreads
   for (uint32_t i = 0; i < nb_cores; ++i) {
     log_info("Creating kthread on core %d", i);
-    kthread_t* kthread = enso::kthread_create(application_id, i);
+    kthread_t* kthread = sched::kthread_create(application_id, i);
+    // barrier to ensure that all kthreads start looking at their runqueues only
+    // after all kthreads have been initialized & all uthreads have been added
+    // to runqueues
     kthread->barrier = &init_barrier;
     kthreads.push_back(kthread);
   }

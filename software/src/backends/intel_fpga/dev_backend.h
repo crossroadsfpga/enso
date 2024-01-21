@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#define ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
 
 #include <enso/helpers.h>
 
@@ -55,23 +55,12 @@ class DevBackend {
       return nullptr;
     }
 
-    if (dev->Init(bdf, bar)) {
+    if (dev->Init()) {
       delete dev;
       return nullptr;
     }
 
     return dev;
-  }
-
-  static void Init(DevBackend* dev, unsigned int bdf, int bar) noexcept {
-    std::cerr << "Initializing Intel FPGA backend" << std::endl;
-
-    if (dev->Init(bdf, bar)) {
-      delete dev;
-      return;
-    }
-
-    return;
   }
 
   ~DevBackend() noexcept {
@@ -105,9 +94,7 @@ class DevBackend {
     return 0;
   }
 
-  static _enso_always_inline void register_waiting(uint32_t uthread_id,
-                                                   uint32_t notif_buf_id) {
-    (void)uthread_id;
+  static _enso_always_inline void register_waiting(uint32_t notif_buf_id) {
     (void)notif_buf_id;
     return;
   }
@@ -137,7 +124,7 @@ class DevBackend {
    *
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
-  int SetRrStatus(bool enable_rr) { return dev_->set_rr_status(enable_rr); }
+  int SetRrStatus(bool round_robin) { return dev_->set_rr_status(round_robin); }
 
   /**
    * @brief Gets the Round-Robin status.
@@ -197,10 +184,7 @@ class DevBackend {
   DevBackend(DevBackend&& other) = delete;
   DevBackend& operator=(DevBackend&& other) = delete;
 
-  int Init(unsigned int bdf, int bar) noexcept {
-    bdf_ = bdf;
-    bar_ = bar;
-
+  int Init() noexcept {
     dev_ = intel_fpga_pcie_api::IntelFpgaPcieDev::Create(bdf_, bar_);
     if (dev_ == nullptr) {
       return -1;
@@ -217,4 +201,4 @@ class DevBackend {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_

@@ -77,39 +77,21 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 #endif
 }
 
-void* pcie_get_devbackend(uint32_t core_id) {
-  std::string devbackend_huge_page_path =
-      std::string(enso::kHugePageDefaultPrefix) +
-      std::string(enso::kHugePageDevBackendPathPrefix);
-  void* devbackend_hugepage = enso::get_huge_page(devbackend_huge_page_path);
-  if (devbackend_hugepage == NULL) {
-    std::cerr << "Failed to get devbackend huge page." << std::endl;
-    exit(2);
-  }
-  DevBackend* dev =
-      &(reinterpret_cast<DevBackend*>(devbackend_hugepage)[core_id]);
-  return (void*)dev;
-}
-
-void pcie_init_devbackend(void* devbackend) {
-  DevBackend* dev = reinterpret_cast<DevBackend*>(devbackend);
-  DevBackend::Init(dev, 0, -1);
-}
-
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix,
                           uint32_t uthread_id) {
-  (void)bdf;
-  (void)bar;
-  sched::kthread_t* k = sched::getk();
-  DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
+  DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
+  if (unlikely(fpga_dev == nullptr)) {
+    std::cerr << "Could not create device" << std::endl;
+    return -1;
+  }
+  notification_buf_pair->fpga_dev = fpga_dev;
 
   int notif_pipe_id = fpga_dev->AllocateNotifBuf(uthread_id);
 
   if (notif_pipe_id < 0) {
     std::cerr << "Could not allocate notification buffer" << std::endl;
-    sched::putk();
     return -1;
   }
 
@@ -119,7 +101,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
       fpga_dev->uio_mmap((1 << 12) * (kMaxNbFlows + kMaxNbApps), 2);
   if (uio_mmap_bar2_addr == MAP_FAILED) {
     std::cerr << "Could not get mmap uio memory!" << std::endl;
-    sched::putk();
     return -1;
   }
 
@@ -162,14 +143,13 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
 
   std::string huge_page_path = huge_page_prefix +
                                std::string(kHugePageNotifBufPathPrefix) +
-                               std::to_string(notification_buf_pair->id + 2);
-  std::cout << "huge page path: " << huge_page_path << std::endl;
+                               std::to_string(notification_buf_pair->id);
+
   notification_buf_pair->regs = (struct QueueRegs*)notification_buf_pair_regs;
   notification_buf_pair->rx_buf =
       (struct RxNotification*)get_huge_page(huge_page_path);
   if (notification_buf_pair->rx_buf == NULL) {
     std::cerr << "Could not get huge page" << std::endl;
-    sched::putk();
     return -1;
   }
 
@@ -209,7 +189,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
       sizeof(*(notification_buf_pair->pending_rx_pipe_tails)) * kMaxNbFlows);
   if (notification_buf_pair->pending_rx_pipe_tails == NULL) {
     std::cerr << "Could not allocate memory" << std::endl;
-    sched::putk();
     return -1;
   }
   memset(notification_buf_pair->pending_rx_pipe_tails, 0, kMaxNbFlows);
@@ -218,7 +197,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
       (uint8_t*)malloc(kNotificationBufSize / 8);
   if (notification_buf_pair->wrap_tracker == NULL) {
     std::cerr << "Could not allocate memory" << std::endl;
-    sched::putk();
     return -1;
   }
   memset(notification_buf_pair->wrap_tracker, 0, kNotificationBufSize / 8);
@@ -227,7 +205,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
       (RxNotification**)malloc(kNotificationBufSize * sizeof(RxNotification*));
   if (notification_buf_pair->next_rx_pipe_notifs == NULL) {
     std::cerr << "Could not allocate memory" << std::endl;
-    sched::putk();
     return -1;
   }
 
@@ -254,7 +231,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   DevBackend::mmio_write32(&notification_buf_pair_regs->tx_mem_high,
                            (uint32_t)(phys_addr >> 32),
                            notification_buf_pair->uio_mmap_bar2_addr);
-  sched::putk();
   return 0;
 }
 
@@ -262,14 +238,13 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    struct NotificationBufPair* notification_buf_pair,
                    bool fallback) {
   void* uio_mmap_bar2_addr = notification_buf_pair->uio_mmap_bar2_addr;
-  sched::kthread_t* k = sched::getk();
-  DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
   int enso_pipe_id = fpga_dev->AllocatePipe(fallback);
 
   if (enso_pipe_id < 0) {
     std::cerr << "Could not allocate pipe" << std::endl;
-    sched::putk();
     return -1;
   }
 
@@ -317,7 +292,6 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   enso_pipe->buf = (uint32_t*)get_huge_page(huge_page_path, 0, true);
   if (enso_pipe->buf == NULL) {
     std::cerr << "Could not get huge page" << std::endl;
-    sched::putk();
     return -1;
   }
   uint64_t phys_addr = fpga_dev->ConvertVirtAddrToDevAddr(enso_pipe->buf);
@@ -345,7 +319,6 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                            (uint32_t)(phys_addr >> 32),
                            notification_buf_pair->uio_mmap_bar2_addr);
   update_fallback_queues_config(notification_buf_pair);
-  sched::putk();
   return enso_pipe_id;
 }
 
@@ -397,8 +370,6 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
     // Check if the next notification was updated by the NIC.
     if (!cur_notification->signal) {
-      // log_info("waiting for notif at phys addr 0x%lx",
-      //          virt_to_phys((void*)cur_notification));
       break;
     }
     cur_notification->signal = 0;
@@ -706,7 +677,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
          nb_unreported_completions) {
     update_tx_head(notification_buf_pair);
   }
-  // iterate over all nb_unreported_completions and invoke completion callback?
+  // iterate over all nb_unreported_completions and invoke completion callback
   if (completion_callback != nullptr) {
     uint32_t unreported_config_completions =
         notification_buf_pair->nb_unreported_completions -
@@ -720,30 +691,35 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   return 0;
 }
 
-int get_nb_fallback_queues(sched::kthread_t* k) {
-  DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
+int get_nb_fallback_queues(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
   return fpga_dev->GetNbFallbackQueues();
 }
 
-int set_round_robin_status(sched::kthread_t* k, bool round_robin) {
-  DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
+int set_round_robin_status(struct NotificationBufPair* notification_buf_pair,
+                           bool round_robin) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
   return fpga_dev->SetRrStatus(round_robin);
 }
 
-int get_round_robin_status(sched::kthread_t* k) {
-  DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
+int get_round_robin_status(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
   return fpga_dev->GetRrStatus();
 }
 
-uint64_t get_dev_addr_from_virt_addr(sched::kthread_t* k, void* virt_addr) {
-  DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
+uint64_t get_dev_addr_from_virt_addr(
+    struct NotificationBufPair* notification_buf_pair, void* virt_addr) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
   uint64_t dev_addr = fpga_dev->ConvertVirtAddrToDevAddr(virt_addr);
   return dev_addr;
 }
 
-void register_waiting(uint32_t uthread_id, uint32_t notif_id) {
-  log_info("Uthread %u registered waiting", uthread_id);
-  DevBackend::register_waiting(uthread_id, notif_id);
+void pcie_register_waiting(uint32_t notif_id) {
+  DevBackend::register_waiting(notif_id);
 }
 
 void pcie_register_kthread(uint32_t application_id) {
@@ -751,8 +727,8 @@ void pcie_register_kthread(uint32_t application_id) {
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
-  sched::kthread_t* k = sched::getk();
-  DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
   fpga_dev->FreeNotifBuf(notification_buf_pair->id);
 
@@ -777,18 +753,14 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   free(notification_buf_pair->wrap_tracker);
   free(notification_buf_pair->next_rx_pipe_notifs);
 
-  sched::putk();
-
   delete fpga_dev;
-
-  sched::putk();
 }
 
 void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
                     struct RxEnsoPipeInternal* enso_pipe,
                     enso_pipe_id_t enso_pipe_id) {
-  sched::kthread_t* k = sched::getk();
-  DevBackend* fpga_dev = reinterpret_cast<DevBackend*>(k->dev);
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
   DevBackend::mmio_write32(&enso_pipe->regs->rx_mem_low, 0,
                            notification_buf_pair->uio_mmap_bar2_addr);
@@ -807,8 +779,6 @@ void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
   fpga_dev->FreePipe(enso_pipe_id);
 
   update_fallback_queues_config(notification_buf_pair);
-
-  sched::putk();
 }
 
 int dma_finish(struct SocketInternal* socket_entry) {

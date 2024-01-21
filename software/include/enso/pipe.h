@@ -39,9 +39,10 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_PIPE_H_
-#define SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
 
+#include <enso/consts.h>
 #include <enso/helpers.h>
 #include <enso/internals.h>
 
@@ -67,11 +68,13 @@ uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
-void init_devbackend(void* dev);
-
-sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id);
-
+/**
+ * @brief Entry point for kthreads.
+ *
+ * @param arg Arguments for function: should be the kthread_t* object.
+ */
 void* kthread_entry(void* arg);
+
 /**
  * @brief A class that represents a device.
  *
@@ -80,10 +83,8 @@ void* kthread_entry(void* arg);
  *
  * Example:
  * @code
- *    uint16_t core_id = 0;
- *    uint32_t nb_pipes = 4;
  *    std::string pcie_addr = "0000:01:00.0";
- *    auto device = Device::Create(core_id, nb_pipes, pcie_addr);
+ *    auto device = Device::Create(pcie_addr);
  * @endcode
  */
 class Device {
@@ -134,26 +135,16 @@ class Device {
    */
   RxPipe* AllocateRxPipe(bool fallback = false) noexcept;
 
-  RxPipe* GetRxPipe(uint16_t queue_id) noexcept;
-
   /**
    * @brief Allocates a TX pipe.
    *
    * @param buf Buffer address to use for the pipe. It must be a pinned
    *            hugepage. If not specified, the buffer is allocated
-   * internally.
+   *            internally.
    * @return A pointer to the pipe. May be null if the pipe cannot be
-   * created.
+   *         created.
    */
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
-
-  int GetNbFallbackQueues() noexcept;
-
-  int SetRrStatus(bool rr_status) noexcept;
-
-  bool GetRrStatus() noexcept;
-
-  int ApplyConfig(struct TxNotification* notification);
 
   /**
    * @brief Allocates an RX/TX pipe.
@@ -175,9 +166,7 @@ class Device {
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
 
   /**
-   * @brief Gets the next RX notification object for this device.
-   *
-   * @return struct RxNotification*
+   * @brief Gets the next RX notification received by this device.
    */
   struct RxNotification* NextRxNotif();
 
@@ -300,6 +289,11 @@ class Device {
   int DisableRateLimiting();
 
   /**
+   * @brief Retrieves the number of fallback queues for this device.
+   */
+  int GetNbFallbackQueues() noexcept;
+
+  /**
    * @brief Enables round robing of packets among the fallback pipes.
    *
    * @note This setting applies to all pipes that share the same hardware
@@ -325,6 +319,14 @@ class Device {
   int DisableRoundRobin();
 
   /**
+   * @brief Gets the round robin status for the device.
+   *
+   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
+   *         failure.
+   */
+  bool GetRoundRobinStatus() noexcept;
+
+  /**
    * @brief Sends a certain number of bytes to the device. This is designed to
    * be used by a TxPipe object.
    *
@@ -336,9 +338,14 @@ class Device {
   void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
 
   /**
-   * @brief Get the Notif Queue Id object
+   * @brief Applies the config described by the given transmission notification.
    *
-   * @return int
+   * @return 0 on success, -1 on failure.
+   */
+  int ApplyConfig(struct TxNotification* notification);
+
+  /**
+   * @brief Gets the ID of the notification buffer for this device.
    */
   int GetNotifQueueId() noexcept;
 
@@ -368,6 +375,8 @@ class Device {
 
   /**
    * @brief Initializes the device.
+   *
+   * @param uthread_id ID of the uthread creating this device.
    *
    * @return 0 on success and a non-zero error code on failure.
    */
@@ -793,8 +802,7 @@ class RxPipe {
  *
  * Example:
  * @code
- *    enso::Device* device = enso::Device::Create(core_id, nb_pipes,
- *                                                    pcie_addr);
+ *    enso::Device* device = enso::Device::Create(pcie_addr);
  *    enso::TxPipe* tx_pipe = device->AllocateTxPipe();
  *    uint8_t* buf = tx_pipe->AllocateBuf(data_size);
  *
@@ -1446,4 +1454,4 @@ class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_

@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_PCIE_H_
-#define SOFTWARE_SRC_PCIE_H_
+#ifndef ENSO_SOFTWARE_SRC_PCIE_H_
+#define ENSO_SOFTWARE_SRC_PCIE_H_
 
 #include <endian.h>
 #include <enso/helpers.h>
@@ -58,21 +58,6 @@ struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
-
-/**
- * @brief
- *
- * @param core_id
- * @return void*
- */
-void* pcie_get_devbackend(uint32_t core_id);
-
-/**
- * @brief
- *
- * @param dev
- */
-void pcie_init_devbackend(void* dev);
 
 /**
  * @brief Initializes the notification buffer pair.
@@ -274,7 +259,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
  *
  * @return Number of fallback queues currently in use or -1 on failure.
  */
-int get_nb_fallback_queues(sched::kthread_t* k);
+int get_nb_fallback_queues(struct NotificationBufPair* notification_buf_pair);
 
 /**
  * @brief Sets the round robin status for the device.
@@ -284,7 +269,8 @@ int get_nb_fallback_queues(sched::kthread_t* k);
  *
  * @return 0 on success, -1 on failure.
  */
-int set_round_robin_status(sched::kthread_t* k, bool round_robin);
+int set_round_robin_status(struct NotificationBufPair* notification_buf_pair,
+                           bool round_robin);
 
 /**
  * @brief Gets the round robin status for the device.
@@ -294,7 +280,7 @@ int set_round_robin_status(sched::kthread_t* k, bool round_robin);
  * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
  *         failure.
  */
-int get_round_robin_status(sched::kthread_t* k);
+int get_round_robin_status(struct NotificationBufPair* notification_buf_pair);
 
 /**
  * @brief Converts an address in the application's virtual address space to an
@@ -304,7 +290,8 @@ int get_round_robin_status(sched::kthread_t* k);
  * @param virt_addr Virtual address to convert.
  * @return Converted address or 0 if the address cannot be translated.
  */
-uint64_t get_dev_addr_from_virt_addr(sched::kthread_t* k, void* virt_addr);
+uint64_t get_dev_addr_from_virt_addr(
+    struct NotificationBufPair* notification_buf_pair, void* virt_addr);
 
 /**
  * @brief Frees the notification buffer pair.
@@ -348,11 +335,9 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global);
 /**
  * @brief Registers a waiting uthread with the IOKernel.
  *
- * @param uthread_id
- * @param notif_rx_head
- * @param notif_id
+ * @param notif_id The uthread's notification buffer ID.
  */
-void register_waiting(uint32_t uthread_id, uint32_t notif_id);
+void pcie_register_waiting(uint32_t notif_id);
 
 /**
  * @brief Registers a kthread with the IOKernel.
@@ -363,4 +348,4 @@ void pcie_register_kthread(uint32_t application_id);
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_PCIE_H_
+#endif  // ENSO_SOFTWARE_SRC_PCIE_H_

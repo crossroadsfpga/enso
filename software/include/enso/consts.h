@@ -38,8 +38,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_CONSTS_H_
-#define SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 
 #include <cstdint>
 #include <string>
@@ -89,8 +89,6 @@ static constexpr std::string_view kHugePageNotifBufPathPrefix = "_notif_buf:";
 static constexpr std::string_view kHugePageQueuePathPrefix = "_queue:";
 static constexpr std::string_view kHugePageUthreadsPathPrefix = "_uthread:";
 static constexpr std::string_view kHugePageKthreadsPathPrefix = "_kthread:";
-static constexpr std::string_view kHugePageDevBackendPathPrefix =
-    "_dev_backend";
 
 // We need this to allow the same huge page to be mapped to adjacent memory
 // regions.
@@ -157,11 +155,71 @@ enum class NotifType : uint8_t {
   kKthreadYield = 13
 };
 
+struct MmioNotification {
+  NotifType type;
+  uint64_t address;
+  uint64_t value;
+  uint64_t padding;
+};
+
+struct FallbackNotification {
+  NotifType type;
+  uint64_t nb_fallback_queues;
+  uint64_t result;
+  uint64_t padding;
+};
+
+struct RoundRobinNotification {
+  NotifType type;
+  uint64_t round_robin;
+  uint64_t result;
+  uint64_t padding;
+};
+
+struct NotifBufNotification {
+  NotifType type;
+  uint64_t notif_buf_id;
+  uint64_t uthread_id;
+  uint64_t padding;
+};
+
+struct AllocatePipeNotification {
+  NotifType type;
+  uint64_t fallback;
+  uint64_t pipe_id;
+  uint64_t padding;
+};
+
+struct FreePipeNotification {
+  NotifType type;
+  uint64_t pipe_id;
+  uint64_t result;
+  uint64_t padding;
+};
+
+struct ShinkansenNotification {
+  NotifType type;
+  uint64_t notif_queue_id;
+  uint64_t padding[2];
+};
+
+struct KthreadNotification {
+  NotifType type;
+  uint64_t application_id;
+  uint64_t padding[2];
+};
+
+struct WaitingNotification {
+  NotifType type;
+  uint64_t notif_buf_id;
+  uint64_t padding[2];
+};
+
 struct PipeNotification {
   NotifType type;
-  uint64_t data[6];
+  uint64_t data[3];
 };
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_

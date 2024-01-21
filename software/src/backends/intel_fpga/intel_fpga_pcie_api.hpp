@@ -16,8 +16,8 @@
 // logic devices manufactured by Intel and sold by Intel or its authorized
 // distributors. Please refer to the applicable agreement for further details.
 
-#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
-#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
+#define ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
 
 /**
  * @file
@@ -315,13 +315,6 @@ class IntelFpgaPcieDev {
   int dma_send_all(void);
 
   /**
-   * Retrieve the kernel timer in microseconds.
-   * @return Positive integer representing the timer value in microseconds;
-   *         0 otherwise
-   */
-  unsigned int get_ktimer(void);
-
-  /**
    * Retrieve the UIO device name.
    * @return 0 on success. On error, -1 is returned and errno is set
    *         appropriately.
@@ -408,4 +401,4 @@ class IntelFpgaPcieDev {
 
 }  // namespace intel_fpga_pcie_api
 
-#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_

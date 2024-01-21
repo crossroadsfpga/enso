@@ -109,6 +109,7 @@ void* get_huge_page(const std::string& path, size_t size, bool mirror) {
 
   void* virt_addr = (void*)mmap(nullptr, size * 2, PROT_READ | PROT_WRITE,
                                 MAP_SHARED | MAP_HUGETLB, fd, 0);
+
   if (virt_addr == (void*)-1) {
     std::cerr << "(" << errno << ") Could not mmap huge page" << std::endl;
     close(fd);

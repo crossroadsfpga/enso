@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_CONFIG_H_
-#define SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_
 
 #include <enso/internals.h>
 
@@ -172,4 +172,4 @@ void register_kthread(uint32_t application_id);
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_
