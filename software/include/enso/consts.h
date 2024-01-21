@@ -206,13 +206,13 @@ struct KthreadNotification {
   NotifType type;
   uint64_t application_id;
   uint64_t padding[2];
-}
+};
 
 struct WaitingNotification {
   NotifType type;
   uint64_t notif_buf_id;
   uint64_t padding[2];
-}
+};
 
 struct PipeNotification {
   NotifType type;
