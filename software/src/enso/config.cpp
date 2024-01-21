@@ -223,8 +223,4 @@ int update_fallback_queues_config(
                                    (bool)enable_rr);
 }
 
-void register_kthread(uint32_t application_id) {
-  pcie_register_kthread(application_id);
-}
-
 }  // namespace enso

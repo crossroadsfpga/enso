@@ -163,13 +163,6 @@ int disable_round_robin(struct NotificationBufPair* notification_buf_pair);
 int update_fallback_queues_config(
     struct NotificationBufPair* notification_buf_pair);
 
-/**
- * @brief Registers a kthread for the given application.
- *
- * @param application_id
- */
-void register_kthread(uint32_t application_id);
-
 }  // namespace enso
 
 #endif  // ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_
