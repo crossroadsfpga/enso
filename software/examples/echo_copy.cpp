@@ -67,7 +67,7 @@ struct EchoArgs {
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void run_echo_copy(void* arg) {
+void* run_echo_copy(void* arg) {
   struct EchoArgs* args = (struct EchoArgs*)arg;
   uint32_t nb_queues = args->nb_queues;
   uint32_t core_id = args->core_id;
@@ -147,6 +147,8 @@ void run_echo_copy(void* arg) {
       tx_pipe->SendAndFree(batch_length);
     }
   }
+
+  return NULL;
 }
 
 int main(int argc, const char* argv[]) {
