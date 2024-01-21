@@ -182,35 +182,6 @@ class DevBackend {
   }
 
   /**
-   * @brief New kthreads must register themselves with the IOKernel.
-   *
-   * @param application_id Application ID that is running the kthread.
-   * @return Void
-   */
-  static _enso_always_inline void register_kthread(uint32_t application_id) {
-    struct KthreadNotification kthread_notification;
-    kthread_notification.type = NotifType::kRegisterKthread;
-    kthread_notification.application_id = (uint64_t)application_id;
-
-    enso::PipeNotification* pipe_notification =
-        (enso::PipeNotification*)&kthread_notification;
-    while (queue_to_backend_->Push(*pipe_notification) != 0) {
-    }
-
-    std::optional<PipeNotification> notification;
-
-    // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
-    }
-
-    struct KthreadNotification* result =
-        (struct KthreadNotification*)&notification.value();
-
-    assert(result->type == NotifType::kRegisterKthread);
-    return;
-  }
-
-  /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device.
    * @param virt_addr Address in the application's virtual address space.

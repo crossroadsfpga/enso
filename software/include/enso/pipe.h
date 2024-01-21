@@ -72,13 +72,6 @@ uint32_t external_peek_next_batch_from_queue(
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
 /**
- * @brief Entry point for kthreads.
- *
- * @param arg Arguments for function: should be the kthread_t* object.
- */
-void* kthread_entry(void* arg);
-
-/**
  * @brief A class that represents a device.
  *
  * Should be instantiated using the factory method `Create()`. Use separate

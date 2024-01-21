@@ -172,6 +172,7 @@ int main(int argc, const char* argv[]) {
   using sched::kthread_t;
   using sched::uthread_t;
 
+  uint32_t starting_core = atoi(argv[1]);
   uint32_t nb_cores = atoi(argv[2]);
   uint32_t nb_uthreads = atoi(argv[3]);
   uint32_t nb_queues = atoi(argv[4]);
@@ -183,36 +184,35 @@ int main(int argc, const char* argv[]) {
   std::vector<kthread_t*> kthreads;
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
-  /*
-  Barrier to ensure that all kthreads start looking at their runqueues only
-  after all kthreads have been initialized & all uthreads have been added
-  to runqueues
-  */
+  /**
+   * Barrier to ensure that all kthreads start looking at their runqueues only
+   * after all kthreads have been initialized & all uthreads have been added
+   * to runqueues
+   */
   pthread_barrier_t init_barrier;
   pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
 
   /* Create all of the kthreads */
   for (uint32_t i = 0; i < nb_cores; ++i) {
     log_info("Creating kthread on core %d", i);
-    kthread_t* kthread = enso::kthread_create(application_id, i, &init_barrier);
+    kthread_t* kthread =
+        sched::kthread_create(application_id, i, &init_barrier);
     kthreads.push_back(kthread);
   }
 
-  /* Add all of the uthreads to the kthreads runqueues */
-  uint32_t current_kthread;
-  for (uint32_t i = 0; i < nb_uthreads; ++i) {
-    current_kthread = i % nb_cores;
+  /* Add all of the uthreads to the kthreads' runqueues */
+  for (uint32_t uthread_id = 0; uthread_id < nb_uthreads; ++uthread_id) {
+    uint32_t current_kthread = uthread_id % nb_cores;
     struct EchoArgs* args = (struct EchoArgs*)malloc(sizeof(struct EchoArgs));
     args->nb_queues = nb_queues;
     args->nb_cycles = nb_cycles;
     args->stats = &(thread_stats[current_kthread]);
-    args->uthread_id = i;
-    args->core_id = i;
-    uthread_t* th =
-        sched::uthread_create(run_echo_copy, (void*)args, application_id, i);
-    /* Add the uthread to the kthread's runqueue */
+    args->core_id = starting_core + uthread_id;
+    args->uthread_id = uthread_id;
+
     kthread_t* k = kthreads[current_kthread];
-    sched::uthread_ready_kthread(k, th);
+    sched::uthread_create(application_id, k, uthread_id, run_echo_copy,
+                          (void*)args);
   }
 
   pthread_barrier_wait(&init_barrier);

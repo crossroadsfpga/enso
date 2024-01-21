@@ -332,13 +332,6 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
  */
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
-/**
- * @brief Registers a kthread with the IOKernel.
- *
- * @param application_id
- */
-void pcie_register_kthread(uint32_t application_id);
-
 }  // namespace enso
 
 #endif  // ENSO_SOFTWARE_SRC_PCIE_H_

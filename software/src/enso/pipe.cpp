@@ -57,18 +57,6 @@
 
 namespace enso {
 
-void* kthread_entry(void* arg) {
-  sched::kthread_t* k = (sched::kthread_t*)arg;
-  enso::set_self_core_id(k->curr_cpu);
-  pcie_register_kthread(0, k->application_id);
-  return sched::kthread_entry(arg);
-}
-
-sched::kthread_t* kthread_create(uint32_t application_id, uint32_t core_id,
-                                 pthread_barrier_t* barrier) {
-  return sched::kthread_create(application_id, core_id, kthread_entry, barrier);
-}
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {

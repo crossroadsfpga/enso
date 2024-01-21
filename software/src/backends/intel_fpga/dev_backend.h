@@ -88,12 +88,6 @@ class DevBackend {
     return *addr;
   }
 
-  static _enso_always_inline uint32_t
-  register_kthread(uint32_t application_id) {
-    (void)application_id;
-    return 0;
-  }
-
   /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device (typically the physical
