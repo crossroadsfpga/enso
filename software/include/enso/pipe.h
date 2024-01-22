@@ -291,7 +291,7 @@ class Device {
    * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
    *         failure.
    */
-  bool GetRoundRobinStatus() noexcept;
+  int GetRoundRobinStatus() noexcept;
 
  private:
   struct TxPendingRequest {
