@@ -46,6 +46,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <fastscheduler/queue.hpp>
+#include <fastscheduler/sched.hpp>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -53,14 +55,14 @@
 
 #include "enso/consts.h"
 #include "enso/helpers.h"
-#include "enso/queue.h"
 #include "intel_fpga_pcie_api.hpp"
 
 namespace enso {
 
-thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
-thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
-    queue_from_backend_;
+using sched::PipeNotification;
+
+thread_local QueueProducer<sched::PipeNotification>* queue_to_backend_;
+thread_local QueueConsumer<sched::PipeNotification>* queue_from_backend_;
 thread_local uint64_t shinkansen_notif_buf_id_;
 
 class DevBackend {
@@ -344,6 +346,7 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
+    log_info("Allocating pipe");
     int pipe_id = dev_->allocate_pipe(fallback);
     return pipe_id;
   }
@@ -373,6 +376,7 @@ class DevBackend {
    *        when informing it of new pipes.
    */
   uint64_t get_shinkansen_notif_buf_id() {
+    log_info("hi there");
     struct ShinkansenNotification sk_notification;
     sk_notification.type = NotifType::kGetShinkansenNotifBufId;
 
@@ -381,7 +385,11 @@ class DevBackend {
     while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
+    log_info("sent!");
+
     std::optional<PipeNotification> notification;
+
+    log_info("waiting...");
 
     // Block until receive.
     while (!(notification = queue_from_backend_->Pop())) {
@@ -400,26 +408,20 @@ class DevBackend {
    * @return 0 on success and a non-zero error code on failure.
    */
   int Init() noexcept {
+    log_info("in initialization");
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
       std::cerr << "Could not get CPU ID" << std::endl;
       return -1;
     }
 
-    std::string queue_to_app_name =
-        std::string(enso::kIpcQueueToAppName) + std::to_string(core_id_) + "_";
-    std::string queue_from_app_name = std::string(enso::kIpcQueueFromAppName) +
-                                      std::to_string(core_id_) + "_";
-
-    queue_to_backend_ =
-        QueueProducer<PipeNotification>::Create(queue_from_app_name);
+    queue_to_backend_ = sched::access_queue_to_backend();
     if (queue_to_backend_ == nullptr) {
       std::cerr << "Could not create queue to backend" << std::endl;
       return -1;
     }
 
-    queue_from_backend_ =
-        QueueConsumer<PipeNotification>::Create(queue_to_app_name);
+    queue_from_backend_ = sched::access_queue_from_backend();
     if (queue_from_backend_ == nullptr) {
       std::cerr << "Could not create queue from backend" << std::endl;
       return -1;
@@ -431,6 +433,8 @@ class DevBackend {
     }
 
     shinkansen_notif_buf_id_ = get_shinkansen_notif_buf_id();
+
+    log_info("Shinkansen notif buf id: %lu", shinkansen_notif_buf_id_);
 
     return 0;
   }

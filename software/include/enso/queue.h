@@ -160,6 +160,32 @@ class Queue {
   }
 
   /**
+   * @brief Accesses the queue of the given name. Assumes that it has already
+   * been created.
+   *
+   * @param queue_name
+   * @param size
+   * @param huge_page_prefix
+   * @return The created queue.
+   */
+  static std::unique_ptr<Subclass> Access(
+      const std::string& queue_name, size_t size = 0,
+      std::string huge_page_prefix = "") noexcept {
+    if (huge_page_prefix == "") {
+      huge_page_prefix = kHugePageDefaultPrefix;
+    }
+
+    std::unique_ptr<Subclass> queue(
+        new (std::nothrow) Subclass(queue_name, size, huge_page_prefix));
+
+    if (queue->PrivateAccess()) {
+      return std::unique_ptr<Subclass>{};
+    }
+
+    return queue;
+  }
+
+  /**
    * @brief Returns the address of the internal buffer.
    * @return The address of the internal buffer.
    */
@@ -186,6 +212,42 @@ class Queue {
       : size_(size),
         queue_name_(queue_name),
         huge_page_prefix_(huge_page_prefix) {}
+
+  int PrivateAccess() noexcept {
+    if (size_ == 0) {
+      size_ = kBufPageSize;
+    }
+
+    if ((size_ & (size_ - 1)) != 0) {
+      std::cerr << "Queue size must be a power of two" << std::endl;
+      return -1;
+    }
+
+    if (size_ < sizeof(struct Element)) {
+      std::cerr << "Queue size must be at least " << sizeof(struct Element)
+                << " bytes" << std::endl;
+      return -1;
+    }
+
+    capacity_ = size_ / sizeof(struct Element);
+    index_mask_ = capacity_ - 1;
+
+    // Keep path so that we can unlink it later if needed.
+    huge_page_path_ =
+        huge_page_prefix_ + std::string(kHugePageQueuePathPrefix) + queue_name_;
+
+    created_queue_ = false;
+    huge_page_path_ += std::to_string(size_);
+
+    void* addr = get_huge_page(huge_page_path_, size_);
+    if (addr == nullptr) {
+      std::cerr << "Failed to allocate shared memory" << std::endl;
+      return -1;
+    }
+    buf_addr_ = reinterpret_cast<Element*>(addr);
+
+    return 0;
+  }
 
   /**
    * @brief Initializes the Queue object.

@@ -180,7 +180,7 @@ struct NotifBufNotification {
   NotifType type;
   uint64_t notif_buf_id;
   uint64_t uthread_id;
-  uint64_t padding;
+  uint64_t result;
 };
 
 struct AllocatePipeNotification {

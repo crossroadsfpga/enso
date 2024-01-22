@@ -39,6 +39,9 @@
 #include <chrono>
 #include <csignal>
 #include <cstdint>
+#include <fastscheduler/defs.hpp>
+#include <fastscheduler/kthread.hpp>
+#include <fastscheduler/sched.hpp>
 #include <iostream>
 #include <memory>
 
@@ -57,7 +60,7 @@ struct EchoArgs {
   uint32_t uthread_id;
 };
 
-void* run_echo(void* arg) {
+void run_echo(void* arg) {
   struct EchoArgs* args = (struct EchoArgs*)arg;
   uint32_t nb_queues = args->nb_queues;
   uint32_t core_id = args->core_id;
@@ -120,16 +123,19 @@ void* run_echo(void* arg) {
       pipe->SendAndFree(batch_length);
     }
   }
-  return NULL;
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 5) {
+  if (argc != 7) {
     std::cerr << "Usage: " << argv[0]
-              << " NB_CORES NB_QUEUES NB_CYCLES APPLICATION_ID" << std::endl
+              << " STARTING_CORE NB_CORES NB_UTHREADS NB_QUEUES NB_CYCLES "
+                 "APPLICATION_ID"
+              << std::endl
               << std::endl;
-    std::cerr << "NB_CORES: Number of cores to use." << std::endl;
-    std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
+    std::cerr << "STARTING_CORE: Core to start running on." << std::endl;
+    std::cerr << "NB_CORES: Number of cores to run on." << std::endl;
+    std::cerr << "NB_UTHREADS: Number of uthreads to create." << std::endl;
+    std::cerr << "NB_QUEUES: Number of queues per uthread." << std::endl;
     std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
                  " packet."
               << std::endl;
@@ -142,10 +148,12 @@ int main(int argc, const char* argv[]) {
   using sched::kthread_t;
   using sched::uthread_t;
 
-  uint32_t nb_cores = atoi(argv[1]);
-  uint32_t nb_queues = atoi(argv[2]);
-  uint32_t nb_cycles = atoi(argv[3]);
-  uint32_t application_id = atoi(argv[4]);
+  uint32_t starting_core = atoi(argv[1]);
+  uint32_t nb_cores = atoi(argv[2]);
+  uint32_t nb_uthreads = atoi(argv[3]);
+  uint32_t nb_queues = atoi(argv[4]);
+  uint32_t nb_cycles = atoi(argv[5]);
+  uint32_t application_id = atoi(argv[6]);
 
   signal(SIGINT, int_handler);
 
