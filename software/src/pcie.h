@@ -47,7 +47,6 @@
 #include <netinet/ip.h>
 
 #include <algorithm>
-#include <fastscheduler/defs.hpp>
 #include <string>
 
 namespace enso {

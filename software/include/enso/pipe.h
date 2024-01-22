@@ -48,7 +48,6 @@
 
 #include <array>
 #include <cassert>
-#include <fastscheduler/defs.hpp>
 #include <functional>
 #include <iostream>
 #include <memory>

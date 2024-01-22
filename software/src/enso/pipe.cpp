@@ -47,8 +47,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
-#include <fastscheduler/defs.hpp>
-#include <fastscheduler/kthread.hpp>
 #include <iostream>
 #include <memory>
 #include <string>

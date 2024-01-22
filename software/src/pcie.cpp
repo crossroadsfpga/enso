@@ -56,7 +56,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
-#include <fastscheduler/defs.hpp>
 #include <iomanip>
 #include <iostream>
 #include <limits>

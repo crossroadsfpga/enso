@@ -46,23 +46,18 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#include <fastscheduler/queue.hpp>
-#include <fastscheduler/sched.hpp>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
 
-#include "enso/consts.h"
 #include "enso/helpers.h"
 #include "intel_fpga_pcie_api.hpp"
 
 namespace enso {
 
-using sched::PipeNotification;
-
-thread_local QueueProducer<sched::PipeNotification>* queue_to_backend_;
-thread_local QueueConsumer<sched::PipeNotification>* queue_from_backend_;
+thread_local QueueProducer<PipeNotification>* queue_to_backend_;
+thread_local QueueConsumer<PipeNotification>* queue_from_backend_;
 thread_local uint64_t shinkansen_notif_buf_id_;
 
 class DevBackend {
@@ -415,13 +410,20 @@ class DevBackend {
       return -1;
     }
 
-    queue_to_backend_ = sched::access_queue_to_backend();
+    std::string queue_to_app_name =
+        std::string(kIpcQueueToAppName) + std::to_string(core_id_) + "_";
+    std::string queue_from_app_name =
+        std::string(kIpcQueueFromAppName) + std::to_string(core_id_) + "_";
+
+    queue_to_backend_ =
+        QueueProducer<PipeNotification>::Create(queue_from_app_name).get();
     if (queue_to_backend_ == nullptr) {
       std::cerr << "Could not create queue to backend" << std::endl;
       return -1;
     }
 
-    queue_from_backend_ = sched::access_queue_from_backend();
+    queue_from_backend_ =
+        QueueProducer<PipeNotification>::Create(queue_to_app_name).get();
     if (queue_from_backend_ == nullptr) {
       std::cerr << "Could not create queue from backend" << std::endl;
       return -1;
