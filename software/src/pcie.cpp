@@ -61,10 +61,6 @@
 #include <limits>
 #include <stdexcept>
 
-extern "C" {
-#include <base/log.h>
-}
-
 // Automatically points to the device backend configured at compile time.
 #include <dev_backend.h>
 

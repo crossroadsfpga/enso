@@ -344,7 +344,6 @@ class DevBackend {
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
-    log_info("Allocating pipe");
     int pipe_id = dev_->allocate_pipe(fallback);
     return pipe_id;
   }
@@ -374,7 +373,6 @@ class DevBackend {
    *        when informing it of new pipes.
    */
   uint64_t get_shinkansen_notif_buf_id() {
-    log_info("hi there");
     struct ShinkansenNotification sk_notification;
     sk_notification.type = NotifType::kGetShinkansenNotifBufId;
 
@@ -383,11 +381,7 @@ class DevBackend {
     while (queue_to_backend_->Push(*pipe_notification) != 0) {
     }
 
-    log_info("sent!");
-
     std::optional<PipeNotification> notification;
-
-    log_info("waiting...");
 
     // Block until receive.
     while (!(notification = queue_from_backend_->Pop())) {
@@ -406,7 +400,6 @@ class DevBackend {
    * @return 0 on success and a non-zero error code on failure.
    */
   int Init() noexcept {
-    log_info("in initialization");
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
       std::cerr << "Could not get CPU ID" << std::endl;
@@ -438,8 +431,6 @@ class DevBackend {
     }
 
     shinkansen_notif_buf_id_ = get_shinkansen_notif_buf_id();
-
-    log_info("Shinkansen notif buf id: %lu", shinkansen_notif_buf_id_);
 
     return 0;
   }

@@ -42,12 +42,6 @@
 #include <csignal>
 #include <cstdint>
 #include <cstring>
-extern "C" {
-#include <base/log.h>
-}
-#include <fastscheduler/defs.hpp>
-#include <fastscheduler/kthread.hpp>
-#include <fastscheduler/sched.hpp>
 #include <iostream>
 #include <memory>
 #include <vector>
