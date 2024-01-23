@@ -353,6 +353,10 @@ int Device::Init() noexcept {
   return 0;
 }
 
+int Device::ApplyConfig(struct TxNotification* config_notification) {
+  return send_config(&notification_buf_pair_, config_notification);
+}
+
 void Device::Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
                   uint32_t nb_bytes) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
