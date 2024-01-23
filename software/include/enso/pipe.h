@@ -317,13 +317,6 @@ class Device {
   void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
 
   /**
-   * @brief Applies the config described by the given transmission notification.
-   *
-   * @return 0 on success, -1 on failure.
-   */
-  int ApplyConfig(struct TxNotification* notification);
-
-  /**
    * @brief Gets the ID of the notification buffer for this device.
    */
   int GetNotifQueueId() noexcept;
