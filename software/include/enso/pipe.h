@@ -1150,14 +1150,14 @@ class RxTxPipe {
    */
   inline RxPipe::MessageBatch<PeekPktIterator> PeekPkts(
       int32_t max_nb_pkts = -1) {
-    using micro = std::chrono::microseconds;
-    auto start = std::chrono::high_resolution_clock::now();
+    // using micro = std::chrono::microseconds;
+    // auto start = std::chrono::high_resolution_clock::now();
     device_->ProcessCompletions();
-    auto finish = std::chrono::high_resolution_clock::now();
-    if (std::chrono::duration_cast<micro>(finish - start).count() > 0)
-      std::cout << "ProcessCompletions() took "
-                << std::chrono::duration_cast<micro>(finish - start).count()
-                << " " << std::endl;
+    // auto finish = std::chrono::high_resolution_clock::now();
+    // if (std::chrono::duration_cast<micro>(finish - start).count() > 0)
+    //   std::cout << "ProcessCompletions() took "
+    //             << std::chrono::duration_cast<micro>(finish - start).count()
+    //             << " " << std::endl;
     return rx_pipe_->PeekPkts(max_nb_pkts);
   }
 
