@@ -48,7 +48,7 @@
 
 #include <array>
 #include <cassert>
-#include <fastscheduler/defs.hpp>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -325,7 +325,15 @@ class Device {
    * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
    *         failure.
    */
-  bool GetRoundRobinStatus() noexcept;
+  int GetRoundRobinStatus() noexcept;
+
+  /**
+   * @brief Sends the given config notification to the device.
+   *
+   * @param config_notification The config notification.
+   * @return 0 on success, -1 on failure.
+   */
+  int ApplyConfig(struct TxNotification* config_notification);
 
   /**
    * @brief Sends a certain number of bytes to the device. This is designed to
@@ -337,13 +345,6 @@ class Device {
    * @return The number of bytes sent.
    */
   void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
-
-  /**
-   * @brief Applies the config described by the given transmission notification.
-   *
-   * @return 0 on success, -1 on failure.
-   */
-  int ApplyConfig(struct TxNotification* notification);
 
   /**
    * @brief Gets the ID of the notification buffer for this device.
@@ -1174,7 +1175,14 @@ class RxTxPipe {
    */
   inline RxPipe::MessageBatch<PeekPktIterator> PeekPkts(
       int32_t max_nb_pkts = -1) {
+    // using micro = std::chrono::microseconds;
+    // auto start = std::chrono::high_resolution_clock::now();
     device_->ProcessCompletions();
+    // auto finish = std::chrono::high_resolution_clock::now();
+    // if (std::chrono::duration_cast<micro>(finish - start).count() > 0)
+    //   std::cout << "ProcessCompletions() took "
+    //             << std::chrono::duration_cast<micro>(finish - start).count()
+    //             << " " << std::endl;
     return rx_pipe_->PeekPkts(max_nb_pkts);
   }
 
