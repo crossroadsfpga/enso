@@ -62,22 +62,18 @@ struct EchoArgs {
   uint32_t core_id;
   uint32_t nb_cycles;
   enso::stats_t* stats;
-  uint32_t uthread_id;
 };
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void run_echo_copy(void* arg) {
+void* run_echo_copy(void* arg) {
   struct EchoArgs* args = (struct EchoArgs*)arg;
   uint32_t nb_queues = args->nb_queues;
   uint32_t core_id = args->core_id;
   uint32_t nb_cycles = args->nb_cycles;
   enso::stats_t* stats = args->stats;
-  uint32_t uthread_id = args->uthread_id;
 
   usleep(1000000);
-
-  log_info("Running %u", uthread_id);
 
   using enso::Device;
   using enso::RxPipe;
@@ -86,7 +82,7 @@ void run_echo_copy(void* arg) {
   std::vector<RxPipe*> rx_pipes;
   std::vector<TxPipe*> tx_pipes;
 
-  std::unique_ptr<Device> dev = Device::Create(uthread_id);
+  std::unique_ptr<Device> dev = Device::Create(0);
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -96,7 +92,7 @@ void run_echo_copy(void* arg) {
   for (uint32_t i = 0; i < nb_queues; ++i) {
     RxPipe* rx_pipe = dev->AllocateRxPipe();
     if (!rx_pipe) {
-      log_err("Problem creating RX pipe");
+      std::cout << "Problem creating RX pipe" << std::endl;
       exit(3);
     }
 
@@ -107,7 +103,6 @@ void run_echo_copy(void* arg) {
 
     TxPipe* tx_pipe = dev->AllocateTxPipe();
     if (!tx_pipe) {
-      log_err("Problem creating TX pipe");
       exit(3);
     }
     tx_pipes.push_back(tx_pipe);
@@ -147,19 +142,17 @@ void run_echo_copy(void* arg) {
       tx_pipe->SendAndFree(batch_length);
     }
   }
+
+  return NULL;
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 7) {
+  if (argc != 5) {
     std::cerr << "Usage: " << argv[0]
-              << " STARTING_CORE NB_CORES NB_UTHREADS NB_QUEUES NB_CYCLES "
-                 "APPLICATION_ID"
-              << std::endl
+              << " NB_CORES NB_QUEUES NB_CYCLES APPLICATION_ID" << std::endl
               << std::endl;
-    std::cerr << "STARTING_CORE: Core to start running on." << std::endl;
-    std::cerr << "NB_CORES: Number of cores to run on." << std::endl;
-    std::cerr << "NB_UTHREADS: Number of uthreads to create." << std::endl;
-    std::cerr << "NB_QUEUES: Number of queues per uthread." << std::endl;
+    std::cerr << "NB_CORES: Number of cores to use." << std::endl;
+    std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
     std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
                  " packet."
               << std::endl;
@@ -169,58 +162,33 @@ int main(int argc, const char* argv[]) {
     return 1;
   }
 
-  using sched::kthread_t;
-  using sched::uthread_t;
-
-  uint32_t starting_core = atoi(argv[1]);
-  uint32_t nb_cores = atoi(argv[2]);
-  uint32_t nb_uthreads = atoi(argv[3]);
-  uint32_t nb_queues = atoi(argv[4]);
-  uint32_t nb_cycles = atoi(argv[5]);
-  uint32_t application_id = atoi(argv[6]);
+  uint32_t nb_cores = atoi(argv[1]);
+  uint32_t nb_queues = atoi(argv[2]);
+  uint32_t nb_cycles = atoi(argv[3]);
 
   signal(SIGINT, int_handler);
 
-  std::vector<kthread_t*> kthreads;
+  std::vector<pthread_t> threads;
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
-  /**
-   * Barrier to ensure that all kthreads start looking at their runqueues only
-   * after all kthreads have been initialized & all uthreads have been added
-   * to runqueues
-   */
-  pthread_barrier_t init_barrier;
-  pthread_barrier_init(&init_barrier, NULL, nb_cores + 1);
-
-  /* Create all of the kthreads */
-  for (uint32_t i = 0; i < nb_cores; ++i) {
-    log_info("Creating kthread on core %d", i);
-    kthread_t* kthread =
-        sched::kthread_create(application_id, i, &init_barrier);
-    kthreads.push_back(kthread);
+  for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
+    pthread_t thread;
+    struct EchoArgs args;
+    args.nb_queues = nb_queues;
+    args.core_id = core_id;
+    args.nb_cycles = nb_cycles;
+    args.stats = &(thread_stats[core_id]);
+    pthread_create(&thread, NULL, run_echo_copy, (void*)&args);
+    threads.push_back(thread);
+    usleep(100000);
   }
 
-  /* Add all of the uthreads to the kthreads' runqueues */
-  for (uint32_t uthread_id = 0; uthread_id < nb_uthreads; ++uthread_id) {
-    uint32_t current_kthread = uthread_id % nb_cores;
-    struct EchoArgs* args = (struct EchoArgs*)malloc(sizeof(struct EchoArgs));
-    args->nb_queues = nb_queues;
-    args->nb_cycles = nb_cycles;
-    args->stats = &(thread_stats[current_kthread]);
-    args->core_id = starting_core + uthread_id;
-    args->uthread_id = uthread_id;
-
-    kthread_t* k = kthreads[current_kthread];
-    sched::uthread_create(application_id, k, uthread_id, run_echo_copy,
-                          (void*)args);
-  }
-
-  pthread_barrier_wait(&init_barrier);
+  while (!setup_done) continue;  // Wait for setup to be done.
 
   show_stats(thread_stats, &keep_running);
 
-  for (auto& k : kthreads) {
-    sched::kthread_join(k);
+  for (auto& thread : threads) {
+    pthread_join(thread, NULL);
   }
 
   return 0;

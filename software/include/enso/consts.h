@@ -46,8 +46,8 @@
 
 namespace enso {
 
-constexpr uint32_t kMaxNbApps = MAX_NB_APPS;
-constexpr uint32_t kMaxNbFlows = MAX_NB_FLOWS;
+constexpr uint32_t kMaxNbApps = 1024;
+constexpr uint32_t kMaxNbFlows = 8192;
 
 constexpr uint32_t kMaxTransferLen = 131072;
 

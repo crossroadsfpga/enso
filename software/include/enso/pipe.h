@@ -63,9 +63,6 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
-/* The maximum number of iterations without packets. */
-#define MAX_ITERATIONS 1000000000
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
@@ -100,8 +97,7 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      uint32_t uthread_id, uint32_t max_misses = MAX_ITERATIONS,
-      CompletionCallback completion_callback = NULL,
+      uint32_t uthread_id, CompletionCallback completion_callback = NULL,
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
@@ -332,6 +328,11 @@ class Device {
   int GetNotifQueueId() noexcept;
 
   /**
+   * @brief Gets the RX head of the notification buffer for this device.
+   */
+  int GetNotifRxHead() noexcept;
+
+  /**
    * @brief Yields the current uthread to the running kthread, enabling other
    * uthreads to run on the current core.
    *
@@ -339,13 +340,6 @@ class Device {
    * if it should be added back to the runnable queue).
    */
   void YieldUthread(bool runnable);
-
-  /**
-   * @brief Called when an RxPipe does not receive any packets when RecvPkts()
-   * is called.
-   *
-   */
-  void PipeMiss();
 
   /**
    * @brief Called when an RxPipe receives packets when RecvPkts()
@@ -363,13 +357,11 @@ class Device {
   /**
    * Use `Create` factory method to instantiate objects externally.
    */
-  Device(uint32_t uthread_id, uint32_t max_misses,
-         CompletionCallback completion_callback, const std::string& pcie_addr,
-         std::string huge_page_prefix) noexcept
+  Device(uint32_t uthread_id, CompletionCallback completion_callback,
+         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
       : kPcieAddr(pcie_addr),
         completion_callback_(completion_callback),
-        uthread_id_(uthread_id),
-        max_misses_(max_misses) {
+        uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
               << std::endl;
@@ -401,9 +393,6 @@ class Device {
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_;
   uint32_t uthread_id_;
-  int64_t max_misses_;
-
-  int64_t num_misses_ = 0;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -677,12 +666,7 @@ class RxPipe {
    *         packets.
    */
   inline MessageBatch<PktIterator> RecvPkts(int32_t max_nb_pkts = -1) {
-    auto batch = RecvMessages<PktIterator>(max_nb_pkts);
-    if (unlikely(batch.available_bytes()) == 0)
-      device_->PipeMiss();
-    else
-      device_->PipeHit();
-    return batch;
+    return RecvMessages<PktIterator>(max_nb_pkts);
   }
 
   /**
@@ -695,12 +679,7 @@ class RxPipe {
    *         packets.
    */
   inline MessageBatch<PeekPktIterator> PeekPkts(int32_t max_nb_pkts = -1) {
-    auto batch = RecvMessages<PeekPktIterator>(max_nb_pkts);
-    if (unlikely(batch.available_bytes()) == 0)
-      device_->PipeMiss();
-    else
-      device_->PipeHit();
-    return batch;
+    return RecvMessages<PeekPktIterator>(max_nb_pkts);
   }
 
   /**

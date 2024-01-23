@@ -51,13 +51,16 @@
 #include <optional>
 #include <string>
 
+#include "enso/consts.h"
 #include "enso/helpers.h"
+#include "enso/queue.h"
 #include "intel_fpga_pcie_api.hpp"
 
 namespace enso {
 
-thread_local QueueProducer<PipeNotification>* queue_to_backend_;
-thread_local QueueConsumer<PipeNotification>* queue_from_backend_;
+thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
+thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
+    queue_from_backend_;
 thread_local uint64_t shinkansen_notif_buf_id_;
 
 class DevBackend {
@@ -416,14 +419,14 @@ class DevBackend {
         std::string(kIpcQueueFromAppName) + std::to_string(core_id_) + "_";
 
     queue_to_backend_ =
-        QueueProducer<PipeNotification>::Create(queue_from_app_name).get();
+        QueueProducer<PipeNotification>::Create(queue_from_app_name);
     if (queue_to_backend_ == nullptr) {
       std::cerr << "Could not create queue to backend" << std::endl;
       return -1;
     }
 
     queue_from_backend_ =
-        QueueProducer<PipeNotification>::Create(queue_to_app_name).get();
+        QueueConsumer<PipeNotification>::Create(queue_to_app_name);
     if (queue_from_backend_ == nullptr) {
       std::cerr << "Could not create queue from backend" << std::endl;
       return -1;
