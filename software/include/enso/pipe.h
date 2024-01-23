@@ -303,7 +303,15 @@ class Device {
    * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
    *         failure.
    */
-  bool GetRoundRobinStatus() noexcept;
+  int GetRoundRobinStatus() noexcept;
+
+  /**
+   * @brief Sends the given config notification to the device.
+   *
+   * @param config_notification The config notification.
+   * @return 0 on success, -1 on failure.
+   */
+  int ApplyConfig(struct TxNotification* config_notification);
 
   /**
    * @brief Sends a certain number of bytes to the device. This is designed to
