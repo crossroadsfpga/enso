@@ -412,7 +412,6 @@ void Device::ProcessCompletions() {
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
     if (tx_req.pipe_id < 0) {
-      std::cout << "hoi" << std::endl;
       // on receiving this, shinkansen should update the notification->signal
       // for applications
       std::invoke(completion_callback_);
@@ -449,7 +448,7 @@ int Device::EnableRoundRobin() {
   return enable_round_robin(&notification_buf_pair_);
 }
 
-bool Device::GetRoundRobinStatus() noexcept {
+int Device::GetRoundRobinStatus() noexcept {
   return get_round_robin_status(&notification_buf_pair_);
 }
 
