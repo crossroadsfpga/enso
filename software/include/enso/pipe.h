@@ -293,6 +293,8 @@ class Device {
    */
   int GetRoundRobinStatus() noexcept;
 
+  int ApplyConfig(struct TxNotification* config_notification);
+
  private:
   struct TxPendingRequest {
     uint32_t pipe_id;
