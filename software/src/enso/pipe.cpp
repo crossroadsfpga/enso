@@ -452,7 +452,7 @@ int Device::EnableRoundRobin() {
   return enable_round_robin(&notification_buf_pair_);
 }
 
-bool Device::GetRoundRobinStatus() noexcept {
+int Device::GetRoundRobinStatus() noexcept {
   return get_round_robin_status(&notification_buf_pair_);
 }
 
