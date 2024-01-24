@@ -69,11 +69,9 @@ struct NotificationBufPair {
 
 struct RxEnsoPipeInternal {
   uint32_t* buf;
-  uint64_t buf_phys_addr;
-  uint32_t* buf_head_ptr;
   uint32_t rx_head;
   uint32_t rx_tail;
-  uint64_t phys_buf_offset;  // Use to convert between phys and virt address.
+  uint32_t krx_tail;
   enso_pipe_id_t id;
   std::string huge_page_prefix;
 };

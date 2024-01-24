@@ -74,7 +74,6 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix) {
-  (void) huge_page_prefix;
   (void) bdf;
   (void) bar;
   EnsoBackend* enso_dev = EnsoBackend::Create();
@@ -92,6 +91,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   }
 
   enso_dev->AllocNotifBufPair(notif_pipe_id);
+  // this is used later to allocate a huge page for the pipe
   notification_buf_pair->huge_page_prefix = huge_page_prefix;
 
   return 0;
@@ -100,7 +100,6 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
 int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    struct NotificationBufPair* notification_buf_pair,
                    bool fallback) {
-  (void) enso_pipe;
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
 
@@ -124,17 +123,16 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
     return -1;
   }
   uint64_t phys_addr = enso_dev->ConvertVirtAddrToDevAddr(enso_pipe->buf);
-
-  enso_pipe->buf_phys_addr = phys_addr;
-  enso_pipe->phys_buf_offset = phys_addr - (uint64_t)(enso_pipe->buf);
-
   int ret = enso_dev->AllocateEnsoRxPipe(enso_pipe_id, phys_addr);
+
+  enso_pipe->rx_head = 0;
+  enso_pipe->rx_tail = 0;
+  enso_pipe->krx_tail = 0;
 
   if (ret < 0) {
     std::cerr << "Could not allocate pipe" << std::endl;
     return -1;
   }
-  // std::cout << "Got pipe id = " << enso_pipe_id << std::endl;
 
   update_fallback_queues_config(notification_buf_pair);
 
@@ -144,18 +142,27 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
 static _enso_always_inline uint32_t
 __consume_rx_kernel(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
-                bool get_tails,
-                bool peek = false) {
+                bool get_tails) {
   (void) buf;
-  // pipe_head gets set by the kernel
-  uint32_t pipe_head = 0;
+  uint32_t* enso_pipe_buf = enso_pipe->buf;
+  uint32_t enso_pipe_head = enso_pipe->rx_tail;
+  *buf = &enso_pipe_buf[enso_pipe_head * 16];
+  // verify if the userspace and kernel space tails match
+  // if not, it means the application hasn't consumed the
+  // bytes (not called ConfirmBytes)
+  if(enso_pipe->rx_tail != enso_pipe->krx_tail) {
+    std::cout << "Exception" << std::endl;
+    return 0;
+  }
+
+  uint32_t new_rx_tail = 0;
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
-  uint32_t flit_aligned_size = enso_dev->ConsumeRxPipe(enso_pipe->id, peek, pipe_head, get_tails);
-  if(flit_aligned_size > 0)
-  {
-    uint32_t* enso_pipe_buf = enso_pipe->buf;
-    *buf = &enso_pipe_buf[pipe_head * 16];
+  uint32_t flit_aligned_size = enso_dev->ConsumeRxPipe(enso_pipe->id, new_rx_tail,
+                                                       get_tails);
+  if(flit_aligned_size > 0) {
+    // update kernel's rx tail in pipe
+    enso_pipe->krx_tail = new_rx_tail;
   }
   return flit_aligned_size;
 }
@@ -172,12 +179,11 @@ uint32_t get_next_batch_kernel(struct NotificationBufPair* notification_buf_pair
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
   int32_t pipe_id = -1;
-  bool peek = false;
-  uint32_t pipe_head = 0;
+  uint32_t new_rx_tail = 0;
   int64_t flit_aligned_size = 0;
 
   flit_aligned_size = enso_dev->GetNextBatch(notification_buf_pair->id,
-                                             peek, pipe_id, pipe_head);
+                                             pipe_id, new_rx_tail);
 
   // can there be an issue if the flit_aligned_size is 0?
   if(flit_aligned_size <= 0) {
@@ -189,8 +195,17 @@ uint32_t get_next_batch_kernel(struct NotificationBufPair* notification_buf_pair
   // set the buffer
   struct SocketInternal* socket_entry = &socket_entries[pipe_id];
   struct RxEnsoPipeInternal* enso_pipe = &socket_entry->enso_pipe;
+
+  if(enso_pipe->rx_tail != enso_pipe->krx_tail) {
+    std::cout << "Exception" << std::endl;
+    return 0;
+  }
+
   uint32_t* enso_pipe_buf = enso_pipe->buf;
-  *buf = &enso_pipe_buf[pipe_head * 16];
+  *buf = &enso_pipe_buf[enso_pipe->rx_tail * 16];
+  if(flit_aligned_size > 0) {
+    enso_pipe->krx_tail = new_rx_tail;
+  }
   return flit_aligned_size;
 }
 

@@ -26,16 +26,14 @@ struct enso_pipe_init_params {
 
 struct enso_consume_rx_params {
   uint32_t id;
-  bool peek;
-  uint32_t head;
   bool get_tails;
+  uint32_t new_rx_tail;
 } __attribute__((packed));
 
 struct enso_get_next_batch_params {
   uint32_t notif_id;
   uint32_t pipe_id;
-  uint32_t head;
-  bool peek;
+  uint32_t new_rx_tail;
 };
 
 struct enso_advance_pipe_params {

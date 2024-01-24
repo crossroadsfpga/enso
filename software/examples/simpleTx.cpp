@@ -120,7 +120,8 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
  * @param total_plts: Total number of packets copied in buf.
  *
  * */
-void init_buffer_with_packets(uint8_t *buf, uint64_t &total_bytes, uint64_t &total_pkts) {
+void init_buffer_with_packets(uint8_t *buf, uint64_t &total_bytes,
+                              uint64_t &total_good_bytes, uint64_t &total_pkts) {
     char errbuf[PCAP_ERRBUF_SIZE];
     pcap_t* pcap = pcap_open_offline(PCAP_FILE_PATH, errbuf);
     if (pcap == NULL) {
@@ -142,13 +143,16 @@ void init_buffer_with_packets(uint8_t *buf, uint64_t &total_bytes, uint64_t &tot
     }
 
     uint32_t init_buf_length = context.bytes_copied;
+    uint32_t init_good_bytes = context.good_bytes;
     uint32_t init_nb_pkts = context.nb_pkts;
     while ((context.bytes_copied + init_buf_length) <= TX_BUFFER_MAX_SIZE) {
         memcpy(buf + context.bytes_copied, buf, init_buf_length);
         context.bytes_copied += init_buf_length;
+        context.good_bytes += init_good_bytes;
         context.nb_pkts += init_nb_pkts;
     }
     total_bytes = context.bytes_copied;
+    total_good_bytes = context.good_bytes;
     total_pkts = context.nb_pkts;
 }
 
@@ -163,7 +167,9 @@ void init_buffer_with_packets(uint8_t *buf, uint64_t &total_bytes, uint64_t &tot
  *
  * */
 void send_tx(TxPipe *pipe, uint8_t *main_buf, uint64_t total_bytes_in_main_buf,
-             uint64_t total_pkts_in_main_buf, TxStats *stats) {
+             uint64_t total_good_bytes_in_main_buf, uint64_t total_pkts_in_main_buf,
+             TxStats *stats) {
+    (void) total_good_bytes_in_main_buf;
     while(run) {
         uint8_t* pipe_buf = pipe->AllocateBuf(TX_BUFFER_MAX_SIZE);
         if(pipe_buf == NULL) {
@@ -175,11 +181,8 @@ void send_tx(TxPipe *pipe, uint8_t *main_buf, uint64_t total_bytes_in_main_buf,
         // send the packets
         pipe->SendAndFree(total_bytes_in_main_buf);
         // update the stats
-        stats->bytes += total_bytes_in_main_buf;
+        stats->bytes += total_good_bytes_in_main_buf;
         stats->pkts += total_pkts_in_main_buf;
-        if(stats->pkts >= 400000000) {
-          run = 0;
-        }
     }
     // set this so that the main thread exits
     done = 1;
@@ -209,8 +212,10 @@ int main() {
         exit(1);
     }
     uint64_t total_bytes = 0;
+    uint64_t total_good_bytes = 0;
     uint64_t total_pkts = 0;
-    init_buffer_with_packets(main_packet_buffer, total_bytes, total_pkts);
+    init_buffer_with_packets(main_packet_buffer, total_bytes, total_good_bytes,
+                             total_pkts);
 
     // stats to record the metrics
     TxStats *stats = (TxStats *) malloc(sizeof(TxStats));
@@ -223,7 +228,8 @@ int main() {
     stats->pkts = 0;
 
     // start the TX thread
-    std::thread tx_thread(send_tx, pipe, main_packet_buffer, total_bytes, total_pkts, stats);
+    std::thread tx_thread(send_tx, pipe, main_packet_buffer, total_bytes,
+                          total_good_bytes, total_pkts, stats);
     // loop until the TX thread exits
     while(!done) {
         uint64_t last_tx_pkts = stats->pkts;

@@ -192,16 +192,16 @@ class EnsoBackend {
     return dev_->free_enso_rx_pipe(pipe_id);
   }
 
-  int ConsumeRxPipe(int pipe_id, bool peek, uint32_t &pipe_head, bool get_tails) {
-    return dev_->consume_rx_pipe(pipe_id, peek, pipe_head, get_tails);
+  int ConsumeRxPipe(int pipe_id, uint32_t &krx_tail, bool get_tails) {
+    return dev_->consume_rx_pipe(pipe_id, krx_tail, get_tails);
   }
 
   int FullyAdvancePipe(int pipe_id) {
     return dev_->full_adv_pipe(pipe_id);
   }
 
-  int GetNextBatch(int notif_id, bool peek, int &pipe_id, uint32_t &pipe_head) {
-    return dev_->get_next_batch(notif_id, peek, pipe_id, pipe_head);
+  int GetNextBatch(int notif_id, int &pipe_id, uint32_t &krx_tail) {
+    return dev_->get_next_batch(notif_id, pipe_id, krx_tail);
   }
 
   int AdvancePipe(int pipe_id, size_t len) {

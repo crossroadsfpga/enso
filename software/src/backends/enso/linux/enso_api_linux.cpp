@@ -192,15 +192,14 @@ int EnsoDev::free_enso_rx_pipe(int pipe_id) {
   return 0;
 }
 
-int EnsoDev::consume_rx_pipe(int pipe_id, bool peek, uint32_t &pipe_head, bool get_tails) {
+int EnsoDev::consume_rx_pipe(int pipe_id, uint32_t &krx_tail, bool get_tails) {
   int result;
   struct enso_consume_rx_params param;
   param.id = pipe_id;
-  param.peek = peek;
   param.get_tails = get_tails;
-  param.head = 0;
+  param.new_rx_tail = 0;
   result = ioctl(m_dev_handle, ENSO_IOCTL_CONSUME_RX, &param);
-  pipe_head = param.head;
+  krx_tail = param.new_rx_tail;
   return result;
 }
 
@@ -210,18 +209,17 @@ int EnsoDev::full_adv_pipe(int pipe_id) {
   return result;
 }
 
-int EnsoDev::get_next_batch(int notif_id, bool peek, int &pipe_id, uint32_t &pipe_head) {
+int EnsoDev::get_next_batch(int notif_id, int &pipe_id, uint32_t &krx_tail) {
   int result;
   struct enso_get_next_batch_params param;
   param.notif_id = notif_id;
-  param.peek = peek;
-  param.head = 0;
+  param.new_rx_tail = 0;
   param.pipe_id = -1;
   result = ioctl(m_dev_handle, ENSO_IOCTL_GET_NEXT_BATCH, &param);
   if(result < 0) {
     return -1;
   }
-  pipe_head = param.head;
+  krx_tail = param.new_rx_tail;
   pipe_id = param.pipe_id;
   return result;
 }

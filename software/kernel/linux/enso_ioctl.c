@@ -35,7 +35,7 @@ static void update_tx_head(struct notification_buf_pair* notif_buf_pair);
 static int32_t get_next_pipe_id(struct notification_buf_pair *notif_buf_pair);
 static uint32_t consume_queue(struct notification_buf_pair *notif_buf_pair,
                               struct rx_pipe_internal *pipe,
-                              bool peek, uint32_t *params_head);
+                              uint32_t *new_rx_tail);
 static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair);
 
 /******************************************************************************
@@ -1005,8 +1005,7 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   }
 
   // now get the new rx pipe tail
-  flit_aligned_size = consume_queue(notif_buf_pair, pipe,
-                                    params.peek, &params.head);
+  flit_aligned_size = consume_queue(notif_buf_pair, pipe, &params.new_rx_tail);
 
   if (copy_to_user((struct enso_consume_rx_params __user *)uarg, &params,
                   sizeof(struct enso_consume_rx_params))) {
@@ -1133,8 +1132,7 @@ static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk,
     return -EFAULT;
   }
 
-  flit_aligned_size = consume_queue(notif_buf_pair, pipe,
-                                    params.peek, &params.head);
+  flit_aligned_size = consume_queue(notif_buf_pair, pipe, &params.new_rx_tail);
 
   if (copy_to_user((struct enso_get_next_batch_params __user *)uarg, &params,
                   sizeof(struct enso_get_next_batch_params))) {
@@ -1345,14 +1343,13 @@ static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair) {
 
 static uint32_t consume_queue(struct notification_buf_pair *notif_buf_pair,
                               struct rx_pipe_internal *pipe,
-                              bool peek, uint32_t *params_head) {
+                              uint32_t *new_rx_tail) {
   uint32_t enso_pipe_head;
   uint32_t flit_aligned_size = 0;
   uint32_t enso_pipe_id;
   uint32_t enso_pipe_new_tail;
 
   enso_pipe_head = pipe->rx_tail;
-  *params_head = enso_pipe_head;
   enso_pipe_id = pipe->id; // get the pipe id from the userspace
   enso_pipe_new_tail = notif_buf_pair->pending_rx_pipe_tails[enso_pipe_id];
   if(enso_pipe_new_tail == enso_pipe_head) {
@@ -1360,11 +1357,12 @@ static uint32_t consume_queue(struct notification_buf_pair *notif_buf_pair,
   }
   flit_aligned_size = ((enso_pipe_new_tail - enso_pipe_head)
                                 % ENSO_PIPE_SIZE) * 64;
-  if(!peek) {
-      enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64)
-                       % ENSO_PIPE_SIZE;
-      pipe->rx_tail = enso_pipe_head;
-  }
+  // we update the rx tail in the kernel
+  enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64)
+                   % ENSO_PIPE_SIZE;
+  pipe->rx_tail = enso_pipe_head;
+  // we send this back to the application
+  *new_rx_tail = enso_pipe_head;
   return flit_aligned_size;
 }
 
