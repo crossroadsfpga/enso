@@ -117,7 +117,7 @@ class DevBackend {
           }
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
-          uint64_t mask = (1L << 32L) - 1L;
+          uint64_t mask = (1L << 8L) - 1L;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
           break;
       }
