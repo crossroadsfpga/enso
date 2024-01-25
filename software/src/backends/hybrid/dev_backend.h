@@ -65,7 +65,7 @@ thread_local uint64_t shinkansen_notif_buf_id_;
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
-    std::cerr << "Using software backend" << std::endl;
+    std::cerr << "Using hybrid backend" << std::endl;
 
     DevBackend* dev = new (std::nothrow) DevBackend(bdf, bar);
 
