@@ -252,6 +252,13 @@ class DevBackend {
   }
 
   /**
+   * @brief Sends a message to the IOKernel that the uthread is yielding.
+   *
+   * @param notif_buf_id The notification buffer ID of the current device.
+   */
+  void YieldUthread(int notif_buf_id) { (void)notif_buf_id; }
+
+  /**
    * @brief Allocates a notification buffer.
    *
    * @param application_id ID of currently running application.
@@ -371,6 +378,12 @@ class DevBackend {
     assert(result->type == NotifType::kFreePipe);
     return result->result;
   }
+
+  /**
+   * @brief Updates the queues in case some other thread has added to them.
+   *
+   */
+  void UpdateQueues() {}
 
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept

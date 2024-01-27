@@ -124,6 +124,13 @@ class DevBackend {
   int GetRrStatus() { return dev_->get_rr_status(); }
 
   /**
+   * @brief Sends a message to the IOKernel that the uthread is yielding.
+   *
+   * @param notif_buf_id The notification buffer ID of the current device.
+   */
+  void YieldUthread(int notif_buf_id) { (void)notif_buf_id; }
+
+  /**
    * @brief Allocates a notification buffer.
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
@@ -163,6 +170,12 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
+
+  /**
+   * @brief Updates the queues in case some other thread has added to them.
+   *
+   */
+  void UpdateQueues() {}
 
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept

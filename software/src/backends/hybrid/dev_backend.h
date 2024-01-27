@@ -357,6 +357,31 @@ class DevBackend {
    */
   int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
 
+  /**
+   * @brief Sends a message to the IOKernel that the uthread is yielding.
+   *
+   * @param notif_buf_id The notification buffer ID of the current device.
+   */
+  void YieldUthread(int notif_buf_id) {
+    struct YieldNotification yield_notification;
+    yield_notification.type = NotifType::kWaiting;
+    yield_notification.notif_buf_id = notif_buf_id;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&yield_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
+    }
+  }
+
+  /**
+   * @brief Updates the queues in case some other thread has added to them.
+   *
+   */
+  void UpdateQueues() {
+    queue_from_backend_->UpdateHead();
+    queue_to_backend_->UpdateTail();
+  }
+
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
       : bdf_(bdf), bar_(bar) {}

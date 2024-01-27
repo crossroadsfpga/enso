@@ -709,6 +709,18 @@ uint64_t get_dev_addr_from_virt_addr(
   return dev_addr;
 }
 
+void send_uthread_yield(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->YieldUthread(notification_buf_pair->id);
+}
+
+void update_queues(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->UpdateQueues();
+}
+
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);

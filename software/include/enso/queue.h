@@ -139,11 +139,13 @@ class Queue {
    * @return A unique pointer to the object or nullptr if the creation fails.
    */
   static std::unique_ptr<Subclass> Create(
-      const std::string& queue_name, size_t size = 0,
+      const std::string& queue_name, int core_id, size_t size = 0,
       bool join_if_exists = true, std::string huge_page_prefix = "") noexcept {
     if (huge_page_prefix == "") {
       huge_page_prefix = kHugePageDefaultPrefix;
     }
+
+    /* TODO (kaajalg): get the tail from the hugepage */
 
     std::unique_ptr<Subclass> queue(
         new (std::nothrow) Subclass(queue_name, size, huge_page_prefix));
@@ -153,32 +155,6 @@ class Queue {
     }
 
     if (queue->Init(join_if_exists)) {
-      return std::unique_ptr<Subclass>{};
-    }
-
-    return queue;
-  }
-
-  /**
-   * @brief Accesses the queue of the given name. Assumes that it has already
-   * been created.
-   *
-   * @param queue_name
-   * @param size
-   * @param huge_page_prefix
-   * @return The created queue.
-   */
-  static std::unique_ptr<Subclass> Access(
-      const std::string& queue_name, size_t size = 0,
-      std::string huge_page_prefix = "") noexcept {
-    if (huge_page_prefix == "") {
-      huge_page_prefix = kHugePageDefaultPrefix;
-    }
-
-    std::unique_ptr<Subclass> queue(
-        new (std::nothrow) Subclass(queue_name, size, huge_page_prefix));
-
-    if (queue->PrivateAccess()) {
       return std::unique_ptr<Subclass>{};
     }
 
@@ -212,42 +188,6 @@ class Queue {
       : size_(size),
         queue_name_(queue_name),
         huge_page_prefix_(huge_page_prefix) {}
-
-  int PrivateAccess() noexcept {
-    if (size_ == 0) {
-      size_ = kBufPageSize;
-    }
-
-    if ((size_ & (size_ - 1)) != 0) {
-      std::cerr << "Queue size must be a power of two" << std::endl;
-      return -1;
-    }
-
-    if (size_ < sizeof(struct Element)) {
-      std::cerr << "Queue size must be at least " << sizeof(struct Element)
-                << " bytes" << std::endl;
-      return -1;
-    }
-
-    capacity_ = size_ / sizeof(struct Element);
-    index_mask_ = capacity_ - 1;
-
-    // Keep path so that we can unlink it later if needed.
-    huge_page_path_ =
-        huge_page_prefix_ + std::string(kHugePageQueuePathPrefix) + queue_name_;
-
-    created_queue_ = false;
-    huge_page_path_ += std::to_string(size_);
-
-    void* addr = get_huge_page(huge_page_path_, size_);
-    if (addr == nullptr) {
-      std::cerr << "Failed to allocate shared memory" << std::endl;
-      return -1;
-    }
-    buf_addr_ = reinterpret_cast<Element*>(addr);
-
-    return 0;
-  }
 
   /**
    * @brief Initializes the Queue object.
@@ -360,6 +300,23 @@ template <typename T>
 class QueueProducer : public Queue<T, QueueProducer<T>> {
  public:
   /**
+   * @brief Updates the tail of this queue in case it has been updated.
+   *
+   */
+  inline UpdateTail() {
+    struct Parent::Element* buf = Parent::buf_addr();
+    for (uint32_t i = 0; i < Parent::capacity(); ++i) {
+      if (buf[i].signal) {
+        tail_ = (i + 1) & Parent::index_mask();
+      }
+
+      if (buf[tail_].signal == 0) {
+        break;
+      }
+    }
+  }
+
+  /**
    * @brief Pushes data to the queue.
    *
    * @param data data to push.
@@ -408,15 +365,9 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
 
     // Synchronize the pointer in case the queue is not empty.
     struct Parent::Element* buf = Parent::buf_addr();
-    for (uint32_t i = 0; i < Parent::capacity(); ++i) {
-      if (buf[i].signal) {
-        tail_ = (i + 1) & Parent::index_mask();
-      }
+    UpdateTail();
 
-      if (buf[tail_].signal == 0) {
-        break;
-      }
-    }
+    std::cout << "tail: " << tail_ << std::endl;
 
     if (tail_ == 0 && buf[0].signal) {
       std::cerr << "Cannot synchronize a full queue" << std::endl;
@@ -450,6 +401,24 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
       return nullptr;  // Queue is empty.
     }
     return &(current_element->data);
+  }
+
+  /**
+   * @brief Synchronize the pointer in case the queue is not empty.
+   *
+   */
+  inline void UpdateHead() {
+    struct Parent::Element* buf = Parent::buf_addr();
+    for (uint32_t i = Parent::capacity(); i > 0; --i) {
+      if (buf[i - 1].signal) {
+        head_ = i - 1;
+      }
+
+      uint32_t prev_element = (head_ - 1) & Parent::index_mask();
+      if (buf[prev_element].signal == 0) {
+        break;
+      }
+    }
   }
 
   /**
@@ -495,16 +464,7 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
 
     // Synchronize the pointer in case the queue is not empty.
     struct Parent::Element* buf = Parent::buf_addr();
-    for (uint32_t i = Parent::capacity(); i > 0; --i) {
-      if (buf[i - 1].signal) {
-        head_ = i - 1;
-      }
-
-      uint32_t prev_element = (head_ - 1) & Parent::index_mask();
-      if (buf[prev_element].signal == 0) {
-        break;
-      }
-    }
+    UpdateHead();
 
     if (head_ == 0 && buf[0].signal) {
       std::cerr << "Cannot synchronize a full queue" << std::endl;

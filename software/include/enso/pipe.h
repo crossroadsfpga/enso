@@ -337,18 +337,15 @@ class Device {
   /**
    * @brief Yields the current uthread to the running kthread, enabling other
    * uthreads to run on the current core.
-   *
-   * @param runnable Whether the yielding uthread is runnable or not (that is,
-   * if it should be added back to the runnable queue).
    */
-  void YieldUthread(bool runnable);
+  void SendUthreadYield();
 
   /**
-   * @brief Called when an RxPipe receives packets when RecvPkts()
-   * is called.
+   * @brief Updates the queues in case some other thread has added to them.
    *
+   * @param notification_buf_pair  Notification buffer pair to use.
    */
-  void PipeHit();
+  void UpdateQueues();
 
  private:
   struct TxPendingRequest {
