@@ -385,6 +385,13 @@ class DevBackend {
    */
   void UpdateQueues() {}
 
+  /**
+   * @brief Accesses the queue information stored in shared memory to ensure
+   * that queues have been updated.
+   *
+   */
+  void AccessQueues() {}
+
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
       : bdf_(bdf), bar_(bar) {}

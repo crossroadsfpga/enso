@@ -81,6 +81,8 @@ static constexpr std::string_view kHugePageNotifBufPathPrefix = "_notif_buf:";
 static constexpr std::string_view kHugePageQueuePathPrefix = "_queue:";
 static constexpr std::string_view kHugePageUthreadsPathPrefix = "_uthread:";
 static constexpr std::string_view kHugePageKthreadsPathPrefix = "_kthread:";
+static constexpr std::string_view kHugePageQueueTailPathPrefix = "_queue_tail";
+static constexpr std::string_view kHugePageQueueHeadPathPrefix = "_queue_head";
 
 // We need this to allow the same huge page to be mapped to adjacent memory
 // regions.

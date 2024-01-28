@@ -341,11 +341,18 @@ class Device {
   void SendUthreadYield();
 
   /**
-   * @brief Updates the queues in case some other thread has added to them.
+   * @brief Updates the huge page information for the queues to the I/O Kernel.
    *
    * @param notification_buf_pair  Notification buffer pair to use.
    */
   void UpdateQueues();
+
+  /**
+   * @brief Accesses the queues in case some other thread has added to them.
+   *
+   * @param notification_buf_pair  Notification buffer pair to use.
+   */
+  void AccessQueues();
 
  private:
   struct TxPendingRequest {

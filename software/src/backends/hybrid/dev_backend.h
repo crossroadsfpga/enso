@@ -374,12 +374,23 @@ class DevBackend {
   }
 
   /**
-   * @brief Updates the queues in case some other thread has added to them.
+   * @brief Once changes have been made to the queues, update them in shared
+   * memory.
    *
    */
   void UpdateQueues() {
-    queue_from_backend_->UpdateHead();
-    queue_to_backend_->UpdateTail();
+    queue_from_backend_->UpdateHeadInHugePage();
+    queue_to_backend_->UpdateTailInHugePage();
+  }
+
+  /**
+   * @brief Accesses the queue information stored in shared memory to ensure
+   * that queues have been updated.
+   *
+   */
+  void AccessQueues() {
+    queue_from_backend_->AccessHeadFromHugePage();
+    queue_to_backend_->AccessTailFromHugePage();
   }
 
  private:
@@ -398,6 +409,7 @@ class DevBackend {
    *        when informing it of new pipes.
    */
   uint64_t get_shinkansen_notif_buf_id() {
+    std::cout << "getting shinkansen notif buf id" << std::endl;
     struct ShinkansenNotification sk_notification;
     sk_notification.type = NotifType::kGetShinkansenNotifBufId;
 
@@ -411,6 +423,7 @@ class DevBackend {
     // Block until receive.
     while (!(notification = queue_from_backend_->Pop())) {
     }
+    std::cout << "received" << std::endl;
 
     struct ShinkansenNotification* result =
         (struct ShinkansenNotification*)&notification.value();

@@ -299,6 +299,8 @@ uint64_t get_dev_addr_from_virt_addr(
  */
 void update_queues(struct NotificationBufPair* notification_buf_pair);
 
+void access_queues(struct NotificationBufPair* notification_buf_pair);
+
 /**
  * @brief Sends a message to the I/O Kernel indicating that this uthread has
  * yielded.
