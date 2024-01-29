@@ -46,6 +46,11 @@
 
 namespace enso {
 
+// These determine the maximum number of notification buffers and enso pipes,
+// these macros also exist in hardware and **must be kept in sync**. Update the
+// variables with the same name on `hardware/src/constants.sv`,
+// `software/kernel/linux/intel_fpga_pcie_setup.h`, and
+// `scripts/hwtest/my_stats.tcl`.
 constexpr uint32_t kMaxNbApps = 1024;
 constexpr uint32_t kMaxNbFlows = 8192;
 
@@ -145,7 +150,7 @@ enum class NotifType : uint8_t {
   kFreePipe = 9,
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
-  kWaiting = 12,
+  kUthreadWaiting = 12,
   kKthreadYield = 13
 };
 

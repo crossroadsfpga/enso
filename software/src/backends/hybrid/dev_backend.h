@@ -364,7 +364,7 @@ class DevBackend {
    */
   void YieldUthread(int notif_buf_id) {
     struct YieldNotification yield_notification;
-    yield_notification.type = NotifType::kWaiting;
+    yield_notification.type = NotifType::kUthreadWaiting;
     yield_notification.notif_buf_id = notif_buf_id;
 
     enso::PipeNotification* pipe_notification =
