@@ -409,7 +409,6 @@ class DevBackend {
    *        when informing it of new pipes.
    */
   uint64_t get_shinkansen_notif_buf_id() {
-    std::cout << "getting shinkansen notif buf id" << std::endl;
     struct ShinkansenNotification sk_notification;
     sk_notification.type = NotifType::kGetShinkansenNotifBufId;
 
@@ -423,7 +422,6 @@ class DevBackend {
     // Block until receive.
     while (!(notification = queue_from_backend_->Pop())) {
     }
-    std::cout << "received" << std::endl;
 
     struct ShinkansenNotification* result =
         (struct ShinkansenNotification*)&notification.value();
