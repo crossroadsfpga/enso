@@ -50,7 +50,7 @@ typedef unsigned short sa_family_t;
 typedef unsigned int socklen_t;
 
 #define MAX_NB_CORES 128
-#define MAX_NB_SOCKETS MAX_NB_FLOWS
+#define MAX_NB_SOCKETS (kMaxNbFlows)
 
 void set_bdf(uint16_t bdf_);
 

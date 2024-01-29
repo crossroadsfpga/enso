@@ -46,16 +46,8 @@
 
 namespace enso {
 
-// These determine the maximum number of notification buffers and enso pipes,
-// these macros also exist in hardware and **must be kept in sync**. Update the
-// variables with the same name on `hardware/src/constants.sv`,
-// `software/kernel/linux/intel_fpga_pcie_setup.h`, and
-// `scripts/hwtest/my_stats.tcl`.
-#define MAX_NB_APPS 1024
-#define MAX_NB_FLOWS 8192
-
-constexpr uint32_t kMaxNbApps = MAX_NB_APPS;
-constexpr uint32_t kMaxNbFlows = MAX_NB_FLOWS;
+constexpr uint32_t kMaxNbApps = 1024;
+constexpr uint32_t kMaxNbFlows = 8192;
 
 constexpr uint32_t kMaxTransferLen = 131072;
 
@@ -89,6 +81,8 @@ static constexpr std::string_view kHugePageNotifBufPathPrefix = "_notif_buf:";
 static constexpr std::string_view kHugePageQueuePathPrefix = "_queue:";
 static constexpr std::string_view kHugePageUthreadsPathPrefix = "_uthread:";
 static constexpr std::string_view kHugePageKthreadsPathPrefix = "_kthread:";
+static constexpr std::string_view kHugePageQueueTailPathPrefix = "_queue_tail";
+static constexpr std::string_view kHugePageQueueHeadPathPrefix = "_queue_head";
 
 // We need this to allow the same huge page to be mapped to adjacent memory
 // regions.
@@ -151,7 +145,8 @@ enum class NotifType : uint8_t {
   kFreePipe = 9,
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
-  kWaiting = 12
+  kWaiting = 12,
+  kKthreadYield = 13
 };
 
 struct MmioNotification {
@@ -179,7 +174,7 @@ struct NotifBufNotification {
   NotifType type;
   uint64_t notif_buf_id;
   uint64_t uthread_id;
-  uint64_t padding;
+  uint64_t result;
 };
 
 struct AllocatePipeNotification {
@@ -208,7 +203,7 @@ struct KthreadNotification {
   uint64_t padding[2];
 };
 
-struct WaitingNotification {
+struct YieldNotification {
   NotifType type;
   uint64_t notif_buf_id;
   uint64_t padding[2];

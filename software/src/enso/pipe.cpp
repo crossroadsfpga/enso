@@ -47,8 +47,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
-#include <fastscheduler/defs.hpp>
-#include <fastscheduler/kthread.hpp>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -56,13 +54,6 @@
 #include "../pcie.h"
 
 namespace enso {
-
-void* kthread_entry(void* arg) {
-  sched::kthread_t* k = (sched::kthread_t*)arg;
-  enso::set_self_core_id(k->curr_cpu);
-  pcie_register_kthread(0, k->application_id);
-  return sched::kthread_entry(arg);
-}
 
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
@@ -345,16 +336,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
-void Device::RegisterWaiting(sched::uthread_t* uthread) {
-  uthread->last_rx_notif_head = notification_buf_pair_.rx_head;
-  uthread->waiting = true;
-  pcie_register_waiting(notification_buf_pair_.id);
-}
-
-void Device::RegisterKthread(uint64_t kthread_waiters_phys_addr,
-                             uint32_t application_id) {
-  pcie_register_kthread(kthread_waiters_phys_addr, application_id);
-}
+int Device::GetNotifRxHead() noexcept { return notification_buf_pair_.rx_head; }
 
 int Device::Init(uint32_t uthread_id) noexcept {
   if (core_id_ < 0) {
@@ -449,6 +431,14 @@ void Device::ProcessCompletions() {
     pipe->ProcessCompletions();
   }
 }
+
+void Device::SendUthreadYield() {
+  return send_uthread_yield(&notification_buf_pair_);
+}
+
+void Device::UpdateQueues() { return update_queues(&notification_buf_pair_); }
+
+void Device::AccessQueues() { return access_queues(&notification_buf_pair_); }
 
 int Device::EnableTimeStamping() {
   return enable_timestamp(&notification_buf_pair_);

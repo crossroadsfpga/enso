@@ -56,15 +56,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
-#include <fastscheduler/defs.hpp>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
-
-extern "C" {
-#include <base/log.h>
-}
 
 // Automatically points to the device backend configured at compile time.
 #include <dev_backend.h>
@@ -714,13 +709,22 @@ uint64_t get_dev_addr_from_virt_addr(
   return dev_addr;
 }
 
-void pcie_register_waiting(uint32_t notif_id) {
-  DevBackend::register_waiting(notif_id);
+void send_uthread_yield(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->YieldUthread(notification_buf_pair->id);
 }
 
-void pcie_register_kthread(uint64_t kthread_waiters_phys_addr,
-                           uint32_t application_id) {
-  DevBackend::register_kthread(kthread_waiters_phys_addr, application_id);
+void update_queues(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->UpdateQueues();
+}
+
+void access_queues(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->AccessQueues();
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {

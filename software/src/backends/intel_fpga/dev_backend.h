@@ -88,18 +88,6 @@ class DevBackend {
     return *addr;
   }
 
-  static _enso_always_inline uint32_t
-  register_kthread(uint64_t waiter_queue_phys, uint32_t application_id) {
-    (void)waiter_queue_phys;
-    (void)application_id;
-    return 0;
-  }
-
-  static _enso_always_inline void register_waiting(uint32_t notif_buf_id) {
-    (void)notif_buf_id;
-    return;
-  }
-
   /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device (typically the physical
@@ -134,6 +122,13 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() { return dev_->get_rr_status(); }
+
+  /**
+   * @brief Sends a message to the IOKernel that the uthread is yielding.
+   *
+   * @param notif_buf_id The notification buffer ID of the current device.
+   */
+  void YieldUthread(int notif_buf_id) { (void)notif_buf_id; }
 
   /**
    * @brief Allocates a notification buffer.
@@ -175,6 +170,19 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
+
+  /**
+   * @brief Updates the queues in case some other thread has added to them.
+   *
+   */
+  void UpdateQueues() {}
+
+  /**
+   * @brief Accesses the queue information stored in shared memory to ensure
+   * that queues have been updated.
+   *
+   */
+  void AccessQueues() {}
 
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept

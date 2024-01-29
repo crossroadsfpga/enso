@@ -47,7 +47,6 @@
 #include <netinet/ip.h>
 
 #include <algorithm>
-#include <fastscheduler/defs.hpp>
 #include <string>
 
 namespace enso {
@@ -294,6 +293,29 @@ uint64_t get_dev_addr_from_virt_addr(
     struct NotificationBufPair* notification_buf_pair, void* virt_addr);
 
 /**
+ * @brief Updates the queues in case some other thread has added to them.
+ *
+ * @param notification_buf_pair  Notification buffer pair to use.
+ */
+void update_queues(struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * @brief  Accesses the queue information stored in shared memory to ensure
+ * that queues have been updated.
+ *
+ * @param notification_buf_pair  Notification buffer pair to use.
+ */
+void access_queues(struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * @brief Sends a message to the I/O Kernel indicating that this uthread has
+ * yielded.
+ *
+ * @param notification_buf_pair  Notification buffer pair to use.
+ */
+void send_uthread_yield(struct NotificationBufPair* notification_buf_pair);
+
+/**
  * @brief Frees the notification buffer pair.
  *
  * @param notification_buf_pair Notification buffer pair to free.
@@ -331,22 +353,6 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
  * @deprecated This function is deprecated and will be removed in the future.
  */
 void print_stats(struct SocketInternal* socket_entry, bool print_global);
-
-/**
- * @brief Registers a waiting uthread with the IOKernel.
- *
- * @param notif_id The uthread's notification buffer ID.
- */
-void pcie_register_waiting(uint32_t notif_id);
-
-/**
- * @brief Registers a kthread with the IOKernel.
- *
- * @param kthread_waiters_phys_addr
- * @param application_id
- */
-void pcie_register_kthread(uint64_t kthread_waiters_phys_addr,
-                           uint32_t application_id);
 
 }  // namespace enso
 

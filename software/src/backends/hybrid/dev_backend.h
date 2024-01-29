@@ -182,62 +182,6 @@ class DevBackend {
   }
 
   /**
-   * @brief New kthreads must register themselves with the IOKernel to share
-   * their waiters queue.
-   *
-   * @param kthread_waiters_phys_addr Physical address of kthread's waiting
-   * queue.
-   * @param application_id Application ID that is running the kthread.
-   * @return Void
-   */
-  static _enso_always_inline void register_kthread(
-      uint64_t kthread_waiters_phys_addr, uint32_t application_id) {
-    (void)kthread_waiters_phys_addr;
-    struct KthreadNotification kthread_notification;
-    kthread_notification.type = NotifType::kRegisterKthread;
-    kthread_notification.application_id = (uint64_t)application_id;
-
-    enso::PipeNotification* pipe_notification =
-        (enso::PipeNotification*)&kthread_notification;
-    while (queue_to_backend_->Push(*pipe_notification) != 0) {
-    }
-
-    std::optional<PipeNotification> notification;
-
-    // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
-    }
-
-    struct KthreadNotification* result =
-        (struct KthreadNotification*)&notification.value();
-
-    assert(result->type == NotifType::kRegisterKthread);
-    return;
-  }
-
-  /**
-   * @brief When uthreads want to start waiting for a new notification in their
-   * notification buffer, must send message to IOKernel.
-   *
-   * Do not need to wait for a response, the IOKernel can take note
-   * of if new notification must be sent to uthread.
-   *
-   * @param uthread_id
-   */
-  static _enso_always_inline void register_waiting(uint32_t notif_buf_id) {
-    struct WaitingNotification waiting_notification;
-    waiting_notification.type = NotifType::kWaiting;
-    waiting_notification.notif_buf_id = (uint64_t)notif_buf_id;
-
-    enso::PipeNotification* pipe_notification =
-        (enso::PipeNotification*)&waiting_notification;
-    while (queue_to_backend_->Push(*pipe_notification) != 0) {
-    }
-
-    return;
-  }
-
-  /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device.
    * @param virt_addr Address in the application's virtual address space.
@@ -413,6 +357,42 @@ class DevBackend {
    */
   int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
 
+  /**
+   * @brief Sends a message to the IOKernel that the uthread is yielding.
+   *
+   * @param notif_buf_id The notification buffer ID of the current device.
+   */
+  void YieldUthread(int notif_buf_id) {
+    struct YieldNotification yield_notification;
+    yield_notification.type = NotifType::kWaiting;
+    yield_notification.notif_buf_id = notif_buf_id;
+
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&yield_notification;
+    while (queue_to_backend_->Push(*pipe_notification) != 0) {
+    }
+  }
+
+  /**
+   * @brief Once changes have been made to the queues, update them in shared
+   * memory.
+   *
+   */
+  void UpdateQueues() {
+    queue_from_backend_->UpdateHeadInHugePage();
+    queue_to_backend_->UpdateTailInHugePage();
+  }
+
+  /**
+   * @brief Accesses the queue information stored in shared memory to ensure
+   * that queues have been updated.
+   *
+   */
+  void AccessQueues() {
+    queue_from_backend_->AccessHeadFromHugePage();
+    queue_to_backend_->AccessTailFromHugePage();
+  }
+
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept
       : bdf_(bdf), bar_(bar) {}
@@ -463,9 +443,9 @@ class DevBackend {
     }
 
     std::string queue_to_app_name =
-        std::string(enso::kIpcQueueToAppName) + std::to_string(core_id_) + "_";
-    std::string queue_from_app_name = std::string(enso::kIpcQueueFromAppName) +
-                                      std::to_string(core_id_) + "_";
+        std::string(kIpcQueueToAppName) + std::to_string(core_id_) + "_";
+    std::string queue_from_app_name =
+        std::string(kIpcQueueFromAppName) + std::to_string(core_id_) + "_";
 
     queue_to_backend_ =
         QueueProducer<PipeNotification>::Create(queue_from_app_name);

@@ -69,13 +69,6 @@ uint32_t external_peek_next_batch_from_queue(
     struct NotificationBufPair* notification_buf_pair, void** buf);
 
 /**
- * @brief Entry point for kthreads.
- *
- * @param arg Arguments for function: should be the kthread_t* object.
- */
-void* kthread_entry(void* arg);
-
-/**
  * @brief A class that represents a device.
  *
  * Should be instantiated using the factory method `Create()`. Use separate
@@ -105,7 +98,7 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      uint32_t uthread_id, CompletionCallback completion_callback,
+      uint32_t uthread_id, CompletionCallback completion_callback = NULL,
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
@@ -169,21 +162,6 @@ class Device {
    * @brief Gets the next RX notification received by this device.
    */
   struct RxNotification* NextRxNotif();
-
-  /**
-   * @brief Informs the IOKernel that the uthread with this device is going to
-   * start waiting.
-   *
-   * @param uthread_id
-   */
-  void RegisterWaiting(sched::uthread_t* uthread);
-
-  /**
-   * @brief Informs the IOKernel of a new kthread running on a certain core.
-   *
-   */
-  void RegisterKthread(uint64_t kthread_waiters_phys_addr,
-                       uint32_t application_id);
 
   /**
    * @brief Gets the next RxPipe that has data pending.
@@ -351,6 +329,31 @@ class Device {
    */
   int GetNotifQueueId() noexcept;
 
+  /**
+   * @brief Gets the RX head of the notification buffer for this device.
+   */
+  int GetNotifRxHead() noexcept;
+
+  /**
+   * @brief Yields the current uthread to the running kthread, enabling other
+   * uthreads to run on the current core.
+   */
+  void SendUthreadYield();
+
+  /**
+   * @brief Updates the huge page information for the queues to the I/O Kernel.
+   *
+   * @param notification_buf_pair  Notification buffer pair to use.
+   */
+  void UpdateQueues();
+
+  /**
+   * @brief Accesses the queues in case some other thread has added to them.
+   *
+   * @param notification_buf_pair  Notification buffer pair to use.
+   */
+  void AccessQueues();
+
  private:
   struct TxPendingRequest {
     int pipe_id;
@@ -362,7 +365,9 @@ class Device {
    */
   Device(uint32_t uthread_id, CompletionCallback completion_callback,
          const std::string& pcie_addr, std::string huge_page_prefix) noexcept
-      : kPcieAddr(pcie_addr) {
+      : kPcieAddr(pcie_addr),
+        completion_callback_(completion_callback),
+        uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
               << std::endl;
@@ -371,8 +376,6 @@ class Device {
       huge_page_prefix = std::string(kHugePageDefaultPrefix);
     }
     huge_page_prefix_ = huge_page_prefix;
-    completion_callback_ = completion_callback;
-    uthread_id_ = uthread_id;
   }
 
   /**
@@ -767,7 +770,8 @@ class RxPipe {
    * @param device The `Device` object that instantiated this pipe.
    */
   explicit RxPipe(Device* device) noexcept
-      : notification_buf_pair_(&(device->notification_buf_pair_)) {}
+      : notification_buf_pair_(&(device->notification_buf_pair_)),
+        device_(device) {}
 
   /**
    * @note RxPipes cannot be deallocated from outside. The `Device` object is in
@@ -795,6 +799,7 @@ class RxPipe {
   void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
+  Device* device_;
 };
 
 /**
