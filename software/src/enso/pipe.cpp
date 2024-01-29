@@ -249,7 +249,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   id = get_next_enso_pipe_id_kernel(&notification_buf_pair_);
 
 #else  // !LATENCY_OPT
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  id = get_next_enso_pipe_id_kernel(&notification_buf_pair_);
 
 #endif  // LATENCY_OPT
 
@@ -274,7 +274,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   id = get_next_enso_pipe_id_kernel(&notification_buf_pair_);
 
 #else  // !LATENCY_OPT
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  id = get_next_enso_pipe_id_kernel(&notification_buf_pair_);
 
 #endif  // LATENCY_OPT
 
