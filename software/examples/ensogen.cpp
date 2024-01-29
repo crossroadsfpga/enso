@@ -533,7 +533,7 @@ static int parse_args(int argc, char** argv,
 
 /*
  * @brief: libpcap callback registered by the main function. Called for each
- * packet present in the PCAP file by libpcap.
+ * packet present in the PCAP file.
  *
  * @param user: Structure allocated in main to read and store relevant information.
  * @param pkt_hdr: Contains packet metadata like timestamp, length, etc. (UNUSED)
@@ -636,12 +636,9 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
 }
 
 /*
- * @brief: This function is called to send packets. Note that the approach we
- * use here to send packets is different from the one defined in Enso's library
- * using the TxPipe abstraction. This approach dissociates the sending part
- * (creating TX notifications) from processing the completions (which TX notif-
- * ications have been consumed by the NIC). It needed to be done this way to meet
- * the performance requirements (full 100 G) for single core.
+ * @brief: This function is called periodically to send packets and update
+ * the TX stats. In case too many transmissions are already pending it will
+ * wait for the NIC to process them before sending another batch.
  *
  * @param tx_args: Arguments needed by this function. See TxArgs definition.
  * @param tx_stats: Tx stats that need to be updated in every iteration.
