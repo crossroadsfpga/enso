@@ -65,7 +65,7 @@ thread_local uint64_t shinkansen_notif_buf_id_;
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
-    std::cerr << "Using software backend" << std::endl;
+    std::cerr << "Using hybrid backend" << std::endl;
 
     DevBackend* dev = new (std::nothrow) DevBackend(bdf, bar);
 
@@ -116,7 +116,7 @@ class DevBackend {
           }
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
-          uint64_t mask = (1L << 32L) - 1L;
+          uint64_t mask = (1L << 8L) - 1L;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
           break;
       }
