@@ -50,6 +50,12 @@
 
 namespace enso {
 
+uint64_t rdtsc() {
+  uint32_t a, d;
+  asm volatile("rdtsc" : "=a"(a), "=d"(d));
+  return ((uint64_t)a) | (((uint64_t)d) << 32);
+}
+
 uint16_t get_bdf_from_pcie_addr(const std::string& pcie_addr) {
   uint32_t domain, bus, dev, func;
   uint16_t bdf = 0;

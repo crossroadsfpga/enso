@@ -83,17 +83,20 @@ struct alignas(kCacheLineSize) stats_t {
   uint64_t nb_pkts;
 };
 
+uint64_t rdtsc(void);
+
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
  *
  * This assumes that the packet has been timestamped by hardware. To enable
  * timestamping call the `Device::EnableTimeStamping` method.
  *
- * To convert from number of cycles to ns. Do `cycles * kNsPerTimestampCycle`.
+ * To convert from number of cycles to ns. Do `cycles *
+ * kNsPerTimestampCycle`.
  *
  * @param pkt Packet to retrieve the RTT from.
- * @return Return RTT measure for the packet in number of cycles. If timestamp
- *         is not enabled on the NIC, the value returned is undefined.
+ * @return Return RTT measure for the packet in number of cycles. If
+ * timestamp is not enabled on the NIC, the value returned is undefined.
  */
 inline uint32_t get_pkt_rtt(const uint8_t* pkt) {
   uint32_t rtt = *((uint32_t*)(pkt + kPacketRttOffset));

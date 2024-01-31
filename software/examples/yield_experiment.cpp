@@ -32,7 +32,6 @@
 
 #include <enso/helpers.h>
 #include <enso/pipe.h>
-#include <pcap/pcap.h>
 #include <pthread.h>
 #include <sched.h>
 #include <unistd.h>  // for usleep
@@ -40,7 +39,6 @@
 #include <chrono>
 #include <csignal>
 #include <cstdint>
-#include <cstring>
 #include <iostream>
 #include <memory>
 
@@ -51,21 +49,19 @@ static volatile bool setup_done = false;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-struct CaptureArgs {
+struct YieldExpArgs {
   uint32_t nb_queues;
   uint32_t core_id;
-  std::string pcap_file;
-  std::string pcie_addr;
+  uint32_t nb_cycles;
   enso::stats_t* stats;
   uint32_t application_id;
 };
 
-void* capture_packets(void* arg) {
-  struct CaptureArgs* args = (struct CaptureArgs*)arg;
+void* run_echo(void* arg) {
+  struct YieldExpArgs* args = (struct YieldExpArgs*)arg;
   uint32_t nb_queues = args->nb_queues;
   uint32_t core_id = args->core_id;
-  std::string pcap_file = args->pcap_file;
-  std::string pcie_addr = args->pcie_addr;
+  uint32_t nb_cycles = args->nb_cycles;
   enso::stats_t* stats = args->stats;
   uint32_t application_id = args->application_id;
 
@@ -76,10 +72,10 @@ void* capture_packets(void* arg) {
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
   using enso::Device;
-  using enso::RxPipe;
+  using enso::RxTxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(application_id, NULL, pcie_addr);
-  std::vector<RxPipe*> rx_pipes;
+  std::unique_ptr<Device> dev = Device::Create(application_id, NULL);
+  std::vector<RxTxPipe*> pipes;
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -87,110 +83,94 @@ void* capture_packets(void* arg) {
   }
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    RxPipe* rx_pipe = dev->AllocateRxPipe(true);
-    if (!rx_pipe) {
-      std::cerr << "Problem creating RX pipe" << std::endl;
+    RxTxPipe* pipe = dev->AllocateRxTxPipe();
+    if (!pipe) {
+      std::cerr << "Problem creating RX/TX pipe" << std::endl;
       exit(3);
     }
-    rx_pipes.push_back(rx_pipe);
+    uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
+    pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+
+    pipes.push_back(pipe);
   }
-
-  pcap_t* pd;
-  pcap_dumper_t* pdumper;
-
-  pd = pcap_open_dead(DLT_EN10MB, 65535);
-  pdumper = pcap_dump_open(pd, pcap_file.c_str());
-  struct timeval ts;
-  ts.tv_sec = 0;
-  ts.tv_usec = 0;
 
   setup_done = true;
 
   while (keep_running) {
-    RxPipe* pipe = dev->NextRxPipeToRecv();
+    for (auto& pipe : pipes) {
+      auto batch = pipe->PeekPkts();
 
-    if (unlikely(pipe == nullptr)) {
-      continue;
+      if (unlikely(batch.available_bytes() == 0)) {
+        continue;
+      }
+
+      for (auto pkt : batch) {
+        ++pkt[63];  // Increment payload.
+
+        for (uint32_t i = 0; i < nb_cycles; ++i) {
+          asm("nop");
+        }
+
+        ++(stats->nb_pkts);
+      }
+      uint32_t batch_length = batch.processed_bytes();
+      pipe->ConfirmBytes(batch_length);
+
+      stats->recv_bytes += batch_length;
+      ++(stats->nb_batches);
+
+      pipe->SendAndFree(batch_length);
     }
-
-    auto batch = pipe->RecvPkts();
-
-    for (auto pkt : batch) {
-      uint16_t pkt_len = enso::get_pkt_len(pkt);
-
-      // Save packet to pcap
-      struct pcap_pkthdr pkt_hdr;
-      pkt_hdr.ts = ts;
-
-      pkt_hdr.len = pkt_len;
-      pkt_hdr.caplen = pkt_len;
-      ++(ts.tv_usec);
-      pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
-
-      ++(stats->nb_pkts);
-    }
-    uint32_t batch_length = batch.processed_bytes();
-    stats->recv_bytes += batch_length;
-    ++(stats->nb_batches);
-
-    pipe->Clear();
   }
-
-  pcap_dump_close(pdumper);
-  pcap_close(pd);
-
   return NULL;
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc < 4 || argc > 5) {
-    std::cerr << "Usage: " << argv[0] << " NB_QUEUES PCAP_FILE [PCIE_ADDR]"
-              << std::endl
+  if (argc != 5) {
+    std::cerr << "Usage: " << argv[0]
+              << " NB_CORES NB_QUEUES NB_CYCLES APPLICATION_ID" << std::endl
               << std::endl;
-    std::cerr << "NB_QUEUES: Number of queues to use." << std::endl;
-    std::cerr << "PCAP_FILE: Path to the pcap file to write to." << std::endl;
+    std::cerr << "NB_CORES: Number of cores to use." << std::endl;
+    std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
+    std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
+                 " packet."
+              << std::endl;
     std::cerr << "APPLICATION_ID: Count of number of applications started "
-                 "before this application, starting from 0.";
-    std::cerr << "PCIE_ADDR: PCIe address of the device to use." << std::endl
+                 "before this application, starting from 0."
               << std::endl;
     return 1;
   }
 
-  constexpr uint32_t kCoreId = 0;
-  uint32_t nb_queues = atoi(argv[1]);
-  std::string pcap_file = argv[2];
-
-  if (nb_queues == 0) {
-    std::cerr << "Invalid number of queues" << std::endl;
-    return 2;
-  }
-
-  uint32_t application_id = atoi(argv[3]);
-
-  std::string pcie_addr;
-  if (argc == 5) {
-    pcie_addr = argv[4];
-  }
+  uint32_t nb_cores = atoi(argv[1]);
+  uint32_t nb_queues = atoi(argv[2]);
+  uint32_t nb_cycles = atoi(argv[3]);
+  uint32_t application_id = atoi(argv[4]);
 
   signal(SIGINT, int_handler);
 
-  std::vector<enso::stats_t> thread_stats(1);
+  std::vector<pthread_t> threads;
+  std::vector<enso::stats_t> thread_stats(nb_cores);
 
-  pthread_t thread;
-  struct CaptureArgs args;
-  args.nb_queues = nb_queues;
-  args.core_id = kCoreId;
-  args.pcap_file = pcap_file;
-  args.pcie_addr = pcie_addr;
-  args.stats = &(thread_stats[0]);
-  args.application_id = application_id;
-  pthread_create(&thread, NULL, capture_packets, static_cast<void*>(&args));
+  for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
+    pthread_t thread;
+    struct YieldExpArgs args;
+    args.nb_queues = nb_queues;
+    args.core_id = core_id;
+    args.nb_cycles = nb_cycles;
+    args.stats = &(thread_stats[core_id]);
+    args.application_id = application_id;
+    pthread_create(&thread, NULL, run_echo, (void*)&args);
+    threads.push_back(thread);
+    usleep(100000);
+  }
 
   while (!setup_done) continue;  // Wait for setup to be done.
 
   show_stats(thread_stats, &keep_running);
 
-  pthread_join(thread, NULL);
+  for (auto& thread : threads) {
+    pthread_join(thread, NULL);
+  }
 
   return 0;
 }
