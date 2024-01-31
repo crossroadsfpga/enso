@@ -39,7 +39,6 @@
 #include <chrono>
 #include <csignal>
 #include <cstdint>
-#include <cstring>
 #include <iostream>
 #include <memory>
 
@@ -48,7 +47,9 @@
 static volatile bool keep_running = true;
 static volatile bool setup_done = false;
 
-struct EchoArgs {
+void int_handler([[maybe_unused]] int signal) { keep_running = false; }
+
+struct YieldExpArgs {
   uint32_t nb_queues;
   uint32_t core_id;
   uint32_t nb_cycles;
@@ -56,10 +57,8 @@ struct EchoArgs {
   uint32_t application_id;
 };
 
-void int_handler([[maybe_unused]] int signal) { keep_running = false; }
-
-void* run_experiment(void* arg) {
-  struct EchoArgs* args = (struct EchoArgs*)arg;
+void* run_echo(void* arg) {
+  struct YieldExpArgs* args = (struct YieldExpArgs*)arg;
   uint32_t nb_queues = args->nb_queues;
   uint32_t core_id = args->core_id;
   uint32_t nb_cycles = args->nb_cycles;
@@ -73,10 +72,10 @@ void* run_experiment(void* arg) {
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
   using enso::Device;
-  using enso::RxPipe;
+  using enso::RxTxPipe;
 
   std::unique_ptr<Device> dev = Device::Create(application_id, NULL);
-  std::vector<RxPipe*> rx_pipes;
+  std::vector<RxTxPipe*> pipes;
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -84,24 +83,22 @@ void* run_experiment(void* arg) {
   }
 
   for (uint32_t i = 0; i < nb_queues; ++i) {
-    RxPipe* rx_pipe = dev->AllocateRxPipe();
-    if (!rx_pipe) {
-      std::cerr << "Problem creating RX pipe" << std::endl;
+    RxTxPipe* pipe = dev->AllocateRxTxPipe();
+    if (!pipe) {
+      std::cerr << "Problem creating RX/TX pipe" << std::endl;
       exit(3);
     }
-
     uint32_t dst_ip = kBaseIpAddress + core_id * nb_queues + i;
-    rx_pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
+    pipe->Bind(kDstPort, 0, dst_ip, 0, kProtocol);
 
-    rx_pipes.push_back(rx_pipe);
+    pipes.push_back(pipe);
   }
 
   setup_done = true;
 
   while (keep_running) {
-    for (uint32_t i = 0; i < nb_queues; ++i) {
-      auto& rx_pipe = rx_pipes[i];
-      auto batch = rx_pipe->RecvPkts();
+    for (auto& pipe : pipes) {
+      auto batch = pipe->PeekPkts();
 
       if (unlikely(batch.available_bytes() == 0)) {
         continue;
@@ -117,20 +114,21 @@ void* run_experiment(void* arg) {
         ++(stats->nb_pkts);
       }
       uint32_t batch_length = batch.processed_bytes();
+      pipe->ConfirmBytes(batch_length);
+
       stats->recv_bytes += batch_length;
       ++(stats->nb_batches);
 
-      rx_pipe->Clear();
+      pipe->SendAndFree(batch_length);
     }
   }
-
   return NULL;
 }
 
 int main(int argc, const char* argv[]) {
   if (argc != 5) {
-    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
-              << std::endl
+    std::cerr << "Usage: " << argv[0]
+              << " NB_CORES NB_QUEUES NB_CYCLES APPLICATION_ID" << std::endl
               << std::endl;
     std::cerr << "NB_CORES: Number of cores to use." << std::endl;
     std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
@@ -155,13 +153,13 @@ int main(int argc, const char* argv[]) {
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
     pthread_t thread;
-    struct EchoArgs args;
+    struct YieldExpArgs args;
     args.nb_queues = nb_queues;
     args.core_id = core_id;
     args.nb_cycles = nb_cycles;
     args.stats = &(thread_stats[core_id]);
     args.application_id = application_id;
-    pthread_create(&thread, NULL, run_echo_copy, (void*)&args);
+    pthread_create(&thread, NULL, run_echo, (void*)&args);
     threads.push_back(thread);
     usleep(100000);
   }

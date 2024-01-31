@@ -30,6 +30,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <asm/ops.h>
 #include <enso/helpers.h>
 #include <enso/pipe.h>
 #include <pthread.h>
@@ -56,7 +57,7 @@ struct ConfigArgs {
   uint32_t core_id;
 };
 
-struct EchoArgs {
+struct ConfigExpArgs {
   uint32_t core_id;
   uint32_t nb_cycles;
   enso::stats_t* stats;
@@ -65,11 +66,6 @@ struct EchoArgs {
 };
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
-
-std::chrono::nanoseconds get_time() {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(
-      std::chrono::system_clock::now().time_since_epoch());
-}
 
 void* change_config(void* arg) {
   struct ConfigArgs* args = (struct ConfigArgs*)arg;
@@ -112,10 +108,10 @@ void* change_config(void* arg) {
     pipes.push_back(pipe);
   }
 
-  nanoseconds last_time = get_time();
+  uint64_t last_time = rdtsc();
 
   while (keep_running) {
-    nanoseconds now = get_time();
+    uint64_t now = rdtsc();
     bool change = false;
     long long diff = (now - last_time).count();
     if (diff >= ns_interval) {
@@ -140,7 +136,7 @@ void* change_config(void* arg) {
 }
 
 void* run_experiment(void* arg) {
-  struct EchoArgs* args = (struct EchoArgs*)arg;
+  struct ConfigExpArgs* args = (struct ConfigExpArgs*)arg;
   uint32_t core_id = args->core_id;
   uint32_t nb_cycles = args->nb_cycles;
   enso::stats_t* stats = args->stats;
@@ -245,7 +241,7 @@ int main(int argc, const char* argv[]) {
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
     pthread_t thread;
-    struct EchoArgs args;
+    struct ConfigExpArgs args;
     args.core_id = core_id;
     args.nb_cycles = nb_cycles;
     args.stats = &(thread_stats[core_id]);

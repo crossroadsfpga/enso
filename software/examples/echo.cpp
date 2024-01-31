@@ -49,7 +49,7 @@ static volatile bool setup_done = false;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-struct EchoArgs {
+struct EchoCopyArgs {
   uint32_t nb_queues;
   uint32_t core_id;
   uint32_t nb_cycles;
@@ -58,7 +58,7 @@ struct EchoArgs {
 };
 
 void* run_echo(void* arg) {
-  struct EchoArgs* args = (struct EchoArgs*)arg;
+  struct EchoCopyArgs* args = (struct EchoCopyArgs*)arg;
   uint32_t nb_queues = args->nb_queues;
   uint32_t core_id = args->core_id;
   uint32_t nb_cycles = args->nb_cycles;
@@ -153,7 +153,7 @@ int main(int argc, const char* argv[]) {
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
     pthread_t thread;
-    struct EchoArgs args;
+    struct EchoCopyArgs args;
     args.nb_queues = nb_queues;
     args.core_id = core_id;
     args.nb_cycles = nb_cycles;
