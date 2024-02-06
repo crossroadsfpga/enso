@@ -90,7 +90,7 @@ void run_forward(uint32_t nb_queues, enso::stats_t* stats) {
       continue;
     }
 
-    auto batch = rx_pipe->PeekPkts();
+    auto batch = rx_pipe->PeekPktsFromTail();
 
     uint8_t* tx_buf = tx_pipe->AllocateBuf(batch.available_bytes());
 

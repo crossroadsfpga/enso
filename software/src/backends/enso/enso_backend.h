@@ -192,8 +192,8 @@ class EnsoBackend {
     return dev_->free_enso_rx_pipe(pipe_id);
   }
 
-  int ConsumeRxPipe(int pipe_id, uint32_t &krx_tail, bool get_tails) {
-    return dev_->consume_rx_pipe(pipe_id, krx_tail, get_tails);
+  int ConsumeRxPipe(int &pipe_id, uint32_t &krx_tail) {
+    return dev_->consume_rx_pipe(pipe_id, krx_tail);
   }
 
   int FullyAdvancePipe(int pipe_id) {

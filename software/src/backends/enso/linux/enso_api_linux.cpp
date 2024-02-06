@@ -192,14 +192,14 @@ int EnsoDev::free_enso_rx_pipe(int pipe_id) {
   return 0;
 }
 
-int EnsoDev::consume_rx_pipe(int pipe_id, uint32_t &krx_tail, bool get_tails) {
+int EnsoDev::consume_rx_pipe(int &pipe_id, uint32_t &krx_tail) {
   int result;
   struct enso_consume_rx_params param;
   param.id = pipe_id;
-  param.get_tails = get_tails;
   param.new_rx_tail = 0;
   result = ioctl(m_dev_handle, ENSO_IOCTL_CONSUME_RX, &param);
   krx_tail = param.new_rx_tail;
+  pipe_id = param.id;
   return result;
 }
 
@@ -240,8 +240,9 @@ int EnsoDev::next_rx_pipe_to_recv() {
 }
 
 int EnsoDev::prefetch_pipe(int pipe_id) {
-  (void) pipe_id;
-  return 0;
+  int result;
+  result = ioctl(m_dev_handle, ENSO_IOCTL_PREFETCH_PIPE, &pipe_id);
+  return result;
 }
 
 }  // namespace enso_api

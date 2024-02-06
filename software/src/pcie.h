@@ -50,11 +50,6 @@
 
 namespace enso {
 
-struct SocketInternal {
-  struct NotificationBufPair* notification_buf_pair;
-  struct RxEnsoPipeInternal enso_pipe;
-};
-
 /**
  * @brief Initializes the notification buffer pair.
  *
@@ -82,103 +77,12 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    struct NotificationBufPair* notification_buf_pair,
                    bool fallback);
 
-/**
- * @brief Initializes an enso pipe and the notification buffer if needed.
- *
- * @deprecated This function is deprecated and will be removed in the future.
- */
-int dma_init(struct NotificationBufPair* notification_buf_pair,
-             struct RxEnsoPipeInternal* enso_pipe, uint32_t bdf, int32_t bar,
-             const std::string& huge_page_prefix, bool fallback);
+uint32_t consume_rx_kernel(struct NotificationBufPair* notification_buf_pair,
+                                  uint32_t &new_rx_tail, int32_t &pipe_id);
 
-/**
- * @brief Gets latest tails for the pipes associated with the given notification
- * buffer.
- *
- * @param notification_buf_pair Notification buffer to get data from.
- * @return Number of notifications received.
- */
-uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair);
-
-/**
- * @brief Gets the next batch of data from the given Enso Pipe.
- *
- * @param enso_pipe Enso Pipe to get data from.
- * @param notification_buf_pair Notification buffer to get data from.
- * @param buf Pointer to the buffer where the data will be stored, it will be
- *            updated to point to the next available data.
- * @return Number of bytes received.
- */
-uint32_t get_next_batch_from_queue(
-    struct RxEnsoPipeInternal* enso_pipe,
-    struct NotificationBufPair* notification_buf_pair, void** buf);
-
-/**
- * @brief Gets the next batch of data from the given Enso Pipe without consuming
- *        it. So the next call to `get_next_batch_from_queue` or to
- *       `peek_next_batch_from_queue` will return the same data.
- *
- * @param enso_pipe Enso Pipe to get data from.
- * @param notification_buf_pair Notification buffer to get data from.
- * @param buf Pointer to the buffer where the data will be stored, it will be
- *            updated to point to the next available data.
- * @return Number of bytes received.
- */
-uint32_t peek_next_batch_from_queue(
-    struct RxEnsoPipeInternal* enso_pipe,
-    struct NotificationBufPair* notification_buf_pair, void** buf);
-
-uint32_t consume_rx_kernel(
-    struct RxEnsoPipeInternal* enso_pipe,
-    struct NotificationBufPair* notification_buf_pair, void** buf, bool get_tails);
-
-/**
- * @brief Get next Enso Pipe with pending data.
- *
- * @param notification_buf_pair Notification buffer to get data from.
- * @return ID for the next Enso Pipe that has data available, or -1 if no Enso
- *         Pipe has data.
- */
-int32_t get_next_enso_pipe_id(
-    struct NotificationBufPair* notification_buf_pair);
-
-/**
- * @brief Get next batch of data from the next available Enso Pipe.
- *
- * @param notification_buf_pair Notification buffer to get data from.
- * @param socket_entries Array of socket entries.
- * @param enso_pipe_id ID of the Enso Pipe that the data came from.
- * @param buf Pointer to the buffer where the data will be stored.
- * @return Number of bytes received.
- */
-uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
-                        struct SocketInternal* socket_entries,
-                        int* enso_pipe_id, void** buf);
-
-uint32_t get_next_batch_kernel(struct NotificationBufPair* notification_buf_pair,
-                               struct SocketInternal* socket_entries,
-                               int* enso_pipe_id, void** buf);
-
-/**
- * @brief Frees the next `len` bytes in the buffer associated with the
- * `socket_entry` socket. If `len` is greater than the number of allocated bytes
- * in the buffer, the behavior is undefined.
- *
- * @param enso_pipe Enso pipe to advance.
- * @param len Number of bytes to free.
- */
-void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len);
 
 void advance_pipe_kernel(struct NotificationBufPair* notification_buf_pair,
                         struct RxEnsoPipeInternal* enso_pipe, size_t len);
-
-/**
- * @brief Frees all the received bytes in the buffer associated with the
- * `socket_entry` socket.
- *
- * @param enso_pipe Enso pipe to advance.
- */
-void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe);
 
 void fully_advance_pipe_kernel(struct RxEnsoPipeInternal* enso_pipe,
                                struct NotificationBufPair* notification_buf_pair);
@@ -229,13 +133,6 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
  */
 uint32_t get_unreported_completions(
     struct NotificationBufPair* notification_buf_pair);
-
-/**
- * @brief Updates the tx head and the number of TX completions.
- *
- * @param notification_buf_pair Notification buffer to be updated.
- */
-void update_tx_head(struct NotificationBufPair* notification_buf_pair);
 
 /**
  * @brief Sends configuration to the NIC.
@@ -308,29 +205,6 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
 void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
                     struct RxEnsoPipeInternal* enso_pipe,
                     enso_pipe_id_t enso_pipe_id);
-
-/**
- * @brief Frees the notification buffer and all pipes.
- *
- * @deprecated This function is deprecated and will be removed in the future.
- */
-int dma_finish(struct SocketInternal* socket_entry);
-
-/**
- * @brief Gets the Enso Pipe ID associated with a given socket.
- *
- * @deprecated This function is deprecated and will be removed in the future.
- */
-uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
-
-/**
- * @brief Prints statistics for a given socket.
- *
- * @deprecated This function is deprecated and will be removed in the future.
- */
-void print_stats(struct SocketInternal* socket_entry, bool print_global);
-
-int get_next_enso_pipe_id_kernel(struct NotificationBufPair* notification_buf_pair);
 
 }  // namespace enso
 

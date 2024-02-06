@@ -28,6 +28,7 @@ static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned lon
 static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long prefetch_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 
 /* Helpers */
 static void free_rx_tx_buf(struct chr_dev_bookkeep *chr_dev_bk);
@@ -37,6 +38,8 @@ static uint32_t consume_queue(struct notification_buf_pair *notif_buf_pair,
                               struct rx_pipe_internal *pipe,
                               uint32_t *new_rx_tail);
 static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair);
+static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
+                                struct rx_pipe_internal **rx_enso_pipes);
 
 /******************************************************************************
  * Device and I/O control function
@@ -157,6 +160,9 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
       break;
     case ENSO_IOCTL_NEXT_RX_PIPE_RCV:
       retval = next_rx_pipe_to_recv(chr_dev_bk, uarg);
+      break;
+    case ENSO_IOCTL_PREFETCH_PIPE:
+      retval = prefetch_pipe(chr_dev_bk, uarg);
       break;
     default:
       retval = -ENOTTY;
@@ -978,6 +984,7 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   struct rx_pipe_internal *pipe;
   struct enso_consume_rx_params params;
   uint32_t flit_aligned_size = 0;
+  int32_t pipe_id;
 
   dev_bk = chr_dev_bk->dev_bk;
   if (unlikely(down_interruptible(&dev_bk->sem))) {
@@ -988,20 +995,35 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   if (copy_from_user(&params, (struct enso_consume_rx_params __user *)uarg,
                     sizeof(struct enso_consume_rx_params))) {
     printk("couldn't copy arg from user.");
+    up(&dev_bk->sem);
     return -EFAULT;
   }
 
   notif_buf_pair = chr_dev_bk->notif_buf_pair;
   rx_pipes = chr_dev_bk->rx_pipes;
-  pipe = rx_pipes[params.id];
-  if(pipe == NULL) {
-    printk("No pipe with ID = %d\n", params.id);
-    return -EFAULT;
+
+  // in case the userspace sets the pipe_id properly, we need to fetch the
+  // new tails for that specific pipe_id. otherwise, if pipe_id is -1,
+  // we check which pipe_id is now available and send it back to the userspace
+  if(params.id != -1) {
+    get_new_tails(notif_buf_pair);
+    pipe_id = params.id;
+  } else {
+    pipe_id = get_next_rx_pipe(notif_buf_pair, rx_pipes);
+    if(pipe_id == -1) {
+        // no new pipes are available to be fetched from
+        // return back to userspace
+        up(&dev_bk->sem);
+        return 0;
+    }
+    params.id = pipe_id;
   }
 
-  // we first check for any new notifications
-  if(params.get_tails) {
-    get_new_tails(notif_buf_pair);
+  pipe = rx_pipes[pipe_id];
+  if(pipe == NULL) {
+    printk("No pipe with ID = %d\n", pipe_id);
+    up(&dev_bk->sem);
+    return -EFAULT;
   }
 
   // now get the new rx pipe tail
@@ -1010,6 +1032,7 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   if (copy_to_user((struct enso_consume_rx_params __user *)uarg, &params,
                   sizeof(struct enso_consume_rx_params))) {
     printk("couldn't copy head to user.");
+    up(&dev_bk->sem);
     return -EFAULT;
   }
 
@@ -1019,7 +1042,7 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
 }
 
 static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
-                            unsigned long uarg) {
+                               unsigned long uarg) {
   struct dev_bookkeep *dev_bk;
   struct rx_pipe_internal **rx_enso_pipes;
   struct rx_pipe_internal *pipe;
@@ -1162,13 +1185,11 @@ static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk,
     printk("interrupted while attempting to obtain device semaphore.");
     return -ERESTARTSYS;
   }
-  // printk("enso_drv: entered next_rx_pipe_to_recv\n");
 
   notif_buf_pair = chr_dev_bk->notif_buf_pair;
   rx_enso_pipes = chr_dev_bk->rx_pipes;
 
   pipe_id = get_next_pipe_id(notif_buf_pair);
-  //  printk("enso_drv: pipe_id is %d\n", pipe_id);
   while(pipe_id >= 0) {
     pipe = rx_enso_pipes[pipe_id];
     if(pipe == NULL) {
@@ -1180,14 +1201,47 @@ static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk,
     if(enso_pipe_head != enso_pipe_tail) {
       smp_wmb();
       iowrite32(pipe->rx_head, pipe->buf_head_ptr);
-      // printk("Get from pipe id = %d\n", pipe_id);
       break;
     }
     pipe_id = get_next_pipe_id(notif_buf_pair);
   }
 
   up(&dev_bk->sem);
-  // printk("enso_drv: exit next_rx_pipe_to_recv\n");
+  return pipe_id;
+}
+
+static long prefetch_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                          unsigned long uarg) {
+  struct dev_bookkeep *dev_bk;
+  struct rx_pipe_internal **rx_enso_pipes;
+  struct rx_pipe_internal *pipe;
+  struct notification_buf_pair *notif_buf_pair;
+  int32_t pipe_id;
+
+  dev_bk = chr_dev_bk->dev_bk;
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    printk("interrupted while attempting to obtain device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  if (copy_from_user(&pipe_id, (void __user *)uarg, sizeof(pipe_id))) {
+    printk("couldn't copy arg from user.");
+    return -EFAULT;
+  }
+
+  notif_buf_pair = chr_dev_bk->notif_buf_pair;
+  rx_enso_pipes = chr_dev_bk->rx_pipes;
+  pipe = rx_enso_pipes[pipe_id];
+
+  if(pipe == NULL) {
+      printk("Pipe ID %d is NULL\n", pipe_id);
+      return -EFAULT;
+  }
+
+  smp_wmb();
+  iowrite32(pipe->rx_head, pipe->buf_head_ptr);
+
+  up(&dev_bk->sem);
   return pipe_id;
 }
 
@@ -1303,7 +1357,6 @@ static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair) {
   uint32_t enso_pipe_id;
   uint16_t ind = 0;
 
-  // printk("Entered get_new_tails\n");
   rx_notif = notif_buf_pair->rx_buf;
   notification_buf_head = notif_buf_pair->rx_head;
   next_rx_ids_tail = notif_buf_pair->next_rx_ids_tail;
@@ -1333,7 +1386,6 @@ static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
-    // printk("nb_consumed_notifications = %d\n", nb_consumed_notifications);
     smp_wmb();
     iowrite32(notification_buf_head, notif_buf_pair->rx_head_ptr);
     notif_buf_pair->rx_head = notification_buf_head;
@@ -1372,7 +1424,6 @@ static int32_t get_next_pipe_id(struct notification_buf_pair *notif_buf_pair) {
   uint16_t nb_consumed_notifications = 0;
   int32_t enso_pipe_id;
 
-  // printk("Entered get_next_pipe_id\n");
   next_rx_ids_head = notif_buf_pair->next_rx_ids_head;
   next_rx_ids_tail = notif_buf_pair->next_rx_ids_tail;
 
@@ -1382,13 +1433,38 @@ static int32_t get_next_pipe_id(struct notification_buf_pair *notif_buf_pair) {
       return -1;
     }
   }
-  // printk("nb_consumed_notif = %d\n", nb_consumed_notifications);
 
   enso_pipe_id = notif_buf_pair->next_rx_pipe_ids[next_rx_ids_head];
 
   notif_buf_pair->next_rx_ids_head =
                  (next_rx_ids_head + 1) % NOTIFICATION_BUF_SIZE;
 
-  // printk("Exit get_next_pipe_id\n");
   return enso_pipe_id;
+}
+
+static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
+                                struct rx_pipe_internal **rx_enso_pipes) {
+  struct rx_pipe_internal *pipe;
+  int32_t pipe_id;
+  uint32_t enso_pipe_head;
+  uint32_t enso_pipe_tail;
+
+  pipe_id = get_next_pipe_id(notif_buf_pair);
+  while(pipe_id >= 0) {
+    pipe = rx_enso_pipes[pipe_id];
+    if(pipe == NULL) {
+      printk("Pipe ID = %d is NULL\n", pipe_id);
+      return -1;
+    }
+    enso_pipe_head = pipe->rx_tail;
+    enso_pipe_tail = notif_buf_pair->pending_rx_pipe_tails[pipe_id];
+    if(enso_pipe_head != enso_pipe_tail) {
+      smp_wmb();
+      iowrite32(pipe->rx_head, pipe->buf_head_ptr);
+      break;
+    }
+    pipe_id = get_next_pipe_id(notif_buf_pair);
+  }
+
+  return pipe_id;
 }

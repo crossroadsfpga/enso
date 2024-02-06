@@ -85,7 +85,7 @@ void run_echo_event(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
       continue;
     }
 
-    auto batch = pipe->PeekPkts();
+    auto batch = pipe->PeekPktsFromTail();
 
     for (auto pkt : batch) {
       ++pkt[63];  // Increment payload.
