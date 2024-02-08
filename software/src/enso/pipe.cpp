@@ -231,6 +231,8 @@ RxTxPipe* Device::AllocateRxTxPipe(bool fallback) noexcept {
   rx_tx_pipes_.push_back(pipe);
   rx_tx_pipes_map_[pipe->rx_id()] = pipe;
 
+  std::cout << "rx pipe id: " << pipe->rx_id() << std::endl;
+
   return pipe;
 }
 

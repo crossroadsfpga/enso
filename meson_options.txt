@@ -4,7 +4,7 @@ option('notification_buf_size', type: 'integer', min: 0, max: 32768,
        description: 'Buffer size used by each software notification buffer')
 option('enso_pipe_size', type: 'integer', min: 0, max: 32768, value: 32768,
        description: 'Buffer size used by each software enso pipe')
-option('latency_opt', type: 'boolean', value: true,
+option('latency_opt', type: 'boolean', value: false,
        description: 'Optimize for latency')
 option('dev_backend', type: 'combo', choices: ['intel_fpga', 'software'],
        value: 'intel_fpga', description: 'Device backend to use')

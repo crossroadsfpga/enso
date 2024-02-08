@@ -79,11 +79,19 @@ void run_echo(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
   setup_done = true;
 
   while (keep_running) {
+    int first = true;
     for (auto& pipe : pipes) {
       auto batch = pipe->PeekPkts();
 
       if (unlikely(batch.available_bytes() == 0)) {
         continue;
+      }
+
+      if (first) {
+        for (uint64_t i = 0; i < 10000000000; i++) {
+          asm("nop");
+        }
+        first = false;
       }
 
       for (auto pkt : batch) {
