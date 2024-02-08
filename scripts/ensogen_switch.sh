@@ -13,7 +13,7 @@ GET_PCAP_SIZE_CMD_PATH="${SCRIPT_DIR}/../build/scripts/get_pcap_pkt_size"
 GET_PCAP_SIZE_CMD_PATH=$(realpath $GET_PCAP_SIZE_CMD_PATH)
 
 if [ $# -lt 2 ]; then
-    echo "Usage: ./ensogen.sh PCAP_FILE_1 PCAP_FILE_2 RATE_GBPS [OPTIONS]"
+    echo "Usage: ./ensogen.sh RATE_GBPS [OPTIONS]"
     echo "Example: ./ensogen.sh /tmp/pcap_file.pcap 100 --pcie-addr 65:00.0"
     exit 1
 fi
@@ -30,13 +30,11 @@ if [ ! -f $GET_PCAP_SIZE_CMD_PATH ]; then
     exit 3
 fi
 
-pcap_file_1=$1
-pcap_file_2=$2
-rate=$3
-extra_args=${@:4}
+rate=$1
+extra_args=${@:2}
 
 pattern="Average packet size:"
-mean_pkt_size=$($GET_PCAP_SIZE_CMD_PATH $pcap_file_1)
+mean_pkt_size=64
 
 num_den=$(python3 <<EOF
 import math
@@ -56,4 +54,4 @@ print(clock_fraction.numerator, clock_fraction.denominator)
 EOF
 )
 
-sudo $ENSOGEN_SWITCH_PATH $pcap_file_1 $pcap_file_2 $num_den $extra_args
+sudo $ENSOGEN_SWITCH_PATH $num_den $extra_args

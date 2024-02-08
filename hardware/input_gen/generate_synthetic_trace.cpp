@@ -109,7 +109,7 @@ int main(int argc, char const* argv[]) {
   pkt_hdr.ts = ts;
 
   uint32_t src_ip = ip(192, 168, 0, 0);
-  uint32_t dst_ip = ip(192, 168, 0, 0);
+  uint32_t dst_ip = ip(192, 168, 0, 3);
 
   uint32_t mss =
       pkt_size - sizeof(*l2_hdr) - sizeof(*l3_hdr) - sizeof(*l4_hdr) - 4;

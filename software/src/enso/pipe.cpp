@@ -256,7 +256,9 @@ struct RxNotification* Device::NextRxNotif() {
   //     RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
   //     uint32_t enso_pipe_head = pipe.rx_tail;
   //     uint32_t enso_pipe_tail =
-  //     notification_buf_pair_.pending_rx_pipe_tails[id];
+  //     notification_buf_pair_.pending_rx_pipe_tails[id]; std::cout << "enso
+  //     pipe head: " << enso_pipe_head << std::endl; std::cout << "enso pipe
+  //     tail: " << enso_pipe_tail << std::endl;
 
   //     if (enso_pipe_head != enso_pipe_tail) {
   //       rx_pipe->Prefetch();
@@ -421,6 +423,7 @@ void Device::ProcessCompletions() {
       std::invoke(completion_callback_);
     } else {
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
+      // increments app_end_ for the tx pipe by nb_bytes
       pipe->NotifyCompletion(tx_req.nb_bytes);
     }
   }

@@ -377,6 +377,10 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id] =
         (uint32_t)cur_notification->tail;
 
+    // if (notification_buf_pair->id == 1)
+    //   std::cout << "got new notification, tail: " << cur_notification->tail
+    //             << std::endl;
+
     // orders the new updates: read pipes from next_rx_ids_head to
     // next_rx_ids_tail
     notification_buf_pair->next_rx_pipe_notifs[next_rx_ids_tail] =
@@ -390,6 +394,11 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
+    // std::cout << "notif buf id: " << notification_buf_pair->id << ", consumed
+    // "
+    //           << nb_consumed_notifications
+    //           << " notifications, updating rx head ptr to "
+    //           << notification_buf_head << std::endl;
     DevBackend::mmio_write32(notification_buf_pair->rx_head_ptr,
                              notification_buf_head,
                              notification_buf_pair->uio_mmap_bar2_addr);
