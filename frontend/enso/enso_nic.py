@@ -52,7 +52,7 @@ class EnsoNic(IntelFpga):
         tx_credits: int = DEFAULT_NB_TX_CREDITS,
         ethernet_port: int = DEFAULT_ETH_PORT,
         desc_per_pkt: bool = False,
-        latency_opt: bool = False,
+        latency_opt: bool = True,
         skip_config: bool = False,
         verbose: bool = False,
         log_file: Union[bool, TextIO] = False,

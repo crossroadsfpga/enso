@@ -4,7 +4,6 @@ enso_sources = files(
     'helpers.cpp',
     'ixy_helpers.cpp',
     'pipe.cpp',
-    'socket.cpp',
 )
 
 project_sources += enso_sources

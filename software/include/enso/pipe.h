@@ -277,6 +277,22 @@ class Device {
    */
   int DisableRoundRobin();
 
+  /**
+   * @brief Vanilla function that sends a given number of bytes from a physical
+   *        address. Used only by Ensogen.
+   *
+   */
+  void SendOnly(uint64_t phys_addr, uint32_t nb_bytes);
+
+  /**
+   * @brief Vanilla function that checks for the number of Tx notifications
+   *        consumed by the NIC. Used only by Ensogen.
+   *
+   * @return number of Tx notifications successfully processed by the NIC.
+   *
+   */
+  uint32_t ProcessCompletionsOnly();
+
  private:
   struct TxPendingRequest {
     uint32_t pipe_id;
@@ -817,6 +833,15 @@ class TxPipe {
     app_begin_ = (app_begin_ + nb_bytes) & kBufMask;
 
     device_->Send(kId, phys_addr, nb_bytes);
+  }
+
+  /*
+   * @brief: Used to get the physical address of the pipe's buffer.
+   * Used only by EnsoGen as of now.
+   *
+   * */
+  inline uint64_t GetBufPhysAddr() {
+    return buf_phys_addr_ + app_begin_;
   }
 
   /**
