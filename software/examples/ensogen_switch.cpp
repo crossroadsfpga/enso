@@ -622,7 +622,7 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
     // Move to next packet buffer.
     tx_stats.pkts += tx_args.current_enso_pipe->nb_pkts;
     if (tx_stats.pkts - tx_stats.last_pkts_ckpt > 1000000000) {
-      std::cout << "switch!" << std::endl;
+      std::cout << "switch: " << tx_stats.pkts << std::endl;
       tx_stats.nb_switches++;
       tx_stats.nb_iters = 0;
       tx_stats.last_pkts_ckpt = tx_stats.pkts;

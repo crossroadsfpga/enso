@@ -377,9 +377,8 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id] =
         (uint32_t)cur_notification->tail;
 
-    // if (notification_buf_pair->id == 1)
-    //   std::cout << "got new notification, tail: " << cur_notification->tail
-    //             << std::endl;
+    std::cout << "got new notification, tail: " << cur_notification->tail
+              << std::endl;
 
     // orders the new updates: read pipes from next_rx_ids_head to
     // next_rx_ids_tail
@@ -520,18 +519,24 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
+  std::cout << "advancing pipe " << enso_pipe->id << " head to " << rx_pkt_head
+            << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, rx_pkt_head,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = rx_pkt_head;
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
+  std::cout << "fully advancing pipe " << enso_pipe->id << " head to "
+            << enso_pipe->rx_tail << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 
 void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
+  std::cout << "prefetching pipe " << enso_pipe->id << " head to "
+            << enso_pipe->rx_head << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_head,
                            enso_pipe->uio_mmap_bar2_addr);
 }
