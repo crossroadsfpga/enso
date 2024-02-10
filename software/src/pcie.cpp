@@ -807,13 +807,9 @@ std::optional<PipeNotification> pcie_push_to_backend_get_response(
   return push_to_backend_get_response(notif);
 }
 
-void pcie_update_queues(struct NotificationBufPair* notification_buf_pair) {
-  update_backend_queues();
-}
+void pcie_update_queues() { update_backend_queues(); }
 
-void pcie_access_queues(struct NotificationBufPair* notification_buf_pair) {
-  access_backend_queues();
-}
+void pcie_access_queues() { access_backend_queues(); }
 
 void print_stats(struct SocketInternal* socket_entry, bool print_global) {
   struct NotificationBufPair* notification_buf_pair =

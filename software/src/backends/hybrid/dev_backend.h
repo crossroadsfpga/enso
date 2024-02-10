@@ -74,14 +74,14 @@ int initialize_queues() {
       std::string(kIpcQueueFromAppName) + std::to_string(core_id) + "_";
 
   queue_to_backend_ =
-      QueueProducer<PipeNotification>::Create(queue_from_app_name);
+      QueueProducer<PipeNotification>::Create(queue_from_app_name, core_id);
   if (queue_to_backend_ == nullptr) {
     std::cerr << "Could not create queue to backend" << std::endl;
     return -1;
   }
 
   queue_from_backend_ =
-      QueueConsumer<PipeNotification>::Create(queue_to_app_name);
+      QueueConsumer<PipeNotification>::Create(queue_to_app_name, core_id);
   if (queue_from_backend_ == nullptr) {
     std::cerr << "Could not create queue from backend" << std::endl;
     return -1;
