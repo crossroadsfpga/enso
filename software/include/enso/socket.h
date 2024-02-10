@@ -38,8 +38,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_SOCKET_H_
-#define ENSO_SOFTWARE_INCLUDE_ENSO_SOCKET_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_SOCKET_H_
+#define SOFTWARE_INCLUDE_ENSO_SOCKET_H_
 
 #include <arpa/inet.h>
 #include <linux/types.h>
@@ -140,4 +140,4 @@ void print_sock_stats(int sockfd);
 
 }  // namespace enso
 
-#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_SOCKET_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_SOCKET_H_

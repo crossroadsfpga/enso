@@ -30,8 +30,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef ENSO_SOFTWARE_KERNEL_LINUX_EVENT_QUEUE_H_
-#define ENSO_SOFTWARE_KERNEL_LINUX_EVENT_QUEUE_H_
+#ifndef SOFTWARE_KERNEL_LINUX_EVENT_QUEUE_H_
+#define SOFTWARE_KERNEL_LINUX_EVENT_QUEUE_H_
 
 #include <linux/kthread.h>
 
@@ -44,4 +44,4 @@ int event_queue_loop(event_kthread_data_t* data);
 int launch_event_kthread(void);
 void stop_event_kthread(void);
 
-#endif  // ENSO_SOFTWARE_KERNEL_LINUX_EVENT_QUEUE_H_
+#endif  // SOFTWARE_KERNEL_LINUX_EVENT_QUEUE_H_

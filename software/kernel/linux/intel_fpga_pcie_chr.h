@@ -41,8 +41,8 @@
  * SOFTWARE.
  */
 
-#ifndef ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_CHR_H_
-#define ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_CHR_H_
+#ifndef SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_CHR_H_
+#define SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_CHR_H_
 
 #include "intel_fpga_pcie_setup.h"
 
@@ -78,4 +78,4 @@ struct intel_fpga_pcie_cmd {
   void *user_addr;
 } __attribute__((packed));
 
-#endif  // ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_CHR_H_
+#endif  // SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_CHR_H_

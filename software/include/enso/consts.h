@@ -38,8 +38,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
-#define ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#define SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 
 #include <cstdint>
 #include <string>
@@ -192,4 +192,4 @@ struct PipeNotification {
 
 }  // namespace enso
 
-#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_CONSTS_H_

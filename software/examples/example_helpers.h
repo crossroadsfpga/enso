@@ -30,8 +30,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef ENSO_SOFTWARE_EXAMPLES_EXAMPLE_HELPERS_H_
-#define ENSO_SOFTWARE_EXAMPLES_EXAMPLE_HELPERS_H_
+#ifndef SOFTWARE_EXAMPLES_EXAMPLE_HELPERS_H_
+#define SOFTWARE_EXAMPLES_EXAMPLE_HELPERS_H_
 
 #include <arpa/inet.h>
 
@@ -41,4 +41,4 @@ const uint32_t kBaseIpAddress = ntohl(inet_addr("192.168.0.0"));
 const uint32_t kDstPort = 80;
 const uint32_t kProtocol = 0x11;
 
-#endif  // ENSO_SOFTWARE_EXAMPLES_EXAMPLE_HELPERS_H_
+#endif  // SOFTWARE_EXAMPLES_EXAMPLE_HELPERS_H_

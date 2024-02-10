@@ -41,8 +41,8 @@
  * SOFTWARE.
  */
 
-#ifndef ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_SETUP_H_
-#define ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_SETUP_H_
+#ifndef SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_SETUP_H_
+#define SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_SETUP_H_
 
 #include <linux/cdev.h>
 #include <linux/dma-mapping.h>
@@ -225,4 +225,4 @@ int intel_fpga_pcie_sriov_configure(struct pci_dev *dev, int numvfs);
 
 extern struct global_bookkeep global_bk;
 
-#endif  // ENSO_SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_SETUP_H_
+#endif  // SOFTWARE_KERNEL_LINUX_INTEL_FPGA_PCIE_SETUP_H_

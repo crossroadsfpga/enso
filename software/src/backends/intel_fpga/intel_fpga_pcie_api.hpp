@@ -16,8 +16,8 @@
 // logic devices manufactured by Intel and sold by Intel or its authorized
 // distributors. Please refer to the applicable agreement for further details.
 
-#ifndef ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
-#define ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
+#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
+#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
 
 /**
  * @file
@@ -401,4 +401,4 @@ class IntelFpgaPcieDev {
 
 }  // namespace intel_fpga_pcie_api
 
-#endif  // ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
+#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_INTEL_FPGA_PCIE_API_HPP_
