@@ -287,8 +287,9 @@ RxPipe* Device::NextRxPipeToRecv() {
   }
   int32_t id = notification->queue_id;
 
-  // TODO(kaajalg): make this safe? if id not in rx_pipes_map_
   RxPipe* rx_pipe = rx_pipes_map_[id];
+  if (!rx_pipe)
+    return NULL;
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
 }

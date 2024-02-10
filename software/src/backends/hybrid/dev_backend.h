@@ -279,6 +279,8 @@ class DevBackend {
   /**
    * @brief Allocates a notification buffer.
    *
+   * @param uthread_id ID of uthread calling this function.
+   *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
   int AllocateNotifBuf(uint32_t uthread_id) {
@@ -359,6 +361,8 @@ class DevBackend {
 
   /**
    * @brief Sends a message to the IOKernel that the uthread is yielding.
+   *
+   * @param 
    *
    * @param notif_buf_id The notification buffer ID of the current device.
    */

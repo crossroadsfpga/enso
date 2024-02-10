@@ -86,7 +86,7 @@ class Device {
   /**
    * @brief Factory method to create a device.
    *
-   * @param application_id The unique ID of the application creating the device.
+   * @param uthread_id The unique ID of the uthread creating the device.
    *                       Should be less than kMaxNbFlows.
    * @param completion_callback Function to call once a transmission has
    * completed.
@@ -770,8 +770,7 @@ class RxPipe {
    * @param device The `Device` object that instantiated this pipe.
    */
   explicit RxPipe(Device* device) noexcept
-      : notification_buf_pair_(&(device->notification_buf_pair_)),
-        device_(device) {}
+      : notification_buf_pair_(&(device->notification_buf_pair_)) {}
 
   /**
    * @note RxPipes cannot be deallocated from outside. The `Device` object is in
@@ -799,7 +798,6 @@ class RxPipe {
   void* context_;
   struct RxEnsoPipeInternal internal_rx_pipe_;
   struct NotificationBufPair* notification_buf_pair_;
-  Device* device_;
 };
 
 /**

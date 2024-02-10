@@ -339,7 +339,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
                          size_t size,
                          const std::string& huge_page_prefix) noexcept
       : Queue<T, QueueProducer<T>>(queue_name, size, huge_page_prefix),
-        size_(size),
         core_id_(core_id),
         huge_page_prefix_(huge_page_prefix) {}
 
@@ -381,7 +380,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
 
   uint32_t tail_ = 0;
   uint32_t* tail_addr_ = nullptr;
-  uint32_t size_;
   uint32_t core_id_;
   std::string huge_page_prefix_;
 };
@@ -441,7 +439,6 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
                          size_t size,
                          const std::string& huge_page_prefix) noexcept
       : Queue<T, QueueConsumer<T>>(queue_name, size, huge_page_prefix),
-        size_(size),
         core_id_(core_id),
         huge_page_prefix_(huge_page_prefix) {}
 
@@ -483,7 +480,6 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
 
   uint32_t head_ = 0;
   uint32_t* head_addr_ = nullptr;
-  uint32_t size_;
   uint32_t core_id_;
   std::string huge_page_prefix_;
 };

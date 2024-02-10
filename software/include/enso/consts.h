@@ -51,8 +51,11 @@ namespace enso {
 // variables with the same name on `hardware/src/constants.sv`,
 // `software/kernel/linux/intel_fpga_pcie_setup.h`, and
 // `scripts/hwtest/my_stats.tcl`.
-constexpr uint32_t kMaxNbApps = 1024;
-constexpr uint32_t kMaxNbFlows = 8192;
+#define MAX_NB_APPS 1024
+#define MAX_NB_FLOWS 8192
+
+constexpr uint32_t kMaxNbApps = MAX_NB_APPS;
+constexpr uint32_t kMaxNbFlows = MAX_NB_FLOWS;
 
 constexpr uint32_t kMaxTransferLen = 131072;
 
