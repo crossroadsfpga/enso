@@ -8,6 +8,10 @@ else
     error('Unknown backend')
 endif
 
+if latency_opt == false
+    library_name += '_no_latency_opt'
+endif
+
 inc = include_directories('include')
 
 subdir('include')
