@@ -1,6 +1,5 @@
 inc = include_directories('include')
 
-subdir('include')
 subdir('src')
 
 if dev_backend == 'intel_fpga'
@@ -16,6 +15,8 @@ endif
 if latency_opt == false
     library_name += '_no_latency_opt'
 endif
+
+subdir('include')
 
 enso_lib = library(library_name, project_sources, install: true,
                    include_directories: [inc, backend_inc])
