@@ -103,6 +103,9 @@ int RxPipe::Init(bool fallback) noexcept {
 
   id_ = ret;
 
+  std::cout << "initialized rxpipe with id " << id_
+            << " and tail: " << internal_rx_pipe_.rx_tail << std::endl;
+
   return 0;
 }
 
@@ -243,33 +246,32 @@ struct RxNotification* Device::NextRxNotif() {
 
   struct RxNotification* notif;
 
-  // #ifdef LATENCY_OPT
-  //   int32_t id;
-  //   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  //   notif = get_next_rx_notif(&notification_buf_pair_);
-
-  //   while (notif) {
-  //     id = notif->queue_id;
-  //     RxPipe* rx_pipe = rx_pipes_map_[id];
-  //     assert(rx_pipe != nullptr);
-
-  //     RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
-  //     uint32_t enso_pipe_head = pipe.rx_tail;
-  //     uint32_t enso_pipe_tail =
-  //     notification_buf_pair_.pending_rx_pipe_tails[id];
-
-  //     if (enso_pipe_head != enso_pipe_tail) {
-  //       rx_pipe->Prefetch();
-  //       break;
-  //     }
-
-  //     notif = get_next_rx_notif(&notification_buf_pair_);
-  //   }
-
-  // #else  // !LATENCY_OPT
+#ifdef LATENCY_OPT
+  int32_t id;
+  // When LATENCY_OPT is enabled, we always prefetch the next pipe.
   notif = get_next_rx_notif(&notification_buf_pair_);
 
-  // #endif  // LATENCY_OPT
+  while (notif) {
+    id = notif->queue_id;
+    RxPipe* rx_pipe = rx_pipes_map_[id];
+    assert(rx_pipe != nullptr);
+
+    RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
+    uint32_t enso_pipe_head = pipe.rx_tail;
+    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
+
+    if (enso_pipe_head != enso_pipe_tail) {
+      rx_pipe->Prefetch();
+      break;
+    }
+
+    notif = get_next_rx_notif(&notification_buf_pair_);
+  }
+
+#else  // !LATENCY_OPT
+  notif = get_next_rx_notif(&notification_buf_pair_);
+
+#endif  // LATENCY_OPT
 
   return notif;
 }

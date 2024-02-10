@@ -13,6 +13,10 @@ else
     error('Unknown backend')
 endif
 
+if latency_opt == false
+    library_name += '_no_latency_opt'
+endif
+
 enso_lib = library(library_name, project_sources, install: true,
                    include_directories: [inc, backend_inc])
 pkg_mod = import('pkgconfig')
