@@ -118,7 +118,6 @@ void* run_echo(void* arg) {
       ++(stats->nb_batches);
 
       pipe->SendAndFree(batch_length);
-      std::cout << "sent!" << std::endl;
     }
   }
   return NULL;
