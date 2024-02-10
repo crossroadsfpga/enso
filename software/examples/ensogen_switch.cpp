@@ -169,6 +169,7 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_STATS_DELAY "stats-delay"
 #define CMD_OPT_PCIE_ADDR "pcie-addr"
 #define CMD_OPT_PCAP_FILE "pcap-file"
+#define CMD_OPT_PKTS_PER_PCAP "pkts-per-pcap"
 
 #define MAX_PCAPS 1024
 
@@ -176,6 +177,7 @@ static void print_usage(const char* program_name) {
 enum {
   CMD_OPT_HELP_NUM = 256,
   CMD_OPT_PCAP_FILE_NUM,
+  CMD_OPT_PKTS_PER_PCAP_NUM,
   CMD_OPT_COUNT_NUM,
   CMD_OPT_CORE_NUM,
   CMD_OPT_QUEUES_NUM,
@@ -194,6 +196,7 @@ static const char short_options[] = "";
 static const struct option long_options[] = {
     {CMD_OPT_HELP, no_argument, NULL, CMD_OPT_HELP_NUM},
     {CMD_OPT_PCAP_FILE, required_argument, NULL, CMD_OPT_PCAP_FILE_NUM},
+    {CMD_OPT_PKTS_PER_PCAP, required_argument, NULL, CMD_OPT_PKTS_PER_PCAP_NUM},
     {CMD_OPT_COUNT, required_argument, NULL, CMD_OPT_COUNT_NUM},
     {CMD_OPT_CORE, required_argument, NULL, CMD_OPT_CORE_NUM},
     {CMD_OPT_QUEUES, required_argument, NULL, CMD_OPT_QUEUES_NUM},
@@ -217,6 +220,7 @@ struct parsed_args_t {
   std::string hist_file;
   std::string pcap_files[MAX_PCAPS];
   uint32_t nb_pcaps;
+  uint64_t pkts_per_pcap;
   std::string save_file;
   uint16_t rate_num;
   uint16_t rate_den;
@@ -243,6 +247,7 @@ static int parse_args(int argc, char** argv,
   parsed_args.rtt_hist_len = DEFAULT_HIST_LEN;
   parsed_args.stats_delay = DEFAULT_STATS_DELAY;
   parsed_args.nb_pcaps = 0;
+  parsed_args.pkts_per_pcap = 1000000000;
 
   while ((opt = getopt_long(argc, argv, short_options, long_options,
                             &long_index)) != EOF) {
@@ -252,6 +257,9 @@ static int parse_args(int argc, char** argv,
       case CMD_OPT_PCAP_FILE_NUM:
         parsed_args.pcap_files[parsed_args.nb_pcaps] = optarg;
         parsed_args.nb_pcaps++;
+        break;
+      case CMD_OPT_PKTS_PER_PCAP_NUM:
+        parsed_args.pkts_per_pcap = atoi(optarg);
         break;
       case CMD_OPT_COUNT_NUM:
         parsed_args.nb_pkts = atoi(optarg);
@@ -474,7 +482,7 @@ struct TxStats {
 struct TxArgs {
   TxArgs(std::vector<EnsoPipe>& enso_pipes, uint64_t total_bytes_to_send,
          uint64_t total_good_bytes_to_send, uint64_t pkts_in_last_buffer,
-         int socket_fd)
+         int socket_fd, uint64_t pkts_per_pcap)
       : ignored_reclaims(0),
         total_remaining_bytes(total_bytes_to_send),
         total_remaining_good_bytes(total_good_bytes_to_send),
@@ -482,7 +490,8 @@ struct TxArgs {
         pkts_in_last_buffer(pkts_in_last_buffer),
         enso_pipes(enso_pipes),
         current_enso_pipe(enso_pipes.begin()),
-        socket_fd(socket_fd) {}
+        socket_fd(socket_fd),
+        pkts_per_pcap(pkts_per_pcap) {}
   uint64_t ignored_reclaims;
   uint64_t total_remaining_bytes;
   uint64_t total_remaining_good_bytes;
@@ -491,6 +500,7 @@ struct TxArgs {
   std::vector<EnsoPipe>& enso_pipes;
   std::vector<EnsoPipe>::iterator current_enso_pipe;
   int socket_fd;
+  uint64_t pkts_per_pcap;
 };
 
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
@@ -621,8 +631,7 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
     tx_stats.nb_iters++;
     // Move to next packet buffer.
     tx_stats.pkts += tx_args.current_enso_pipe->nb_pkts;
-    if (tx_stats.pkts - tx_stats.last_pkts_ckpt > 1000000000) {
-      std::cout << "switch: " << tx_stats.pkts << std::endl;
+    if (tx_stats.pkts - tx_stats.last_pkts_ckpt > tx_args.pkts_per_pcap) {
       tx_stats.nb_switches++;
       tx_stats.nb_iters = 0;
       tx_stats.last_pkts_ckpt = tx_stats.pkts;
@@ -801,6 +810,8 @@ int main(int argc, char** argv) {
     total_good_bytes_to_send = 0xffffffffffffffff;
   }
 
+  uint64_t pkts_per_pcap = parsed_args.pkts_per_pcap;
+
   uint32_t rtt_hist_len = 0;
   uint32_t rtt_hist_offset = 0;
 
@@ -888,7 +899,7 @@ int main(int argc, char** argv) {
 
     std::thread tx_thread = std::thread(
         [total_bytes_to_send, total_good_bytes_to_send, pkts_in_last_buffer,
-         &parsed_args, &enso_pipes, &tx_stats] {
+         pkts_per_pcap, &parsed_args, &enso_pipes, &tx_stats] {
           std::this_thread::sleep_for(std::chrono::seconds(1));
 
           int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, false);
@@ -905,7 +916,7 @@ int main(int argc, char** argv) {
 
           TxArgs tx_args(enso_pipes, total_bytes_to_send,
                          total_good_bytes_to_send, pkts_in_last_buffer,
-                         socket_fd);
+                         socket_fd, pkts_per_pcap);
           tx_stats.last_pkts_ckpt = 0;
           tx_stats.nb_iters = 0;
           tx_stats.nb_switches = 0;
@@ -946,7 +957,7 @@ int main(int argc, char** argv) {
     // Send and receive packets within the same thread.
     std::thread rx_tx_thread = std::thread(
         [&parsed_args, &rx_stats, total_bytes_to_send, total_good_bytes_to_send,
-         pkts_in_last_buffer, &enso_pipes, &tx_stats] {
+         pkts_in_last_buffer, pkts_per_pcap, &enso_pipes, &tx_stats] {
           std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
           std::vector<int> socket_fds;
@@ -982,7 +993,7 @@ int main(int argc, char** argv) {
 
           TxArgs tx_args(enso_pipes, total_bytes_to_send,
                          total_good_bytes_to_send, pkts_in_last_buffer,
-                         socket_fd);
+                         socket_fd, pkts_per_pcap);
 
           rx_ready = 1;
 

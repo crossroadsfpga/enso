@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Helper script to run ensogen with the correct arguments for numerator and
-# denominator depending on a given rate and pcap file.
+# denominator depending on a given rate and pcap files, switching between the given pcap files at specified intervals.
 
 set -e
 
@@ -13,13 +13,13 @@ GET_PCAP_SIZE_CMD_PATH="${SCRIPT_DIR}/../build/scripts/get_pcap_pkt_size"
 GET_PCAP_SIZE_CMD_PATH=$(realpath $GET_PCAP_SIZE_CMD_PATH)
 
 if [ $# -lt 2 ]; then
-    echo "Usage: ./ensogen.sh RATE_GBPS [OPTIONS]"
-    echo "Example: ./ensogen.sh /tmp/pcap_file.pcap 100 --pcie-addr 65:00.0"
+    echo "Usage: ./ensogen_switch.sh RATE_GBPS [OPTIONS]"
+    echo "Example: ./ensogen_switch.sh /tmp/pcap_file.pcap 100 --pcie-addr 65:00.0"
     exit 1
 fi
 
 if [ ! -f $ENSOGEN_SWITCH_PATH ]; then
-    echo "Error: Could not find ensogen binary at $ENSOGEN_SWITCH_PATH"
+    echo "Error: Could not find ensogen_switch binary at $ENSOGEN_SWITCH_PATH"
     echo "Make sure you have built the enso project."
     exit 2
 fi
