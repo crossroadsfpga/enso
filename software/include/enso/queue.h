@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_QUEUE_H_
-#define ENSO_SOFTWARE_INCLUDE_ENSO_QUEUE_H_
+#ifndef SOFTWARE_INCLUDE_ENSO_QUEUE_H_
+#define SOFTWARE_INCLUDE_ENSO_QUEUE_H_
 
 #include <enso/consts.h>
 #include <enso/helpers.h>
@@ -255,7 +255,7 @@ class Queue {
     }
 
     if (!join_if_exists && !create_queue) {
-      std::cerr << "Queue already exists!!" << std::endl;
+      std::cerr << "Queue already exists" << std::endl;
       return -1;
     }
 
@@ -461,4 +461,4 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
 
 }  // namespace enso
 
-#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_QUEUE_H_
+#endif  // SOFTWARE_INCLUDE_ENSO_QUEUE_H_
