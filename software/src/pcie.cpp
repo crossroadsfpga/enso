@@ -714,18 +714,6 @@ void send_uthread_yield(struct NotificationBufPair* notification_buf_pair) {
   fpga_dev->YieldUthread(notification_buf_pair->id);
 }
 
-void update_queues(struct NotificationBufPair* notification_buf_pair) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  fpga_dev->UpdateQueues();
-}
-
-void access_queues(struct NotificationBufPair* notification_buf_pair) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  fpga_dev->AccessQueues();
-}
-
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
@@ -806,6 +794,15 @@ int dma_finish(struct SocketInternal* socket_entry) {
 
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   return (uint32_t)socket_entry->enso_pipe.id;
+}
+
+void pcie_initialize_backend_queues() { initialize_queues(); }
+
+void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }
+
+std::optional<PipeNotification> pcie_push_to_backend_get_response(
+    PipeNotification* notif) {
+  return push_to_backend_get_response(notif);
 }
 
 void print_stats(struct SocketInternal* socket_entry, bool print_global) {

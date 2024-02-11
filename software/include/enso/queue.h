@@ -334,11 +334,17 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     return 0;
   }
 
+  void print_name() {
+    std::cout << "CPU " << sched_getcpu() << ": queue name " << queue_name_
+              << std::endl;
+  }
+
  protected:
   explicit QueueProducer(const std::string& queue_name, uint32_t core_id,
                          size_t size,
                          const std::string& huge_page_prefix) noexcept
       : Queue<T, QueueProducer<T>>(queue_name, size, huge_page_prefix),
+        queue_name_(queue_name),
         core_id_(core_id),
         huge_page_prefix_(huge_page_prefix) {}
 
@@ -359,6 +365,9 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
       return 0;
     }
 
+    std::cout << "CPU " << sched_getcpu() << ": created queue " << queue_name_
+              << std::endl;
+
     std::string huge_page_path =
         huge_page_prefix_ + std::string(kHugePageQueueTailPathPrefix);
     void* addr = get_huge_page(huge_page_path, 0);
@@ -378,6 +387,7 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   using Parent = Queue<T, QueueProducer<T>>;
   friend Parent;
 
+  std::string queue_name_;
   uint32_t tail_ = 0;
   uint32_t* tail_addr_ = nullptr;
   uint32_t core_id_;

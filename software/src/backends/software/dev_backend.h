@@ -60,6 +60,17 @@ thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
 thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
     queue_from_backend_;
 
+int initialize_queues() { return 0; }
+
+void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
+
+std::optional<PipeNotification> push_to_backend_get_response(
+    enso::PipeNotification* notif) {
+  (void)notif;
+  std::optional<PipeNotification> res;
+  return res;
+}
+
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
@@ -83,7 +94,8 @@ class DevBackend {
 
   void* uio_mmap([[maybe_unused]] size_t size,
                  [[maybe_unused]] unsigned int mapping) {
-    return 0;  // Not a valid address. We use the offset to emulate MMIO access.
+    return 0;  // Not a valid address. We use the offset to emulate MMIO
+               // access.
   }
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
@@ -131,8 +143,8 @@ class DevBackend {
   }
 
   /**
-   * @brief Converts an address in the application's virtual address space to an
-   *        address that can be used by the device.
+   * @brief Converts an address in the application's virtual address space to
+   * an address that can be used by the device.
    * @param virt_addr Address in the application's virtual address space.
    * @return Converted address or 0 if the address cannot be translated.
    */
@@ -263,7 +275,8 @@ class DevBackend {
    *
    * @param application_id ID of currently running application.
    *
-   * @return Notification buffer ID. On error, -1 is returned and errno is set.
+   * @return Notification buffer ID. On error, -1 is returned and errno is
+   * set.
    */
   int AllocateNotifBuf(uint32_t uthread_id) {
     struct NotifBufNotification nb_notification;
@@ -323,8 +336,8 @@ class DevBackend {
   /**
    * @brief Allocates a pipe.
    *
-   * @param fallback If true, allocates a fallback pipe. Otherwise, allocates a
-   *                regular pipe.
+   * @param fallback If true, allocates a fallback pipe. Otherwise, allocates
+   * a regular pipe.
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
@@ -378,19 +391,6 @@ class DevBackend {
     assert(result->type == NotifType::kFreePipe);
     return result->result;
   }
-
-  /**
-   * @brief Updates the queues in case some other thread has added to them.
-   *
-   */
-  void UpdateQueues() {}
-
-  /**
-   * @brief Accesses the queue information stored in shared memory to ensure
-   * that queues have been updated.
-   *
-   */
-  void AccessQueues() {}
 
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept

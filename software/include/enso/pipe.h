@@ -64,6 +64,27 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
+/**
+ * @brief Initializes queues to and from the backend.
+ *
+ */
+void initialize_backend_queues();
+
+/**
+ * @brief Pushes a notification to the backend.
+ *
+ * @param notif The notification to push.
+ */
+void push_to_backend_queues(PipeNotification* notif);
+
+/**
+ * @brief Pushes a notification to the backend and waits for a response.
+ *
+ * @param notif The notification to push.
+ */
+std::optional<PipeNotification> push_to_backend_queues_get_response(
+    PipeNotification* notif);
+
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
@@ -339,20 +360,6 @@ class Device {
    * uthreads to run on the current core.
    */
   void SendUthreadYield();
-
-  /**
-   * @brief Updates the huge page information for the queues to the I/O Kernel.
-   *
-   * @param notification_buf_pair  Notification buffer pair to use.
-   */
-  void UpdateQueues();
-
-  /**
-   * @brief Accesses the queues in case some other thread has added to them.
-   *
-   * @param notification_buf_pair  Notification buffer pair to use.
-   */
-  void AccessQueues();
 
  private:
   struct TxPendingRequest {

@@ -46,6 +46,17 @@
 
 namespace enso {
 
+int initialize_queues() { return 0; }
+
+void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
+
+std::optional<PipeNotification> push_to_backend_get_response(
+    enso::PipeNotification* notif) {
+  (void)notif;
+  std::optional<PipeNotification> res;
+  return res;
+}
+
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
@@ -170,19 +181,6 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
-
-  /**
-   * @brief Updates the queues in case some other thread has added to them.
-   *
-   */
-  void UpdateQueues() {}
-
-  /**
-   * @brief Accesses the queue information stored in shared memory to ensure
-   * that queues have been updated.
-   *
-   */
-  void AccessQueues() {}
 
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept

@@ -55,6 +55,17 @@
 
 namespace enso {
 
+void initialize_backend_queues() { return pcie_initialize_backend_queues(); }
+
+void push_to_backend_queues(PipeNotification* notif) {
+  return pcie_push_to_backend(notif);
+}
+
+std::optional<PipeNotification> push_to_backend_queues_get_response(
+    PipeNotification* notif) {
+  return pcie_push_to_backend_get_response(notif);
+}
+
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
@@ -102,9 +113,6 @@ int RxPipe::Init(bool fallback) noexcept {
   }
 
   id_ = ret;
-
-  std::cout << "initialized rxpipe with id " << id_
-            << " and tail: " << internal_rx_pipe_.rx_tail << std::endl;
 
   return 0;
 }
@@ -288,8 +296,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   int32_t id = notification->queue_id;
 
   RxPipe* rx_pipe = rx_pipes_map_[id];
-  if (!rx_pipe)
-    return NULL;
+  if (!rx_pipe) return NULL;
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
 }
@@ -439,10 +446,6 @@ void Device::ProcessCompletions() {
 void Device::SendUthreadYield() {
   return send_uthread_yield(&notification_buf_pair_);
 }
-
-void Device::UpdateQueues() { return update_queues(&notification_buf_pair_); }
-
-void Device::AccessQueues() { return access_queues(&notification_buf_pair_); }
 
 int Device::EnableTimeStamping() {
   return enable_timestamp(&notification_buf_pair_);
