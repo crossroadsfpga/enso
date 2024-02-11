@@ -298,18 +298,6 @@ template <typename T>
 class QueueProducer : public Queue<T, QueueProducer<T>> {
  public:
   /**
-   * @brief Access the tail from the huge page storing this information.
-   *
-   */
-  inline void AccessTailFromHugePage() { tail_ = *tail_addr_; }
-
-  /**
-   * @brief Updates the tail of this queue in case it has been updated.
-   *
-   */
-  inline void UpdateTailInHugePage() { *tail_addr_ = tail_; }
-
-  /**
    * @brief Pushes data to the queue.
    *
    * @param data data to push.
@@ -360,17 +348,22 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
       return 0;
     }
 
-    std::string huge_page_path =
-        huge_page_prefix_ + std::string(kHugePageQueueTailPathPrefix);
-    void* addr = get_huge_page(huge_page_path, 0);
-    if (addr == nullptr) {
-      std::cerr << "Failed to allocate shared memory for tail" << std::endl;
+    // Synchronize the pointer in case the queue is not empty.
+    struct Parent::Element* buf = Parent::buf_addr();
+    for (uint32_t i = 0; i < Parent::capacity(); ++i) {
+      if (buf[i].signal) {
+        tail_ = (i + 1) & Parent::index_mask();
+      }
+
+      if (buf[tail_].signal == 0) {
+        break;
+      }
+    }
+
+    if (tail_ == 0 && buf[0].signal) {
+      std::cerr << "Cannot synchronize a full queue" << std::endl;
       return -1;
     }
-    tail_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
-
-    // Synchronize the pointer in case the queue is not empty.
-    AccessTailFromHugePage();
 
     return 0;
   }
@@ -381,7 +374,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
 
   std::string queue_name_;
   uint32_t tail_ = 0;
-  uint32_t* tail_addr_ = nullptr;
   uint32_t core_id_;
   std::string huge_page_prefix_;
 };
@@ -404,18 +396,6 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
     }
     return &(current_element->data);
   }
-
-  /**
-   * @brief Access the head from the huge page storing this information.
-   *
-   */
-  inline void AccessHeadFromHugePage() { head_ = *head_addr_; }
-
-  /**
-   * @brief Updates the head of this queue in case it has been updated.
-   *
-   */
-  inline void UpdateHeadInHugePage() { *head_addr_ = head_; }
 
   /**
    * @brief Pops data from the queue.
@@ -461,17 +441,23 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
       return 0;
     }
 
-    std::string huge_page_path =
-        huge_page_prefix_ + std::string(kHugePageQueueHeadPathPrefix);
-    void* addr = get_huge_page(huge_page_path, 0);
-    if (addr == nullptr) {
-      std::cerr << "Failed to allocate shared memor for head" << std::endl;
+    // Synchronize the pointer in case the queue is not empty.
+    struct Parent::Element* buf = Parent::buf_addr();
+    for (uint32_t i = Parent::capacity(); i > 0; --i) {
+      if (buf[i - 1].signal) {
+        head_ = i - 1;
+      }
+
+      uint32_t prev_element = (head_ - 1) & Parent::index_mask();
+      if (buf[prev_element].signal == 0) {
+        break;
+      }
+    }
+
+    if (head_ == 0 && buf[0].signal) {
+      std::cerr << "Cannot synchronize a full queue" << std::endl;
       return -1;
     }
-    head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
-
-    // Synchronize the pointer in case the queue is not empty.
-    AccessHeadFromHugePage();
 
     return 0;
   }
@@ -481,7 +467,6 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
   friend Parent;
 
   uint32_t head_ = 0;
-  uint32_t* head_addr_ = nullptr;
   uint32_t core_id_;
   std::string huge_page_prefix_;
 };
