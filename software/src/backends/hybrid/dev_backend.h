@@ -427,12 +427,6 @@ class DevBackend {
       return -1;
     }
 
-    if (queue_to_backend_ == NULL) {
-      if (initialize_queues() < 0) {
-        return -1;
-      }
-    }
-
     dev_ = intel_fpga_pcie_api::IntelFpgaPcieDev::Create(bdf_, bar_);
     if (dev_ == nullptr) {
       return -1;

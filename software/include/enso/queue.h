@@ -334,11 +334,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     return 0;
   }
 
-  void print_name() {
-    std::cout << "CPU " << sched_getcpu() << ": queue name " << queue_name_
-              << std::endl;
-  }
-
  protected:
   explicit QueueProducer(const std::string& queue_name, uint32_t core_id,
                          size_t size,
@@ -364,9 +359,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     if (Parent::created_queue()) {
       return 0;
     }
-
-    std::cout << "CPU " << sched_getcpu() << ": created queue " << queue_name_
-              << std::endl;
 
     std::string huge_page_path =
         huge_page_prefix_ + std::string(kHugePageQueueTailPathPrefix);
