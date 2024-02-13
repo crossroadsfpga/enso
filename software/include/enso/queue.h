@@ -139,14 +139,14 @@ class Queue {
    * @return A unique pointer to the object or nullptr if the creation fails.
    */
   static std::unique_ptr<Subclass> Create(
-      const std::string& queue_name, uint32_t core_id = 0, size_t size = 0,
+      const std::string& queue_name, size_t size = 0,
       bool join_if_exists = true, std::string huge_page_prefix = "") noexcept {
     if (huge_page_prefix == "") {
       huge_page_prefix = kHugePageDefaultPrefix;
     }
 
-    std::unique_ptr<Subclass> queue(new (std::nothrow) Subclass(
-        queue_name, core_id, size, huge_page_prefix));
+    std::unique_ptr<Subclass> queue(
+        new (std::nothrow) Subclass(queue_name, size, huge_page_prefix));
 
     if (queue == nullptr) {
       return std::unique_ptr<Subclass>{};
@@ -264,7 +264,7 @@ class Queue {
 
     void* addr = get_huge_page(huge_page_path_, size_);
     if (addr == nullptr) {
-      std::cerr << "Failed to allocate shared memory for queue" << std::endl;
+      std::cerr << "Failed to allocate shared memory" << std::endl;
       return -1;
     }
     buf_addr_ = reinterpret_cast<Element*>(addr);
@@ -323,13 +323,9 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   }
 
  protected:
-  explicit QueueProducer(const std::string& queue_name, uint32_t core_id,
-                         size_t size,
+  explicit QueueProducer(const std::string& queue_name, size_t size,
                          const std::string& huge_page_prefix) noexcept
-      : Queue<T, QueueProducer<T>>(queue_name, size, huge_page_prefix),
-        queue_name_(queue_name),
-        core_id_(core_id),
-        huge_page_prefix_(huge_page_prefix) {}
+      : Queue<T, QueueProducer<T>>(queue_name, size, huge_page_prefix) {}
 
   /**
    * @brief Initializes the Queue object.
@@ -372,10 +368,7 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   using Parent = Queue<T, QueueProducer<T>>;
   friend Parent;
 
-  std::string queue_name_;
   uint32_t tail_ = 0;
-  uint32_t core_id_;
-  std::string huge_page_prefix_;
 };
 
 template <typename T>
@@ -417,12 +410,9 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
   }
 
  protected:
-  explicit QueueConsumer(const std::string& queue_name, uint32_t core_id,
-                         size_t size,
+  explicit QueueConsumer(const std::string& queue_name, size_t size,
                          const std::string& huge_page_prefix) noexcept
-      : Queue<T, QueueConsumer<T>>(queue_name, size, huge_page_prefix),
-        core_id_(core_id),
-        huge_page_prefix_(huge_page_prefix) {}
+      : Queue<T, QueueConsumer<T>>(queue_name, size, huge_page_prefix) {}
 
   /**
    * @brief Initializes the Queue object.
@@ -467,8 +457,6 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
   friend Parent;
 
   uint32_t head_ = 0;
-  uint32_t core_id_;
-  std::string huge_page_prefix_;
 };
 
 }  // namespace enso

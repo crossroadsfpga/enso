@@ -86,6 +86,7 @@ int initialize_queues() {
     std::cerr << "Could not create queue from backend" << std::endl;
     return -1;
   }
+
   return 0;
 }
 
@@ -302,7 +303,11 @@ class DevBackend {
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
-  int AllocateNotifBuf(uint32_t uthread_id) {
+  int AllocateNotifBuf(int32_t uthread_id) {
+    if (uthread_id < 0) {
+      std::cout << "ERROR: Must specify a uthread ID when creating a device in the hybrid backend." << std::uintptr_t ep_addr_aligned, data_ptr_aligned;
+      exit(2);
+    }
     struct NotifBufNotification nb_notification;
     nb_notification.type = NotifType::kAllocateNotifBuf;
     nb_notification.uthread_id = (uint64_t)uthread_id;
@@ -368,8 +373,6 @@ class DevBackend {
 
   /**
    * @brief Sends a message to the IOKernel that the uthread is yielding.
-   *
-   * @param
    *
    * @param notif_buf_id The notification buffer ID of the current device.
    */

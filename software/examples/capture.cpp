@@ -33,9 +33,6 @@
 #include <enso/helpers.h>
 #include <enso/pipe.h>
 #include <pcap/pcap.h>
-#include <pthread.h>
-#include <sched.h>
-#include <unistd.h>  // for usleep
 
 #include <chrono>
 #include <csignal>
@@ -43,6 +40,7 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 #include "example_helpers.h"
 
@@ -51,32 +49,16 @@ static volatile bool setup_done = false;
 
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-struct CaptureArgs {
-  uint32_t nb_queues;
-  uint32_t core_id;
-  std::string pcap_file;
-  std::string pcie_addr;
-  enso::stats_t* stats;
-};
-
-void* capture_packets(void* arg) {
-  struct CaptureArgs* args = (struct CaptureArgs*)arg;
-  uint32_t nb_queues = args->nb_queues;
-  uint32_t core_id = args->core_id;
-  std::string pcap_file = args->pcap_file;
-  std::string pcie_addr = args->pcie_addr;
-  enso::stats_t* stats = args->stats;
-
-  enso::set_self_core_id(core_id);
-
-  usleep(1000000);
+void capture_packets(uint32_t nb_queues, const std::string& pcap_file,
+                     const std::string& pcie_addr, enso::stats_t* stats) {
+  std::this_thread::sleep_for(std::chrono::seconds(1));
 
   std::cout << "Running on core " << sched_getcpu() << std::endl;
 
   using enso::Device;
   using enso::RxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(0, NULL, pcie_addr);
+  std::unique_ptr<Device> dev = Device::Create(pcie_addr);
   std::vector<RxPipe*> rx_pipes;
 
   if (!dev) {
@@ -136,21 +118,16 @@ void* capture_packets(void* arg) {
 
   pcap_dump_close(pdumper);
   pcap_close(pd);
-
-  return NULL;
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc < 4 || argc > 5) {
+  if (argc < 3 || argc > 4) {
     std::cerr << "Usage: " << argv[0] << " NB_QUEUES PCAP_FILE [PCIE_ADDR]"
               << std::endl
               << std::endl;
     std::cerr << "NB_QUEUES: Number of queues to use." << std::endl;
     std::cerr << "PCAP_FILE: Path to the pcap file to write to." << std::endl;
-    std::cerr << "APPLICATION_ID: Count of number of applications started "
-                 "before this application, starting from 0.";
-    std::cerr << "PCIE_ADDR: PCIe address of the device to use." << std::endl
-              << std::endl;
+    std::cerr << "PCIE_ADDR: PCIe address of the device to use." << std::endl;
     return 1;
   }
 
@@ -164,28 +141,27 @@ int main(int argc, const char* argv[]) {
   }
 
   std::string pcie_addr;
-  if (argc == 5) {
-    pcie_addr = argv[4];
+  if (argc == 4) {
+    pcie_addr = argv[3];
   }
 
   signal(SIGINT, int_handler);
 
   std::vector<enso::stats_t> thread_stats(1);
 
-  pthread_t thread;
-  struct CaptureArgs args;
-  args.nb_queues = nb_queues;
-  args.core_id = kCoreId;
-  args.pcap_file = pcap_file;
-  args.pcie_addr = pcie_addr;
-  args.stats = &(thread_stats[0]);
-  pthread_create(&thread, NULL, capture_packets, static_cast<void*>(&args));
+  std::thread socket_thread = std::thread(capture_packets, nb_queues, pcap_file,
+                                          pcie_addr, &(thread_stats[0]));
+
+  if (enso::set_core_id(socket_thread, kCoreId)) {
+    std::cerr << "Error setting CPU affinity" << std::endl;
+    return 6;
+  }
 
   while (!setup_done) continue;  // Wait for setup to be done.
 
   show_stats(thread_stats, &keep_running);
 
-  pthread_join(thread, NULL);
+  socket_thread.join();
 
   return 0;
 }

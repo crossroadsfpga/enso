@@ -157,7 +157,7 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    uint32_t uthread_id, CompletionCallback completion_callback,
+    int32_t uthread_id, CompletionCallback completion_callback,
     const std::string& pcie_addr,
     const std::string& huge_page_prefix) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow) Device(
@@ -348,7 +348,7 @@ int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
 int Device::GetNotifRxHead() noexcept { return notification_buf_pair_.rx_head; }
 
-int Device::Init(uint32_t uthread_id) noexcept {
+int Device::Init(int32_t uthread_id) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {

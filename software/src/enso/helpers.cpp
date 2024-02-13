@@ -37,7 +37,6 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#include <enso/consts.h>
 #include <enso/helpers.h>
 #include <pthread.h>
 #include <sched.h>

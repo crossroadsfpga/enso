@@ -56,7 +56,7 @@ void run_echo_event(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
   using enso::Device;
   using enso::RxTxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create(0);
+  std::unique_ptr<Device> dev = Device::Create();
   std::vector<RxTxPipe*> pipes;
 
   if (!dev) {
@@ -107,7 +107,7 @@ void run_echo_event(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 5) {
+  if (argc != 4) {
     std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
               << std::endl
               << std::endl;
@@ -115,9 +115,6 @@ int main(int argc, const char* argv[]) {
     std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
     std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
                  " packet."
-              << std::endl;
-    std::cerr << "APPLICATION_ID: Count of number of applications started "
-                 "before this application, starting from 0."
               << std::endl;
     return 1;
   }

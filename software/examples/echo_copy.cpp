@@ -30,13 +30,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <enso/consts.h>
 #include <enso/helpers.h>
 #include <enso/pipe.h>
-#include <enso/queue.h>
-#include <pthread.h>
-#include <sched.h>
-#include <unistd.h>  // for usleep
 
 #include <chrono>
 #include <csignal>
@@ -44,39 +39,28 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
-#include <vector>
+#include <thread>
 
 #include "example_helpers.h"
 
 static volatile bool keep_running = true;
 static volatile bool setup_done = false;
 
-struct EchoArgs {
-  uint32_t nb_queues;
-  uint32_t core_id;
-  uint32_t nb_cycles;
-  enso::stats_t* stats;
-};
-
 void int_handler([[maybe_unused]] int signal) { keep_running = false; }
 
-void* run_echo_copy(void* arg) {
-  struct EchoArgs* args = (struct EchoArgs*)arg;
-  uint32_t nb_queues = args->nb_queues;
-  uint32_t core_id = args->core_id;
-  uint32_t nb_cycles = args->nb_cycles;
-  enso::stats_t* stats = args->stats;
+void run_echo_copy(uint32_t nb_queues, uint32_t core_id, uint32_t nb_cycles,
+                   enso::stats_t* stats) {
+  std::this_thread::sleep_for(std::chrono::seconds(1));
 
-  usleep(1000000);
+  std::cout << "Running on core " << sched_getcpu() << std::endl;
 
   using enso::Device;
   using enso::RxPipe;
   using enso::TxPipe;
 
+  std::unique_ptr<Device> dev = Device::Create();
   std::vector<RxPipe*> rx_pipes;
   std::vector<TxPipe*> tx_pipes;
-
-  std::unique_ptr<Device> dev = Device::Create(0);
 
   if (!dev) {
     std::cerr << "Problem creating device" << std::endl;
@@ -86,7 +70,7 @@ void* run_echo_copy(void* arg) {
   for (uint32_t i = 0; i < nb_queues; ++i) {
     RxPipe* rx_pipe = dev->AllocateRxPipe();
     if (!rx_pipe) {
-      std::cout << "Problem creating RX pipe" << std::endl;
+      std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);
     }
 
@@ -97,6 +81,7 @@ void* run_echo_copy(void* arg) {
 
     TxPipe* tx_pipe = dev->AllocateTxPipe();
     if (!tx_pipe) {
+      std::cerr << "Problem creating TX pipe" << std::endl;
       exit(3);
     }
     tx_pipes.push_back(tx_pipe);
@@ -136,22 +121,17 @@ void* run_echo_copy(void* arg) {
       tx_pipe->SendAndFree(batch_length);
     }
   }
-
-  return NULL;
 }
 
 int main(int argc, const char* argv[]) {
-  if (argc != 5) {
-    std::cerr << "Usage: " << argv[0]
-              << " NB_CORES NB_QUEUES NB_CYCLES APPLICATION_ID" << std::endl
+  if (argc != 4) {
+    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES NB_CYCLES"
+              << std::endl
               << std::endl;
     std::cerr << "NB_CORES: Number of cores to use." << std::endl;
     std::cerr << "NB_QUEUES: Number of queues per core." << std::endl;
     std::cerr << "NB_CYCLES: Number of cycles to busy loop when processing each"
                  " packet."
-              << std::endl;
-    std::cerr << "APPLICATION_ID: Count of number of applications started "
-                 "before this application, starting from 0."
               << std::endl;
     return 1;
   }
@@ -162,19 +142,17 @@ int main(int argc, const char* argv[]) {
 
   signal(SIGINT, int_handler);
 
-  std::vector<pthread_t> threads;
+  std::vector<std::thread> threads;
   std::vector<enso::stats_t> thread_stats(nb_cores);
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
-    pthread_t thread;
-    struct EchoArgs args;
-    args.nb_queues = nb_queues;
-    args.core_id = core_id;
-    args.nb_cycles = nb_cycles;
-    args.stats = &(thread_stats[core_id]);
-    pthread_create(&thread, NULL, run_echo_copy, (void*)&args);
-    threads.push_back(thread);
-    usleep(100000);
+    threads.emplace_back(run_echo_copy, nb_queues, core_id, nb_cycles,
+                         &(thread_stats[core_id]));
+    if (enso::set_core_id(threads.back(), core_id)) {
+      std::cerr << "Error setting CPU affinity" << std::endl;
+      return 6;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   while (!setup_done) continue;  // Wait for setup to be done.
@@ -182,7 +160,7 @@ int main(int argc, const char* argv[]) {
   show_stats(thread_stats, &keep_running);
 
   for (auto& thread : threads) {
-    pthread_join(thread, NULL);
+    thread.join();
   }
 
   return 0;

@@ -146,7 +146,7 @@ class DevBackend {
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
-  int AllocateNotifBuf(uint32_t uthread_id) {
+  int AllocateNotifBuf(int32_t uthread_id) {
     (void)uthread_id;
     return dev_->allocate_notif_buf();
   }

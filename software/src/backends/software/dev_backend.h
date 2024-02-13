@@ -273,12 +273,12 @@ class DevBackend {
   /**
    * @brief Allocates a notification buffer.
    *
-   * @param application_id ID of currently running application.
+   * @param uthread_id ID of currently running uthread.
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is
    * set.
    */
-  int AllocateNotifBuf(uint32_t uthread_id) {
+  int AllocateNotifBuf(int32_t uthread_id) {
     struct NotifBufNotification nb_notification;
     nb_notification.type = NotifType::kAllocateNotifBuf;
     nb_notification.uthread_id = (uint64_t)uthread_id;

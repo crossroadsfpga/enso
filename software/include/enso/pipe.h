@@ -119,7 +119,7 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      uint32_t uthread_id, CompletionCallback completion_callback = NULL,
+      int32_t uthread_id = -1, CompletionCallback completion_callback = NULL,
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
@@ -358,6 +358,8 @@ class Device {
   /**
    * @brief Yields the current uthread to the running kthread, enabling other
    * uthreads to run on the current core.
+   *
+   * NOTE: Only to be used with the hybrid backend.
    */
   void SendUthreadYield();
 
@@ -370,7 +372,7 @@ class Device {
   /**
    * Use `Create` factory method to instantiate objects externally.
    */
-  Device(uint32_t uthread_id, CompletionCallback completion_callback,
+  Device(int32_t uthread_id, CompletionCallback completion_callback,
          const std::string& pcie_addr, std::string huge_page_prefix) noexcept
       : kPcieAddr(pcie_addr),
         completion_callback_(completion_callback),
@@ -392,7 +394,7 @@ class Device {
    *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init(uint32_t uthread_id) noexcept;
+  int Init(int32_t uthread_id) noexcept;
 
   friend class RxPipe;
   friend class TxPipe;
@@ -405,7 +407,7 @@ class Device {
   uint16_t bdf_;
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_;
-  uint32_t uthread_id_;
+  int32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
