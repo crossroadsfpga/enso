@@ -215,8 +215,6 @@ head_upd_queue (
     .out_ready     (head_upd_queue_out_ready)
 );
 
-logic merge_head_pkt;
-
 logic [31:0] in_queue_occup;
 logic in_queue_almost_full;
 assign in_queue_almost_full = in_queue_occup > 4;
@@ -231,20 +229,14 @@ logic                  in_queue_out_ready;
 always_comb begin
     head_upd_queue_out_ready = 0;
     pcie_rx_meta_buf_ready = 0;
-    merge_head_pkt = 0;
 
-    // Prioritize serving head queue updates over incoming metadata. But if both
-    // the head update and the next incoming packet are destined to the same
-    // queue, we can merge the two and save a cycle.
+    // Prioritize serving head queue updates over incoming metadata.
     if (!in_queue_almost_full) begin
         head_upd_queue_out_ready = 1;
         if (head_upd_queue_out_valid) begin
             if (pcie_rx_meta_buf_valid) begin
                 automatic logic [FLOW_IDX_WIDTH-1:0] pkt_queue_id =
                     pcie_rx_meta_buf_data.pkt_queue_id;
-
-                merge_head_pkt = (head_upd_queue_out_data == pkt_queue_id);
-                pcie_rx_meta_buf_ready = merge_head_pkt;
             end
         end else begin
             pcie_rx_meta_buf_ready = 1;
@@ -282,11 +274,7 @@ always @(posedge pcie_clk) begin
             meta.pkt_queue_id = pcie_rx_meta_buf_data.pkt_queue_id;
             meta.size = pcie_rx_meta_buf_data.size;
             meta.descriptor_only = 0;
-
-            // If both the head update and the incoming metadata affect the same
-            // packet queue, we merge the two and signal here that the packet
-            // needs a descriptor.
-            meta.needs_dsc = merge_head_pkt;
+            meta.needs_dsc = 0;
 
             in_queue_in_data <= meta;
             in_queue_in_valid <= 1;
