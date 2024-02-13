@@ -119,9 +119,9 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      int32_t uthread_id = -1, CompletionCallback completion_callback = NULL,
       const std::string& pcie_addr = "",
-      const std::string& huge_page_prefix = "") noexcept;
+      const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
+      CompletionCallback completion_callback = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;

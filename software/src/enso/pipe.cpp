@@ -157,9 +157,8 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    int32_t uthread_id, CompletionCallback completion_callback,
-    const std::string& pcie_addr,
-    const std::string& huge_page_prefix) noexcept {
+    const std::string& pcie_addr, const std::string& huge_page_prefix,
+    int32_t uthread_id, CompletionCallback completion_callback) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow) Device(
       uthread_id, completion_callback, pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
