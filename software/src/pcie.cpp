@@ -72,6 +72,12 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 #endif
 }
 
+static inline uint64_t rdtsc(void) {
+  uint32_t a, d;
+  asm volatile("rdtsc" : "=a"(a), "=d"(d));
+  return ((uint64_t)a) | (((uint64_t)d) << 32);
+}
+
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix,
@@ -83,7 +89,10 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   }
   notification_buf_pair->fpga_dev = fpga_dev;
 
+  uint64_t time = rdtsc();
   int notif_pipe_id = fpga_dev->AllocateNotifBuf(uthread_id);
+  uint64_t after = rdtsc();
+  std::cout << "allocate notif buf time: " << after - time << std::endl;
 
   if (notif_pipe_id < 0) {
     std::cerr << "Could not allocate notification buffer" << std::endl;
