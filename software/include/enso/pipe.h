@@ -39,8 +39,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_PIPE_H_
-#define SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
 
 #include <enso/consts.h>
 #include <enso/helpers.h>
@@ -48,6 +48,7 @@
 
 #include <array>
 #include <cassert>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -81,9 +82,14 @@ uint32_t external_peek_next_batch_from_queue(
  */
 class Device {
  public:
+  using CompletionCallback = std::function<void()>;
   /**
    * @brief Factory method to create a device.
    *
+   * @param application_id The unique ID of the application creating the device.
+   *                       Should be less than kMaxNbFlows.
+   * @param completion_callback Function to call once a transmission has
+   * completed.
    * @param pcie_addr The PCIe address of the device. If empty, uses the first
    *                  device found.
    * @param huge_page_prefix The prefix to use for huge pages file. If empty,
@@ -92,6 +98,7 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
+      uint32_t application_id, CompletionCallback completion_callback,
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "") noexcept;
 
@@ -133,11 +140,6 @@ class Device {
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
 
   /**
-   * @brief Retrieves the number of fallback queues for this device.
-   */
-  int GetNbFallbackQueues() noexcept;
-
-  /**
    * @brief Allocates an RX/TX pipe.
    *
    * @param fallback Whether this pipe is a fallback pipe. Fallback pipes can
@@ -155,6 +157,11 @@ class Device {
    * @return A pointer to the pipe. May be null if the pipe cannot be created.
    */
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
+
+  /**
+   * @brief Gets the next RX notification received by this device.
+   */
+  struct RxNotification* NextRxNotif();
 
   /**
    * @brief Gets the next RxPipe that has data pending.
@@ -261,6 +268,11 @@ class Device {
   int DisableRateLimiting();
 
   /**
+   * @brief Retrieves the number of fallback queues for this device.
+   */
+  int GetNbFallbackQueues() noexcept;
+
+  /**
    * @brief Enables round robing of packets among the fallback pipes.
    *
    * @note This setting applies to all pipes that share the same hardware
@@ -301,34 +313,6 @@ class Device {
    */
   int ApplyConfig(struct TxNotification* config_notification);
 
- private:
-  struct TxPendingRequest {
-    uint32_t pipe_id;
-    uint32_t nb_bytes;
-  };
-
-  /**
-   * Use `Create` factory method to instantiate objects externally.
-   */
-  Device(const std::string& pcie_addr, std::string huge_page_prefix) noexcept
-      : kPcieAddr(pcie_addr) {
-#ifndef NDEBUG
-    std::cerr << "Warning: assertions are enabled. Performance may be affected."
-              << std::endl;
-#endif  // NDEBUG
-    if (huge_page_prefix == "") {
-      huge_page_prefix = std::string(kHugePageDefaultPrefix);
-    }
-    huge_page_prefix_ = huge_page_prefix;
-  }
-
-  /**
-   * @brief Initializes the device.
-   *
-   * @return 0 on success and a non-zero error code on failure.
-   */
-  int Init() noexcept;
-
   /**
    * @brief Sends a certain number of bytes to the device. This is designed to
    * be used by a TxPipe object.
@@ -338,7 +322,44 @@ class Device {
    * @param nb_bytes The number of bytes to send.
    * @return The number of bytes sent.
    */
-  void Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+  void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+
+  /**
+   * @brief Gets the ID of the notification buffer for this device.
+   */
+  int GetNotifQueueId() noexcept;
+
+ private:
+  struct TxPendingRequest {
+    int pipe_id;
+    uint32_t nb_bytes;
+  };
+
+  /**
+   * Use `Create` factory method to instantiate objects externally.
+   */
+  Device(const std::string& pcie_addr, std::string huge_page_prefix,
+         CompletionCallback completion_callback) noexcept
+      : kPcieAddr(pcie_addr) {
+#ifndef NDEBUG
+    std::cerr << "Warning: assertions are enabled. Performance may be affected."
+              << std::endl;
+#endif  // NDEBUG
+    if (huge_page_prefix == "") {
+      huge_page_prefix = std::string(kHugePageDefaultPrefix);
+    }
+    huge_page_prefix_ = huge_page_prefix;
+    completion_callback_ = completion_callback;
+  }
+
+  /**
+   * @brief Initializes the device.
+   *
+   * @param application_id ID of the application creating this device.
+   *
+   * @return 0 on success and a non-zero error code on failure.
+   */
+  int Init(uint32_t application_id) noexcept;
 
   friend class RxPipe;
   friend class TxPipe;
@@ -350,6 +371,7 @@ class Device {
   int16_t core_id_;
   uint16_t bdf_;
   std::string huge_page_prefix_;
+  CompletionCallback completion_callback_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -362,7 +384,8 @@ class Device {
 
   uint32_t tx_pr_head_ = 0;
   uint32_t tx_pr_tail_ = 0;
-  std::array<TxPendingRequest, kMaxPendingTxRequests + 1> tx_pending_requests_;
+  std::array<TxPendingRequest, kMaxPendingTxRequests + 1> tx_pending_requests_ =
+      {};
   static constexpr uint32_t kPendingTxRequestsBufMask = kMaxPendingTxRequests;
   static_assert((kMaxPendingTxRequests & (kMaxPendingTxRequests + 1)) == 0,
                 "kMaxPendingTxRequests + 1 must be a power of 2");
@@ -1128,7 +1151,14 @@ class RxTxPipe {
    */
   inline RxPipe::MessageBatch<PeekPktIterator> PeekPkts(
       int32_t max_nb_pkts = -1) {
+    // using micro = std::chrono::microseconds;
+    // auto start = std::chrono::high_resolution_clock::now();
     device_->ProcessCompletions();
+    // auto finish = std::chrono::high_resolution_clock::now();
+    // if (std::chrono::duration_cast<micro>(finish - start).count() > 0)
+    //   std::cout << "ProcessCompletions() took "
+    //             << std::chrono::duration_cast<micro>(finish - start).count()
+    //             << " " << std::endl;
     return rx_pipe_->PeekPkts(max_nb_pkts);
   }
 
@@ -1409,4 +1439,4 @@ class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_

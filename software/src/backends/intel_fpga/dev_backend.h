@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#define ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
 
 #include <enso/helpers.h>
 
@@ -74,12 +74,16 @@ class DevBackend {
   }
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
-                                               uint32_t value) {
+                                               uint32_t value,
+                                               void* uio_mmap_bar2_addr) {
+    (void)uio_mmap_bar2_addr;
     _enso_compiler_memory_barrier();
     *addr = value;
   }
 
-  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
+  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr,
+                                                  void* uio_mmap_bar2_addr) {
+    (void)uio_mmap_bar2_addr;
     _enso_compiler_memory_barrier();
     return *addr;
   }
@@ -124,7 +128,10 @@ class DevBackend {
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
-  int AllocateNotifBuf() { return dev_->allocate_notif_buf(); }
+  int AllocateNotifBuf(uint32_t application_id) {
+    (void)application_id;
+    return dev_->allocate_notif_buf();
+  }
 
   /**
    * @brief Frees a notification buffer.
@@ -181,4 +188,4 @@ class DevBackend {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_

@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_PCIE_H_
-#define SOFTWARE_SRC_PCIE_H_
+#ifndef ENSO_SOFTWARE_SRC_PCIE_H_
+#define ENSO_SOFTWARE_SRC_PCIE_H_
 
 #include <endian.h>
 #include <enso/helpers.h>
@@ -46,9 +46,12 @@
 #include <netinet/ether.h>
 #include <netinet/ip.h>
 
+#include <algorithm>
 #include <string>
 
 namespace enso {
+
+using CompletionCallback = std::function<void()>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
@@ -62,12 +65,15 @@ struct SocketInternal {
  * @param bar PCIe BAR to use (set to -1 to automatically select one).
  * @param notification_buf_pair Notification buffer pair to initialize.
  * @param huge_page_prefix File prefix to use when allocating the huge pages.
+ * @param application_id Unique ID of currently running application that owns
+ * this kthread.
  *
  * @return 0 on success, -1 on failure.
  */
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
-                          const std::string& huge_page_prefix);
+                          const std::string& huge_page_prefix,
+                          uint32_t application_id);
 
 /**
  * @brief Initializes an Enso Pipe.
@@ -127,6 +133,15 @@ uint32_t get_next_batch_from_queue(
 uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
+
+/**
+ * @brief Get next RX notification with pending data.
+ *
+ * @param notification_buf_pair Notification buffer to get data from.
+ * @return Pointer to the RX notification that can be addressed next.
+ */
+struct RxNotification* get_next_rx_notif(
+    struct NotificationBufPair* notification_buf_pair);
 
 /**
  * @brief Get next Enso Pipe with pending data.
@@ -233,7 +248,8 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair);
  * @return 0 on success, -1 on failure.
  */
 int send_config(struct NotificationBufPair* notification_buf_pair,
-                struct TxNotification* config_notification);
+                struct TxNotification* config_notification,
+                CompletionCallback* completion_callback = nullptr);
 
 /**
  * @brief Get number of fallback queues currently in use.
@@ -317,4 +333,4 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_PCIE_H_
+#endif  // ENSO_SOFTWARE_SRC_PCIE_H_
