@@ -87,6 +87,10 @@ static constexpr std::string_view kHugePageRxPipePathPrefix = "_rx_pipe:";
 static constexpr std::string_view kHugePagePathPrefix = "_tx_pipe:";
 static constexpr std::string_view kHugePageNotifBufPathPrefix = "_notif_buf:";
 static constexpr std::string_view kHugePageQueuePathPrefix = "_queue:";
+static constexpr std::string_view kHugePageUthreadsPathPrefix = "_uthread:";
+static constexpr std::string_view kHugePageKthreadsPathPrefix = "_kthread:";
+static constexpr std::string_view kHugePageQueueTailPathPrefix = "_queue_tail";
+static constexpr std::string_view kHugePageQueueHeadPathPrefix = "_queue_head";
 
 // We need this to allow the same huge page to be mapped to adjacent memory
 // regions.
@@ -147,35 +151,37 @@ enum class NotifType : uint8_t {
   kGetRrStatus = 7,
   kFreeNotifBuf = 8,
   kFreePipe = 9,
-  kGetShinkansenNotifBufId = 10
+  kGetShinkansenNotifBufId = 10,
+  kRegisterKthread = 11,
+  kUthreadWaiting = 12,
+  kKthreadYield = 13
 };
 
 struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
-  uint64_t padding[2];
+  uint64_t padding;
 };
 
 struct FallbackNotification {
   NotifType type;
   uint64_t nb_fallback_queues;
   uint64_t result;
-  uint64_t padding[2];
+  uint64_t padding;
 };
 
 struct RoundRobinNotification {
   NotifType type;
   uint64_t round_robin;
   uint64_t result;
-  uint64_t padding[2];
+  uint64_t padding;
 };
 
 struct NotifBufNotification {
   NotifType type;
   uint64_t notif_buf_id;
-  uint64_t application_id;
-  uint64_t tid;
+  uint64_t uthread_id;
   uint64_t result;
 };
 
@@ -183,25 +189,38 @@ struct AllocatePipeNotification {
   NotifType type;
   uint64_t fallback;
   uint64_t pipe_id;
-  uint64_t padding[2];
+  uint64_t padding;
 };
 
 struct FreePipeNotification {
   NotifType type;
   uint64_t pipe_id;
   uint64_t result;
-  uint64_t padding[2];
+  uint64_t padding;
 };
 
 struct ShinkansenNotification {
   NotifType type;
   uint64_t notif_queue_id;
-  uint64_t padding[3];
+  uint64_t padding[2];
+};
+
+struct KthreadNotification {
+  NotifType type;
+  uint64_t application_id;
+  uint64_t padding[2];
+};
+
+struct YieldNotification {
+  NotifType type;
+  uint64_t notif_buf_id;
+  uint64_t last_rx_notif_head;
+  uint64_t last_tx_consumed_head;
 };
 
 struct PipeNotification {
   NotifType type;
-  uint64_t data[4];
+  uint64_t data[3];
 };
 
 }  // namespace enso

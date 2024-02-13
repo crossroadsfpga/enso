@@ -64,6 +64,27 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
+/**
+ * @brief Initializes queues to and from the backend.
+ *
+ */
+void initialize_backend_queues();
+
+/**
+ * @brief Pushes a notification to the backend.
+ *
+ * @param notif The notification to push.
+ */
+void push_to_backend_queues(PipeNotification* notif);
+
+/**
+ * @brief Pushes a notification to the backend and waits for a response.
+ *
+ * @param notif The notification to push.
+ */
+std::optional<PipeNotification> push_to_backend_queues_get_response(
+    PipeNotification* notif);
+
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
@@ -86,7 +107,7 @@ class Device {
   /**
    * @brief Factory method to create a device.
    *
-   * @param application_id The unique ID of the application creating the device.
+   * @param uthread_id The unique ID of the uthread creating the device.
    *                       Should be less than kMaxNbFlows.
    * @param completion_callback Function to call once a transmission has
    * completed.
@@ -98,9 +119,9 @@ class Device {
    *         created.
    */
   static std::unique_ptr<Device> Create(
-      uint32_t application_id, CompletionCallback completion_callback,
       const std::string& pcie_addr = "",
-      const std::string& huge_page_prefix = "") noexcept;
+      const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
+      CompletionCallback completion_callback = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -321,6 +342,14 @@ class Device {
    */
   int GetNotifQueueId() noexcept;
 
+  /**
+   * @brief Yields the current uthread to the running kthread, enabling other
+   * uthreads to run on the current core.
+   *
+   * NOTE: Only to be used with the hybrid backend.
+   */
+  void SendUthreadYield();
+
  private:
   struct TxPendingRequest {
     int pipe_id;
@@ -330,9 +359,11 @@ class Device {
   /**
    * Use `Create` factory method to instantiate objects externally.
    */
-  Device(const std::string& pcie_addr, std::string huge_page_prefix,
-         CompletionCallback completion_callback) noexcept
-      : kPcieAddr(pcie_addr) {
+  Device(int32_t uthread_id, CompletionCallback completion_callback,
+         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
+      : kPcieAddr(pcie_addr),
+        completion_callback_(completion_callback),
+        uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
               << std::endl;
@@ -341,17 +372,16 @@ class Device {
       huge_page_prefix = std::string(kHugePageDefaultPrefix);
     }
     huge_page_prefix_ = huge_page_prefix;
-    completion_callback_ = completion_callback;
   }
 
   /**
    * @brief Initializes the device.
    *
-   * @param application_id ID of the application creating this device.
+   * @param uthread_id ID of the uthread creating this device.
    *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init(uint32_t application_id) noexcept;
+  int Init(int32_t uthread_id) noexcept;
 
   friend class RxPipe;
   friend class TxPipe;
@@ -364,6 +394,7 @@ class Device {
   uint16_t bdf_;
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_;
+  int32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -1143,14 +1174,7 @@ class RxTxPipe {
    */
   inline RxPipe::MessageBatch<PeekPktIterator> PeekPkts(
       int32_t max_nb_pkts = -1) {
-    // using micro = std::chrono::microseconds;
-    // auto start = std::chrono::high_resolution_clock::now();
     device_->ProcessCompletions();
-    // auto finish = std::chrono::high_resolution_clock::now();
-    // if (std::chrono::duration_cast<micro>(finish - start).count() > 0)
-    //   std::cout << "ProcessCompletions() took "
-    //             << std::chrono::duration_cast<micro>(finish - start).count()
-    //             << " " << std::endl;
     return rx_pipe_->PeekPkts(max_nb_pkts);
   }
 
