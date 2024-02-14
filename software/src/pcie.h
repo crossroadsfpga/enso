@@ -80,7 +80,6 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
 uint32_t consume_rx_kernel(struct NotificationBufPair* notification_buf_pair,
                                   uint32_t &new_rx_tail, int32_t &pipe_id);
 
-
 void advance_pipe_kernel(struct NotificationBufPair* notification_buf_pair,
                         struct RxEnsoPipeInternal* enso_pipe, size_t len);
 
