@@ -107,6 +107,16 @@ std::optional<PipeNotification> push_to_backend_get_response(
   return notification;
 }
 
+void update_backend_queues() {
+  queue_from_backend_->UpdateHeadInHugePage();
+  queue_to_backend_->UpdateTailInHugePage();
+}
+
+void access_backend_queues() {
+  queue_from_backend_->AccessHeadFromHugePage();
+  queue_to_backend_->AccessTailFromHugePage();
+}
+
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {

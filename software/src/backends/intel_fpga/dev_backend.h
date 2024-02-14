@@ -50,6 +50,10 @@ int initialize_queues() { return 0; }
 
 void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
 
+void update_backend_queues() {}
+
+void access_backend_queues() {}
+
 std::optional<PipeNotification> push_to_backend_get_response(
     enso::PipeNotification* notif) {
   (void)notif;

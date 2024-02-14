@@ -66,6 +66,10 @@ std::optional<PipeNotification> push_to_backend_queues_get_response(
   return pcie_push_to_backend_get_response(notif);
 }
 
+void update_queues() { return pcie_update_queues(&notification_buf_pair_); }
+
+void access_queues() { return pcie_uaccess_queues(&notification_buf_pair_); }
+
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
@@ -445,10 +449,6 @@ void Device::ProcessCompletions() {
 void Device::SendUthreadYield() {
   return send_uthread_yield(&notification_buf_pair_);
 }
-
-void Device::UpdateQueues() { return update_queues(&notification_buf_pair_); }
-
-void Device::AccessQueues() { return access_queues(&notification_buf_pair_); }
 
 int Device::EnableTimeStamping() {
   return enable_timestamp(&notification_buf_pair_);

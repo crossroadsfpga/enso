@@ -297,7 +297,7 @@ uint64_t get_dev_addr_from_virt_addr(
  *
  * @param notification_buf_pair  Notification buffer pair to use.
  */
-void update_queues(struct NotificationBufPair* notification_buf_pair);
+void pcie_update_queues(struct NotificationBufPair* notification_buf_pair);
 
 /**
  * @brief  Accesses the queue information stored in shared memory to ensure
@@ -305,7 +305,7 @@ void update_queues(struct NotificationBufPair* notification_buf_pair);
  *
  * @param notification_buf_pair  Notification buffer pair to use.
  */
-void access_queues(struct NotificationBufPair* notification_buf_pair);
+void pcie_access_queues(struct NotificationBufPair* notification_buf_pair);
 
 /**
  * @brief Sends a message to the I/O Kernel indicating that this uthread has
