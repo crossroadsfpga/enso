@@ -714,6 +714,18 @@ void send_uthread_yield(struct NotificationBufPair* notification_buf_pair) {
   fpga_dev->YieldUthread(notification_buf_pair->id);
 }
 
+void update_queues(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->UpdateQueues();
+}
+
+void access_queues(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->AccessQueues();
+}
+
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);

@@ -446,6 +446,10 @@ void Device::SendUthreadYield() {
   return send_uthread_yield(&notification_buf_pair_);
 }
 
+void Device::UpdateQueues() { return update_queues(&notification_buf_pair_); }
+
+void Device::AccessQueues() { return access_queues(&notification_buf_pair_); }
+
 int Device::EnableTimeStamping() {
   return enable_timestamp(&notification_buf_pair_);
 }
