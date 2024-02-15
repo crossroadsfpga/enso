@@ -351,11 +351,6 @@ class Device {
   int GetNotifQueueId() noexcept;
 
   /**
-   * @brief Gets the RX head of the notification buffer for this device.
-   */
-  int GetNotifRxHead() noexcept;
-
-  /**
    * @brief Yields the current uthread to the running kthread, enabling other
    * uthreads to run on the current core.
    *
