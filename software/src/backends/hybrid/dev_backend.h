@@ -378,10 +378,11 @@ class DevBackend {
    *
    * @param notif_buf_id The notification buffer ID of the current device.
    */
-  void YieldUthread(int notif_buf_id) {
+  void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head) {
     struct YieldNotification yield_notification;
     yield_notification.type = NotifType::kUthreadWaiting;
     yield_notification.notif_buf_id = notif_buf_id;
+    yield_notification.last_rx_notif_head = last_rx_notif_head;
 
     enso::PipeNotification* pipe_notification =
         (enso::PipeNotification*)&yield_notification;
