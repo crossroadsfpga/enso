@@ -510,18 +510,21 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
+  std::cout << "advancing pipe to " << rx_pkt_head << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, rx_pkt_head,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = rx_pkt_head;
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
+  std::cout << "fully advancing pipe" << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = enso_pipe->rx_tail;
 }
 
 void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
+  std::cout << "prefetching pipe" << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_head,
                            enso_pipe->uio_mmap_bar2_addr);
 }
@@ -712,7 +715,8 @@ void send_uthread_yield(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
   fpga_dev->YieldUthread(notification_buf_pair->id,
-                         notification_buf_pair->rx_head);
+                         notification_buf_pair->rx_head,
+                         notification_buf_pair->tx_head);
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
