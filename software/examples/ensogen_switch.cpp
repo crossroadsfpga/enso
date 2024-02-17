@@ -416,8 +416,8 @@ struct PcapHandlerContext {
   std::vector<struct EnsoPipe> enso_pipes;
   uint32_t free_flits;
   uint32_t hugepage_offset;
+  uint32_t nb_pcaps;
   pcap_t* pcaps[MAX_PCAPS];
-  uint32_t pcap_index;
 };
 
 struct RxStats {
@@ -503,50 +503,6 @@ struct TxArgs {
   uint64_t pkts_per_pcap;
 };
 
-void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
-                      const u_char* pkt_bytes) {
-  (void)pkt_hdr;
-  struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
-
-  const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
-  if (l2_hdr->ether_type != htons(ETHERTYPE_IP)) {
-    std::cerr << "Non-IPv4 packets are not supported" << std::endl;
-    exit(8);
-  }
-
-  uint32_t len = enso::get_pkt_len(pkt_bytes);
-  uint32_t nb_flits = (len - 1) / 64 + 1;
-
-  if (nb_flits > context->free_flits) {
-    uint8_t* buf;
-    if ((context->hugepage_offset + BUFFER_SIZE) > HUGEPAGE_SIZE) {
-      // Need to allocate another huge page.
-      buf = (uint8_t*)get_huge_page(HUGEPAGE_SIZE);
-      if (buf == NULL) {
-        pcap_breakloop(context->pcaps[context->pcap_index]);
-        return;
-      }
-      context->hugepage_offset = BUFFER_SIZE;
-    } else {
-      struct EnsoPipe& enso_pipe = context->enso_pipes.back();
-      buf = enso_pipe.buf + BUFFER_SIZE;
-      context->hugepage_offset += BUFFER_SIZE;
-    }
-    context->enso_pipes.emplace_back(buf, 0, 0, 0);
-    context->free_flits = BUFFER_SIZE / 64;
-  }
-
-  struct EnsoPipe& enso_pipe = context->enso_pipes.back();
-  uint8_t* dest = enso_pipe.buf + enso_pipe.length;
-
-  memcpy(dest, pkt_bytes, len);
-
-  enso_pipe.length += nb_flits * 64;  // Packets must be cache aligned.
-  enso_pipe.good_bytes += len;
-  ++(enso_pipe.nb_pkts);
-  context->free_flits -= nb_flits;
-}
-
 inline uint64_t receive_pkts(const struct RxArgs& rx_args,
                              struct RxStats& rx_stats) {
   uint64_t nb_pkts = 0;
@@ -628,12 +584,9 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
       return;
     }
 
-    tx_stats.nb_iters++;
     // Move to next packet buffer.
     tx_stats.pkts += tx_args.current_enso_pipe->nb_pkts;
-    if (tx_stats.pkts - tx_stats.last_pkts_ckpt > tx_args.pkts_per_pcap) {
-      tx_stats.nb_switches++;
-      tx_stats.nb_iters = 0;
+    if (tx_stats.pkts - tx_stats.last_pkts_ckpt >= tx_args.pkts_per_pcap) {
       tx_stats.last_pkts_ckpt = tx_stats.pkts;
       tx_args.current_enso_pipe = std::next(tx_args.current_enso_pipe);
       if (tx_args.current_enso_pipe == tx_args.enso_pipes.end()) {
@@ -656,6 +609,67 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
 inline void reclaim_all_buffers(struct TxArgs& tx_args) {
   while (tx_args.transmissions_pending) {
     tx_args.transmissions_pending -= enso::get_completions(tx_args.socket_fd);
+  }
+}
+
+void handle_pkt(struct PcapHandlerContext* context, const u_char* pkt_bytes) {
+  const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
+  if (l2_hdr->ether_type != htons(ETHERTYPE_IP)) {
+    std::cerr << "Non-IPv4 packets are not supported" << std::endl;
+    exit(8);
+  }
+
+  uint32_t len = enso::get_pkt_len(pkt_bytes);
+  uint32_t nb_flits = (len - 1) / 64 + 1;
+
+  if (nb_flits > context->free_flits) {
+    uint8_t* buf;
+    if ((context->hugepage_offset + BUFFER_SIZE) > HUGEPAGE_SIZE) {
+      // Need to allocate another huge page.
+      buf = (uint8_t*)get_huge_page(HUGEPAGE_SIZE);
+      if (buf == NULL) {
+        return;
+      }
+      context->hugepage_offset = BUFFER_SIZE;
+    } else {
+      struct EnsoPipe& enso_pipe = context->enso_pipes.back();
+      buf = enso_pipe.buf + BUFFER_SIZE;
+      context->hugepage_offset += BUFFER_SIZE;
+    }
+    context->enso_pipes.emplace_back(buf, 0, 0, 0);
+    context->free_flits = BUFFER_SIZE / 64;
+  }
+
+  struct EnsoPipe& enso_pipe = context->enso_pipes.back();
+  uint8_t* dest = enso_pipe.buf + enso_pipe.length;
+
+  memcpy(dest, pkt_bytes, len);
+
+  enso_pipe.length += nb_flits * 64;  // Packets must be cache aligned.
+  enso_pipe.good_bytes += len;
+  ++(enso_pipe.nb_pkts);
+  context->free_flits -= nb_flits;
+}
+
+void handle_pcaps(struct PcapHandlerContext* context, uint32_t pkts_per_pcap) {
+  const u_char* pkt_bytes;
+  struct pcap_pkthdr header;
+  uint64_t nb_bytes;
+
+  while (true) {
+    nb_bytes = 0;
+    for (uint32_t pcap_idx = 0; pcap_idx < context->nb_pcaps; pcap_idx++) {
+      pcap_t* pcap = context->pcaps[pcap_idx];
+      for (uint32_t pkt_idx = 0; pkt_idx < pkts_per_pcap; pkt_idx++) {
+        pkt_bytes = pcap_next(pcap, &header);
+        if (!pkt_bytes) break;
+
+        handle_pkt(context, pkt_bytes);
+
+        nb_bytes += enso::get_pkt_len(pkt_bytes);
+      }
+    }
+    if (nb_bytes == 0) return;
   }
 }
 
@@ -690,7 +704,9 @@ int main(int argc, char** argv) {
   struct PcapHandlerContext context;
   context.free_flits = 0;
   context.hugepage_offset = HUGEPAGE_SIZE;
-  context.pcap_index = 0;
+  context.nb_pcaps = parsed_args.nb_pcaps;
+  std::vector<EnsoPipe>& enso_pipes = context.enso_pipes;
+
   for (uint32_t i = 0; i < parsed_args.nb_pcaps; i++) {
     pcap_t* pcap = pcap_open_offline(parsed_args.pcap_files[i].c_str(), errbuf);
     if (pcap == NULL) {
@@ -701,45 +717,14 @@ int main(int argc, char** argv) {
     context.pcaps[i] = pcap;
   }
 
-  std::vector<EnsoPipe>& enso_pipes = context.enso_pipes;
-
-  for (uint32_t i = 0; i < parsed_args.nb_pcaps; i++) {
-    pcap_t* pcap = context.pcaps[i];
-    context.pcap_index = i;
-    // Initialize packet buffers with packets read from pcap file.
-    if (pcap_loop(pcap, 0, pcap_pkt_handler, (u_char*)&context) < 0) {
-      std::cerr << "Error while reading pcap (" << pcap_geterr(pcap) << ")"
-                << std::endl;
-      return 3;
-    }
-
-    if (i == parsed_args.nb_pcaps - 1) continue;
-
-    // push new enso pipe onto pipes vector, differentiating the different pcaps
-    // in different pipes
-    uint8_t* buf;
-    if ((context.hugepage_offset + BUFFER_SIZE) > HUGEPAGE_SIZE) {
-      // Need to allocate another huge page.
-      buf = (uint8_t*)get_huge_page(HUGEPAGE_SIZE);
-      if (buf == NULL) {
-        std::cerr << "Error when getting huge page" << std::endl;
-        return 3;
-      }
-      context.hugepage_offset = BUFFER_SIZE;
-    } else {
-      struct EnsoPipe& enso_pipe = context.enso_pipes.back();
-      buf = enso_pipe.buf + BUFFER_SIZE;
-      context.hugepage_offset += BUFFER_SIZE;
-    }
-    context.enso_pipes.emplace_back(buf, 0, 0, 0);
-    context.free_flits = BUFFER_SIZE / 64;
-  }
+  handle_pcaps(&context, parsed_args.pkts_per_pcap);
 
   std::cout << "number of enso pipes: " << enso_pipes.size() << std::endl;
 
   // For small pcaps we copy the same packets over the remaining of the
   // buffer. This reduces the number of transfers that we need to issue.
-  if ((enso_pipes.front().length < BUFFER_SIZE / 2)) {
+  if ((enso_pipes.size() == 1) &&
+      (enso_pipes.front().length < BUFFER_SIZE / 2)) {
     std::cout << "filling in" << std::endl;
     for (uint32_t i = 0; i < enso_pipes.size(); i++) {
       EnsoPipe& buffer = enso_pipes[i];

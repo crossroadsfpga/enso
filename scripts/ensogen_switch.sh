@@ -34,7 +34,7 @@ rate=$1
 extra_args=${@:2}
 
 pattern="Average packet size:"
-mean_pkt_size=64
+mean_pkt_size=60
 
 num_den=$(python3 <<EOF
 import math
