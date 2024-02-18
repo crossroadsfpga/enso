@@ -54,8 +54,9 @@ static constexpr uint32_t ip(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
 }
 
 int main(int argc, char const* argv[]) {
-  if (argc != 6) {
-    std::cerr << "Usage: " << argv[0] << " NB_PKTS PKT_SIZE NB_SRC NB_DST "
+  if (argc != 7) {
+    std::cerr << "Usage: " << argv[0]
+              << " NB_PKTS PKT_SIZE NB_SRC NB_DST DST_START "
               << "OUTPUT_PCAP" << std::endl;
     exit(1);
   }
@@ -64,7 +65,8 @@ int main(int argc, char const* argv[]) {
   const int pkt_size = std::stoi(argv[2]);
   const int nb_src = std::stoi(argv[3]);
   const int nb_dst = std::stoi(argv[4]);
-  const std::string output_pcap = argv[5];
+  const int dst_start = std::stoi(argv[5]);
+  const std::string output_pcap = argv[6];
 
   // Skip if pcap with same name already exists.
   {
@@ -109,7 +111,7 @@ int main(int argc, char const* argv[]) {
   pkt_hdr.ts = ts;
 
   uint32_t src_ip = ip(192, 168, 0, 0);
-  uint32_t dst_ip = ip(192, 168, 0, 6);
+  uint32_t dst_ip = ip(192, 168, 0, dst_start);
 
   uint32_t mss =
       pkt_size - sizeof(*l2_hdr) - sizeof(*l3_hdr) - sizeof(*l4_hdr) - 4;
