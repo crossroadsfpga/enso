@@ -583,10 +583,9 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
 
     // Move to next packet buffer.
     tx_stats.pkts += tx_args.current_enso_pipe->nb_pkts;
-      tx_args.current_enso_pipe = std::next(tx_args.current_enso_pipe);
-      if (tx_args.current_enso_pipe == tx_args.enso_pipes.end()) {
-        tx_args.current_enso_pipe = tx_args.enso_pipes.begin();
-      }
+    tx_args.current_enso_pipe = std::next(tx_args.current_enso_pipe);
+    if (tx_args.current_enso_pipe == tx_args.enso_pipes.end()) {
+      tx_args.current_enso_pipe = tx_args.enso_pipes.begin();
     }
   }
 
