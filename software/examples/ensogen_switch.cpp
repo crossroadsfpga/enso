@@ -473,10 +473,7 @@ struct RxArgs {
 struct TxStats {
   TxStats() : pkts(0), bytes(0) {}
   uint64_t pkts;
-  uint64_t last_pkts_ckpt;
   uint64_t bytes;
-  uint64_t nb_iters;
-  uint64_t nb_switches;
 };
 
 struct TxArgs {
@@ -586,8 +583,6 @@ inline void transmit_pkts(struct TxArgs& tx_args, struct TxStats& tx_stats) {
 
     // Move to next packet buffer.
     tx_stats.pkts += tx_args.current_enso_pipe->nb_pkts;
-    if (tx_stats.pkts - tx_stats.last_pkts_ckpt >= tx_args.pkts_per_pcap) {
-      tx_stats.last_pkts_ckpt = tx_stats.pkts;
       tx_args.current_enso_pipe = std::next(tx_args.current_enso_pipe);
       if (tx_args.current_enso_pipe == tx_args.enso_pipes.end()) {
         tx_args.current_enso_pipe = tx_args.enso_pipes.begin();
@@ -902,9 +897,6 @@ int main(int argc, char** argv) {
           TxArgs tx_args(enso_pipes, total_bytes_to_send,
                          total_good_bytes_to_send, pkts_in_last_buffer,
                          socket_fd, pkts_per_pcap);
-          tx_stats.last_pkts_ckpt = 0;
-          tx_stats.nb_iters = 0;
-          tx_stats.nb_switches = 0;
           while (keep_running) {
             transmit_pkts(tx_args, tx_stats);
           }
