@@ -372,6 +372,7 @@ class EnsoGenSwitch(Pktgen):
     def __init__(
         self,
         nic: EnsoNic,
+        window_size: int = 1,
         core_id: int = 0,
         queues: int = 4,
         single_core: bool = False,
@@ -389,9 +390,11 @@ class EnsoGenSwitch(Pktgen):
         super().__init__()
 
         self.nic = nic
+        self.window_size = window_size
         self.queues = queues
 
-        self._pcap_path = None
+        self.pcap_paths = [None * 1024]
+        self.nb_pcaps = 0
 
         self.core_id = core_id
         self.single_core = single_core
@@ -415,28 +418,37 @@ class EnsoGenSwitch(Pktgen):
 
         self.clean_stats()
 
-    def set_params(self, pkt_size: int, nb_src: int, nb_dst: int) -> None:
+    def set_params(
+        self, pkt_size: int, nb_src: int, nb_dst: int, nb_pcaps: int
+    ) -> None:
         nb_pkts = nb_src * nb_dst
 
-        pcap_name = f"{nb_pkts}_{pkt_size}_{nb_src}_{nb_dst}.pcap"
-
         remote_dir_path = Path(self.nic.enso_path)
-        pcap_dst = remote_dir_path / Path(PCAPS_DIR) / Path(pcap_name)
+
         pcap_gen_cmd = remote_dir_path / Path(PCAP_GEN_CMD)
-        pcap_gen_cmd = (
-            f"{pcap_gen_cmd} {nb_pkts} {pkt_size} {nb_src} {nb_dst} {pcap_dst}"
-        )
+        for i in range(nb_pcaps):
+            dst_start = i * nb_dst
+            pcap_name = (
+                f"{nb_pkts}_{pkt_size}_{nb_src}_{nb_dst}_{dst_start}.pcap"
+            )
+            pcap_dst = remote_dir_path / Path(PCAPS_DIR) / Path(pcap_name)
 
-        pcap_gen_cmd = self.nic.host.run_command(
-            pcap_gen_cmd, print_command=self.log_file
-        )
-        pcap_gen_cmd.watch(stdout=self.log_file, stderr=self.log_file)
+            pcap_gen_cmd = (
+                f"{pcap_gen_cmd} {nb_pkts} {pkt_size} {nb_src} "
+                f"{nb_dst} {dst_start}"
+            )
 
-        status = pcap_gen_cmd.recv_exit_status()
-        if status != 0:
-            raise RuntimeError("Error generating pcap")
+            pcap_gen_cmd = self.nic.host.run_command(
+                pcap_gen_cmd, print_command=self.log_file
+            )
+            pcap_gen_cmd.watch(stdout=self.log_file, stderr=self.log_file)
 
-        self.pcap_path = pcap_dst
+            status = pcap_gen_cmd.recv_exit_status()
+            if status != 0:
+                raise RuntimeError("Error generating pcap")
+
+            self.pcap_paths[i] = pcap_dst
+            self.nb_pcaps += 1
 
     def start(self, throughput: float, nb_pkts: int) -> None:
         """Start packet generation.
@@ -445,8 +457,8 @@ class EnsoGenSwitch(Pktgen):
             throughput: Throughput in bits per second.
             nb_pkts: Number of packets to transmit.
         """
-        if self.pcap_path is None:
-            raise RuntimeError("No pcap was configured")
+        if self.pcap_paths is None:
+            raise RuntimeError("No pcaps were configured")
 
         bits_per_pkt = (self.mean_pcap_pkt_size + ETHERNET_OVERHEAD) * 8
         pkts_per_sec = throughput / bits_per_pkt
@@ -473,10 +485,15 @@ class EnsoGenSwitch(Pktgen):
                 f"Error removing remote stats file ({self.stats_file})"
             )
 
+        pcaps_str = ""
+        for i in range(self.nb_pcaps):
+            pcaps_str += f" --pcap-file {self.pcap_paths[i]}"
+
         command = (
             f"sudo {self.nic.enso_path}/{ENSOGEN_CMD}"
-            f" {self.pcap_path} {rate_frac.numerator} {rate_frac.denominator}"
-            f" --count {nb_pkts}"
+            f" {rate_frac.numerator} {rate_frac.denominator}"
+            + pcaps_str
+            + f" --count {nb_pkts}"
             f" --core {self.core_id}"
             f" --queues {self.queues}"
             f" --save {self.stats_file}"
