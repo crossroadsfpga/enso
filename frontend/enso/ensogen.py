@@ -372,7 +372,6 @@ class EnsoGenSwitch(Pktgen):
     def __init__(
         self,
         nic: EnsoNic,
-        window_size: int = 1,
         core_id: int = 0,
         queues: int = 4,
         single_core: bool = False,
@@ -390,11 +389,7 @@ class EnsoGenSwitch(Pktgen):
         super().__init__()
 
         self.nic = nic
-        self.window_size = window_size
         self.queues = queues
-
-        self.pcap_paths = [None * 1024]
-        self.nb_pcaps = 0
 
         self.core_id = core_id
         self.single_core = single_core
@@ -421,6 +416,9 @@ class EnsoGenSwitch(Pktgen):
     def set_params(
         self, pkt_size: int, nb_src: int, nb_dst: int, nb_pcaps: int
     ) -> None:
+        self.pcap_paths = [None * 1024]
+        self.nb_pcaps = 0
+
         nb_pkts = nb_src * nb_dst
 
         remote_dir_path = Path(self.nic.enso_path)
@@ -450,7 +448,7 @@ class EnsoGenSwitch(Pktgen):
             self.pcap_paths[i] = pcap_dst
             self.nb_pcaps += 1
 
-    def start(self, throughput: float, nb_pkts: int) -> None:
+    def start(self, throughput: float, nb_pkts: int, window_size: int) -> None:
         """Start packet generation.
 
         Args:
@@ -485,19 +483,18 @@ class EnsoGenSwitch(Pktgen):
                 f"Error removing remote stats file ({self.stats_file})"
             )
 
-        pcaps_str = ""
-        for i in range(self.nb_pcaps):
-            pcaps_str += f" --pcap-file {self.pcap_paths[i]}"
-
         command = (
             f"sudo {self.nic.enso_path}/{ENSOGEN_CMD}"
             f" {rate_frac.numerator} {rate_frac.denominator}"
-            + pcaps_str
-            + f" --count {nb_pkts}"
+            + f" --pkts-per-pcap {window_size}"
+            f" --count {nb_pkts}"
             f" --core {self.core_id}"
             f" --queues {self.queues}"
             f" --save {self.stats_file}"
         )
+
+        for i in range(self.nb_pcaps):
+            command += f" --pcap-file {self.pcap_paths[i]}"
 
         if self.single_core:
             command += " --single-core"
