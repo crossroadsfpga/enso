@@ -223,6 +223,41 @@ struct PipeNotification {
   uint64_t data[3];
 };
 
+struct FallbackNotification {
+  NotifType type;
+  uint64_t nb_fallback_queues;
+  uint64_t result;
+};
+
+struct RoundRobinNotification {
+  NotifType type;
+  uint64_t round_robin;
+  uint64_t result;
+};
+
+struct NotifBufNotification {
+  NotifType type;
+  uint64_t notif_buf_id;
+  uint64_t result;
+};
+
+struct AllocatePipeNotification {
+  NotifType type;
+  uint64_t fallback;
+  uint64_t pipe_id;
+};
+
+struct FreePipeNotification {
+  NotifType type;
+  uint64_t pipe_id;
+  uint64_t result;
+};
+
+struct PipeNotification {
+  NotifType type;
+  uint64_t data[2];
+};
+
 }  // namespace enso
 
 #endif  // ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
