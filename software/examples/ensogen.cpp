@@ -479,7 +479,7 @@ struct TxStats {
 struct TxArgs {
   TxArgs(std::vector<EnsoPipe>& enso_pipes, uint64_t total_bytes_to_send,
          uint64_t total_good_bytes_to_send, uint64_t pkts_in_last_buffer,
-         int socket_fd, uint64_t window_size)
+         int socket_fd)
       : ignored_reclaims(0),
         total_remaining_bytes(total_bytes_to_send),
         total_remaining_good_bytes(total_good_bytes_to_send),
@@ -487,8 +487,7 @@ struct TxArgs {
         pkts_in_last_buffer(pkts_in_last_buffer),
         enso_pipes(enso_pipes),
         current_enso_pipe(enso_pipes.begin()),
-        socket_fd(socket_fd),
-        window_size(window_size) {}
+        socket_fd(socket_fd)) {}
   uint64_t ignored_reclaims;
   uint64_t total_remaining_bytes;
   uint64_t total_remaining_good_bytes;
@@ -497,7 +496,6 @@ struct TxArgs {
   std::vector<EnsoPipe>& enso_pipes;
   std::vector<EnsoPipe>::iterator current_enso_pipe;
   int socket_fd;
-  uint64_t window_size;
 };
 
 inline uint64_t receive_pkts(const struct RxArgs& rx_args,
@@ -606,7 +604,7 @@ inline void reclaim_all_buffers(struct TxArgs& tx_args) {
   }
 }
 
-void handle_pkt(struct PcapHandlerContext* context, const u_char* pkt_bytes) {
+void load_pkt(struct PcapHandlerContext* context, const u_char* pkt_bytes) {
   const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
   if (l2_hdr->ether_type != htons(ETHERTYPE_IP)) {
     std::cerr << "Non-IPv4 packets are not supported" << std::endl;
@@ -645,7 +643,7 @@ void handle_pkt(struct PcapHandlerContext* context, const u_char* pkt_bytes) {
   context->free_flits -= nb_flits;
 }
 
-void handle_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
+void load_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
   const u_char* pkt_bytes;
   struct pcap_pkthdr header;
   uint64_t nb_bytes;
@@ -658,7 +656,7 @@ void handle_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
         pkt_bytes = pcap_next(pcap, &header);
         if (!pkt_bytes) break;
 
-        handle_pkt(context, pkt_bytes);
+        load_pkt(context, pkt_bytes);
 
         nb_bytes += enso::get_pkt_len(pkt_bytes);
       }
@@ -711,27 +709,23 @@ int main(int argc, char** argv) {
     context.pcaps[i] = pcap;
   }
 
-  handle_pcaps(&context, parsed_args.window_size);
+  load_pcaps(&context, parsed_args.window_size);
 
-  std::cout << "number of enso pipes: " << enso_pipes.size() << std::endl;
+  std::cout << "Number of enso pipes: " << enso_pipes.size() << std::endl;
 
   // For small pcaps we copy the same packets over the remaining of the
   // buffer. This reduces the number of transfers that we need to issue.
   if ((enso_pipes.size() == 1) &&
       (enso_pipes.front().length < BUFFER_SIZE / 2)) {
-    std::cout << "filling in" << std::endl;
-    for (uint32_t i = 0; i < enso_pipes.size(); i++) {
-      EnsoPipe& buffer = enso_pipes[i];
-      uint32_t original_buf_length = buffer.length;
-      uint32_t original_good_bytes = buffer.good_bytes;
-      uint32_t original_nb_pkts = buffer.nb_pkts;
-      while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
-        memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
-        buffer.length += original_buf_length;
-        buffer.good_bytes += original_good_bytes;
-        buffer.nb_pkts += original_nb_pkts;
-      }
-      std::cout << "buffer nb pkts: " << buffer.nb_pkts << std::endl;
+    EnsoPipe& buffer = enso_pipes.front();
+    uint32_t original_buf_length = buffer.length;
+    uint32_t original_good_bytes = buffer.good_bytes;
+    uint32_t original_nb_pkts = buffer.nb_pkts;
+    while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
+      memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
+      buffer.length += original_buf_length;
+      buffer.good_bytes += original_good_bytes;
+      buffer.nb_pkts += original_nb_pkts;
     }
   }
 
@@ -743,8 +737,6 @@ int main(int argc, char** argv) {
     total_bytes_in_buffers += buffer.length;
     total_good_bytes_in_buffers += buffer.good_bytes;
   }
-
-  std::cout << "total pkts: " << total_pkts_in_buffers << std::endl;
 
   // To restrict the number of packets, we track the total number of bytes.
   // This avoids the need to look at every sent packet only to figure out the
@@ -788,8 +780,6 @@ int main(int argc, char** argv) {
     total_bytes_to_send = 0xffffffffffffffff;
     total_good_bytes_to_send = 0xffffffffffffffff;
   }
-
-  uint64_t window_size = parsed_args.window_size;
 
   uint32_t rtt_hist_len = 0;
   uint32_t rtt_hist_offset = 0;
@@ -878,7 +868,7 @@ int main(int argc, char** argv) {
 
     std::thread tx_thread = std::thread(
         [total_bytes_to_send, total_good_bytes_to_send, pkts_in_last_buffer,
-         window_size, &parsed_args, &enso_pipes, &tx_stats] {
+         &parsed_args, &enso_pipes, &tx_stats] {
           std::this_thread::sleep_for(std::chrono::seconds(1));
 
           int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, false);
@@ -895,7 +885,8 @@ int main(int argc, char** argv) {
 
           TxArgs tx_args(enso_pipes, total_bytes_to_send,
                          total_good_bytes_to_send, pkts_in_last_buffer,
-                         socket_fd, window_size);
+                         socket_fd);
+
           while (keep_running) {
             transmit_pkts(tx_args, tx_stats);
           }
@@ -933,7 +924,7 @@ int main(int argc, char** argv) {
     // Send and receive packets within the same thread.
     std::thread rx_tx_thread = std::thread(
         [&parsed_args, &rx_stats, total_bytes_to_send, total_good_bytes_to_send,
-         pkts_in_last_buffer, window_size, &enso_pipes, &tx_stats] {
+         pkts_in_last_buffer, &enso_pipes, &tx_stats] {
           std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
           std::vector<int> socket_fds;
@@ -969,7 +960,7 @@ int main(int argc, char** argv) {
 
           TxArgs tx_args(enso_pipes, total_bytes_to_send,
                          total_good_bytes_to_send, pkts_in_last_buffer,
-                         socket_fd, window_size);
+                         socket_fd);
 
           rx_ready = 1;
 
