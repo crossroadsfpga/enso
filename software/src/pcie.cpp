@@ -502,8 +502,6 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     uint64_t huge_page_offset = (transf_addr + req_length) % kBufPageSize;
     transf_addr = hugepage_base_addr + huge_page_offset;
 
-    try_clflush(tx_notification);
-
     tx_tail = (tx_tail + 1) % kNotificationBufSize;
     missing_bytes -= req_length;
   }
@@ -590,8 +588,6 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   struct TxNotification* tx_notification = tx_buf + tx_tail;
   *tx_notification = *config_notification;
-
-  try_clflush(tx_notification);
 
   tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;
