@@ -247,7 +247,7 @@ static int parse_args(int argc, char** argv,
   parsed_args.rtt_hist_len = DEFAULT_HIST_LEN;
   parsed_args.stats_delay = DEFAULT_STATS_DELAY;
   parsed_args.nb_pcaps = 0;
-  parsed_args.window_size = 1000000000;
+  parsed_args.window_size = 0;
 
   while ((opt = getopt_long(argc, argv, short_options, long_options,
                             &long_index)) != EOF) {
@@ -300,6 +300,8 @@ static int parse_args(int argc, char** argv,
         return -1;
     }
   }
+
+  if (parsed_args.window_size == 0) parsed_args.window_size = 1000000000;
 
   if ((argc - optind) != NB_CLI_ARGS) {
     return -1;
