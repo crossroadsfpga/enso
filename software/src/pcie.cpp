@@ -75,7 +75,7 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix,
-                          uint32_t application_id) {
+                          int32_t uthread_id) {
   DevBackend* fpga_dev = DevBackend::Create(bdf, bar);
   if (unlikely(fpga_dev == nullptr)) {
     std::cerr << "Could not create device" << std::endl;
@@ -83,7 +83,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   }
   notification_buf_pair->fpga_dev = fpga_dev;
 
-  int notif_pipe_id = fpga_dev->AllocateNotifBuf(application_id);
+  int notif_pipe_id = fpga_dev->AllocateNotifBuf(uthread_id);
 
   if (notif_pipe_id < 0) {
     std::cerr << "Could not allocate notification buffer" << std::endl;
@@ -364,10 +364,9 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
         notification_buf + notification_buf_head;
 
     // Check if the next notification was updated by the NIC.
-    if (cur_notification->signal == 0) {
+    if (!cur_notification->signal) {
       break;
     }
-
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
@@ -390,7 +389,6 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   notification_buf_pair->next_rx_ids_tail = next_rx_ids_tail;
 
   if (likely(nb_consumed_notifications > 0)) {
-    // Update notification buffer head.
     DevBackend::mmio_write32(notification_buf_pair->rx_head_ptr,
                              notification_buf_head,
                              notification_buf_pair->uio_mmap_bar2_addr);
@@ -710,6 +708,14 @@ uint64_t get_dev_addr_from_virt_addr(
   return dev_addr;
 }
 
+void send_uthread_yield(struct NotificationBufPair* notification_buf_pair) {
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->YieldUthread(notification_buf_pair->id,
+                         notification_buf_pair->rx_head,
+                         notification_buf_pair->tx_head);
+}
+
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
@@ -790,6 +796,15 @@ int dma_finish(struct SocketInternal* socket_entry) {
 
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   return (uint32_t)socket_entry->enso_pipe.id;
+}
+
+void pcie_initialize_backend_queues() { initialize_queues(); }
+
+void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }
+
+std::optional<PipeNotification> pcie_push_to_backend_get_response(
+    PipeNotification* notif) {
+  return push_to_backend_get_response(notif);
 }
 
 void print_stats(struct SocketInternal* socket_entry, bool print_global) {
