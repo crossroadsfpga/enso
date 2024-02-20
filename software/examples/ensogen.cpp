@@ -487,7 +487,7 @@ struct TxArgs {
         pkts_in_last_buffer(pkts_in_last_buffer),
         enso_pipes(enso_pipes),
         current_enso_pipe(enso_pipes.begin()),
-        socket_fd(socket_fd)) {}
+        socket_fd(socket_fd) {}
   uint64_t ignored_reclaims;
   uint64_t total_remaining_bytes;
   uint64_t total_remaining_good_bytes;
