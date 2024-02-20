@@ -215,7 +215,7 @@ struct YieldNotification {
   NotifType type;
   uint64_t notif_buf_id;
   uint64_t last_rx_notif_head;
-  uint64_t padding;
+  uint64_t last_tx_consumed_head;
 };
 
 struct PipeNotification {

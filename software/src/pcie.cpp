@@ -712,7 +712,8 @@ void send_uthread_yield(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
   fpga_dev->YieldUthread(notification_buf_pair->id,
-                         notification_buf_pair->rx_head);
+                         notification_buf_pair->rx_head,
+                         notification_buf_pair->tx_head);
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
