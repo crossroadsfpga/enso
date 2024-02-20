@@ -92,8 +92,8 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
              const std::string& huge_page_prefix, bool fallback);
 
 /**
- * @brief Gets latest tails for the pipes associated with the given notification
- * buffer.
+ * @brief Gets latest tails for the pipes associated with the given
+ * notification buffer.
  *
  * @param notification_buf_pair Notification buffer to get data from.
  * @return Number of notifications received.
