@@ -54,4 +54,4 @@ print(clock_fraction.numerator, clock_fraction.denominator)
 EOF
 )
 
-sudo $ENSOGEN_PATH $pcap_file $num_den $extra_args
+sudo $ENSOGEN_PATH $num_den $extra_args

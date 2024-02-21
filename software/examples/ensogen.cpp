@@ -119,6 +119,7 @@ static void print_usage(const char* program_name) {
       "%s RATE_NUM RATE_DEN\n"
       " [--help]\n"
       " [--pcap-file]\n"
+      " [--window-size]\n"
       " [--count NB_PKTS]\n"
       " [--core CORE_ID]\n"
       " [--queues NB_QUEUES]\n"
@@ -135,7 +136,8 @@ static void print_usage(const char* program_name) {
       "  RATE_DEN: Denominator of the rate used to transmit packets.\n\n"
 
       "  --help: Show this help and exit.\n"
-      "  --pcap-file: Pcap file with packets to transmit."
+      "  --pcap-file: Pcap file with packets to transmit.\n"
+      "  --window-size: Number of packets per pcap in each window.\n"
       "  --count: Specify number of packets to transmit.\n"
       "  --core: Specify CORE_ID to run on (default: %d).\n"
       "  --queues: Specify number of RX queues (default: %d).\n"
