@@ -143,7 +143,12 @@ class DevBackend {
    *
    * @param notif_buf_id The notification buffer ID of the current device.
    */
-  void YieldUthread(int notif_buf_id) { (void)notif_buf_id; }
+  void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
+                    uint32_t last_tx_consumed_head) {
+    (void)notif_buf_id;
+    (void)last_rx_notif_head;
+    (void)last_tx_consumed_head;
+  }
 
   /**
    * @brief Allocates a notification buffer.

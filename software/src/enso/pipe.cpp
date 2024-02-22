@@ -349,8 +349,6 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
-int Device::GetNotifRxHead() noexcept { return notification_buf_pair_.rx_head; }
-
 int Device::Init(int32_t uthread_id) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
