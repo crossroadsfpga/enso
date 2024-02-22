@@ -55,6 +55,8 @@
 
 namespace enso {
 
+uint64_t test_round_trip() { return pcie_test_round_trip(); }
+
 void initialize_backend_queues() { return pcie_initialize_backend_queues(); }
 
 void push_to_backend_queues(PipeNotification* notif) {
@@ -65,7 +67,6 @@ std::optional<PipeNotification> push_to_backend_queues_get_response(
     PipeNotification* notif) {
   return pcie_push_to_backend_get_response(notif);
 }
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {

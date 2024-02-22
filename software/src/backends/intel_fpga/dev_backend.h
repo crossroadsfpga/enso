@@ -50,6 +50,8 @@ int initialize_queues() { return 0; }
 
 void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
 
+uint64_t backend_test_round_trip() { return 0; }
+
 std::optional<PipeNotification> push_to_backend_get_response(
     enso::PipeNotification* notif) {
   (void)notif;

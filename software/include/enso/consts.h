@@ -154,7 +154,8 @@ enum class NotifType : uint8_t {
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
   kUthreadWaiting = 12,
-  kKthreadYield = 13
+  kKthreadYield = 13,
+  kTestRoundTrip = 14
 };
 
 struct MmioNotification {
@@ -216,6 +217,11 @@ struct YieldNotification {
   uint64_t notif_buf_id;
   uint64_t last_rx_notif_head;
   uint64_t last_tx_consumed_head;
+};
+
+struct TestRoundTripNotification {
+  NotifType type;
+  uint64_t padding[3];
 };
 
 struct PipeNotification {

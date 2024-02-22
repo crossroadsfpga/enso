@@ -64,6 +64,8 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
+uint64_t test_round_trip(void);
+
 /**
  * @brief Initializes queues to and from the backend.
  *

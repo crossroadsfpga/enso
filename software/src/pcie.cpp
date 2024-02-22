@@ -807,6 +807,8 @@ std::optional<PipeNotification> pcie_push_to_backend_get_response(
   return push_to_backend_get_response(notif);
 }
 
+uint64_t pcie_test_round_trip() { return backend_test_round_trip(); }
+
 void print_stats(struct SocketInternal* socket_entry, bool print_global) {
   struct NotificationBufPair* notification_buf_pair =
       socket_entry->notification_buf_pair;

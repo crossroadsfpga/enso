@@ -71,6 +71,8 @@ std::optional<PipeNotification> push_to_backend_get_response(
   return res;
 }
 
+uint64_t backend_test_round_trip() { return 0; }
+
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {

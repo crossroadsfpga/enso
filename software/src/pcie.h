@@ -354,6 +354,8 @@ void pcie_push_to_backend(PipeNotification* notif);
 std::optional<PipeNotification> pcie_push_to_backend_get_response(
     PipeNotification* notif);
 
+uint64_t pcie_test_round_trip();
+
 /**
  * @brief Prints statistics for a given socket.
  *

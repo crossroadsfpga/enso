@@ -107,6 +107,31 @@ std::optional<PipeNotification> push_to_backend_get_response(
   return notification;
 }
 
+static inline uint64_t rdtsc(void) {
+  uint32_t a, d;
+  asm volatile("rdtsc" : "=a"(a), "=d"(d));
+  return ((uint64_t)a) | (((uint64_t)d) << 32);
+}
+
+uint64_t backend_test_round_trip() {
+  struct TestRoundTripNotification rtt_notification;
+  rtt_notification.type = NotifType::kTestRoundTrip;
+
+  enso::PipeNotification* pipe_notification =
+      (enso::PipeNotification*)&rtt_notification;
+
+  uint64_t start = rdtsc();
+  std::optional<PipeNotification> notification =
+      push_to_backend_get_response(pipe_notification);
+  uint64_t after = rdtsc();
+
+  struct TestRoundTripNotification* result =
+      (struct TestRoundTripNotification*)&notification.value();
+  (void)result;
+  assert(result->type == NotifType::kTestRoundTrip);
+  return after - start;
+}
+
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
