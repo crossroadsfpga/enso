@@ -152,7 +152,6 @@ enum class NotifType : uint8_t {
   kFreeNotifBuf = 8,
   kFreePipe = 9,
   kGetShinkansenNotifBufId = 10,
-  kRegisterKthread = 11,
   kUthreadWaiting = 12,
   kKthreadYield = 13
 };
