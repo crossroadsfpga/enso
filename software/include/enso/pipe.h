@@ -104,6 +104,7 @@ uint32_t external_peek_next_batch_from_queue(
 class Device {
  public:
   using CompletionCallback = std::function<void()>;
+
   /**
    * @brief Factory method to create a device.
    *
