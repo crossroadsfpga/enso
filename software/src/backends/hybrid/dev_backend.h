@@ -63,7 +63,7 @@ namespace enso {
 thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
 thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
     queue_from_backend_;
-thread_local int64_t shinkansen_notif_buf_id_ = -1;
+int64_t shinkansen_notif_buf_id_ = -1;
 
 using BackendWrapper = std::function<void()>;
 BackendWrapper preempt_enable_;
@@ -188,8 +188,11 @@ class DevBackend {
           push_to_backend(pipe_notification);
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
-          uint64_t mask = (1L << 8L) - 1L;
+          std::cout << "Shinkansen notif buf ID: " << shinkansen_notif_buf_id_
+                    << std::endl;
+          uint64_t mask = enso::kMaxNbApps - 1;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
+          std::cout << "value: " << value << std::endl;
           break;
       }
       _enso_compiler_memory_barrier();
