@@ -65,7 +65,14 @@ thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
     queue_from_backend_;
 thread_local int64_t shinkansen_notif_buf_id_ = -1;
 
-int initialize_queues() {
+using BackendWrapper = std::function<void()>;
+BackendWrapper preempt_enable_;
+BackendWrapper preempt_disable_;
+
+int initialize_queues(BackendWrapper preempt_enable,
+                      BackendWrapper preempt_disable) {
+  (void)preempt_enable;
+  (void)preempt_disable;
   uint32_t core_id = sched_getcpu();
 
   std::string queue_to_app_name =
@@ -87,16 +94,22 @@ int initialize_queues() {
     return -1;
   }
 
+  preempt_enable_ = preempt_enable;
+  preempt_disable_ = preempt_disable;
+
   return 0;
 }
 
 void push_to_backend(PipeNotification* notif) {
+  std::invoke(preempt_disable_);
   while (queue_to_backend_->Push(*notif) != 0) {
   }
+  std::invoke(preempt_enable_);
 }
 
 std::optional<PipeNotification> push_to_backend_get_response(
     PipeNotification* notif) {
+  std::invoke(preempt_disable_);
   while (queue_to_backend_->Push(*notif) != 0) {
   }
   std::optional<PipeNotification> notification;
@@ -104,17 +117,22 @@ std::optional<PipeNotification> push_to_backend_get_response(
   // Block until receive.
   while (!(notification = queue_from_backend_->Pop())) {
   }
+  std::invoke(preempt_enable_);
   return notification;
 }
 
 void update_backend_queues() {
+  std::invoke(preempt_disable_);
   queue_from_backend_->UpdateHeadInHugePage();
   queue_to_backend_->UpdateTailInHugePage();
+  std::invoke(preempt_enable_);
 }
 
 void access_backend_queues() {
+  std::invoke(preempt_disable_);
   queue_from_backend_->AccessHeadFromHugePage();
   queue_to_backend_->AccessTailFromHugePage();
+  std::invoke(preempt_enable_);
 }
 
 class DevBackend {
@@ -389,12 +407,20 @@ class DevBackend {
    * @param notif_buf_id The notification buffer ID of the current device.
    */
   void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
-                    uint32_t last_tx_consumed_head) {
+                    uint32_t last_tx_consumed_head, bool get_notified,
+                    int32_t next_uthread_id) {
     struct YieldNotification yield_notification;
     yield_notification.type = NotifType::kUthreadWaiting;
     yield_notification.notif_buf_id = notif_buf_id;
     yield_notification.last_rx_notif_head = last_rx_notif_head;
     yield_notification.last_tx_consumed_head = last_tx_consumed_head;
+    yield_notification.get_notified = get_notified;
+    if (next_uthread_id >= 0) {
+      yield_notification.next_uthread_id = next_uthread_id;
+      yield_notification.next_uthread = 1;
+    } else {
+      yield_notification.next_uthread = 0;
+    }
 
     enso::PipeNotification* pipe_notification =
         (enso::PipeNotification*)&yield_notification;

@@ -46,7 +46,13 @@
 
 namespace enso {
 
-int initialize_queues() { return 0; }
+using BackendWrapper = std::function<void()>;
+int initialize_queues(BackendWrapper preempt_enable,
+                      BackendWrapper preempt_disable) {
+  (void)preempt_enable;
+  (void)preempt_disable;
+  return 0;
+}
 
 void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
 
@@ -144,10 +150,13 @@ class DevBackend {
    * @param notif_buf_id The notification buffer ID of the current device.
    */
   void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
-                    uint32_t last_tx_consumed_head) {
+                    uint32_t last_tx_consumed_head, bool get_notified,
+                    int32_t next_uthread_id) {
     (void)notif_buf_id;
     (void)last_rx_notif_head;
     (void)last_tx_consumed_head;
+    (void)get_notified;
+    (void)next_uthread_id;
   }
 
   /**

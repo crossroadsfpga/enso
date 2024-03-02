@@ -55,7 +55,10 @@
 
 namespace enso {
 
-void initialize_backend_queues() { return pcie_initialize_backend_queues(); }
+void initialize_backend_queues(BackendWrapper preempt_enable,
+                               BackendWrapper preempt_disable) {
+  return pcie_initialize_backend_queues(preempt_enable, preempt_disable);
+}
 
 void push_to_backend_queues(PipeNotification* notif) {
   return pcie_push_to_backend(notif);
@@ -444,8 +447,9 @@ void Device::ProcessCompletions() {
   }
 }
 
-void Device::SendUthreadYield() {
-  return send_uthread_yield(&notification_buf_pair_);
+void Device::SendUthreadYield(int32_t next_uthread_id, bool get_notified) {
+  return send_uthread_yield(&notification_buf_pair_, next_uthread_id,
+                            get_notified);
 }
 
 int Device::EnableTimeStamping() {

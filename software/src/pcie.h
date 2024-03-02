@@ -52,6 +52,7 @@
 namespace enso {
 
 using CompletionCallback = std::function<void()>;
+using BackendWrapper = std::function<void()>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
@@ -308,8 +309,13 @@ void pcie_access_queues();
  * yielded.
  *
  * @param notification_buf_pair  Notification buffer pair to use.
+ * @param next_uthread_id The ID of the next uthread that will be run.
+ * @param get_notified Whether the uthread should be added to the runqueue
+ * when new notification comes.
+ *
  */
-void send_uthread_yield(struct NotificationBufPair* notification_buf_pair);
+void send_uthread_yield(struct NotificationBufPair* notification_buf_pair,
+                        int32_t next_uthread_id, bool get_notified);
 
 /**
  * @brief Frees the notification buffer pair.
@@ -347,7 +353,8 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
  * @brief Initializes queues to and from backend for this thread.
  *
  */
-void pcie_initialize_backend_queues();
+void pcie_initialize_backend_queues(BackendWrapper preempt_enable,
+                                    BackendWrapper preempt_disable);
 
 /**
  * @brief Push notification to backend.

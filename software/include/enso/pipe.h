@@ -64,11 +64,14 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
+using BackendWrapper = std::function<void()>;
+
 /**
  * @brief Initializes queues to and from the backend.
  *
  */
-void initialize_backend_queues();
+void initialize_backend_queues(BackendWrapper preempt_enable,
+                               BackendWrapper preempt_disable);
 
 /**
  * @brief Pushes a notification to the backend.
@@ -368,9 +371,13 @@ class Device {
    * @brief Yields the current uthread to the running kthread, enabling other
    * uthreads to run on the current core.
    *
+   * @param next_uthread_id The ID of the next uthread that will be run.
+   * @param get_notified Whether the uthread should be added to the runqueue
+   * when new notification comes.
+   *
    * NOTE: Only to be used with the hybrid backend.
    */
-  void SendUthreadYield();
+  void SendUthreadYield(int32_t next_uthread_id, bool get_notified);
 
  private:
   struct TxPendingRequest {

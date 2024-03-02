@@ -708,12 +708,13 @@ uint64_t get_dev_addr_from_virt_addr(
   return dev_addr;
 }
 
-void send_uthread_yield(struct NotificationBufPair* notification_buf_pair) {
+void send_uthread_yield(struct NotificationBufPair* notification_buf_pair,
+                        int32_t next_uthread_id, bool get_notified) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  fpga_dev->YieldUthread(notification_buf_pair->id,
-                         notification_buf_pair->rx_head,
-                         notification_buf_pair->tx_head);
+  fpga_dev->YieldUthread(
+      notification_buf_pair->id, notification_buf_pair->rx_head,
+      notification_buf_pair->tx_head, get_notified, next_uthread_id);
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
@@ -798,7 +799,10 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   return (uint32_t)socket_entry->enso_pipe.id;
 }
 
-void pcie_initialize_backend_queues() { initialize_queues(); }
+void pcie_initialize_backend_queues(BackendWrapper preempt_enable,
+                                    BackendWrapper preempt_disable) {
+  initialize_queues(preempt_enable, preempt_disable);
+}
 
 void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }
 

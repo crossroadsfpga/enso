@@ -154,28 +154,29 @@ enum class NotifType : uint8_t {
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
   kUthreadWaiting = 12,
-  kKthreadYield = 13
+  kKthreadYield = 13,
+  kUthreadStart = 14
 };
 
 struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
-  uint64_t padding;
+  uint64_t padding[4];
 };
 
 struct FallbackNotification {
   NotifType type;
   uint64_t nb_fallback_queues;
   uint64_t result;
-  uint64_t padding;
+  uint64_t padding[4];
 };
 
 struct RoundRobinNotification {
   NotifType type;
   uint64_t round_robin;
   uint64_t result;
-  uint64_t padding;
+  uint64_t padding[4];
 };
 
 struct NotifBufNotification {
@@ -183,32 +184,33 @@ struct NotifBufNotification {
   uint64_t notif_buf_id;
   uint64_t uthread_id;
   uint64_t result;
+  uint64_t padding[3];
 };
 
 struct AllocatePipeNotification {
   NotifType type;
   uint64_t fallback;
   uint64_t pipe_id;
-  uint64_t padding;
+  uint64_t padding[4];
 };
 
 struct FreePipeNotification {
   NotifType type;
   uint64_t pipe_id;
   uint64_t result;
-  uint64_t padding;
+  uint64_t padding[4];
 };
 
 struct ShinkansenNotification {
   NotifType type;
   uint64_t notif_queue_id;
-  uint64_t padding[2];
+  uint64_t padding[5];
 };
 
 struct KthreadNotification {
   NotifType type;
   uint64_t application_id;
-  uint64_t padding[2];
+  uint64_t padding[5];
 };
 
 struct YieldNotification {
@@ -216,11 +218,20 @@ struct YieldNotification {
   uint64_t notif_buf_id;
   uint64_t last_rx_notif_head;
   uint64_t last_tx_consumed_head;
+  uint64_t get_notified;
+  uint64_t next_uthread;
+  uint64_t next_uthread_id;
+};
+
+struct UthreadStartNotification {
+  NotifType type;
+  uint64_t uthread_id;
+  uint64_t padding[5];
 };
 
 struct PipeNotification {
   NotifType type;
-  uint64_t data[3];
+  uint64_t data[6];
 };
 
 }  // namespace enso
