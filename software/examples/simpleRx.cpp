@@ -47,19 +47,11 @@
 #define DEFAULT_STATS_DELAY             1000
 #define ONE_MILLION                     1e6
 #define ONE_THOUSAND                    1e3
-#define FPGA_PACKET_OVERHEAD            24
+#define FPGA_PACKET_OVERHEAD            20
 #define MIN_PACKET_SIZE                 64
 
 using enso::Device;
 using enso::RxPipe;
-
-// structure to record RX stats
-struct RxStats {
-    RxStats() : pkts(0), bytes(0), batches(0) {}
-    uint64_t pkts;
-    uint64_t bytes;
-    uint64_t batches;
-};
 
 /*
  * Variables used to control the flow of the
@@ -68,9 +60,9 @@ struct RxStats {
 // used by the RX thread to keep receiving packets
 static int run = 1;
 // used to the main thread to detect when the RX thread exits to stop collecting stats
-static int done = 0;
+static bool keep_running = true;
 
-void rcv_pkts(std::vector<RxPipe*> rxPipes, RxStats *stats) {
+void rcv_pkts(std::vector<RxPipe*> rxPipes, enso::stats_t* stats) {
     while(run) {
         for(int i = 0; i < 2; i++) {
           auto& rxPipe = rxPipes[i];
@@ -82,16 +74,16 @@ void rcv_pkts(std::vector<RxPipe*> rxPipes, RxStats *stats) {
 
           for (auto pkt : batch) {
               (void) pkt;
-              ++(stats->pkts);
+              ++(stats->nb_pkts);
           }
           uint32_t batch_length = batch.processed_bytes();
-          stats->bytes += batch_length;
-          ++(stats->batches);
+          stats->recv_bytes += batch_length;
+          ++(stats->nb_batches);
           rxPipe->Clear();
         }
     }
     // set this so that the main thread exits
-    done = 1;
+    keep_running = false;
 }
 
 /*
@@ -127,52 +119,17 @@ int main() {
       rxPipes.push_back(rxPipe);
     }
 
-    // stats to record the metrics
-    RxStats *stats = (RxStats *) malloc(sizeof(RxStats));
-    if(stats == NULL) {
-        std::cerr << "Could not allocate RxStats buffer" << std::endl;
-        exit(1);
-    }
-    stats->pkts = 0;
-    stats->bytes = 0;
-    stats->batches = 0;
+    std::vector<enso::stats_t> thread_stats(1);
 
     // start the RX thread
-    std::thread rx_thread(rcv_pkts, rxPipes, stats);
-    while(!done) {
-        uint64_t last_rx_pkts = stats->pkts;
-        uint64_t last_rx_bytes = stats->bytes;
+    std::thread rx_thread(rcv_pkts, rxPipes, &thread_stats[0]);
+    enso::set_core_id(rx_thread, 0);
 
-        std::this_thread::sleep_for(
-                std::chrono::milliseconds(DEFAULT_STATS_DELAY));
-
-        uint64_t rx_bytes = stats->bytes;
-        uint64_t rx_pkts = stats->pkts;
-
-        double interval_s = DEFAULT_STATS_DELAY / 1000.;
-        uint64_t rx_pkt_diff = rx_pkts - last_rx_pkts;
-        uint64_t rx_goodput_mbps =
-            (rx_bytes - last_rx_bytes) * 8. / (ONE_MILLION * interval_s);
-        uint64_t rx_pkt_rate = (rx_pkt_diff / interval_s);
-        uint64_t rx_pkt_rate_kpps = rx_pkt_rate / ONE_THOUSAND;
-        uint64_t rx_tput_mbps = rx_goodput_mbps + FPGA_PACKET_OVERHEAD * 8 * rx_pkt_rate / ONE_MILLION;
-
-        std::cout << std::dec << "RX: Throughput: " << rx_tput_mbps << " Mbps"
-                  << " Rate: " << rx_pkt_rate_kpps << " kpps"
-                  <<  " #bytes: " << rx_bytes << " #packets: " << rx_pkts
-                  << std::endl;
-    }
+    // start the stats collection in the main thread
+    show_stats(thread_stats, &keep_running);
 
     rx_thread.join();
 
-    // print final stats
-    std::cout << "Total stats:" << std::endl;
-    std::cout << "RX bytes: " << stats->bytes << std::endl;
-    std::cout << "RX pkts: " << stats->pkts << std::endl;
-    std::cout << "RX batches: " << stats->batches << std::endl;
-
     dev.reset();
-    // clean up
-    free(stats);
     return 0;
 }
