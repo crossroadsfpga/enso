@@ -248,6 +248,19 @@ class DevBackend {
     return -1;
   }
 
+  void ProcessedCompletions(uint32_t notif_buf_id, uint32_t old_head,
+                            uint32_t new_head) {
+    struct CompletionNotification completion_notification;
+    completion_notification.type = NotifType::kProcessedCompletion;
+    completion_notification.notif_buf_id = notif_buf_id;
+    completion_notification.old_head = old_head;
+    completion_notification.new_head = new_head;
+    enso::PipeNotification* pipe_notification =
+        (enso::PipeNotification*)&completion_notification;
+
+    push_to_backend(pipe_notification);
+  }
+
   /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device.
@@ -403,32 +416,6 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
-
-  /**
-   * @brief Sends a message to the IOKernel that the uthread is yielding.
-   *
-   * @param notif_buf_id The notification buffer ID of the current device.
-   */
-  void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
-                    uint32_t last_tx_consumed_head, bool get_notified,
-                    int32_t next_uthread_id) {
-    struct YieldNotification yield_notification;
-    yield_notification.type = NotifType::kUthreadWaiting;
-    yield_notification.notif_buf_id = notif_buf_id;
-    yield_notification.last_rx_notif_head = last_rx_notif_head;
-    yield_notification.last_tx_consumed_head = last_tx_consumed_head;
-    yield_notification.get_notified = get_notified;
-    if (next_uthread_id >= 0) {
-      yield_notification.next_uthread_id = next_uthread_id;
-      yield_notification.next_uthread = 1;
-    } else {
-      yield_notification.next_uthread = 0;
-    }
-
-    enso::PipeNotification* pipe_notification =
-        (enso::PipeNotification*)&yield_notification;
-    push_to_backend(pipe_notification);
-  }
 
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept

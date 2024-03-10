@@ -305,19 +305,6 @@ void pcie_update_queues();
 void pcie_access_queues();
 
 /**
- * @brief Sends a message to the I/O Kernel indicating that this uthread has
- * yielded.
- *
- * @param notification_buf_pair  Notification buffer pair to use.
- * @param next_uthread_id The ID of the next uthread that will be run.
- * @param get_notified Whether the uthread should be added to the runqueue
- * when new notification comes.
- *
- */
-void send_uthread_yield(struct NotificationBufPair* notification_buf_pair,
-                        int32_t next_uthread_id, bool get_notified);
-
-/**
  * @brief Frees the notification buffer pair.
  *
  * @param notification_buf_pair Notification buffer pair to free.

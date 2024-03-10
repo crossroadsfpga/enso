@@ -368,6 +368,34 @@ class Device {
   int GetNotifQueueId() noexcept;
 
   /**
+   * @brief Get the RX Notif Queue virtual address.
+   *
+   * @return void*
+   */
+  struct RxNotification* GetRxNotifQueueBuf() noexcept;
+
+  /**
+   * @brief Get the TX Notif Queue virtual address.
+   *
+   * @return void*
+   */
+  struct TxNotification* GetTxNotifQueueBuf() noexcept;
+
+  /**
+   * @brief Get the current head of the RX notification buffer.
+   *
+   * @return uint32_t
+   */
+  uint32_t GetRxHead() noexcept;
+
+  /**
+   * @brief Get the current head of the TX notification buffer.
+   *
+   * @return uint32_t
+   */
+  uint32_t GetTxHead() noexcept;
+
+  /**
    * @brief Yields the current uthread to the running kthread, enabling other
    * uthreads to run on the current core.
    *

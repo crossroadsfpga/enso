@@ -629,6 +629,11 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
     head = (head + 1) % kNotificationBufSize;
   }
 
+  DevBackend* fpga_dev =
+      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
+  fpga_dev->ProcessedCompletions(notification_buf_pair->id,
+                                 notification_buf_pair->tx_head, head);
+
   notification_buf_pair->tx_head = head;
 }
 
@@ -706,15 +711,6 @@ uint64_t get_dev_addr_from_virt_addr(
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
   uint64_t dev_addr = fpga_dev->ConvertVirtAddrToDevAddr(virt_addr);
   return dev_addr;
-}
-
-void send_uthread_yield(struct NotificationBufPair* notification_buf_pair,
-                        int32_t next_uthread_id, bool get_notified) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  fpga_dev->YieldUthread(
-      notification_buf_pair->id, notification_buf_pair->rx_head,
-      notification_buf_pair->tx_head, get_notified, next_uthread_id);
 }
 
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {

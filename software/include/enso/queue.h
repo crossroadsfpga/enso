@@ -436,6 +436,11 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
     return data;
   }
 
+  inline bool IsEmpty() {
+    struct Parent::Element* current_element = &(Parent::buf_addr()[head_]);
+    return current_element->signal == 0;
+  }
+
  protected:
   explicit QueueConsumer(const std::string& queue_name, uint32_t core_id,
                          size_t size,

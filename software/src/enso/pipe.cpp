@@ -352,6 +352,18 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
+struct RxNotification* Device::GetRxNotifQueueBuf() noexcept {
+  return notification_buf_pair_.rx_buf;
+}
+
+struct TxNotification* Device::GetTxNotifQueueBuf() noexcept {
+  return notification_buf_pair_.tx_buf;
+}
+
+uint32_t Device::GetRxHead() noexcept { return notification_buf_pair_.rx_head; }
+
+uint32_t Device::GetTxHead() noexcept { return notification_buf_pair_.tx_head; }
+
 int Device::Init(int32_t uthread_id) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
@@ -445,11 +457,6 @@ void Device::ProcessCompletions() {
   for (RxTxPipe* pipe : rx_tx_pipes_) {
     pipe->ProcessCompletions();
   }
-}
-
-void Device::SendUthreadYield(int32_t next_uthread_id, bool get_notified) {
-  return send_uthread_yield(&notification_buf_pair_, next_uthread_id,
-                            get_notified);
 }
 
 int Device::EnableTimeStamping() {
