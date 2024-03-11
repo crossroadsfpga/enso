@@ -454,8 +454,6 @@ void Device::ProcessCompletions() {
       // for applications
       std::invoke(completion_callback_);
     } else {
-      std::cout << "process completions for tx pipe: " << tx_req.pipe_id
-                << std::endl;
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
       // increments app_end_ for the tx pipe by nb_bytes
       pipe->NotifyCompletion(tx_req.nb_bytes);
