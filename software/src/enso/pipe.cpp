@@ -92,7 +92,9 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
+  std::cout << "in peek" << std::endl;
   if (!next_pipe_) {
+    std::cout << "getting new tails" << std::endl;
     get_new_tails(notification_buf_pair_);
   }
   uint32_t ret = peek_next_batch_from_queue(
@@ -168,14 +170,19 @@ int RxTxPipe::Init(bool fallback) noexcept {
   return 0;
 }
 
-std::unique_ptr<Device> Device::Create(
-    const std::string& pcie_addr, const std::string& huge_page_prefix,
-    int32_t uthread_id, CompletionCallback completion_callback) noexcept {
-  std::unique_ptr<Device> dev(new (std::nothrow) Device(
-      uthread_id, completion_callback, pcie_addr, huge_page_prefix));
+std::unique_ptr<Device> Device::Create(const std::string& pcie_addr,
+                                       const std::string& huge_page_prefix,
+                                       int32_t uthread_id,
+                                       CompletionCallback completion_callback,
+                                       ParkCallback park_callback) noexcept {
+  std::unique_ptr<Device> dev(
+      new (std::nothrow) Device(uthread_id, completion_callback, park_callback,
+                                pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
+
+  set_park_callback(park_callback);
 
   if (dev->Init(uthread_id)) {
     return std::unique_ptr<Device>{};
@@ -409,7 +416,8 @@ int Device::ApplyConfig(struct TxNotification* notification) {
   tx_pending_requests_[tx_pr_tail_].pipe_id = -1;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = 0;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
-  return send_config(&notification_buf_pair_, notification);
+  return send_config(&notification_buf_pair_, notification,
+                     &completion_callback_);
 }
 
 void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
@@ -417,8 +425,13 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
   // tracker currently used inside send_to_queue.
   send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
 
+  std::cout << "finished sending to queue" << std::endl;
   uint32_t nb_pending_requests =
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
+
+  std::cout << "tx pr tail: " << tx_pr_tail_ << std::endl;
+  std::cout << "tx pr head: " << tx_pr_head_ << std::endl;
+  std::cout << "nb pending requests: " << nb_pending_requests << std::endl;
 
   // This will block until there is enough space to keep at least two requests.
   // We need space for two requests because the request may be split into two
@@ -427,7 +440,10 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
     ProcessCompletions();
     nb_pending_requests =
         (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
+    if (park_callback_) std::invoke(park_callback_);
   }
+
+  std::cout << "past while loop" << std::endl;
 
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = nb_bytes;

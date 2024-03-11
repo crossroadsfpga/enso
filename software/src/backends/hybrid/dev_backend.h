@@ -321,7 +321,6 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
-    std::cout << "get rr status" << std::endl;
     struct RoundRobinNotification rr_notification;
     rr_notification.type = NotifType::kGetRrStatus;
 
@@ -335,7 +334,6 @@ class DevBackend {
         (struct RoundRobinNotification*)&notification.value();
 
     assert(result->type == NotifType::kGetRrStatus);
-    std::cout << "got rr status" << std::endl;
     return result->round_robin;
   }
 

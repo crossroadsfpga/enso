@@ -52,12 +52,15 @@
 namespace enso {
 
 using CompletionCallback = std::function<void()>;
+using ParkCallback = std::function<void()>;
 using BackendWrapper = std::function<void()>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
+
+void set_park_callback(ParkCallback park_callback);
 
 /**
  * @brief Initializes the notification buffer pair.
@@ -249,7 +252,8 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair);
  * @return 0 on success, -1 on failure.
  */
 int send_config(struct NotificationBufPair* notification_buf_pair,
-                struct TxNotification* config_notification);
+                struct TxNotification* config_notification,
+                CompletionCallback* completion_callback = NULL);
 
 /**
  * @brief Get number of fallback queues currently in use.
