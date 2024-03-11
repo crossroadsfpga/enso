@@ -148,15 +148,20 @@ int TxPipe::Init() noexcept {
 }
 
 int RxTxPipe::Init(bool fallback) noexcept {
+  std::cout << "in rxtxpipe init" << std::endl;
   rx_pipe_ = device_->AllocateRxPipe(fallback);
   if (rx_pipe_ == nullptr) {
     return -1;
   }
 
+  std::cout << "allocated rx pipe" << std::endl;
+
   tx_pipe_ = device_->AllocateTxPipe(rx_pipe_->buf());
   if (tx_pipe_ == nullptr) {
     return -1;
   }
+
+  std::cout << "allocated tx pipe" << std::endl;
 
   last_tx_pipe_capacity_ = tx_pipe_->capacity();
 
@@ -404,8 +409,7 @@ int Device::ApplyConfig(struct TxNotification* notification) {
   tx_pending_requests_[tx_pr_tail_].pipe_id = -1;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = 0;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
-  return send_config(&notification_buf_pair_, notification,
-                     &completion_callback_);
+  return send_config(&notification_buf_pair_, notification);
 }
 
 void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {

@@ -188,11 +188,8 @@ class DevBackend {
           push_to_backend(pipe_notification);
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
-          std::cout << "Shinkansen notif buf ID: " << shinkansen_notif_buf_id_
-                    << std::endl;
           uint64_t mask = enso::kMaxNbApps - 1;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
-          std::cout << "value: " << value << std::endl;
           break;
       }
       _enso_compiler_memory_barrier();
@@ -324,6 +321,7 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() {
+    std::cout << "get rr status" << std::endl;
     struct RoundRobinNotification rr_notification;
     rr_notification.type = NotifType::kGetRrStatus;
 
@@ -337,6 +335,7 @@ class DevBackend {
         (struct RoundRobinNotification*)&notification.value();
 
     assert(result->type == NotifType::kGetRrStatus);
+    std::cout << "got rr status" << std::endl;
     return result->round_robin;
   }
 

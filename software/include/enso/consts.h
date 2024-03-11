@@ -230,7 +230,8 @@ struct KthreadNotification {
 
 struct YieldNotification {
   NotifType type;
-  uint64_t padding[6];
+  uint64_t voluntary;
+  uint64_t padding[5];
 };
 
 struct PipeNotification {

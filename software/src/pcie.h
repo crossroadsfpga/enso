@@ -249,8 +249,7 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair);
  * @return 0 on success, -1 on failure.
  */
 int send_config(struct NotificationBufPair* notification_buf_pair,
-                struct TxNotification* config_notification,
-                CompletionCallback* completion_callback = nullptr);
+                struct TxNotification* config_notification);
 
 /**
  * @brief Get number of fallback queues currently in use.

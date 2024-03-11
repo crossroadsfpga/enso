@@ -218,6 +218,7 @@ int update_fallback_queues_config(
   if (nb_fallback_queues < 0) {
     return nb_fallback_queues;
   }
+  std::cout << "got nb fallback queues" << std::endl;
 
   return configure_fallback_queues(notification_buf_pair, nb_fallback_queues,
                                    (bool)enable_rr);
