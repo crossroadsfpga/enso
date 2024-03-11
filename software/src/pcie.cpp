@@ -320,7 +320,6 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                            (uint32_t)(phys_addr >> 32),
                            notification_buf_pair->uio_mmap_bar2_addr);
   update_fallback_queues_config(notification_buf_pair);
-  std::cout << "finished enso_pipe_init" << std::endl;
   return enso_pipe_id;
 }
 
@@ -413,7 +412,7 @@ static _enso_always_inline uint32_t
 __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
-  std::cout << "consuming queue" << std::endl;
+  // std::cout << "consuming queue" << std::endl;
   uint32_t* enso_pipe_buf = enso_pipe->buf;
   uint32_t enso_pipe_head = enso_pipe->rx_tail;
   int queue_id = enso_pipe->id;
@@ -518,14 +517,14 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
-  std::cout << "advance pipe: " << rx_pkt_head << std::endl;
+  // std::cout << "advance pipe: " << rx_pkt_head << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, rx_pkt_head,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = rx_pkt_head;
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
-  std::cout << "fully advance pipe: " << enso_pipe->rx_tail << std::endl;
+  // std::cout << "fully advance pipe: " << enso_pipe->rx_tail << std::endl;
 
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
@@ -640,6 +639,10 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
     head = (head + 1) % kNotificationBufSize;
   }
 
+  // if (head != notification_buf_pair->tx_head)
+  //   std::cout << "updated tx head from " << notification_buf_pair->tx_head
+  //             << " to " << head << std::endl;
+
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
   fpga_dev->ProcessedCompletions(notification_buf_pair->id,
@@ -673,7 +676,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   struct TxNotification* tx_notification = tx_buf + tx_tail;
   *tx_notification = *config_notification;
-  std::cout << "transmitting tx notification at " << tx_tail << std::endl;
+  // std::cout << "transmitting tx notification at " << tx_tail << std::endl;
 
   tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;

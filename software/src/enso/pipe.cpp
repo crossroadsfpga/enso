@@ -92,9 +92,9 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
-  std::cout << "in peek" << std::endl;
+  // std::cout << "in peek" << std::endl;
   if (!next_pipe_) {
-    std::cout << "getting new tails" << std::endl;
+    // std::cout << "getting new tails" << std::endl;
     get_new_tails(notification_buf_pair_);
   }
   uint32_t ret = peek_next_batch_from_queue(
@@ -150,20 +150,15 @@ int TxPipe::Init() noexcept {
 }
 
 int RxTxPipe::Init(bool fallback) noexcept {
-  std::cout << "in rxtxpipe init" << std::endl;
   rx_pipe_ = device_->AllocateRxPipe(fallback);
   if (rx_pipe_ == nullptr) {
     return -1;
   }
 
-  std::cout << "allocated rx pipe" << std::endl;
-
   tx_pipe_ = device_->AllocateTxPipe(rx_pipe_->buf());
   if (tx_pipe_ == nullptr) {
     return -1;
   }
-
-  std::cout << "allocated tx pipe" << std::endl;
 
   last_tx_pipe_capacity_ = tx_pipe_->capacity();
 
@@ -425,13 +420,8 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
   // tracker currently used inside send_to_queue.
   send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
 
-  std::cout << "finished sending to queue" << std::endl;
   uint32_t nb_pending_requests =
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
-
-  std::cout << "tx pr tail: " << tx_pr_tail_ << std::endl;
-  std::cout << "tx pr head: " << tx_pr_head_ << std::endl;
-  std::cout << "nb pending requests: " << nb_pending_requests << std::endl;
 
   // This will block until there is enough space to keep at least two requests.
   // We need space for two requests because the request may be split into two
@@ -442,8 +432,6 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
         (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
     if (park_callback_) std::invoke(park_callback_);
   }
-
-  std::cout << "past while loop" << std::endl;
 
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = nb_bytes;
@@ -466,6 +454,8 @@ void Device::ProcessCompletions() {
       // for applications
       std::invoke(completion_callback_);
     } else {
+      std::cout << "process completions for tx pipe: " << tx_req.pipe_id
+                << std::endl;
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
       // increments app_end_ for the tx pipe by nb_bytes
       pipe->NotifyCompletion(tx_req.nb_bytes);
