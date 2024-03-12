@@ -101,15 +101,15 @@ int initialize_queues(BackendWrapper preempt_enable,
 }
 
 void push_to_backend(PipeNotification* notif) {
-  std::invoke(preempt_disable_);
+  // std::invoke(preempt_disable_);
   while (queue_to_backend_->Push(*notif) != 0) {
   }
-  std::invoke(preempt_enable_);
+  // std::invoke(preempt_enable_);
 }
 
 std::optional<PipeNotification> push_to_backend_get_response(
     PipeNotification* notif) {
-  std::invoke(preempt_disable_);
+  // std::invoke(preempt_disable_);
   while (queue_to_backend_->Push(*notif) != 0) {
   }
   std::optional<PipeNotification> notification;
@@ -117,22 +117,22 @@ std::optional<PipeNotification> push_to_backend_get_response(
   // Block until receive.
   while (!(notification = queue_from_backend_->Pop())) {
   }
-  std::invoke(preempt_enable_);
+  // std::invoke(preempt_enable_);
   return notification;
 }
 
 void update_backend_queues() {
-  std::invoke(preempt_disable_);
+  // std::invoke(preempt_disable_);
   queue_from_backend_->UpdateHeadInHugePage();
   queue_to_backend_->UpdateTailInHugePage();
-  std::invoke(preempt_enable_);
+  // std::invoke(preempt_enable_);
 }
 
 void access_backend_queues() {
-  std::invoke(preempt_disable_);
+  // std::invoke(preempt_disable_);
   queue_from_backend_->AccessHeadFromHugePage();
   queue_to_backend_->AccessTailFromHugePage();
-  std::invoke(preempt_enable_);
+  // std::invoke(preempt_enable_);
 }
 
 class DevBackend {
