@@ -247,7 +247,7 @@ static int parse_args(int argc, char** argv,
   parsed_args.rtt_hist_len = DEFAULT_HIST_LEN;
   parsed_args.stats_delay = DEFAULT_STATS_DELAY;
   parsed_args.nb_pcaps = 0;
-  parsed_args.window_size = 1000000000;
+  parsed_args.window_size = 100000000;
 
   while ((opt = getopt_long(argc, argv, short_options, long_options,
                             &long_index)) != EOF) {
@@ -418,6 +418,7 @@ struct PcapHandlerContext {
   uint32_t hugepage_offset;
   uint32_t nb_pcaps;
   pcap_t* pcaps[MAX_PCAPS];
+  std::string pcap_files[MAX_PCAPS];
 };
 
 struct RxStats {
@@ -647,21 +648,29 @@ void load_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
   const u_char* pkt_bytes;
   struct pcap_pkthdr header;
   uint64_t nb_bytes;
+  char errbuf[PCAP_ERRBUF_SIZE];
 
-  while (true) {
+  for (uint32_t pcap_idx = 0; pcap_idx < context->nb_pcaps; pcap_idx++) {
+    pcap_t* pcap = context->pcaps[pcap_idx];
     nb_bytes = 0;
-    for (uint32_t pcap_idx = 0; pcap_idx < context->nb_pcaps; pcap_idx++) {
-      pcap_t* pcap = context->pcaps[pcap_idx];
-      for (uint32_t pkt_idx = 0; pkt_idx < window_size; pkt_idx++) {
+
+    for (uint32_t pkt_idx = 0; pkt_idx < window_size; pkt_idx++) {
+      pkt_bytes = pcap_next(pcap, &header);
+      if (!pkt_bytes) {
+        pcap_close(context->pcaps[pcap_idx]);
+        context->pcaps[pcap_idx] =
+            pcap_open_offline(context->pcap_files[pcap_idx].c_str(), errbuf);
+        pcap = context->pcaps[pcap_idx];
         pkt_bytes = pcap_next(pcap, &header);
-        if (!pkt_bytes) break;
+      }
 
-        load_pkt(context, pkt_bytes);
+      load_pkt(context, pkt_bytes);
 
-        nb_bytes += enso::get_pkt_len(pkt_bytes);
+      nb_bytes += enso::get_pkt_len(pkt_bytes);
+      if (nb_bytes >= window_size) {
+        break;
       }
     }
-    if (nb_bytes == 0) return;
   }
 }
 
@@ -707,6 +716,7 @@ int main(int argc, char** argv) {
       return 2;
     }
     context.pcaps[i] = pcap;
+    context.pcap_files[i] = parsed_args.pcap_files[i];
   }
 
   load_pcaps(&context, parsed_args.window_size);
