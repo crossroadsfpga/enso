@@ -668,6 +668,8 @@ void load_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
 
       nb_bytes += enso::get_pkt_len(pkt_bytes);
       if (nb_bytes >= window_size) {
+        std::cout << "Loaded " << nb_bytes << " bytes of pcap file "
+                  << context->pcap_files[pcap_idx] << std::endl;
         break;
       }
     }
