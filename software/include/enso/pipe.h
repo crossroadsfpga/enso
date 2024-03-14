@@ -88,20 +88,6 @@ void push_to_backend_queues(PipeNotification* notif);
 std::optional<PipeNotification> push_to_backend_queues_get_response(
     PipeNotification* notif);
 
-/**
- * @brief Updates the huge page information for the queues to the I/O Kernel.
- *
- * @param notification_buf_pair  Notification buffer pair to use.
- */
-void update_queues();
-
-/**
- * @brief Accesses the queues in case some other thread has added to them.
- *
- * @param notification_buf_pair  Notification buffer pair to use.
- */
-void access_queues();
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);

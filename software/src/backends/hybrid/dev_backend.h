@@ -80,15 +80,15 @@ int initialize_queues(BackendWrapper preempt_enable,
   std::string queue_from_app_name =
       std::string(kIpcQueueFromAppName) + std::to_string(core_id) + "_";
 
-  queue_to_backend_ =
-      QueueProducer<PipeNotification>::Create(queue_from_app_name, core_id);
+  queue_to_backend_ = QueueProducer<PipeNotification>::Create(
+      queue_from_app_name, true, true, core_id);
   if (queue_to_backend_ == nullptr) {
     std::cerr << "Could not create queue to backend" << std::endl;
     return -1;
   }
 
-  queue_from_backend_ =
-      QueueConsumer<PipeNotification>::Create(queue_to_app_name, core_id);
+  queue_from_backend_ = QueueConsumer<PipeNotification>::Create(
+      queue_to_app_name, true, true, core_id);
   if (queue_from_backend_ == nullptr) {
     std::cerr << "Could not create queue from backend" << std::endl;
     return -1;
@@ -119,20 +119,6 @@ std::optional<PipeNotification> push_to_backend_get_response(
   }
   std::invoke(preempt_enable_);
   return notification;
-}
-
-void update_backend_queues() {
-  std::invoke(preempt_disable_);
-  queue_from_backend_->UpdateHeadInHugePage();
-  queue_to_backend_->UpdateTailInHugePage();
-  std::invoke(preempt_enable_);
-}
-
-void access_backend_queues() {
-  std::invoke(preempt_disable_);
-  queue_from_backend_->AccessHeadFromHugePage();
-  queue_to_backend_->AccessTailFromHugePage();
-  std::invoke(preempt_enable_);
 }
 
 class DevBackend {
@@ -170,6 +156,9 @@ class DevBackend {
         (uint64_t)((uint8_t*)addr - (uint8_t*)uio_mmap_bar2_addr);
     enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
     uint32_t offset = offset_addr % enso::kMemorySpacePerQueue;
+    uint64_t mask;
+    enso::PipeNotification* pipe_notification;
+    struct MmioNotification mmio_notification;
 
     if (queue_id < enso::kMaxNbFlows) {
       // Updates to RX pipe: write directly
@@ -177,19 +166,21 @@ class DevBackend {
       // queue
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
-          struct MmioNotification mmio_notification;
           mmio_notification.type = NotifType::kWrite;
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
 
-          enso::PipeNotification* pipe_notification =
-              (enso::PipeNotification*)&mmio_notification;
+          pipe_notification = (enso::PipeNotification*)&mmio_notification;
 
           push_to_backend(pipe_notification);
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
-          uint64_t mask = enso::kMaxNbApps - 1;
+          mask = enso::kMaxNbApps - 1;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
+          break;
+        case offsetof(struct enso::QueueRegs, rx_head):
+          // std::cout << "Writing to rx head with value " << value <<
+          // std::endl;
           break;
       }
       _enso_compiler_memory_barrier();

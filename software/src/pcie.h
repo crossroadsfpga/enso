@@ -297,17 +297,6 @@ uint64_t get_dev_addr_from_virt_addr(
     struct NotificationBufPair* notification_buf_pair, void* virt_addr);
 
 /**
- * @brief Updates the queues in case some other thread has added to them.
- */
-void pcie_update_queues();
-
-/**
- * @brief  Accesses the queue information stored in shared memory to ensure
- * that queues have been updated.
- */
-void pcie_access_queues();
-
-/**
  * @brief Frees the notification buffer pair.
  *
  * @param notification_buf_pair Notification buffer pair to free.
