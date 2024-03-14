@@ -52,15 +52,12 @@
 namespace enso {
 
 using CompletionCallback = std::function<void()>;
-using ParkCallback = std::function<void()>;
 using BackendWrapper = std::function<void()>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
-
-void set_park_callback(ParkCallback park_callback);
 
 /**
  * @brief Initializes the notification buffer pair.

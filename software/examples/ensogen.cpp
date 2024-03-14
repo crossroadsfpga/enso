@@ -649,7 +649,9 @@ void load_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
   struct pcap_pkthdr header;
   uint64_t nb_bytes;
   char errbuf[PCAP_ERRBUF_SIZE];
+  // uint64_t total_bytes = 0;
 
+  // while (total_bytes < BUFFER_SIZE) {
   for (uint32_t pcap_idx = 0; pcap_idx < context->nb_pcaps; pcap_idx++) {
     pcap_t* pcap = context->pcaps[pcap_idx];
     nb_bytes = 0;
@@ -672,6 +674,8 @@ void load_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
       }
     }
   }
+  //   total_bytes += nb_bytes;
+  // }
 }
 
 int main(int argc, char** argv) {

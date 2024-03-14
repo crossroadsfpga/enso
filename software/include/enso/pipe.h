@@ -121,7 +121,7 @@ uint32_t external_peek_next_batch_from_queue(
 class Device {
  public:
   using CompletionCallback = std::function<void()>;
-  using ParkCallback = std::function<void()>;
+
   /**
    * @brief Factory method to create a device.
    *
@@ -139,8 +139,7 @@ class Device {
   static std::unique_ptr<Device> Create(
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
-      CompletionCallback completion_callback = NULL,
-      ParkCallback park_callback = NULL) noexcept;
+      CompletionCallback completion_callback = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -419,11 +418,9 @@ class Device {
    * Use `Create` factory method to instantiate objects externally.
    */
   Device(int32_t uthread_id, CompletionCallback completion_callback,
-         ParkCallback park_callback, const std::string& pcie_addr,
-         std::string huge_page_prefix) noexcept
+         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
       : kPcieAddr(pcie_addr),
         completion_callback_(completion_callback),
-        park_callback_(park_callback),
         uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
@@ -455,7 +452,6 @@ class Device {
   uint16_t bdf_;
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_ = NULL;
-  ParkCallback park_callback_ = NULL;
   int32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;

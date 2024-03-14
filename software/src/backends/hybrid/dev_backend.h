@@ -245,19 +245,6 @@ class DevBackend {
     return -1;
   }
 
-  void ProcessedCompletions(uint32_t notif_buf_id, uint32_t old_head,
-                            uint32_t new_head) {
-    struct CompletionNotification completion_notification;
-    completion_notification.type = NotifType::kProcessedCompletion;
-    completion_notification.notif_buf_id = notif_buf_id;
-    completion_notification.old_head = old_head;
-    completion_notification.new_head = new_head;
-    enso::PipeNotification* pipe_notification =
-        (enso::PipeNotification*)&completion_notification;
-
-    push_to_backend(pipe_notification);
-  }
-
   /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device.
