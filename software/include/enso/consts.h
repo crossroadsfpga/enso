@@ -228,7 +228,7 @@ struct UthreadSwitchNotification {
   uint64_t last_tx_consumed_head;
   uint64_t next_uthread_id;
   uint64_t parking;
-  uint64_t padding;
+  uint64_t time;
 };
 
 struct UthreadCreateNotification {
