@@ -555,9 +555,9 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     // Block until we can send.
     while (unlikely(free_slots == 0)) {
       ++notification_buf_pair->tx_full_cnt;
-      if (park_callback_ != nullptr) {
-        std::invoke(park_callback_);
-      }
+      // if (park_callback_ != nullptr) {
+      //   std::invoke(park_callback_);
+      // }
       update_tx_head(notification_buf_pair);
       free_slots =
           (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
@@ -642,15 +642,6 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
     head = (head + 1) % kNotificationBufSize;
   }
 
-  // if (head != notification_buf_pair->tx_head)
-  //   std::cout << "updated tx head from " << notification_buf_pair->tx_head
-  //             << " to " << head << std::endl;
-
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  fpga_dev->ProcessedCompletions(notification_buf_pair->id,
-                                 notification_buf_pair->tx_head, head);
-
   notification_buf_pair->tx_head = head;
 }
 
@@ -672,9 +663,9 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
     update_tx_head(notification_buf_pair);
     free_slots =
         (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
-    if (park_callback_ != nullptr) {
-      std::invoke(park_callback_);
-    }
+    // if (park_callback_ != nullptr) {
+    //   std::invoke(park_callback_);
+    // }
   }
 
   struct TxNotification* tx_notification = tx_buf + tx_tail;
@@ -691,9 +682,9 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
       notification_buf_pair->nb_unreported_completions;
   while (notification_buf_pair->nb_unreported_completions ==
          nb_unreported_completions) {
-    if (park_callback_ != nullptr) {
-      std::invoke(park_callback_);
-    }
+    // if (park_callback_ != nullptr) {
+    //   std::invoke(park_callback_);
+    // }
     update_tx_head(notification_buf_pair);
   }
 
