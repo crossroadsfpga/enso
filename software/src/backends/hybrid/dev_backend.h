@@ -149,6 +149,12 @@ class DevBackend {
     return dev_->uio_mmap(size, mapping);
   }
 
+  static inline uint64_t rdtsc(void) {
+    uint32_t a, d;
+    asm volatile("rdtsc" : "=a"(a), "=d"(d));
+    return ((uint64_t)a) | (((uint64_t)d) << 32);
+  }
+
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value,
                                                void* uio_mmap_bar2_addr) {
@@ -164,6 +170,8 @@ class DevBackend {
       // Updates to RX pipe: write directly
       // push this to let shinkansen know about queue ID -> notification
       // queue
+      bool rx_mem_low = false;
+      uint64_t start, end;
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
           mmio_notification.type = NotifType::kWrite;
@@ -177,6 +185,7 @@ class DevBackend {
           // notification buffer ID 0
           mask = enso::kMaxNbApps - 1;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
+          rx_mem_low = true;
           break;
         case offsetof(struct enso::QueueRegs, rx_head):
           // std::cout << "Writing to rx head with value " << value <<
@@ -184,7 +193,13 @@ class DevBackend {
           break;
       }
       _enso_compiler_memory_barrier();
+      if (rx_mem_low) start = rdtsc();
       *addr = value;
+      if (rx_mem_low) {
+        end = rdtsc();
+        std::cout << "mmio write time for rx mem low: " << end - start
+                  << std::endl;
+      }
       return;
     }
     queue_id -= enso::kMaxNbFlows;

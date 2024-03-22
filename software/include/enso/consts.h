@@ -224,10 +224,10 @@ struct KthreadYieldNotification {
 struct UthreadSwitchNotification {
   NotifType type;
   uint64_t uthread_id;
-  uint64_t last_rx_notif_head;
-  uint64_t last_tx_consumed_head;
+  uint64_t last_heads;
   uint64_t next_uthread_id;
   uint64_t parking;
+  uint64_t application_id;
   uint64_t time;
 };
 
