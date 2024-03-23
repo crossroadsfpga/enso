@@ -334,6 +334,10 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     return 0;
   }
 
+  uint32_t* GetHeadPtr() { return head_addr_; }
+
+  uint32_t GetTail() { return tail_; }
+
  protected:
   explicit QueueProducer(const std::string& queue_name, uint32_t core_id,
                          size_t size, const std::string& huge_page_prefix,
@@ -372,6 +376,16 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
       }
 
       tail_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
+
+      huge_page_path =
+          huge_page_prefix_ + std::string(kHugePageQueueHeadPathPrefix);
+      addr = get_huge_page(huge_page_path, 0);
+      if (addr == nullptr) {
+        std::cerr << "Failed to allocate shared memory for head" << std::endl;
+        return -1;
+      }
+
+      head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
     }
 
     return 0;
@@ -383,6 +397,7 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
 
   uint32_t tail_ = 0;
   uint32_t* tail_addr_ = nullptr;
+  uint32_t* head_addr_ = nullptr;
   uint32_t core_id_;
   bool shared_ = false;
   bool print_ = false;
