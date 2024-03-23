@@ -109,6 +109,13 @@ class DevBackend {
     return *addr;
   }
 
+  void ProcessedCompletions(uint32_t notif_buf_id, uint32_t old_head,
+                            uint32_t new_head) {
+    (void)notif_buf_id;
+    (void)old_head;
+    (void)new_head;
+  }
+
   /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device (typically the physical
@@ -143,21 +150,6 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() { return dev_->get_rr_status(); }
-
-  /**
-   * @brief Sends a message to the IOKernel that the uthread is yielding.
-   *
-   * @param notif_buf_id The notification buffer ID of the current device.
-   */
-  void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
-                    uint32_t last_tx_consumed_head, bool get_notified,
-                    int32_t next_uthread_id) {
-    (void)notif_buf_id;
-    (void)last_rx_notif_head;
-    (void)last_tx_consumed_head;
-    (void)get_notified;
-    (void)next_uthread_id;
-  }
 
   /**
    * @brief Allocates a notification buffer.

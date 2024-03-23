@@ -52,12 +52,15 @@
 namespace enso {
 
 using CompletionCallback = std::function<void()>;
+using ParkCallback = std::function<void()>;
 using BackendWrapper = std::function<void()>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
+
+void set_park_callback(ParkCallback park_callback);
 
 /**
  * @brief Initializes the notification buffer pair.
@@ -250,7 +253,7 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair);
  */
 int send_config(struct NotificationBufPair* notification_buf_pair,
                 struct TxNotification* config_notification,
-                CompletionCallback* completion_callback = nullptr);
+                CompletionCallback* completion_callback = NULL);
 
 /**
  * @brief Get number of fallback queues currently in use.
@@ -292,30 +295,6 @@ int get_round_robin_status(struct NotificationBufPair* notification_buf_pair);
  */
 uint64_t get_dev_addr_from_virt_addr(
     struct NotificationBufPair* notification_buf_pair, void* virt_addr);
-
-/**
- * @brief Updates the queues in case some other thread has added to them.
- */
-void pcie_update_queues();
-
-/**
- * @brief  Accesses the queue information stored in shared memory to ensure
- * that queues have been updated.
- */
-void pcie_access_queues();
-
-/**
- * @brief Sends a message to the I/O Kernel indicating that this uthread has
- * yielded.
- *
- * @param notification_buf_pair  Notification buffer pair to use.
- * @param next_uthread_id The ID of the next uthread that will be run.
- * @param get_notified Whether the uthread should be added to the runqueue
- * when new notification comes.
- *
- */
-void send_uthread_yield(struct NotificationBufPair* notification_buf_pair,
-                        int32_t next_uthread_id, bool get_notified);
 
 /**
  * @brief Frees the notification buffer pair.
