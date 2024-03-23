@@ -646,11 +646,6 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
   //   std::cout << "updated tx head from " << notification_buf_pair->tx_head
   //             << " to " << head << std::endl;
 
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  fpga_dev->ProcessedCompletions(notification_buf_pair->id,
-                                 notification_buf_pair->tx_head, head);
-
   notification_buf_pair->tx_head = head;
 }
 
