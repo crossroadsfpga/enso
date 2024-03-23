@@ -81,14 +81,14 @@ int initialize_queues(BackendWrapper preempt_enable,
       std::string(kIpcQueueFromAppName) + std::to_string(core_id) + "_";
 
   queue_to_backend_ = QueueProducer<PipeNotification>::Create(
-      queue_from_app_name, true, true, core_id);
+      queue_from_app_name, -1, true, true, core_id);
   if (queue_to_backend_ == nullptr) {
     std::cerr << "Could not create queue to backend" << std::endl;
     return -1;
   }
 
   queue_from_backend_ = QueueConsumer<PipeNotification>::Create(
-      queue_to_app_name, true, true, core_id);
+      queue_to_app_name, -1, true, true, core_id);
   if (queue_from_backend_ == nullptr) {
     std::cerr << "Could not create queue from backend" << std::endl;
     return -1;
@@ -110,10 +110,13 @@ void push_to_backend(PipeNotification* notif) {
 std::optional<PipeNotification> push_to_backend_get_response(
     PipeNotification* notif) {
   // std::invoke(preempt_disable_);
+  // std::cout << "going to push, notif type: " << (int)notif->type <<
+  // std::endl;
   while (queue_to_backend_->Push(*notif) != 0) {
   }
   std::optional<PipeNotification> notification;
 
+  // std::cout << "sent!" << std::endl;
   // Block until receive.
   while (!(notification = queue_from_backend_->Pop())) {
   }
@@ -234,19 +237,6 @@ class DevBackend {
       return result->value;
     }
     return -1;
-  }
-
-  void ProcessedCompletions(uint32_t notif_buf_id, uint32_t old_head,
-                            uint32_t new_head) {
-    struct CompletionNotification completion_notification;
-    completion_notification.type = NotifType::kProcessedCompletion;
-    completion_notification.notif_buf_id = notif_buf_id;
-    completion_notification.old_head = old_head;
-    completion_notification.new_head = new_head;
-    enso::PipeNotification* pipe_notification =
-        (enso::PipeNotification*)&completion_notification;
-
-    push_to_backend(pipe_notification);
   }
 
   /**
@@ -421,6 +411,8 @@ class DevBackend {
    *        when informing it of new pipes.
    */
   uint64_t get_shinkansen_notif_buf_id() {
+    // std::cout << "Core " << sched_getcpu() << ": get sk notif buf id"
+    //           << std::endl;
     struct ShinkansenNotification sk_notification;
     sk_notification.type = NotifType::kGetShinkansenNotifBufId;
 
@@ -429,6 +421,7 @@ class DevBackend {
 
     std::optional<PipeNotification> notification =
         push_to_backend_get_response(pipe_notification);
+    // std::cout << "got id!" << std::endl;
 
     struct ShinkansenNotification* result =
         (struct ShinkansenNotification*)&notification.value();

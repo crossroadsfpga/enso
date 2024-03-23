@@ -154,8 +154,7 @@ enum class NotifType : uint8_t {
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
   kKthreadYield = 12,
-  kProcessedCompletion = 13,
-  kJoinedKthread = 14,
+  kJoinedKthread = 13,
 };
 
 struct MmioNotification {

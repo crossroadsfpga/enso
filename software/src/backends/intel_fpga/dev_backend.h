@@ -109,13 +109,6 @@ class DevBackend {
     return *addr;
   }
 
-  void ProcessedCompletions(uint32_t notif_buf_id, uint32_t old_head,
-                            uint32_t new_head) {
-    (void)notif_buf_id;
-    (void)old_head;
-    (void)new_head;
-  }
-
   /**
    * @brief Converts an address in the application's virtual address space to an
    *        address that can be used by the device (typically the physical
