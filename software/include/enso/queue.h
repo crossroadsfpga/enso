@@ -139,15 +139,17 @@ class Queue {
    * @return A unique pointer to the object or nullptr if the creation fails.
    */
   static std::unique_ptr<Subclass> Create(
-      const std::string& queue_name, bool shared = false, bool print = false,
-      uint32_t core_id = 0, size_t size = 0, bool join_if_exists = true,
+      const std::string& queue_name, int32_t application_id = -1,
+      bool shared = false, bool print = false, uint32_t core_id = 0,
+      size_t size = 0, bool join_if_exists = true,
       std::string huge_page_prefix = "") noexcept {
     if (huge_page_prefix == "") {
       huge_page_prefix = kHugePageDefaultPrefix;
     }
 
-    std::unique_ptr<Subclass> queue(new (std::nothrow) Subclass(
-        queue_name, core_id, size, huge_page_prefix, shared, print));
+    std::unique_ptr<Subclass> queue(
+        new (std::nothrow) Subclass(queue_name, core_id, size, huge_page_prefix,
+                                    application_id, shared, print));
 
     if (queue == nullptr) {
       return std::unique_ptr<Subclass>{};
@@ -268,6 +270,10 @@ class Queue {
       std::cerr << "Failed to allocate shared memory" << std::endl;
       return -1;
     }
+    // uint64_t phys = virt_to_phys(addr);
+    // std::cout << "creating queue " << huge_page_path_ << " phys addr: " <<
+    // phys
+    //           << std::endl;
     buf_addr_ = reinterpret_cast<Element*>(addr);
 
     if (create_queue) {
@@ -305,11 +311,16 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
    * @return 0 on success and a non-zero error code on failure.
    */
   inline int Push(const T& data) {
-    if (shared_) {
+    if (shared_ || application_id_ >= 0) {
       // std::cout << "accessed tail as " << *tail_addr_ << std::endl;
       tail_ = *tail_addr_;
     }
-    struct Parent::Element* current_element = &(Parent::buf_addr()[tail_]);
+    struct Parent::Element* current_element =
+        &(Parent::buf_addr()[tail_ & Parent::index_mask()]);
+    // uint64_t phys = virt_to_phys(Parent::buf_addr());
+    // std::cout << "trying to pushing to tail " << (tail_ &
+    // Parent::index_mask())
+    //           << " phys addr: " << phys << std::endl;
     if (unlikely(current_element->signal)) {
       return -1;  // Queue is full.
     }
@@ -320,30 +331,37 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     tmp_element->signal = 1;
     tmp_element->data = data;
 
-    if (shared_) {
-      // if (print_) std::cout << "pushing to tail " << tail_ << std::endl;
-      // std::cout << "updated tail to " << ((tail_ + 1) & Parent::index_mask())
+    // std::cout << "pushing to tail " << (tail_ & Parent::index_mask())
+    //           << " phys addr: " << phys << std::endl;
+    if (shared_ || application_id_ >= 0) {
+      // if (application_id_ >= 0)
+      //   std::cout << "pushing to tail " << (tail_ & Parent::index_mask())
+      //             << " phys addr: " << phys << std::endl;
+      // std::cout << "updated tail to " << ((tail_ + 1) &
+      // Parent::index_mask())
       //           << std::endl;
-      *tail_addr_ = (tail_ + 1) & Parent::index_mask();
+      *tail_addr_ = (tail_ + 1);
     }
 
     _mm512_storeu_si512((__m512i*)current_element, tmp_element_raw);
 
-    tail_ = (tail_ + 1) & Parent::index_mask();
+    tail_ = (tail_ + 1);
 
     return 0;
   }
 
-  uint32_t* GetHeadPtr() { return head_addr_; }
-
   uint32_t GetTail() { return tail_; }
+
+  uint32_t* GetHeadPtr() { return head_addr_; }
 
  protected:
   explicit QueueProducer(const std::string& queue_name, uint32_t core_id,
                          size_t size, const std::string& huge_page_prefix,
-                         bool shared, bool print) noexcept
+                         int32_t application_id, bool shared,
+                         bool print) noexcept
       : Queue<T, QueueProducer<T>>(queue_name, size, huge_page_prefix),
         core_id_(core_id),
+        application_id_(application_id),
         shared_(shared),
         print_(print),
         huge_page_prefix_(huge_page_prefix) {}
@@ -361,10 +379,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
       return -1;
     }
 
-    if (Parent::created_queue()) {
-      return 0;
-    }
-
     // Synchronize the pointer in case the queue is not empty.
     if (shared_) {
       std::string huge_page_path =
@@ -376,16 +390,38 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
       }
 
       tail_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
+    }
 
-      huge_page_path =
-          huge_page_prefix_ + std::string(kHugePageQueueHeadPathPrefix);
+    if (application_id_ >= 0) {
+      std::string huge_page_path = huge_page_prefix_ +
+                                   std::string(kHugePageQueueTailPathPrefix) +
+                                   ":" + std::to_string(application_id_);
+      void* addr = get_huge_page(huge_page_path, 0);
+      if (addr == nullptr) {
+        std::cerr << "Failed to allocate shared memory for tail" << std::endl;
+        return -1;
+      }
+
+      tail_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
+
+      // uint64_t phys = virt_to_phys(tail_addr_);
+      // std::cout << "phys tail address  of producer: " << phys << std::endl;
+
+      huge_page_path = huge_page_prefix_ +
+                       std::string(kHugePageQueueHeadPathPrefix) + ":" +
+                       std::to_string(application_id_);
       addr = get_huge_page(huge_page_path, 0);
       if (addr == nullptr) {
         std::cerr << "Failed to allocate shared memory for head" << std::endl;
         return -1;
       }
-
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
+
+      // phys = virt_to_phys(head_addr_);
+      // std::cout << "phys head address  of producer: " << phys << std::endl;
+
+      // std::cout << "producer: allocating head addr: " << head_addr_
+      //           << " for app " << application_id_ << std::endl;
     }
 
     return 0;
@@ -399,6 +435,7 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   uint32_t* tail_addr_ = nullptr;
   uint32_t* head_addr_ = nullptr;
   uint32_t core_id_;
+  int32_t application_id_ = -1;
   bool shared_ = false;
   bool print_ = false;
   std::string huge_page_prefix_;
@@ -428,7 +465,8 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
    * queue is empty.
    */
   inline T* Front() {
-    struct Parent::Element* current_element = &(Parent::buf_addr()[head_]);
+    struct Parent::Element* current_element =
+        &(Parent::buf_addr()[head_ & Parent::index_mask()]);
     if (!current_element->signal) {
       return nullptr;  // Queue is empty.
     }
@@ -441,34 +479,53 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
    * @return the data on success and an empty optional if the queue is empty.
    */
   inline std::optional<T> Pop() {
-    if (shared_) head_ = *head_addr_;
-    struct Parent::Element* current_element = &(Parent::buf_addr()[head_]);
+    if (shared_ || application_id_ >= 0) {
+      head_ = *head_addr_;
+    }
+    struct Parent::Element* current_element =
+        &(Parent::buf_addr()[head_ & Parent::index_mask()]);
+
+    // uint64_t phys = virt_to_phys(current_element);
+    // std::cout << "trying to pop from " << phys << " at head " << head_
+    //           << std::endl;
+
     if (!current_element->signal) {
       return {};  // Queue is empty.
     }
 
-    if (shared_) *head_addr_ = (head_ + 1) & Parent::index_mask();
-    // if (print_) std::cout << "popped from head " << head_ << std::endl;
+    if (shared_ || application_id_ >= 0) *head_addr_ = (head_ + 1);
+    // if (application_id_ >= 0)
+    //   std::cout << "popped from head " << (head_ & Parent::index_mask())
+    //             << std::endl;
 
     T data = current_element->data;
     current_element->signal = 0;
 
-    head_ = (head_ + 1) & Parent::index_mask();
+    head_ = (head_ + 1);
 
     return data;
   }
 
+  inline uint32_t GetHead() { return head_; }
+
   inline bool IsEmpty() {
-    struct Parent::Element* current_element = &(Parent::buf_addr()[head_]);
+    struct Parent::Element* current_element =
+        &(Parent::buf_addr()[head_ & Parent::index_mask()]);
+    // std::cout << "checking head " << (head_ & Parent::index_mask())
+    //           << " signal: " << current_element->signal
+    //           << " phys addr: " << virt_to_phys(Parent::buf_addr())
+    //           << std::endl;
     return current_element->signal == 0;
   }
 
  protected:
   explicit QueueConsumer(const std::string& queue_name, uint32_t core_id,
                          size_t size, const std::string& huge_page_prefix,
-                         bool shared, bool print) noexcept
+                         int32_t application_id, bool shared,
+                         bool print) noexcept
       : Queue<T, QueueConsumer<T>>(queue_name, size, huge_page_prefix),
         core_id_(core_id),
+        application_id_(application_id),
         shared_(shared),
         print_(print),
         huge_page_prefix_(huge_page_prefix) {}
@@ -486,10 +543,6 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
       return -1;
     }
 
-    if (Parent::created_queue()) {
-      return 0;
-    }
-
     // Synchronize the pointer in case the queue is not empty.
     if (shared_) {
       std::string huge_page_path =
@@ -502,6 +555,23 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
     }
 
+    if (application_id_ >= 0) {
+      std::string huge_page_path = huge_page_prefix_ +
+                                   std::string(kHugePageQueueHeadPathPrefix) +
+                                   ":" + std::to_string(application_id_);
+      void* addr = get_huge_page(huge_page_path, 0);
+      if (addr == nullptr) {
+        std::cerr << "Failed to allocate shared memory for head" << std::endl;
+        return -1;
+      }
+
+      head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
+      // uint64_t phys = virt_to_phys(head_addr_);
+      // std::cout << "phys head address  of consumer: " << phys << std::endl;
+      //   std::cout << "consumer: allocating head addr: " << head_addr_
+      //             << " for app " << application_id_ << std::endl;
+    }
+
     return 0;
   }
 
@@ -512,6 +582,7 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
   uint32_t head_ = 0;
   uint32_t* head_addr_ = nullptr;
   uint32_t core_id_;
+  int32_t application_id_ = -1;
   bool shared_ = false;
   bool print_ = false;
   std::string huge_page_prefix_;
