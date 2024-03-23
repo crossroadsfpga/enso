@@ -222,13 +222,7 @@ struct ShinkansenNotification {
   uint64_t padding[5];
 };
 
-struct KthreadNotification {
-  NotifType type;
-  uint64_t application_id;
-  uint64_t padding[5];
-};
-
-struct YieldNotification {
+struct KthreadYieldNotification {
   NotifType type;
   uint64_t voluntary;
   uint64_t padding[5];
