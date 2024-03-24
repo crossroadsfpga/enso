@@ -151,7 +151,9 @@ class DevBackend {
    */
   int AllocateNotifBuf(int32_t uthread_id) {
     (void)uthread_id;
-    return dev_->allocate_notif_buf();
+    int notif_buf_id = dev_->allocate_notif_buf();
+    notification_buf_id_ = notif_buf_id;
+    return notif_buf_id;
   }
 
   /**

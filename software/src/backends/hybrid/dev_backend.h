@@ -54,6 +54,7 @@
 #include "enso/consts.h"
 #include "enso/helpers.h"
 #include "enso/queue.h"
+#include "enso/shared.h"
 #include "intel_fpga_pcie_api.hpp"
 
 namespace enso {
@@ -179,6 +180,10 @@ class DevBackend {
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
           mask = enso::kMaxNbApps - 1;
+
+          pipe_ids_to_rx_mem_low_ptrs_[queue_id] = (void*)addr;
+          pipe_ids_to_rx_mem_low_[queue_id] = (value & ~(mask));
+
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
           break;
         case offsetof(struct enso::QueueRegs, rx_head):
