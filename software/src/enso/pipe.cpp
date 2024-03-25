@@ -55,9 +55,14 @@
 
 namespace enso {
 
-void initialize_backend_queues(BackendWrapper preempt_enable,
+void set_backend_core_id(uint32_t core_id) {
+  pcie_set_backend_core_id(core_id);
+}
+
+void initialize_backend_queues(uint32_t core_id, BackendWrapper preempt_enable,
                                BackendWrapper preempt_disable) {
-  return pcie_initialize_backend_queues(preempt_enable, preempt_disable);
+  return pcie_initialize_backend_queues(core_id, preempt_enable,
+                                        preempt_disable);
 }
 
 void push_to_backend_queues(PipeNotification* notif) {

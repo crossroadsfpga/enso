@@ -58,38 +58,46 @@
 
 namespace enso {
 
+#define NCPU 256
+
+std::array<std::unique_ptr<QueueProducer<PipeNotification>>, NCPU>
+    queues_to_backend_ = {0};
+std::array<std::unique_ptr<QueueConsumer<PipeNotification>>, NCPU>
+    queues_from_backend_ = {0};
+
 // These queues are per-kthread, not per-uthread, given that they are
 // thread-local. Will automatically update when switching cores.
-thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
-thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
-    queue_from_backend_;
+int32_t thread_local core_id_ = -1;
 int64_t shinkansen_notif_buf_id_ = -1;
 
 using BackendWrapper = std::function<void()>;
 BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
 
-int initialize_queues(BackendWrapper preempt_enable,
+int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
                       BackendWrapper preempt_disable) {
   (void)preempt_enable;
   (void)preempt_disable;
-  uint32_t core_id = sched_getcpu();
+  core_id_ = core_id;
+  if (queues_to_backend_[core_id] != nullptr) return -1;
+
+  // std::cout << "Initializing queue for core " << core_id << std::endl;
 
   std::string queue_to_app_name =
       std::string(kIpcQueueToAppName) + std::to_string(core_id) + "_";
   std::string queue_from_app_name =
       std::string(kIpcQueueFromAppName) + std::to_string(core_id) + "_";
 
-  queue_to_backend_ = QueueProducer<PipeNotification>::Create(
+  queues_to_backend_[core_id] = QueueProducer<PipeNotification>::Create(
       queue_from_app_name, -1, true, true, core_id);
-  if (queue_to_backend_ == nullptr) {
+  if (queues_to_backend_[core_id] == nullptr) {
     std::cerr << "Could not create queue to backend" << std::endl;
     return -1;
   }
 
-  queue_from_backend_ = QueueConsumer<PipeNotification>::Create(
+  queues_from_backend_[core_id] = QueueConsumer<PipeNotification>::Create(
       queue_to_app_name, -1, true, true, core_id);
-  if (queue_from_backend_ == nullptr) {
+  if (queues_from_backend_[core_id] == nullptr) {
     std::cerr << "Could not create queue from backend" << std::endl;
     return -1;
   }
@@ -100,25 +108,36 @@ int initialize_queues(BackendWrapper preempt_enable,
   return 0;
 }
 
+void set_backend_core_id_dev(uint32_t core_id) { core_id_ = core_id; }
+
 void push_to_backend(PipeNotification* notif) {
+  if (core_id_ < 0) {
+    std::cerr << "ERROR: Must specify a core ID when pushing to the backend."
+              << std::endl;
+    exit(2);
+  }
   // std::invoke(preempt_disable_);
-  while (queue_to_backend_->Push(*notif) != 0) {
+  while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
   }
   // std::invoke(preempt_enable_);
 }
 
 std::optional<PipeNotification> push_to_backend_get_response(
     PipeNotification* notif) {
+  if (core_id_ < 0) {
+    std::cerr << "ERROR: Must specify a core ID when pushing to the backend."
+              << std::endl;
+    exit(2);
+  }
+
   // std::invoke(preempt_disable_);
-  // std::cout << "going to push, notif type: " << (int)notif->type <<
-  // std::endl;
-  while (queue_to_backend_->Push(*notif) != 0) {
+  while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
   }
   std::optional<PipeNotification> notification;
 
   // std::cout << "sent!" << std::endl;
   // Block until receive.
-  while (!(notification = queue_from_backend_->Pop())) {
+  while (!(notification = queues_from_backend_[core_id_]->Pop())) {
   }
   // std::invoke(preempt_enable_);
   return notification;
