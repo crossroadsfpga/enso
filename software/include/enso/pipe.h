@@ -66,11 +66,13 @@ class PeekPktIterator;
 
 using BackendWrapper = std::function<void()>;
 
+void set_backend_core_id(uint32_t core_id);
+
 /**
  * @brief Initializes queues to and from the backend.
  *
  */
-void initialize_backend_queues(BackendWrapper preempt_enable,
+void initialize_backend_queues(uint32_t core_id, BackendWrapper preempt_enable,
                                BackendWrapper preempt_disable);
 
 /**

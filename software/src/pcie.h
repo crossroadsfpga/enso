@@ -328,11 +328,14 @@ int dma_finish(struct SocketInternal* socket_entry);
  */
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 
+void pcie_set_backend_core_id(uint32_t core_id);
+
 /**
  * @brief Initializes queues to and from backend for this thread.
  *
  */
-void pcie_initialize_backend_queues(BackendWrapper preempt_enable,
+void pcie_initialize_backend_queues(uint32_t core_id,
+                                    BackendWrapper preempt_enable,
                                     BackendWrapper preempt_disable);
 
 /**
