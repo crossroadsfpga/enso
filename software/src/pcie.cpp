@@ -807,13 +807,18 @@ int dma_finish(struct SocketInternal* socket_entry) {
   return 0;
 }
 
+void pcie_set_backend_core_id(uint32_t core_id) {
+  set_backend_core_id_dev(core_id);
+}
+
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   return (uint32_t)socket_entry->enso_pipe.id;
 }
 
-void pcie_initialize_backend_queues(BackendWrapper preempt_enable,
+void pcie_initialize_backend_queues(uint32_t core_id,
+                                    BackendWrapper preempt_enable,
                                     BackendWrapper preempt_disable) {
-  initialize_queues(preempt_enable, preempt_disable);
+  initialize_queues(core_id, preempt_enable, preempt_disable);
 }
 
 void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }
