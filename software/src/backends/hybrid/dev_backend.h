@@ -111,6 +111,7 @@ int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
 void set_backend_core_id_dev(uint32_t core_id) { core_id_ = core_id; }
 
 void push_to_backend(PipeNotification* notif) {
+  assert(core_id_ == sched_getcpu());
   if (core_id_ < 0) {
     std::cerr << "ERROR: Must specify a core ID when pushing to the backend."
               << std::endl;
@@ -124,6 +125,7 @@ void push_to_backend(PipeNotification* notif) {
 
 std::optional<PipeNotification> push_to_backend_get_response(
     PipeNotification* notif) {
+  assert(core_id_ == sched_getcpu());
   if (core_id_ < 0) {
     std::cerr << "ERROR: Must specify a core ID when pushing to the backend."
               << std::endl;
