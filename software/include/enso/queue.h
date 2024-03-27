@@ -320,8 +320,8 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     tmp_element->signal = 1;
     tmp_element->data = data;
 
+    // if (print_) std::cout << "pushing to tail " << tail_ << std::endl;
     if (shared_) {
-      // if (print_) std::cout << "pushing to tail " << tail_ << std::endl;
       // std::cout << "updated tail to " << ((tail_ + 1) & Parent::index_mask())
       //           << std::endl;
       *tail_addr_ = (tail_ + 1) & Parent::index_mask();
