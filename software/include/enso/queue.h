@@ -402,6 +402,10 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
         return -1;
       }
 
+      // std::cout << "Initializing queue producer for core " << core_id_
+      //           << " with tail huge page path: " << huge_page_path <<
+      //           std::endl;
+
       tail_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
 
       // uint64_t phys = virt_to_phys(tail_addr_);
@@ -415,6 +419,11 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
         std::cerr << "Failed to allocate shared memory for head" << std::endl;
         return -1;
       }
+
+      // std::cout << "Initializing queue producer for core " << core_id_
+      //           << " with head huge page path: " << huge_page_path <<
+      //           std::endl;
+
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
 
       // phys = virt_to_phys(head_addr_);
@@ -564,6 +573,10 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
         std::cerr << "Failed to allocate shared memory for head" << std::endl;
         return -1;
       }
+
+      // std::cout << "Initializing queue consumer for core " << core_id_
+      //           << " with head huge page path: " << huge_page_path <<
+      //           std::endl;
 
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
       // uint64_t phys = virt_to_phys(head_addr_);
