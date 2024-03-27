@@ -108,7 +108,11 @@ int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
   return 0;
 }
 
-void set_backend_core_id_dev(uint32_t core_id) { core_id_ = core_id; }
+void set_backend_core_id_dev(uint32_t core_id) {
+  assert(core_id == sched_getcpu());
+  core_id_ = core_id;
+  initialize_queues(core_id, preempt_enable_, preempt_disable_);
+}
 
 void push_to_backend(PipeNotification* notif) {
   assert(core_id_ == sched_getcpu());
@@ -117,6 +121,7 @@ void push_to_backend(PipeNotification* notif) {
               << std::endl;
     exit(2);
   }
+  initialize_queues(core_id_, preempt_enable_, preempt_disable_);
   // std::invoke(preempt_disable_);
   while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
   }
@@ -131,6 +136,7 @@ std::optional<PipeNotification> push_to_backend_get_response(
               << std::endl;
     exit(2);
   }
+  initialize_queues(core_id_, preempt_enable_, preempt_disable_);
 
   // std::invoke(preempt_disable_);
   while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
@@ -141,6 +147,7 @@ std::optional<PipeNotification> push_to_backend_get_response(
   // Block until receive.
   while (!(notification = queues_from_backend_[core_id_]->Pop())) {
   }
+
   // std::invoke(preempt_enable_);
   return notification;
 }
@@ -195,7 +202,7 @@ class DevBackend {
       // push this to let shinkansen know about queue ID -> notification
       // queue
       bool rx_mem_low = false;
-      uint64_t start, end;
+      // uint64_t start, end;
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
           mmio_notification.type = NotifType::kWrite;
@@ -217,12 +224,12 @@ class DevBackend {
           break;
       }
       _enso_compiler_memory_barrier();
-      if (rx_mem_low) start = rdtsc();
+      // if (rx_mem_low) start = rdtsc();
       *addr = value;
       if (rx_mem_low) {
-        end = rdtsc();
-        std::cout << "mmio write time for rx mem low: " << end - start
-                  << std::endl;
+        // end = rdtsc();
+        // std::cout << "mmio write time for rx mem low: " << end - start
+        //           << std::endl;
       }
       return;
     }
@@ -368,6 +375,7 @@ class DevBackend {
                 << std::endl;
       exit(2);
     }
+    // std::cout << "allocating notif buf" << std::endl;
     struct NotifBufNotification nb_notification;
     nb_notification.type = NotifType::kAllocateNotifBuf;
     nb_notification.uthread_id = (uint64_t)uthread_id;
@@ -380,6 +388,8 @@ class DevBackend {
 
     struct NotifBufNotification* result =
         (struct NotifBufNotification*)&notification.value();
+
+    // std::cout << "recvd response from allocatenotifbuf" << std::endl;
 
     assert(result->type == NotifType::kAllocateNotifBuf);
     return result->notif_buf_id;
