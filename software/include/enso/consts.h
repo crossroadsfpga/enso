@@ -156,7 +156,6 @@ enum class NotifType : uint8_t {
   kKthreadYield = 12,
   kUthreadSwitch = 13,
   kJoinedKthread = 14,
-  kUthreadCreate = 15,
 };
 
 struct MmioNotification {
