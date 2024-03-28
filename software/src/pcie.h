@@ -334,9 +334,8 @@ void pcie_set_backend_core_id(uint32_t core_id);
  * @brief Initializes queues to and from backend for this thread.
  *
  */
-void pcie_initialize_backend_queues(uint32_t core_id,
-                                    BackendWrapper preempt_enable,
-                                    BackendWrapper preempt_disable);
+void pcie_initialize_backend(BackendWrapper preempt_enable,
+                             BackendWrapper preempt_disable);
 
 /**
  * @brief Push notification to backend.

@@ -819,10 +819,9 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   return (uint32_t)socket_entry->enso_pipe.id;
 }
 
-void pcie_initialize_backend_queues(uint32_t core_id,
-                                    BackendWrapper preempt_enable,
-                                    BackendWrapper preempt_disable) {
-  initialize_queues(core_id, preempt_enable, preempt_disable);
+void pcie_initialize_backend(BackendWrapper preempt_enable,
+                             BackendWrapper preempt_disable) {
+  initialize_backend_dev(preempt_enable, preempt_disable);
 }
 
 void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }

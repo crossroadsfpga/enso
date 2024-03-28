@@ -74,10 +74,7 @@ using BackendWrapper = std::function<void()>;
 BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
 
-int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
-                      BackendWrapper preempt_disable) {
-  (void)preempt_enable;
-  (void)preempt_disable;
+int initialize_queues(uint32_t core_id) {
   core_id_ = core_id;
   if (queues_to_backend_[core_id] != nullptr) return -1;
 
@@ -102,43 +99,47 @@ int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
     return -1;
   }
 
+  return 0;
+}
+
+void initialize_backend_dev(BackendWrapper preempt_enable,
+                            BackendWrapper preempt_disable) {
   preempt_enable_ = preempt_enable;
   preempt_disable_ = preempt_disable;
-
-  return 0;
 }
 
 void set_backend_core_id_dev(uint32_t core_id) {
   assert(core_id == sched_getcpu());
   core_id_ = core_id;
-  initialize_queues(core_id, preempt_enable_, preempt_disable_);
+  initialize_queues(core_id);
 }
 
 void push_to_backend(PipeNotification* notif) {
+  std::invoke(preempt_disable_);
   assert(core_id_ == sched_getcpu());
   if (core_id_ < 0) {
     std::cerr << "ERROR: Must specify a core ID when pushing to the backend."
               << std::endl;
     exit(2);
   }
-  initialize_queues(core_id_, preempt_enable_, preempt_disable_);
-  // std::invoke(preempt_disable_);
+  initialize_queues(core_id_);
   while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
   }
-  // std::invoke(preempt_enable_);
+  std::invoke(preempt_enable_);
 }
 
 std::optional<PipeNotification> push_to_backend_get_response(
     PipeNotification* notif) {
+  std::invoke(preempt_disable_);
+
   assert(core_id_ == sched_getcpu());
   if (core_id_ < 0) {
     std::cerr << "ERROR: Must specify a core ID when pushing to the backend."
               << std::endl;
     exit(2);
   }
-  initialize_queues(core_id_, preempt_enable_, preempt_disable_);
+  initialize_queues(core_id_);
 
-  // std::invoke(preempt_disable_);
   while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
   }
   std::optional<PipeNotification> notification;
@@ -148,7 +149,7 @@ std::optional<PipeNotification> push_to_backend_get_response(
   while (!(notification = queues_from_backend_[core_id_]->Pop())) {
   }
 
-  // std::invoke(preempt_enable_);
+  std::invoke(preempt_enable_);
   return notification;
 }
 

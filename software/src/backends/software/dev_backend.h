@@ -66,6 +66,12 @@ int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
   return 0;
 }
 
+void initialize_backend_dev(BackendWrapper preempt_enable,
+                            BackendWrapper preempt_disable) {
+  (void)preempt_enable;
+  (void)preempt_disable;
+}
+
 void set_backend_core_id_dev(uint32_t core_id) { (void)core_id; }
 
 void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
