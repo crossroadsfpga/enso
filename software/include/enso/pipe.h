@@ -72,8 +72,8 @@ void set_backend_core_id(uint32_t core_id);
  * @brief Initializes queues to and from the backend.
  *
  */
-void initialize_backend_queues(uint32_t core_id, BackendWrapper preempt_enable,
-                               BackendWrapper preempt_disable);
+void initialize_backend(BackendWrapper preempt_enable,
+                        BackendWrapper preempt_disable);
 
 /**
  * @brief Pushes a notification to the backend.

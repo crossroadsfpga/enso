@@ -61,10 +61,6 @@ thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
     queue_from_backend_;
 
 using BackendWrapper = std::function<void()>;
-int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
-                      BackendWrapper preempt_disable) {
-  return 0;
-}
 
 void set_backend_core_id_dev(uint32_t core_id) { (void)core_id; }
 
