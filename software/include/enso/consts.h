@@ -163,14 +163,6 @@ struct MmioNotification {
   uint64_t padding[4];
 };
 
-struct CompletionNotification {
-  NotifType type;
-  uint64_t notif_buf_id;
-  uint64_t old_head;
-  uint64_t new_head;
-  uint64_t padding[3];
-};
-
 struct JoinedNotification {
   NotifType type;
   uint32_t application_id;

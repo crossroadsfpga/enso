@@ -430,7 +430,7 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
     ProcessCompletions();
     nb_pending_requests =
         (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
-    if (park_callback_) std::invoke(park_callback_);
+    // if (park_callback_) std::invoke(park_callback_);
   }
 
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;

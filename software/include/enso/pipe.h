@@ -385,18 +385,6 @@ class Device {
    */
   uint32_t GetTxHead() noexcept;
 
-  /**
-   * @brief Yields the current uthread to the running kthread, enabling other
-   * uthreads to run on the current core.
-   *
-   * @param next_uthread_id The ID of the next uthread that will be run.
-   * @param get_notified Whether the uthread should be added to the runqueue
-   * when new notification comes.
-   *
-   * NOTE: Only to be used with the hybrid backend.
-   */
-  void SendUthreadYield(int32_t next_uthread_id, bool get_notified);
-
  private:
   struct TxPendingRequest {
     int pipe_id;
