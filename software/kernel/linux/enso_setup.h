@@ -11,6 +11,9 @@
 #include <linux/uaccess.h>
 #include <linux/mm.h>
 #include <asm/io.h>
+#include <linux/kthread.h>
+#include <linux/delay.h>
+#include <linux/spinlock.h>
 
 #define ENSO_DRIVER_NAME        "enso"
 #define NOTIFICATION_BUF_SIZE   16384
@@ -60,6 +63,16 @@ struct enso_global_bookkeep {
   struct dev_bookkeep *dev_bk;
 };
 
+struct tx_queue_node {
+    struct enso_send_tx_pipe_params *batch;
+    struct tx_queue_node *next;
+};
+
+struct tx_queue_head {
+    struct tx_queue_node *front;
+    struct tx_queue_node *rear;
+};
+
 /**
  * struct dev_bookkeep - Bookkeeping structure per device.
  *
@@ -82,6 +95,12 @@ struct dev_bookkeep {
   bool enable_rr;
   uint8_t *notif_q_status;
   uint8_t *pipe_status;
+  struct task_struct *enso_sched_thread;
+  struct tx_queue_head *queue_head;
+  spinlock_t lock;
+  bool sched_run;
+  // hack to make it work
+  struct notification_buf_pair *notif_buf_pair;
 };
 
 /**

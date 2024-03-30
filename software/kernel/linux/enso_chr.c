@@ -56,6 +56,7 @@ static int enso_chr_open(struct inode *inode, struct file *filp) {
     goto failed_notif_buf_pair_alloc;
   }
   chr_dev_bk->notif_buf_pair->allocated = false;
+  dev_bk->notif_buf_pair = chr_dev_bk->notif_buf_pair;
 
   chr_dev_bk->rx_pipes = kzalloc(MAX_NB_FLOWS *
                                  sizeof(struct rx_pipe_internal *),
@@ -132,6 +133,7 @@ static int enso_chr_release(struct inode *inode, struct file *filp) {
   --dev_bk->chr_open_cnt;
   up(&dev_bk->sem);
 
+  // free the notification buffer
   free_notif_buf_pair(chr_dev_bk);
   free_rx_pipes(chr_dev_bk);
   kfree(chr_dev_bk->notif_q_status);
@@ -269,6 +271,7 @@ static void free_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk) {
   if(notif_buf_pair->wrap_tracker != NULL) {
     kfree(notif_buf_pair->wrap_tracker);
   }
+
   kfree(notif_buf_pair);
   chr_dev_bk->notif_buf_pair = NULL;
   return;

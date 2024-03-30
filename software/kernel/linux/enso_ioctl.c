@@ -1,4 +1,5 @@
 #include "enso_ioctl.h"
+#include <linux/kthread.h>
 
 /******************************************************************************
  * Static function prototypes
@@ -40,6 +41,8 @@ static uint32_t consume_queue(struct notification_buf_pair *notif_buf_pair,
 static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair);
 static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
                                 struct rx_pipe_internal **rx_enso_pipes);
+static int send_one_batch(struct notification_buf_pair *notif_buf_pair,
+                          struct enso_send_tx_pipe_params *stpp);
 
 /******************************************************************************
  * Device and I/O control function
@@ -276,6 +279,12 @@ static long alloc_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
       break;
     }
   }
+
+  dev_bk->enso_sched_thread = kthread_create(enso_sched, dev_bk, "enso_sched");
+  kthread_bind(dev_bk->enso_sched_thread, 1);
+  wake_up_process(dev_bk->enso_sched_thread);
+  dev_bk->sched_run = true;
+
 
   up(&dev_bk->sem);
 
@@ -656,93 +665,62 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
 static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
   struct enso_send_tx_pipe_params stpp;
   struct notification_buf_pair *notif_buf_pair = chr_dev_bk->notif_buf_pair;
-  struct tx_notification* tx_buf;
-  struct tx_notification* new_tx_notification;
   struct dev_bookkeep *dev_bk;
-  uint32_t tx_tail;
-  uint32_t missing_bytes;
-  uint32_t missing_bytes_in_page;
-  uint8_t wrap_tracker_mask;
+  struct tx_queue_node *new_node = NULL;
+  struct tx_queue_head *qh = NULL;
+  struct tx_queue_node *last_node = NULL;
 
-  uint64_t transf_addr;
-  uint64_t hugepage_mask;
-  uint64_t hugepage_base_addr;
-  uint64_t hugepage_boundary;
-  uint64_t huge_page_offset;
-  uint32_t free_slots;
-  uint32_t req_length;
-
-  uint32_t buf_page_size = HUGE_PAGE_SIZE;
-
-  // printk(KERN_CRIT "Send TX Pipe\n");
   if (copy_from_user(&stpp, (void __user *)uarg, sizeof(stpp))) {
     printk("couldn't copy arg from user.");
     return -EFAULT;
   }
 
-  if(notif_buf_pair == NULL) {
+  if (notif_buf_pair == NULL) {
     printk("Notification buffer is invalid");
     return -EFAULT;
   }
   dev_bk = chr_dev_bk->dev_bk;
 
+  // add the new batch to the queue
+  new_node = kzalloc(sizeof(struct tx_queue_node), GFP_KERNEL);
+  if (new_node == NULL) {
+      printk("Failed to allocated memory for the new queue node");
+      return -ENOMEM;
+  }
+  new_node->batch = kzalloc(sizeof(struct enso_send_tx_pipe_params), GFP_KERNEL);
+  if (new_node->batch == NULL) {
+      printk("Failed to allocated memory for the new queue node's batch");
+      kfree(new_node);
+      return -ENOMEM;
+  }
+  new_node->batch->phys_addr = stpp.phys_addr;
+  new_node->batch->id = stpp.id;
+  new_node->batch->len = stpp.len;
+  new_node->next = NULL;
+  qh = dev_bk->queue_head;
+
   if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
+    printk("send_tx: interrupted while attempting to obtain device semaphore.");
     return -ERESTARTSYS;
   }
 
-  tx_buf = notif_buf_pair->tx_buf;
-  tx_tail = notif_buf_pair->tx_tail;
-  missing_bytes = stpp.len;
+  spin_lock(&dev_bk->lock);
 
-  transf_addr = stpp.phys_addr;
-  hugepage_mask = ~((uint64_t)buf_page_size - 1);
-  hugepage_base_addr = transf_addr & hugepage_mask;
-  hugepage_boundary = hugepage_base_addr + buf_page_size;
-
-  //printk("Send request received from: %llx, %x, %x\n", stpp.phys_addr, stpp.len, stpp.id);
-
-  while (missing_bytes > 0) {
-    free_slots = (notif_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
-
-    // Block until we can send.
-    while (unlikely(free_slots == 0)) {
-      ++notif_buf_pair->tx_full_cnt;
-      update_tx_head(notif_buf_pair);
-      free_slots =
-          (notif_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
-    }
-
-    new_tx_notification = tx_buf + tx_tail;
-    req_length = (missing_bytes < MAX_TRANSFER_LEN) ? missing_bytes : MAX_TRANSFER_LEN;
-    missing_bytes_in_page = hugepage_boundary - transf_addr;
-    req_length = (req_length < missing_bytes_in_page) ? req_length : missing_bytes_in_page;
-
-    // If the transmission needs to be split among multiple requests, we
-    // need to set a bit in the wrap tracker.
-    wrap_tracker_mask = (missing_bytes > req_length) << (tx_tail & 0x7);
-    notif_buf_pair->wrap_tracker[tx_tail / 8] |= wrap_tracker_mask;
-
-    new_tx_notification->length = req_length;
-    new_tx_notification->signal = 1;
-    new_tx_notification->phys_addr = transf_addr;
-
-    huge_page_offset = (transf_addr + req_length) % (HUGE_PAGE_SIZE);
-    transf_addr = hugepage_base_addr + huge_page_offset;
-
-    tx_tail = (tx_tail + 1) % NOTIFICATION_BUF_SIZE;
-    missing_bytes -= req_length;
+  if(qh) {
+      if ((qh->front == NULL) && (qh->rear == NULL)) {
+          // first element in the queue
+          qh->front = new_node;
+          qh->rear = new_node;
+      }
+      else {
+          last_node = qh->rear;
+          if(last_node) {
+              last_node->next = new_node;
+              qh->rear = new_node;
+          }
+      }
   }
-
-  notif_buf_pair->tx_tail = tx_tail;
-  smp_wmb();
-  iowrite32(tx_tail, notif_buf_pair->tx_tail_ptr);
-
-  // req_length = 0;
-  // while(req_length < 27500) {
-  //   asm("nop");
-  //   req_length++;
-  // }
+  spin_unlock(&dev_bk->lock);
 
   up(&dev_bk->sem);
 
@@ -913,22 +891,22 @@ static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
 
   smp_rmb();
   while(ioread32(&rep_q_regs->rx_mem_low) != 0)
-      continue;
+    continue;
   smp_rmb();
   while(ioread32(&rep_q_regs->rx_mem_high) != 0)
-      continue;
+    continue;
 
   smp_wmb();
   iowrite32(0, &rep_q_regs->rx_tail);
   smp_rmb();
   while(ioread32(&rep_q_regs->rx_tail) != 0)
-      continue;
+    continue;
 
   smp_wmb();
   iowrite32(0, &rep_q_regs->rx_head);
   smp_rmb();
   while(ioread32(&rep_q_regs->rx_head) != 0)
-      continue;
+    continue;
 
   new_enso_rx_pipe->buf_head_ptr = (uint32_t*)&rep_q_regs->rx_head;
   new_enso_rx_pipe->rx_head = 0;
@@ -1277,7 +1255,7 @@ void free_rx_tx_buf(struct chr_dev_bookkeep *chr_dev_bk) {
 
 /**
  * update_tx_head() - Checks which TX notifications have been
- *                    processed and updated the relevant pointers
+ *                    processed and updates the relevant pointers
  *                    and variables in the notification_buf_pair.
  *                    Used by send_tx_pipe and get_unreported_completions.
  *
@@ -1467,4 +1445,100 @@ static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
   }
 
   return pipe_id;
+}
+
+int send_one_batch(struct notification_buf_pair *notif_buf_pair,
+                   struct enso_send_tx_pipe_params *stpp) {
+  struct tx_notification* tx_buf;
+  struct tx_notification* new_tx_notification;
+  uint32_t tx_tail;
+  uint32_t missing_bytes;
+  uint32_t missing_bytes_in_page;
+  uint8_t wrap_tracker_mask;
+
+  uint64_t transf_addr;
+  uint64_t hugepage_mask;
+  uint64_t hugepage_base_addr;
+  uint64_t hugepage_boundary;
+  uint64_t huge_page_offset;
+  uint32_t free_slots;
+  uint32_t req_length;
+  uint32_t buf_page_size = HUGE_PAGE_SIZE;
+
+  tx_buf = notif_buf_pair->tx_buf;
+  tx_tail = notif_buf_pair->tx_tail;
+  missing_bytes = stpp->len;
+
+  transf_addr = stpp->phys_addr;
+  hugepage_mask = ~((uint64_t)buf_page_size - 1);
+  hugepage_base_addr = transf_addr & hugepage_mask;
+  hugepage_boundary = hugepage_base_addr + buf_page_size;
+
+  while (missing_bytes > 0) {
+    free_slots = (notif_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
+
+    // Block until we can send.
+    while (unlikely(free_slots == 0)) {
+      ++notif_buf_pair->tx_full_cnt;
+      update_tx_head(notif_buf_pair);
+      free_slots =
+          (notif_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
+    }
+
+    new_tx_notification = tx_buf + tx_tail;
+    req_length = (missing_bytes < MAX_TRANSFER_LEN) ? missing_bytes : MAX_TRANSFER_LEN;
+    missing_bytes_in_page = hugepage_boundary - transf_addr;
+    req_length = (req_length < missing_bytes_in_page) ? req_length : missing_bytes_in_page;
+
+    // If the transmission needs to be split among multiple requests, we
+    // need to set a bit in the wrap tracker.
+    wrap_tracker_mask = (missing_bytes > req_length) << (tx_tail & 0x7);
+    notif_buf_pair->wrap_tracker[tx_tail / 8] |= wrap_tracker_mask;
+
+    new_tx_notification->length = req_length;
+    new_tx_notification->signal = 1;
+    new_tx_notification->phys_addr = transf_addr;
+
+    huge_page_offset = (transf_addr + req_length) % (HUGE_PAGE_SIZE);
+    transf_addr = hugepage_base_addr + huge_page_offset;
+
+    tx_tail = (tx_tail + 1) % NOTIFICATION_BUF_SIZE;
+    missing_bytes -= req_length;
+  }
+
+  notif_buf_pair->tx_tail = tx_tail;
+  smp_wmb();
+  iowrite32(tx_tail, notif_buf_pair->tx_tail_ptr);
+  return 0;
+}
+
+int enso_sched(void *data) {
+  struct dev_bookkeep *dev_bk = (struct dev_bookkeep *) data;
+  struct tx_queue_head *qh = dev_bk->queue_head;
+  struct notification_buf_pair *notif_buf_pair = dev_bk->notif_buf_pair;
+  struct tx_queue_node *first_node = NULL;
+
+  while (!kthread_should_stop()) {
+    // dequeue an element from the queue and send it
+    spin_lock(&dev_bk->lock);
+    if (qh != NULL) {
+      if(qh->front != NULL) {
+        first_node = qh->front;
+        qh->front = first_node->next;
+        if (qh->front == NULL) {
+            // we got the last element, set rear to NULL as well
+            qh->rear = NULL;
+        }
+        send_one_batch(notif_buf_pair, first_node->batch);
+        kfree(first_node->batch);
+        first_node->batch = NULL;
+        kfree(first_node);
+        first_node = NULL;
+      }
+    }
+    spin_unlock(&dev_bk->lock);
+    // yield();
+  }
+  printk("enso_sched exiting\n");
+  return 0;
 }

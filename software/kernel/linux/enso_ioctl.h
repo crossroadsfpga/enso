@@ -80,4 +80,6 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
                          unsigned long arg);
 int free_rx_pipe(struct rx_pipe_internal *pipe);
 
+int enso_sched(void *data);
+
 #endif  // SOFTWARE_KERNEL_LINUX_ENSO_IOCTL_H_

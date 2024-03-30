@@ -1,5 +1,6 @@
 #include "enso_setup.h"
 #include "enso_chr.h"
+#include "enso_ioctl.h"
 
 struct enso_global_bookkeep global_bk __read_mostly;
 
@@ -45,32 +46,74 @@ static __init int enso_init(void) {
   dev_bk->enable_rr = false;
   dev_bk->notif_q_status = kzalloc(MAX_NB_APPS / 8, GFP_KERNEL);
   if (dev_bk->notif_q_status == NULL) {
-    printk("couldn't create notification queue status");
+    printk("couldn't create notification queue status\n");
     kfree(dev_bk);
     return -ENOMEM;
   }
 
   dev_bk->pipe_status = kzalloc(MAX_NB_FLOWS / 8, GFP_KERNEL);
   if (dev_bk->pipe_status == NULL) {
-    printk("couldn't create pipe status for device ");
-    kfree(dev_bk);
+    printk("couldn't create pipe status for device\n");
     kfree(dev_bk->notif_q_status);
+    kfree(dev_bk);
     return -ENOMEM;
   }
+
+  dev_bk->queue_head = kzalloc(sizeof(struct tx_queue_head), GFP_KERNEL);
+  if (dev_bk->queue_head == NULL) {
+    printk("couldn't create queue head for device\n");
+    kfree(dev_bk->notif_q_status);
+    kfree(dev_bk->pipe_status);
+    kfree(dev_bk);
+    return -ENOMEM;
+  }
+  dev_bk->queue_head->front = NULL;
+  dev_bk->queue_head->rear = NULL;
+  spin_lock_init(&dev_bk->lock);
+  dev_bk->sched_run = false;
+
   global_bk.dev_bk = dev_bk;
+
   return 0;
 
 }
 module_init(enso_init);
 
 /*
- * enso_init(void): Unregisters the Enso driver.
+ * enso_exit(void): Unregisters the Enso driver.
  *
  * */
 static void enso_exit(void) {
   // unregister the character device
+  struct tx_queue_head *queue_head;
+  struct tx_queue_node *node;
+  struct tx_queue_node *to_free;
+  if(global_bk.dev_bk->sched_run) {
+    kthread_stop(global_bk.dev_bk->enso_sched_thread);
+  }
+
+  // free the queue
+  queue_head = global_bk.dev_bk->queue_head;
+  node = queue_head->front;
+  while(node != NULL) {
+    to_free = node;
+    if(to_free) {
+      if(to_free->batch) {
+          kfree(to_free->batch);
+          to_free->batch = NULL;
+      }
+      kfree(to_free);
+      to_free = NULL;
+    }
+    node = node->next;
+  }
+  kfree(global_bk.dev_bk->queue_head);
   enso_chr_exit();
   global_bk.intel_enso = NULL;
+
+  kfree(global_bk.dev_bk->pipe_status);
+  kfree(global_bk.dev_bk->notif_q_status);
+  kfree(global_bk.dev_bk);
 }
 module_exit(enso_exit);
 

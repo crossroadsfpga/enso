@@ -230,6 +230,10 @@ int main() {
     // start the TX thread
     std::thread tx_thread(send_tx, pipe, main_packet_buffer, total_bytes,
                           total_good_bytes, total_pkts, stats);
+    if (enso::set_core_id(tx_thread, 0)) {
+      std::cerr << "Error setting CPU affinity" << std::endl;
+      return 6;
+    }
     // loop until the TX thread exits
     while(!done) {
         uint64_t last_tx_pkts = stats->pkts;
