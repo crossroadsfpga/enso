@@ -68,6 +68,12 @@ struct TxNotificationInfo {
   uint32_t tail;
 };
 
+struct RingBuf {
+  uint8_t *buf = nullptr;
+  uint32_t tail = 0;
+  uint32_t head = 0;
+};
+
 #define NCPU 256
 
 // Application RX Pipe IDs mapped to their notification queue IDs
