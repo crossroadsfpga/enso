@@ -169,7 +169,9 @@ std::unique_ptr<Device> Device::Create(const std::string& pcie_addr,
                                        const std::string& huge_page_prefix,
                                        int32_t uthread_id,
                                        CompletionCallback completion_callback,
-                                       ParkCallback park_callback) noexcept {
+                                       ParkCallback park_callback,
+                                       UpdateCallback update_rx_head,
+                                       UpdateCallback update_tx_head) noexcept {
   std::unique_ptr<Device> dev(
       new (std::nothrow) Device(uthread_id, completion_callback, park_callback,
                                 pcie_addr, huge_page_prefix));
@@ -178,6 +180,8 @@ std::unique_ptr<Device> Device::Create(const std::string& pcie_addr,
   }
 
   set_park_callback(park_callback);
+  set_update_rx_head_callback(update_rx_head);
+  set_update_tx_head_callback(update_tx_head);
 
   if (dev->Init(uthread_id)) {
     return std::unique_ptr<Device>{};
@@ -452,7 +456,7 @@ void Device::ProcessCompletions() {
     if (tx_req.pipe_id < 0) {
       // on receiving this, shinkansen should update the notification->signal
       // for applications
-      std::invoke(completion_callback_);
+      std::invoke(completion_callback_, notification_buf_pair_.id);
     } else {
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
       // increments app_end_ for the tx pipe by nb_bytes

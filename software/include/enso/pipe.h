@@ -128,7 +128,8 @@ class Device {
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
       CompletionCallback completion_callback = NULL,
-      ParkCallback park_callback = NULL) noexcept;
+      ParkCallback park_callback = NULL, UpdateCallback update_rx_head = NULL,
+      UpdateCallback update_tx_head = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;

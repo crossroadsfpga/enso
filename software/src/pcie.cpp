@@ -67,11 +67,20 @@
 namespace enso {
 
 ParkCallback park_callback_;
+UpdateCallback update_rx_head_;
+UpdateCallback update_tx_head_;
 
 void set_park_callback(ParkCallback park_callback) {
   park_callback_ = park_callback;
 }
 
+void set_update_rx_head_callback(UpdateCallback update_rx_head) {
+  update_rx_head_ = update_rx_head;
+}
+
+void set_update_tx_head_callback(UpdateCallback update_tx_head) {
+  update_tx_head_ = update_tx_head;
+}
 static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 #ifdef __CLFLUSHOPT__
   _mm_clflushopt(addr);
@@ -367,7 +376,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
   for (uint16_t i = 0; i < kBatchSize; ++i) {
     struct RxNotification* cur_notification =
-        notification_buf + notification_buf_head;
+        notification_buf + (notification_buf_head % kNotificationBufSize);
 
     // Check if the next notification was updated by the NIC.
     if (!cur_notification->signal) {
@@ -375,7 +384,7 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     }
     cur_notification->signal = 0;
 
-    notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
+    notification_buf_head = (notification_buf_head + 1);
 
     // updates the 'tail', that is, until where you can read,
     // for the given enso pipe
@@ -396,9 +405,10 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     DevBackend::mmio_write32(notification_buf_pair->rx_head_ptr,
-                             notification_buf_head,
+                             notification_buf_head % kNotificationBufSize,
                              notification_buf_pair->uio_mmap_bar2_addr);
     notification_buf_pair->rx_head = notification_buf_head;
+    std::invoke(update_rx_head_, notification_buf_head);
   }
 
   return nb_consumed_notifications;
@@ -611,16 +621,17 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
   uint32_t head = notification_buf_pair->tx_head;
   uint32_t tail = notification_buf_pair->tx_tail;
 
-  if (head == tail) {
+  if ((head % kNotificationBufSize) == (tail % kNotificationBufSize)) {
     return;
   }
 
   // Advance pointer for pkt queues that were already sent.
   for (uint16_t i = 0; i < kBatchSize; ++i) {
-    if (head == tail) {
+    if ((head % kNotificationBufSize) == (tail % kNotificationBufSize)) {
       break;
     }
-    struct TxNotification* tx_notification = tx_buf + head;
+    struct TxNotification* tx_notification =
+        tx_buf + (head % kNotificationBufSize);
 
     // Notification has not yet been consumed by hardware.
     if (tx_notification->signal != 0) {
@@ -633,16 +644,19 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
     // TODO(sadok): If we implement the logic to have two notifications in the
     // same cache line, we can get rid of `wrap_tracker` and instead check
     // for two notifications.
-    uint8_t wrap_tracker_mask = 1 << (head & 0x7);
-    uint8_t no_wrap =
-        !(notification_buf_pair->wrap_tracker[head / 8] & wrap_tracker_mask);
+    uint8_t wrap_tracker_mask = 1 << ((head % kNotificationBufSize) & 0x7);
+    uint8_t no_wrap = !(
+        notification_buf_pair->wrap_tracker[(head % kNotificationBufSize) / 8] &
+        wrap_tracker_mask);
     notification_buf_pair->nb_unreported_completions += no_wrap;
-    notification_buf_pair->wrap_tracker[head / 8] &= ~wrap_tracker_mask;
+    notification_buf_pair->wrap_tracker[(head % kNotificationBufSize) / 8] &=
+        ~wrap_tracker_mask;
 
-    head = (head + 1) % kNotificationBufSize;
+    head++;
   }
 
   notification_buf_pair->tx_head = head;
+  std::invoke(update_tx_head_, notification_buf_head);
 }
 
 int send_config(struct NotificationBufPair* notification_buf_pair,

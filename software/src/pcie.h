@@ -53,6 +53,7 @@ namespace enso {
 
 using CompletionCallback = std::function<void()>;
 using ParkCallback = std::function<void()>;
+using UpdateCallback = std::function<void()>;
 using BackendWrapper = std::function<void()>;
 
 struct SocketInternal {
@@ -61,6 +62,8 @@ struct SocketInternal {
 };
 
 void set_park_callback(ParkCallback park_callback);
+void set_update_rx_head_callback(UpdateCallback update_rx_head);
+void set_update_tx_head_callback(UpdateCallback update_tx_head);
 
 /**
  * @brief Initializes the notification buffer pair.

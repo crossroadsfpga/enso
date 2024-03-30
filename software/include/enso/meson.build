@@ -6,7 +6,8 @@ public_enso_headers = files(
     'internals.h',
     'queue.h',
     'pipe.h',
-    'socket.h'
+    'socket.h',
+    'shared.h'
 )
 
 install_headers(public_enso_headers, subdir: library_name)
