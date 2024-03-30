@@ -53,6 +53,7 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <random>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -676,6 +677,46 @@ void load_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
   }
 }
 
+void load_pcaps_random(struct PcapHandlerContext* context,
+                       uint32_t window_size) {
+  const u_char* pkt_bytes;
+  struct pcap_pkthdr header;
+  uint64_t nb_bytes;
+  uint64_t total_bytes = 0;
+  char errbuf[PCAP_ERRBUF_SIZE];
+
+  // Seed for random number generation
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  // Define a distribution for integers between 0 and nb_pcaps-1
+  std::uniform_int_distribution<int> dis(0, context->nb_pcaps - 1);
+
+  while (total_bytes < BUFFER_SIZE) {
+    uint32_t pcap_idx = dis(gen);
+    pcap_t* pcap = context->pcaps[pcap_idx];
+    nb_bytes = 0;
+
+    while (nb_bytes < window_size) {
+      pkt_bytes = pcap_next(pcap, &header);
+      if (!pkt_bytes) {
+        pcap_close(context->pcaps[pcap_idx]);
+        context->pcaps[pcap_idx] =
+            pcap_open_offline(context->pcap_files[pcap_idx].c_str(), errbuf);
+        pcap = context->pcaps[pcap_idx];
+        pkt_bytes = pcap_next(pcap, &header);
+      }
+
+      load_pkt(context, pkt_bytes);
+
+      nb_bytes += enso::get_pkt_len(pkt_bytes);
+    }
+    std::cout << "Loaded " << nb_bytes << " bytes of pcap file "
+              << context->pcap_files[pcap_idx] << std::endl;
+    total_bytes += nb_bytes;
+  }
+}
+
 int main(int argc, char** argv) {
   struct parsed_args_t parsed_args;
   int ret = parse_args(argc, argv, parsed_args);
@@ -1028,9 +1069,10 @@ int main(int argc, char** argv) {
   if (parsed_args.save) {
     std::ofstream save_file;
     save_file.open(parsed_args.save_file);
-    save_file
-        << "rx_goodput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
-           "tx_goodput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
+    save_file << "rx_goodput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_"
+                 "packets,"
+                 "tx_goodput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_"
+                 "packets";
     if (parsed_args.enable_rtt) {
       save_file << ",mean_rtt_ns";
     }
