@@ -762,7 +762,7 @@ int main(int argc, char** argv) {
     context.pcap_files[i] = parsed_args.pcap_files[i];
   }
 
-  load_pcaps(&context, parsed_args.window_size);
+  load_pcaps_random(&context, parsed_args.window_size);
 
   std::cout << "Number of enso pipes: " << enso_pipes.size() << std::endl;
 
