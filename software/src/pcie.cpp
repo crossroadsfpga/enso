@@ -734,7 +734,6 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
   fpga_dev->FreeNotifBuf(notification_buf_pair->id);
-
   DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_low, 0,
                            notification_buf_pair->uio_mmap_bar2_addr);
   DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_high, 0,
