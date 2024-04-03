@@ -744,7 +744,7 @@ static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsi
 
   notif_buf_pair = chr_dev_bk->notif_buf_pair;
   dev_bk = chr_dev_bk->dev_bk;
-  // printk(KERN_CRIT "get_unreported_completions\n");
+  // printk(KERN_CRIT "Entered get_unreported_completions\n");
   if (unlikely(down_interruptible(&dev_bk->sem))) {
     printk("interrupted while attempting to obtain device semaphore.");
     return -ERESTARTSYS;
@@ -754,14 +754,20 @@ static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsi
     return -EINVAL;
   }
 
+  spin_lock(&dev_bk->lock);
+
   // first we update the tx head
   update_tx_head(notif_buf_pair);
   completions = notif_buf_pair->nb_unreported_completions;
   if (copy_to_user(user_addr, &completions, sizeof(completions))) {
     printk("couldn't copy information to user.");
+    spin_unlock(&dev_bk->lock);
+    up(&dev_bk->sem);
     return -EFAULT;
   }
   notif_buf_pair->nb_unreported_completions = 0; // reset
+
+  spin_unlock(&dev_bk->lock);
   up(&dev_bk->sem);
   return 0;
 }
