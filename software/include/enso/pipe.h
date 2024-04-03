@@ -261,6 +261,39 @@ class Device {
   int DisableRateLimiting();
 
   /**
+   * @brief Enables per-packet rate limiting.
+   *
+   * This function enables per-packet rate limiting. This means that every
+   * packet should have a "delay" in number of cycles that the NIC will wait
+   * before sending the packet. This delay should be specified in the packet
+   * itself at the same offset used for the timestamp (`enso::PacketRttOffset`).
+   *
+   * Use `enso::kMaxHardwareFlitRate` or `enso::kNsPerTimestampCycle` to convert
+   * the delay between nanoseconds and cycles and the helper function
+   * `enso::set_pkt_delay` to set the delay in the packet.
+   *
+   * @note This setting applies to all pipes that share the same hardware
+   *      device.
+   *
+   * @see DisablePerPacketRateLimiting
+   *
+   * @return 0 if configuration was successful.
+   */
+  int EnablePerPacketRateLimiting();
+
+  /**
+   * @brief Disables per-packet rate limiting.
+   *
+   * @note This setting applies to all pipes that share the same hardware
+   *      device.
+   *
+   * @see EnablePerPacketRateLimiting
+   *
+   * @return 0 if configuration was successful.
+   */
+  int DisablePerPacketRateLimiting();
+
+  /**
    * @brief Enables round robing of packets among the fallback pipes.
    *
    * @note This setting applies to all pipes that share the same hardware

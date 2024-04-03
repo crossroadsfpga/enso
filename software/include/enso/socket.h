@@ -132,6 +132,16 @@ int enable_device_round_robin(int ref_sockfd);
 int disable_device_round_robin(int ref_sockfd);
 
 /*
+ * Enable per-packet rate limit for the device. This applies to all sockets.
+ */
+int enable_per_packet_rate_limit(int ref_sockfd);
+
+/*
+ * Disable per-packet rate limit for the device. This applies to all sockets.
+ */
+int disable_per_packet_rate_limit(int ref_sockfd);
+
+/*
  * Free packet buffer. Use this to free received packets.
  */
 void free_enso_pipe(int sockfd, size_t len);

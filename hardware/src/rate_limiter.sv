@@ -6,6 +6,8 @@
  * This means that we send `numerator` flits every `denominator` cycles.
  */
 module rate_limiter #(
+    parameter TIMESTAMP_WIDTH=32,
+    parameter TIMESTAMP_OFFSET=(112+32) // Bytes 4--7 of IPv4 header.
 )(
     input logic clk,
     input logic rst,
@@ -32,7 +34,10 @@ module rate_limiter #(
     output logic                   conf_rl_ready
 );
 
+localparam REVERSED_OFFSET = 512 - TIMESTAMP_OFFSET - TIMESTAMP_WIDTH;
+
 logic rate_limit_enabled;
+logic per_packet_delay_enabled;
 
 logic [$bits(conf_rl_data.numerator)-1:0]   numerator;
 logic [$bits(conf_rl_data.denominator)-1:0] denominator;
@@ -41,13 +46,18 @@ logic [$bits(conf_rl_data.numerator)-1:0]   incr_period_counter;
 
 logic pause;
 
+logic [TIMESTAMP_WIDTH-1:0] delay_cnt;
+
 always @(posedge clk) begin
     if (rst) begin
         rate_limit_enabled <= 0;
+        per_packet_delay_enabled <= 0;
+        delay_cnt <= 0;
     end else begin
         // Apply configuration.
         if (conf_rl_valid) begin
             rate_limit_enabled <= conf_rl_data.enable;
+            per_packet_delay_enabled <= conf_rl_data.per_packet;
             if (conf_rl_data.enable) begin
                 numerator <= conf_rl_data.numerator;
                 denominator <= conf_rl_data.denominator;
@@ -60,6 +70,17 @@ always @(posedge clk) begin
             if (incr_period_counter >= denominator) begin
                 period_counter <= 0;
             end
+        end
+
+        if (per_packet_delay_enabled) begin
+            if (in_pkt_sop && !delay_cnt) begin
+                // Find delay from packet header.
+                delay_cnt <= in_pkt_data[REVERSED_OFFSET +: TIMESTAMP_WIDTH];
+            end
+        end
+
+        if (delay_cnt) begin
+            delay_cnt <= delay_cnt - 1;
         end
     end
 end
@@ -79,6 +100,10 @@ always_comb begin
         if (period_counter >= numerator) begin
             pause = 1;
         end
+    end
+
+    if (delay_cnt) begin
+        pause = 1;
     end
 
     in_pkt_ready = out_pkt_ready & !pause;

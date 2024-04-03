@@ -242,7 +242,8 @@ typedef struct packed {
 typedef struct packed {
     logic [319:0] pad1;
     logic         enable;  // Set to 1 to enable rate-limiting.
-    logic [30:0]  pad2;
+    logic         per_packet;  // Set to 1 to enable per-packet rate limiting.
+    logic [29:0]  pad2;
     logic [15:0]  numerator;  // Set rate numerator.
     logic [15:0]  denominator;  // Set rate denominator.
     logic [63:0]  config_id;

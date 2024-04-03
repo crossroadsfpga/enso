@@ -100,6 +100,19 @@ inline uint32_t get_pkt_rtt(const uint8_t* pkt) {
   return be32toh(rtt);
 }
 
+/**
+ * @brief Sets the the delay for a packet.
+ *
+ * To use this, per-packet timestamping must be enabled. To enable per-packet
+ * timestamping call the `Device::EnablePerPacketRateLimiting` method.
+ *
+ * @param pkt Packet to set the delay for.
+ * @param delay Delay in number of cycles.
+ */
+inline void set_pkt_delay(const uint8_t* pkt, uint32_t delay) {
+  *((uint32_t*)(pkt + kPacketRttOffset)) = htobe32(delay);
+}
+
 constexpr uint16_t be_to_le_16(const uint16_t le) {
   return ((le & (uint16_t)0x00ff) << 8) | ((le & (uint16_t)0xff00) >> 8);
 }
