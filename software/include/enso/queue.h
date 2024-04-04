@@ -342,17 +342,8 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     }
     nb_pushes_++;
 
+    if (shared_ || application_id_ >= 0) *tail_addr_ = (tail_ + 1);
     _mm512_storeu_si512((__m512i*)current_element, tmp_element_raw);
-
-    if (shared_ || application_id_ >= 0) {
-      // if (application_id_ >= 0)
-      //   std::cout << "pushing to tail " << (tail_ & Parent::index_mask())
-      //             << " phys addr: " << phys << std::endl;
-      // std::cout << "updated tail to " << ((tail_ + 1) &
-      // Parent::index_mask())
-      //           << std::endl;
-      *tail_addr_ = (tail_ + 1);
-    }
     tail_ = (tail_ + 1);
 
     return 0;
@@ -498,6 +489,8 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
       return {};  // Queue is empty.
     }
 
+    if (shared_ || application_id_ >= 0) *head_addr_ = (head_ + 1);
+
     T data = current_element->data;
 
     // enso::PipeNotification* pipe_notif =
@@ -520,7 +513,6 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
     //             << current_element->signal << std::endl;
     // }
 
-    if (shared_ || application_id_ >= 0) *head_addr_ = (head_ + 1);
     head_ = (head_ + 1);
 
     return data;
