@@ -52,7 +52,7 @@
 namespace enso {
 
 using CompletionCallback = std::function<void()>;
-using ParkCallback = std::function<void()>;
+using ParkCallback = std::function<void(bool)>;
 using BackendWrapper = std::function<void()>;
 
 struct SocketInternal {
