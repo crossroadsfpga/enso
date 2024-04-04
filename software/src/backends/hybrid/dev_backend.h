@@ -225,15 +225,10 @@ class DevBackend {
           break;
       }
       _enso_compiler_memory_barrier();
-      // if (rx_mem_low) start = rdtsc();
       *addr = value;
-      if (rx_mem_low) {
-        // end = rdtsc();
-        // std::cout << "mmio write time for rx mem low: " << end - start
-        //           << std::endl;
-      }
       return;
     }
+
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
