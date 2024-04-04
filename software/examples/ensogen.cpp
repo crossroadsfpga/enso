@@ -616,6 +616,13 @@ void load_pkt(struct PcapHandlerContext* context, const u_char* pkt_bytes) {
   uint32_t len = enso::get_pkt_len(pkt_bytes);
   uint32_t nb_flits = (len - 1) / 64 + 1;
 
+  /* TODO (kaajalg): And need to enable pkt delay at beginning */
+
+  /* Take pkt_bytes + kPacketRttOffset to set the offset as the number of cycles
+   */
+
+  /* Use kMaxHardwareFlitRate to convert between hardware cycles and us */
+
   if (nb_flits > context->free_flits) {
     uint8_t* buf;
     if ((context->hugepage_offset + BUFFER_SIZE) > HUGEPAGE_SIZE) {
@@ -677,8 +684,8 @@ void load_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
   }
 }
 
-void load_pcaps_random(struct PcapHandlerContext* context,
-                       uint32_t window_size) {
+void load_pcaps_random(struct PcapHandlerContext* context, uint32_t window_size,
+                       uint64_t num, uint64_t den) {
   const u_char* pkt_bytes;
   struct pcap_pkthdr header;
   uint64_t nb_bytes;
@@ -691,8 +698,9 @@ void load_pcaps_random(struct PcapHandlerContext* context,
 
   // Define a distribution for integers between 0 and nb_pcaps-1
   std::uniform_int_distribution<int> dis(0, context->nb_pcaps - 1);
+  uint64_t nb_packets = num * den;
 
-  while (total_bytes < BUFFER_SIZE) {
+  while (total_bytes < nb_packets) {
     uint32_t pcap_idx = dis(gen);
     pcap_t* pcap = context->pcaps[pcap_idx];
     nb_bytes = 0;
@@ -762,25 +770,26 @@ int main(int argc, char** argv) {
     context.pcap_files[i] = parsed_args.pcap_files[i];
   }
 
-  load_pcaps_random(&context, parsed_args.window_size);
+  load_pcaps_random(&context, parsed_args.window_size, parsed_args.rate_num,
+                    parsed_args.rate_den);
 
   std::cout << "Number of enso pipes: " << enso_pipes.size() << std::endl;
 
   // For small pcaps we copy the same packets over the remaining of the
   // buffer. This reduces the number of transfers that we need to issue.
-  if ((enso_pipes.size() == 1) &&
-      (enso_pipes.front().length < BUFFER_SIZE / 2)) {
-    EnsoPipe& buffer = enso_pipes.front();
-    uint32_t original_buf_length = buffer.length;
-    uint32_t original_good_bytes = buffer.good_bytes;
-    uint32_t original_nb_pkts = buffer.nb_pkts;
-    while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
-      memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
-      buffer.length += original_buf_length;
-      buffer.good_bytes += original_good_bytes;
-      buffer.nb_pkts += original_nb_pkts;
-    }
-  }
+  // if ((enso_pipes.size() == 1) &&
+  //     (enso_pipes.front().length < BUFFER_SIZE / 2)) {
+  //   EnsoPipe& buffer = enso_pipes.front();
+  //   uint32_t original_buf_length = buffer.length;
+  //   uint32_t original_good_bytes = buffer.good_bytes;
+  //   uint32_t original_nb_pkts = buffer.nb_pkts;
+  //   while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
+  //     memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
+  //     buffer.length += original_buf_length;
+  //     buffer.good_bytes += original_good_bytes;
+  //     buffer.nb_pkts += original_nb_pkts;
+  //   }
+  // }
 
   uint64_t total_pkts_in_buffers = 0;
   uint64_t total_bytes_in_buffers = 0;

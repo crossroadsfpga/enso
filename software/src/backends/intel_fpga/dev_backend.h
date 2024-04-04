@@ -47,6 +47,10 @@
 namespace enso {
 
 using BackendWrapper = std::function<void()>;
+using TscCallback = std::function<uint64_t()>;
+using IdCallback = std::function<uint64_t()>;
+using ParkCallback = std::function<void(bool)>;
+ParkCallback park_callback_;
 int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
                       BackendWrapper preempt_disable) {
   (void)core_id;
@@ -56,9 +60,12 @@ int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
 }
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
-                            BackendWrapper preempt_disable) {
+                            BackendWrapper preempt_disable,
+                            TscCallback tsc_callback, IdCallback id_callback) {
   (void)preempt_enable;
   (void)preempt_disable;
+  (void)tsc_callback;
+  (void)id_callback;
 }
 
 void set_backend_core_id_dev(uint32_t core_id) { (void)core_id; }
@@ -75,6 +82,8 @@ std::optional<PipeNotification> push_to_backend_get_response(
   std::optional<PipeNotification> res;
   return res;
 }
+
+bool is_hybrid() { return false; }
 
 class DevBackend {
  public:
@@ -105,8 +114,10 @@ class DevBackend {
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value,
-                                               void* uio_mmap_bar2_addr) {
+                                               void* uio_mmap_bar2_addr,
+                                               bool first = false) {
     (void)uio_mmap_bar2_addr;
+    (void)first;
     _enso_compiler_memory_barrier();
     *addr = value;
   }

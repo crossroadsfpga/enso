@@ -65,6 +65,8 @@ class PktIterator;
 class PeekPktIterator;
 
 using BackendWrapper = std::function<void()>;
+using TscCallback = std::function<uint64_t()>;
+using IdCallback = std::function<uint64_t()>;
 
 void set_backend_core_id(uint32_t core_id);
 
@@ -73,7 +75,8 @@ void set_backend_core_id(uint32_t core_id);
  *
  */
 void initialize_backend(BackendWrapper preempt_enable,
-                        BackendWrapper preempt_disable);
+                        BackendWrapper preempt_disable,
+                        TscCallback tsc_callback, IdCallback id_callback);
 
 /**
  * @brief Pushes a notification to the backend.
@@ -109,7 +112,7 @@ uint32_t external_peek_next_batch_from_queue(
 class Device {
  public:
   using CompletionCallback = std::function<void()>;
-  using ParkCallback = std::function<void()>;
+  using ParkCallback = std::function<void(bool)>;
   /**
    * @brief Factory method to create a device.
    *
@@ -350,7 +353,8 @@ class Device {
    * @param nb_bytes The number of bytes to send.
    * @return The number of bytes sent.
    */
-  void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+  void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
+            bool first = false);
 
   /**
    * @brief Gets the ID of the notification buffer for this device.
@@ -389,6 +393,7 @@ class Device {
   struct TxPendingRequest {
     int pipe_id;
     uint32_t nb_bytes;
+    uint64_t phys_addr;
   };
 
   /**
@@ -917,14 +922,14 @@ class TxPipe {
    * @param nb_bytes The number of bytes to send. Must be a multiple of
    *                 `kQuantumSize`.
    */
-  inline void SendAndFree(uint32_t nb_bytes) {
+  inline void SendAndFree(uint32_t nb_bytes, bool first = false) {
     uint64_t phys_addr = buf_phys_addr_ + app_begin_;
     assert(nb_bytes <= kMaxCapacity);
     assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
     app_begin_ = (app_begin_ + nb_bytes) & kBufMask;
 
-    device_->Send(kId, phys_addr, nb_bytes);
+    device_->Send(kId, phys_addr, nb_bytes, first);
   }
 
   /**
@@ -1236,8 +1241,8 @@ class RxTxPipe {
    *
    * @param nb_bytes The number of bytes to send.
    */
-  inline void SendAndFree(uint32_t nb_bytes) {
-    tx_pipe_->SendAndFree(nb_bytes);
+  inline void SendAndFree(uint32_t nb_bytes, bool first = false) {
+    tx_pipe_->SendAndFree(nb_bytes, first);
     last_tx_pipe_capacity_ -= nb_bytes;
   }
 

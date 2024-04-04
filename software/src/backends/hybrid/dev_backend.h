@@ -46,6 +46,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <atomic>
+#include <csignal>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -64,6 +66,9 @@ std::array<std::unique_ptr<QueueProducer<PipeNotification>>, NCPU>
     queues_to_backend_ = {0};
 std::array<std::unique_ptr<QueueConsumer<PipeNotification>>, NCPU>
     queues_from_backend_ = {0};
+std::atomic<uint64_t> tsc_atomic;
+std::array<uint64_t, enso::kMaxNbFlows> last_tscs_ = {0};
+std::array<uint64_t, enso::kMaxNbFlows> tx_tail_offset_addrs_ = {0};
 
 // These queues are per-kthread, not per-uthread, given that they are
 // thread-local. Will automatically update when switching cores.
@@ -71,14 +76,20 @@ int32_t thread_local core_id_ = -1;
 int64_t shinkansen_notif_buf_id_ = -1;
 
 using BackendWrapper = std::function<void()>;
+using TscCallback = std::function<uint64_t()>;
+using IdCallback = std::function<uint64_t()>;
+using ParkCallback = std::function<void(bool)>;
 BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
+TscCallback tsc_callback_;
+IdCallback id_callback_;
+ParkCallback park_callback_;
 
 int initialize_queues(uint32_t core_id) {
   core_id_ = core_id;
   if (queues_to_backend_[core_id] != nullptr) return -1;
 
-  // std::cout << "Initializing queue for core " << core_id << std::endl;
+  std::cout << "Initializing queue for core " << core_id << std::endl;
 
   std::string queue_to_app_name =
       std::string(kIpcQueueToAppName) + std::to_string(core_id) + "_";
@@ -103,9 +114,12 @@ int initialize_queues(uint32_t core_id) {
 }
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
-                            BackendWrapper preempt_disable) {
+                            BackendWrapper preempt_disable,
+                            TscCallback tsc_callback, IdCallback id_callback) {
   preempt_enable_ = preempt_enable;
   preempt_disable_ = preempt_disable;
+  tsc_callback_ = tsc_callback;
+  id_callback_ = id_callback;
 }
 
 void set_backend_core_id_dev(uint32_t core_id) {
@@ -114,7 +128,7 @@ void set_backend_core_id_dev(uint32_t core_id) {
   initialize_queues(core_id);
 }
 
-void push_to_backend(PipeNotification* notif) {
+void push_to_backend(PipeNotification* notif, bool first = false) {
   std::invoke(preempt_disable_);
   assert(core_id_ == sched_getcpu());
   if (core_id_ < 0) {
@@ -123,7 +137,7 @@ void push_to_backend(PipeNotification* notif) {
     exit(2);
   }
   initialize_queues(core_id_);
-  while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
+  while (queues_to_backend_[core_id_]->Push(*notif, first) != 0) {
   }
   std::invoke(preempt_enable_);
 }
@@ -152,6 +166,8 @@ std::optional<PipeNotification> push_to_backend_get_response(
   std::invoke(preempt_enable_);
   return notification;
 }
+
+bool is_hybrid() { return true; }
 
 class DevBackend {
  public:
@@ -189,7 +205,8 @@ class DevBackend {
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value,
-                                               void* uio_mmap_bar2_addr) {
+                                               void* uio_mmap_bar2_addr,
+                                               bool first = false) {
     uint64_t offset_addr =
         (uint64_t)((uint8_t*)addr - (uint8_t*)uio_mmap_bar2_addr);
     enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
@@ -199,16 +216,16 @@ class DevBackend {
     struct MmioNotification mmio_notification;
 
     if (queue_id < enso::kMaxNbFlows) {
-      // Updates to RX pipe: write directly
-      // push this to let shinkansen know about queue ID -> notification
-      // queue
-      bool rx_mem_low = false;
-      // uint64_t start, end;
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
           mmio_notification.type = NotifType::kWrite;
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
+          mmio_notification.tsc = std::invoke(tsc_callback_);
+          mmio_notification.uthread_id = std::invoke(id_callback_);
+          if (mmio_notification.uthread_id == 0) {
+            std::cout << "Uthread ID is 0!" << std::endl;
+          }
 
           pipe_notification = (enso::PipeNotification*)&mmio_notification;
 
@@ -217,36 +234,53 @@ class DevBackend {
           // notification buffer ID 0
           mask = enso::kMaxNbApps - 1;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
-          rx_mem_low = true;
-          break;
-        case offsetof(struct enso::QueueRegs, rx_head):
-          // std::cout << "Writing to rx head with value " << value <<
-          // std::endl;
           break;
       }
+      // Updates to RX pipe: write directly
       _enso_compiler_memory_barrier();
-      // if (rx_mem_low) start = rdtsc();
       *addr = value;
-      if (rx_mem_low) {
-        // end = rdtsc();
-        // std::cout << "mmio write time for rx mem low: " << end - start
-        //           << std::endl;
-      }
       return;
     }
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
+      switch (offset) {
+        case offsetof(struct enso::QueueRegs, tx_tail):
+          uint64_t actual_offset_addr =
+              tx_tail_offset_addrs_[std::invoke(id_callback_)];
+          if (offset_addr != actual_offset_addr) {
+            std::cout << "Uthread ID: " << std::invoke(id_callback_)
+                      << " offset addr: " << offset_addr
+                      << " actual offset addr: " << actual_offset_addr
+                      << std::endl;
+            raise(SIGINT);
+          }
+          break;
+      }
+
       // Block if full.
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kWrite;
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
+      mmio_notification.tsc = std::invoke(tsc_callback_);
+      mmio_notification.uthread_id = std::invoke(id_callback_);
+      if (mmio_notification.uthread_id == 0) {
+        std::cout << "Uthread ID is 0!" << std::endl;
+      }
+      if (last_tscs_[mmio_notification.uthread_id] >= mmio_notification.tsc) {
+        std::cout << "Got same TSC!" << std::endl;
+      }
+      last_tscs_[mmio_notification.uthread_id] = mmio_notification.tsc;
+      if (first)
+        std::cout << "Sending mmio notification with tsc "
+                  << mmio_notification.tsc << " for notif buf id " << queue_id
+                  << std::endl;
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
 
-      push_to_backend(pipe_notification);
+      push_to_backend(pipe_notification, first);
     }
   }
 
@@ -255,6 +289,7 @@ class DevBackend {
     uint64_t offset_addr =
         (uint64_t)((uint8_t*)addr - (uint8_t*)uio_mmap_bar2_addr);
     enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
+    uint32_t offset = offset_addr % enso::kMemorySpacePerQueue;
     // Read from RX pipe: read directly
     if (queue_id < enso::kMaxNbFlows) {
       _enso_compiler_memory_barrier();
@@ -263,9 +298,18 @@ class DevBackend {
     queue_id -= enso::kMaxNbFlows;
     // Reads from notification buffers.
     if (queue_id < enso::kMaxNbApps) {
+      switch (offset) {
+        case offsetof(struct enso::QueueRegs, tx_tail):
+          std::cout << "Uthread ID: " << std::invoke(id_callback_)
+                    << " offset addr: " << offset_addr << std::endl;
+          tx_tail_offset_addrs_[std::invoke(id_callback_)] = offset_addr;
+          break;
+      }
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kRead;
       mmio_notification.address = offset_addr;
+      mmio_notification.tsc = std::invoke(tsc_callback_);
+      mmio_notification.uthread_id = std::invoke(id_callback_);
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
@@ -376,7 +420,6 @@ class DevBackend {
                 << std::endl;
       exit(2);
     }
-    // std::cout << "allocating notif buf" << std::endl;
     struct NotifBufNotification nb_notification;
     nb_notification.type = NotifType::kAllocateNotifBuf;
     nb_notification.uthread_id = (uint64_t)uthread_id;
@@ -391,6 +434,8 @@ class DevBackend {
         (struct NotifBufNotification*)&notification.value();
 
     // std::cout << "recvd response from allocatenotifbuf" << std::endl;
+    std::cout << "Uthread " << uthread_id << " got notif buf "
+              << result->notif_buf_id << std::endl;
 
     assert(result->type == NotifType::kAllocateNotifBuf);
     return result->notif_buf_id;
