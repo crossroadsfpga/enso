@@ -49,6 +49,8 @@ namespace enso {
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
+using ParkCallback = std::function<void(bool)>;
+ParkCallback park_callback_;
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
                             BackendWrapper preempt_disable,

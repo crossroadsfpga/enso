@@ -425,7 +425,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   uint64_t nb_pushes_ = 0;
   int32_t application_id_ = -1;
   bool shared_ = false;
-  uint64_t nb_pushes_ = 0;
   bool print_ = false;
   std::string huge_page_prefix_;
 };
