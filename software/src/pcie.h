@@ -73,9 +73,11 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
  *
  * @return Pipe ID on success, -1 on failure.
  */
-int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
+int enso_rx_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
                    struct NotificationBufPair* notification_buf_pair,
                    bool fallback);
+
+int enso_tx_pipe_init(struct NotificationBufPair* notification_buf_pair);
 
 uint32_t consume_rx_kernel(struct NotificationBufPair* notification_buf_pair,
                                   uint32_t &new_rx_tail, int32_t &pipe_id);
@@ -113,7 +115,7 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe,
  * @return number of bytes sent.
  */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len);
+                       uint64_t phys_addr, uint32_t len, uint32_t pipe_id);
 
 /**
  * @brief Returns the number of transmission requests that were completed since
@@ -201,9 +203,12 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair);
  * @param enso_pipe Enso Pipe to free.
  * @param enso_pipe_id Hardware ID of the Enso Pipe to free.
  */
-void enso_pipe_free(struct NotificationBufPair* notification_buf_pair,
-                    struct RxEnsoPipeInternal* enso_pipe,
-                    enso_pipe_id_t enso_pipe_id);
+void enso_rx_pipe_free(struct NotificationBufPair* notification_buf_pair,
+                       struct RxEnsoPipeInternal* enso_pipe,
+                       enso_pipe_id_t enso_pipe_id);
+
+void enso_tx_pipe_free(struct NotificationBufPair* notification_buf_pair,
+                       enso_pipe_id_t enso_pipe_id);
 
 }  // namespace enso
 

@@ -56,7 +56,6 @@ static int enso_chr_open(struct inode *inode, struct file *filp) {
     goto failed_notif_buf_pair_alloc;
   }
   chr_dev_bk->notif_buf_pair->allocated = false;
-  dev_bk->notif_buf_pair = chr_dev_bk->notif_buf_pair;
 
   chr_dev_bk->rx_pipes = kzalloc(MAX_NB_FLOWS *
                                  sizeof(struct rx_pipe_internal *),
@@ -78,6 +77,12 @@ static int enso_chr_open(struct inode *inode, struct file *filp) {
     goto failed_pipe_status_alloc;
   }
 
+  chr_dev_bk->tx_pipe_status = kzalloc(MAX_NB_FLOWS / 8, GFP_KERNEL);
+  if (chr_dev_bk->tx_pipe_status == NULL) {
+    printk("couldn't create pipe status for device\n");
+    goto failed_tx_pipe_status_alloc;
+  }
+
   // Increase device open count.
   if (unlikely(down_interruptible(&dev_bk->sem))) {
     printk("interrupted while attempting to obtain device semaphore.\n");
@@ -87,6 +92,8 @@ static int enso_chr_open(struct inode *inode, struct file *filp) {
   up(&dev_bk->sem);
   return 0;
 
+failed_tx_pipe_status_alloc:
+  kfree(chr_dev_bk->pipe_status);
 failed_pipe_status_alloc:
   kfree(chr_dev_bk->notif_q_status);
 failed_notif_status_alloc:
@@ -126,6 +133,9 @@ static int enso_chr_release(struct inode *inode, struct file *filp) {
   }
   for (i = 0; i < MAX_NB_FLOWS / 8; ++i) {
     dev_bk->pipe_status[i] &= ~(chr_dev_bk->pipe_status[i]);
+  }
+  for (i = 0; i < MAX_NB_APPS / 8; ++i) {
+    dev_bk->tx_pipe_status[i] &= ~(chr_dev_bk->tx_pipe_status[i]);
   }
 
   dev_bk->nb_fb_queues -= chr_dev_bk->nb_fb_queues;

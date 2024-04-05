@@ -16,6 +16,10 @@ static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
 static long alloc_pipe(struct chr_dev_bookkeep *chr_dev_bk,
                        unsigned int __user *user_addr);
 static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long alloc_tx_pipe(struct chr_dev_bookkeep *dev_bk,
+                               unsigned int __user *user_addr);
+static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                              unsigned long uarg);
 
 static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
@@ -167,6 +171,12 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
     case ENSO_IOCTL_PREFETCH_PIPE:
       retval = prefetch_pipe(chr_dev_bk, uarg);
       break;
+    case ENSO_IOCTL_ALLOC_TX_PIPE:
+      retval = alloc_tx_pipe(chr_dev_bk, (unsigned int __user *)uarg);
+      break;
+    case ENSO_IOCTL_FREE_TX_PIPE:
+      retval = free_tx_pipe(chr_dev_bk, uarg);
+      break;
     default:
       retval = -ENOTTY;
   }
@@ -279,12 +289,6 @@ static long alloc_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
       break;
     }
   }
-
-  dev_bk->enso_sched_thread = kthread_create(enso_sched, dev_bk, "enso_sched");
-  kthread_bind(dev_bk->enso_sched_thread, 1);
-  wake_up_process(dev_bk->enso_sched_thread);
-  dev_bk->sched_run = true;
-
 
   up(&dev_bk->sem);
 
@@ -488,6 +492,86 @@ static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
   return 0;
 }
 
+static long alloc_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                          unsigned int __user *user_addr) {
+  int i = 0;
+  int32_t pipe_id = -1;
+  struct dev_bookkeep *dev_bk;
+  dev_bk = chr_dev_bk->dev_bk;
+
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    printk("interrupted while attempting to obtain device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  // Find first available notification buffer. If none are available, return
+  // an error.
+  for (i = 0; i < MAX_NB_APPS / 8; ++i) {
+    int32_t set_pipe_id = 0;
+    uint8_t set = dev_bk->tx_pipe_status[i];
+    while (set & 0x1) {
+      ++set_pipe_id;
+      set >>= 1;
+    }
+    if (set_pipe_id < 8) {
+      // Set status bit for both the device bitvector and the character device
+      // bitvector.
+      dev_bk->tx_pipe_status[i] |= (1 << set_pipe_id);
+      chr_dev_bk->tx_pipe_status[i] |= (1 << set_pipe_id);
+
+      pipe_id = i * 8 + set_pipe_id;
+      break;
+    }
+  }
+
+  up(&dev_bk->sem);
+
+  if (pipe_id < 0) {
+    printk("couldn't allocate notification buffer.");
+    return -ENOMEM;
+  }
+  printk("Allocated TX pipe with id = %d\n", pipe_id);
+
+  if (copy_to_user(user_addr, &pipe_id, sizeof(pipe_id))) {
+    printk("couldn't copy pipe_id information to user.");
+    return -EFAULT;
+  }
+
+  return 0;
+}
+
+static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                         unsigned long uarg) {
+  int32_t i, j;
+  int32_t pipe_id = (int32_t)uarg;
+  struct dev_bookkeep *dev_bk;
+
+  dev_bk = chr_dev_bk->dev_bk;
+
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    printk("interrupted while attempting to obtain device semaphore.");
+    return -ERESTARTSYS;
+  }
+
+  // Check that the buffer ID is valid.
+  if (pipe_id < 0 || pipe_id >= MAX_NB_APPS) {
+    printk("invalid buffer ID.");
+    return -EINVAL;
+  }
+
+  // Clear status bit for both the device bitvector and the character device
+  // bitvector.
+  i = pipe_id / 8;
+  j = pipe_id % 8;
+  dev_bk->tx_pipe_status[i] &= ~(1 << j);
+  chr_dev_bk->tx_pipe_status[i] &= ~(1 << j);
+  printk("Freed TX pipe with id = %d\n", pipe_id);
+
+  up(&dev_bk->sem);
+
+  return 0;
+}
+
 /**
  * alloc_notif_buf_pair() - Allocates a notification buffer
  *
@@ -647,6 +731,9 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
 
   notif_buf_pair->allocated = true;
 
+  // update the notification buffer pair in dev_bk
+  dev_bk->notif_buf_pairs[notif_buf_pair->id] = notif_buf_pair;
+
   up(&dev_bk->sem);
 
   return 0;
@@ -666,9 +753,17 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
   struct enso_send_tx_pipe_params stpp;
   struct notification_buf_pair *notif_buf_pair = chr_dev_bk->notif_buf_pair;
   struct dev_bookkeep *dev_bk;
+
+  struct tx_queue_head **queue_heads = NULL;
+  struct tx_queue_head *new_queue_head = NULL;
+  struct tx_queue_head *pipe_queue_head = NULL;
   struct tx_queue_node *new_node = NULL;
-  struct tx_queue_head *qh = NULL;
   struct tx_queue_node *last_node = NULL;
+
+  struct sched_queue_head *sqh = NULL;
+  struct sched_queue_node *new_sched_node = NULL;
+  struct sched_queue_node *last_sched_node = NULL;
+  int pipe_id;
 
   if (copy_from_user(&stpp, (void __user *)uarg, sizeof(stpp))) {
     printk("couldn't copy arg from user.");
@@ -681,23 +776,17 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
   }
   dev_bk = chr_dev_bk->dev_bk;
 
-  // add the new batch to the queue
   new_node = kzalloc(sizeof(struct tx_queue_node), GFP_KERNEL);
   if (new_node == NULL) {
       printk("Failed to allocated memory for the new queue node");
       return -ENOMEM;
   }
-  new_node->batch = kzalloc(sizeof(struct enso_send_tx_pipe_params), GFP_KERNEL);
-  if (new_node->batch == NULL) {
-      printk("Failed to allocated memory for the new queue node's batch");
-      kfree(new_node);
-      return -ENOMEM;
-  }
-  new_node->batch->phys_addr = stpp.phys_addr;
-  new_node->batch->id = stpp.id;
-  new_node->batch->len = stpp.len;
+  new_node->batch.phys_addr = stpp.phys_addr;
+  new_node->batch.notif_buf_id = stpp.notif_buf_id;
+  new_node->batch.pipe_id = stpp.pipe_id;
+  new_node->batch.len = stpp.len;
   new_node->next = NULL;
-  qh = dev_bk->queue_head;
+  queue_heads = dev_bk->queue_heads;
 
   if (unlikely(down_interruptible(&dev_bk->sem))) {
     printk("send_tx: interrupted while attempting to obtain device semaphore.");
@@ -706,19 +795,63 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
 
   spin_lock(&dev_bk->lock);
 
-  if(qh) {
-      if ((qh->front == NULL) && (qh->rear == NULL)) {
-          // first element in the queue
-          qh->front = new_node;
-          qh->rear = new_node;
+  sqh = dev_bk->sqh;
+  pipe_id = stpp.pipe_id;
+  if(queue_heads[pipe_id] == NULL) {
+    // insert new flow to the scheduler and queue_heads array
+    printk("Adding new flow with id = %d\n", pipe_id);
+    new_queue_head = kzalloc(sizeof(struct tx_queue_head), GFP_KERNEL);
+    if(new_queue_head == NULL) {
+      printk("Failed to allocated memory for the new queue head\n");
+      kfree(new_node);
+      spin_unlock(&dev_bk->lock);
+      up(&dev_bk->sem);
+      return -ENOMEM;
+    }
+    queue_heads[pipe_id] = new_queue_head;
+
+    new_sched_node = kzalloc(sizeof(struct sched_queue_node), GFP_KERNEL);
+    if(new_sched_node == NULL) {
+      printk("Failed to allocate memory for the new sched node\n");
+      kfree(new_queue_head);
+      kfree(new_node);
+      spin_unlock(&dev_bk->lock);
+      up(&dev_bk->sem);
+      return -ENOMEM;
+    }
+    new_sched_node->pipe_id = pipe_id;
+    new_sched_node->next = NULL;
+
+    // now add the new sched node to the sched queue
+    if((sqh->front == NULL) && (sqh->rear == NULL)) {
+      // first element in the queue
+      sqh->front = new_sched_node;
+      sqh->rear = new_sched_node;
+      sqh->cur = new_sched_node;
+    }
+    else {
+      last_sched_node = sqh->rear;
+      if(last_sched_node) {
+        last_sched_node->next = new_sched_node;
+        sqh->rear = last_sched_node;
       }
-      else {
-          last_node = qh->rear;
-          if(last_node) {
-              last_node->next = new_node;
-              qh->rear = new_node;
-          }
+    }
+  }
+
+  pipe_queue_head = queue_heads[pipe_id];
+  if (pipe_queue_head) {
+    if ((pipe_queue_head->front == NULL) && (pipe_queue_head->rear == NULL)) {
+      // first element in the queue
+      pipe_queue_head->front = new_node;
+      pipe_queue_head->rear = new_node;
+    }
+    else {
+      last_node = pipe_queue_head->rear;
+      if(last_node) {
+          last_node->next = new_node;
+          pipe_queue_head->rear = new_node;
       }
+    }
   }
   spin_unlock(&dev_bk->lock);
 
@@ -1520,30 +1653,57 @@ int send_one_batch(struct notification_buf_pair *notif_buf_pair,
 
 int enso_sched(void *data) {
   struct dev_bookkeep *dev_bk = (struct dev_bookkeep *) data;
-  struct tx_queue_head *qh = dev_bk->queue_head;
-  struct notification_buf_pair *notif_buf_pair = dev_bk->notif_buf_pair;
+  struct tx_queue_head **queue_heads = dev_bk->queue_heads;
+  struct tx_queue_head *pipe_queue_head = NULL;
   struct tx_queue_node *first_node = NULL;
 
+  struct sched_queue_head *sqh = dev_bk->sqh;
+  struct sched_queue_node *to_sched = NULL;
+  struct notification_buf_pair *notif_buf_pair = NULL;
+
+  if(sqh == NULL) {
+    printk("Exiting since sqh is NULL\n");
+    dev_bk->sched_run = false;
+    return 0;
+  }
+
+  printk("Starting enso_sched\n");
   while (!kthread_should_stop()) {
     // dequeue an element from the queue and send it
     spin_lock(&dev_bk->lock);
-    if (qh != NULL) {
-      if(qh->front != NULL) {
-        first_node = qh->front;
-        qh->front = first_node->next;
-        if (qh->front == NULL) {
-            // we got the last element, set rear to NULL as well
-            qh->rear = NULL;
+    // if (sqh) {
+      if (sqh->cur != NULL) {
+        to_sched = sqh->cur;
+        pipe_queue_head = queue_heads[to_sched->pipe_id];
+        if (pipe_queue_head != NULL) {
+          if (pipe_queue_head->front != NULL) {
+            first_node = pipe_queue_head->front;
+            pipe_queue_head->front = first_node->next;
+            if (pipe_queue_head->front == NULL) {
+              // we got the last element, set rear to NULL as well
+              pipe_queue_head->rear = NULL;
+            }
+            notif_buf_pair = dev_bk->notif_buf_pairs[first_node->batch.notif_buf_id];
+            if(notif_buf_pair == NULL) {
+              printk("enso_sched: Asserting as notif buf %d is NULL\n", first_node->batch.notif_buf_id);
+              dev_bk->sched_run = false;
+              spin_unlock(&dev_bk->lock);
+              return -1;
+            }
+            send_one_batch(notif_buf_pair, &first_node->batch);
+            kfree(first_node);
+            first_node = NULL;
+          }
         }
-        send_one_batch(notif_buf_pair, first_node->batch);
-        kfree(first_node->batch);
-        first_node->batch = NULL;
-        kfree(first_node);
-        first_node = NULL;
+        // move the cur to the next flow to be scheduled
+        sqh->cur = to_sched->next;
+        if (sqh->cur == NULL) {
+          sqh->cur = sqh->front;
+        }
       }
-    }
+    // }
     spin_unlock(&dev_bk->lock);
-    // yield();
+    yield();
   }
   printk("enso_sched exiting\n");
   return 0;

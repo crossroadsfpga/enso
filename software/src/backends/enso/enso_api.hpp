@@ -97,7 +97,7 @@ class EnsoDev {
    * @return 0 on success. On error, -1 is returned and errno is set
    *         appropriately.
    */
-  int send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t buf_id);
+  int send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t notif_buf_id, uint32_t pipe_id);
 
   /**
    * Get the number of Tx notifications that were consumed by the NIC.
@@ -122,6 +122,8 @@ class EnsoDev {
   int advance_pipe(int pipe_id, size_t len);
   int next_rx_pipe_to_recv();
   int prefetch_pipe(int pipe_id);
+  int allocate_tx_pipe();
+  int free_tx_pipe(int pipe_id);
 
  private:
   /**

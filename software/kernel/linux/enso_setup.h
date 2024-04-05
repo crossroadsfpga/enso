@@ -63,14 +63,33 @@ struct enso_global_bookkeep {
   struct dev_bookkeep *dev_bk;
 };
 
+struct enso_send_tx_pipe_params {
+  uint64_t phys_addr;
+  uint32_t len;
+  uint32_t notif_buf_id;
+  uint32_t pipe_id;
+} __attribute__((packed));
+
+
 struct tx_queue_node {
-    struct enso_send_tx_pipe_params *batch;
-    struct tx_queue_node *next;
+  struct enso_send_tx_pipe_params batch;
+  struct tx_queue_node *next;
 };
 
 struct tx_queue_head {
-    struct tx_queue_node *front;
-    struct tx_queue_node *rear;
+  struct tx_queue_node *front;
+  struct tx_queue_node *rear;
+};
+
+struct sched_queue_node {
+  uint32_t pipe_id;
+  struct sched_queue_node *next;
+};
+
+struct sched_queue_head {
+  struct sched_queue_node *front;
+  struct sched_queue_node *rear;
+  struct sched_queue_node *cur;
 };
 
 /**
@@ -95,12 +114,14 @@ struct dev_bookkeep {
   bool enable_rr;
   uint8_t *notif_q_status;
   uint8_t *pipe_status;
+  uint8_t *tx_pipe_status;
+
   struct task_struct *enso_sched_thread;
-  struct tx_queue_head *queue_head;
+  struct tx_queue_head **queue_heads;
+  struct sched_queue_head *sqh;
   spinlock_t lock;
   bool sched_run;
-  // hack to make it work
-  struct notification_buf_pair *notif_buf_pair;
+  struct notification_buf_pair **notif_buf_pairs;
 };
 
 /**
@@ -123,6 +144,7 @@ struct chr_dev_bookkeep {
   uint32_t nb_fb_queues;
   uint8_t *notif_q_status;
   uint8_t *pipe_status;
+  uint8_t *tx_pipe_status;
   struct notification_buf_pair *notif_buf_pair;
   struct rx_pipe_internal **rx_pipes;
 };

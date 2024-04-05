@@ -123,12 +123,13 @@ int EnsoDev::allocate_notif_buf_pair(int id) {
   return result;
 }
 
-int EnsoDev::send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t buf_id) {
+int EnsoDev::send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t buf_id, uint32_t pipe_id) {
   int result;
   struct enso_send_tx_pipe_params stpp;
   stpp.phys_addr = phys_addr;
   stpp.len = len;
-  stpp.id = buf_id;
+  stpp.notif_buf_id = buf_id;
+  stpp.pipe_id = pipe_id;
   result =
       ioctl(m_dev_handle, ENSO_IOCTL_SEND_TX_PIPE, &stpp);
 
@@ -242,6 +243,24 @@ int EnsoDev::next_rx_pipe_to_recv() {
 int EnsoDev::prefetch_pipe(int pipe_id) {
   int result;
   result = ioctl(m_dev_handle, ENSO_IOCTL_PREFETCH_PIPE, &pipe_id);
+  return result;
+}
+
+int EnsoDev::allocate_tx_pipe() {
+  int result;
+  uint32_t pipe_id;
+  result = ioctl(m_dev_handle, ENSO_IOCTL_ALLOC_TX_PIPE, &pipe_id);
+
+  if (result != 0) {
+    return -1;
+  }
+
+  return pipe_id;
+}
+
+int EnsoDev::free_tx_pipe(int pipe_id) {
+  int result;
+  result = ioctl(m_dev_handle, ENSO_IOCTL_FREE_TX_PIPE, pipe_id);
   return result;
 }
 

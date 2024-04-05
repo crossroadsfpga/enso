@@ -335,6 +335,7 @@ class Device {
    * @return The number of bytes sent.
    */
   void Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+  void FreeTxPipe(uint32_t tx_enso_pipe_id);
 
   friend class RxPipe;
   friend class TxPipe;

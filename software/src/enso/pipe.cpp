@@ -107,12 +107,12 @@ void RxPipe::Clear() {
 }
 
 RxPipe::~RxPipe() {
-  enso_pipe_free(notification_buf_pair_, &internal_rx_pipe_, id_);
+  enso_rx_pipe_free(notification_buf_pair_, &internal_rx_pipe_, id_);
 }
 
 int RxPipe::Init(bool fallback) noexcept {
   int ret =
-      enso_pipe_init(&internal_rx_pipe_, notification_buf_pair_, fallback);
+      enso_rx_pipe_init(&internal_rx_pipe_, notification_buf_pair_, fallback);
   if (ret < 0) {
     return ret;
   }
@@ -122,12 +122,17 @@ int RxPipe::Init(bool fallback) noexcept {
   return 0;
 }
 
+void Device::FreeTxPipe(uint32_t pipe_id) {
+  enso_tx_pipe_free(&notification_buf_pair_, pipe_id);
+}
+
 TxPipe::~TxPipe() {
   if (internal_buf_) {
     munmap(buf_, kMaxCapacity);
     std::string path = GetHugePageFilePath();
     unlink(path.c_str());
   }
+  device_->FreeTxPipe(kId);
 }
 
 int TxPipe::Init() noexcept {
@@ -219,7 +224,13 @@ int Device::GetNbFallbackQueues() noexcept {
 }
 
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
-  TxPipe* pipe(new (std::nothrow) TxPipe(tx_pipes_.size(), this, buf));
+  int id =
+      enso_tx_pipe_init(&notification_buf_pair_);
+  if (id < 0) {
+    return nullptr;
+  }
+
+  TxPipe* pipe(new (std::nothrow) TxPipe(id, this, buf));
 
   if (unlikely(!pipe)) {
     return nullptr;
@@ -337,7 +348,7 @@ void Device::Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
                   uint32_t nb_bytes) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
-  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
+  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes, tx_enso_pipe_id);
 
   uint32_t nb_pending_requests =
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;

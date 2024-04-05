@@ -59,24 +59,74 @@ static __init int enso_init(void) {
     return -ENOMEM;
   }
 
-  dev_bk->queue_head = kzalloc(sizeof(struct tx_queue_head), GFP_KERNEL);
-  if (dev_bk->queue_head == NULL) {
-    printk("couldn't create queue head for device\n");
-    kfree(dev_bk->notif_q_status);
+  dev_bk->tx_pipe_status = kzalloc(MAX_NB_FLOWS / 8, GFP_KERNEL);
+  if (dev_bk->tx_pipe_status == NULL) {
+    printk("couldn't create pipe status for device\n");
     kfree(dev_bk->pipe_status);
+    kfree(dev_bk->notif_q_status);
     kfree(dev_bk);
     return -ENOMEM;
   }
-  dev_bk->queue_head->front = NULL;
-  dev_bk->queue_head->rear = NULL;
+
+  dev_bk->queue_heads = kzalloc(MAX_NB_FLOWS * sizeof(struct tx_queue_head*), GFP_KERNEL);
+  if (dev_bk->queue_heads == NULL) {
+    printk("couldn't create queue head for device\n");
+    kfree(dev_bk->tx_pipe_status);
+    kfree(dev_bk->pipe_status);
+    kfree(dev_bk->notif_q_status);
+    kfree(dev_bk);
+    return -ENOMEM;
+  }
+
+  dev_bk->sqh = kzalloc(sizeof(struct sched_queue_head), GFP_KERNEL);
+  if (dev_bk->sqh == NULL) {
+    printk("couldn't create sched head for device\n");
+    kfree(dev_bk->queue_heads);
+    kfree(dev_bk->tx_pipe_status);
+    kfree(dev_bk->pipe_status);
+    kfree(dev_bk->notif_q_status);
+    kfree(dev_bk);
+    return -ENOMEM;
+  }
+
+  dev_bk->notif_buf_pairs = kzalloc(MAX_NB_APPS * sizeof(struct notification_buf_pair *), GFP_KERNEL);
+  if (dev_bk->notif_buf_pairs == NULL) {
+    printk("couldn't create notif_buf_pairs\n");
+    kfree(dev_bk->sqh);
+    kfree(dev_bk->queue_heads);
+    kfree(dev_bk->tx_pipe_status);
+    kfree(dev_bk->pipe_status);
+    kfree(dev_bk->notif_q_status);
+    kfree(dev_bk);
+    return -ENOMEM;
+  }
+
   spin_lock_init(&dev_bk->lock);
-  dev_bk->sched_run = false;
+  dev_bk->enso_sched_thread = kthread_create(enso_sched, dev_bk, "enso_sched");
+  kthread_bind(dev_bk->enso_sched_thread, 2);
+  wake_up_process(dev_bk->enso_sched_thread);
+  dev_bk->sched_run = true;
 
   global_bk.dev_bk = dev_bk;
 
   return 0;
-
 }
+
+void free_tx_queue(struct tx_queue_head *queue_head) {
+  struct tx_queue_node *node;
+  struct tx_queue_node *to_free;
+  node = queue_head->front;
+  while(node != NULL) {
+    to_free = node;
+    if(to_free) {
+      kfree(to_free);
+      to_free = NULL;
+    }
+    node = node->next;
+  }
+  kfree(queue_head);
+}
+
 module_init(enso_init);
 
 /*
@@ -84,35 +134,44 @@ module_init(enso_init);
  *
  * */
 static void enso_exit(void) {
-  // unregister the character device
+  // scheduler clean up
+  int index;
   struct tx_queue_head *queue_head;
-  struct tx_queue_node *node;
-  struct tx_queue_node *to_free;
+  struct sched_queue_head *sqh;
+  struct sched_queue_node *node;
+  struct sched_queue_node *to_free;
+
   if(global_bk.dev_bk->sched_run) {
     kthread_stop(global_bk.dev_bk->enso_sched_thread);
   }
 
-  // free the queue
-  queue_head = global_bk.dev_bk->queue_head;
-  node = queue_head->front;
+  // tx_queue_heads
+  for(index = 0; index < MAX_NB_FLOWS; index++) {
+    queue_head = global_bk.dev_bk->queue_heads[index];
+    if(queue_head) {
+      free_tx_queue(queue_head);
+    }
+  }
+
+  // scheduler queue
+  sqh = global_bk.dev_bk->sqh;
+  node = sqh->front;
   while(node != NULL) {
     to_free = node;
+    node = node->next;
     if(to_free) {
-      if(to_free->batch) {
-          kfree(to_free->batch);
-          to_free->batch = NULL;
-      }
       kfree(to_free);
       to_free = NULL;
     }
-    node = node->next;
   }
-  kfree(global_bk.dev_bk->queue_head);
+  kfree(sqh);
+
+  // other clean up
   enso_chr_exit();
   global_bk.intel_enso = NULL;
-
   kfree(global_bk.dev_bk->pipe_status);
   kfree(global_bk.dev_bk->notif_q_status);
+  kfree(global_bk.dev_bk->notif_buf_pairs);
   kfree(global_bk.dev_bk);
 }
 module_exit(enso_exit);

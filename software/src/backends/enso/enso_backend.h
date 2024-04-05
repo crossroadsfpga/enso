@@ -159,8 +159,8 @@ class EnsoBackend {
    *
    * @return Return 0 on success. On error, -1 is returned and errno is set.
    */
-  int SendTxPipe(uint64_t phys_addr, uint32_t len, uint32_t id) {
-    return dev_->send_tx_pipe(phys_addr, len, id);
+  int SendTxPipe(uint64_t phys_addr, uint32_t len, uint32_t notif_buf_id, uint32_t pipe_id) {
+    return dev_->send_tx_pipe(phys_addr, len, notif_buf_id, pipe_id);
   }
 
   /**
@@ -214,6 +214,14 @@ class EnsoBackend {
 
   int PrefetchPipe(int pipe_id) {
     return dev_->prefetch_pipe(pipe_id);
+  }
+
+  int AllocateTxPipe() {
+    return dev_->allocate_tx_pipe();
+  }
+
+  int FreeTxPipe(int pipe_id) {
+    return dev_->free_tx_pipe(pipe_id);
   }
 
  private:

@@ -16,7 +16,8 @@ namespace enso_api {
 struct enso_send_tx_pipe_params {
   uint64_t phys_addr;
   uint32_t len;
-  uint32_t id;
+  uint32_t notif_buf_id;
+  uint32_t pipe_id;
 } __attribute__((packed));
 
 struct enso_pipe_init_params {
@@ -81,7 +82,11 @@ struct enso_advance_pipe_params {
   _IOR(ENSO_IOCTL_MAGIC, 18, unsigned int)
 #define ENSO_IOCTL_PREFETCH_PIPE \
   _IOR(ENSO_IOCTL_MAGIC, 19, unsigned int *)
-#define ENSO_IOCTL_MAXNR 19
+#define ENSO_IOCTL_ALLOC_TX_PIPE \
+  _IOR(ENSO_IOCTL_MAGIC, 20, unsigned int *)
+#define ENSO_IOCTL_FREE_TX_PIPE \
+  _IOR(ENSO_IOCTL_MAGIC, 21, unsigned int)
+#define ENSO_IOCTL_MAXNR 21
 
 }  // namespace enso_api
 
