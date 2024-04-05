@@ -317,6 +317,9 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     struct Parent::Element* current_element =
         &(Parent::buf_addr()[tail_ & Parent::index_mask()]);
     if (unlikely(current_element->signal)) {
+      // std::cout << "Trying to push to tail " << (tail_ &
+      // Parent::index_mask())
+      //           << " but it is full" << std::endl;
       return -1;  // Queue is full.
     }
 
@@ -329,6 +332,7 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     if (shared_ || application_id_ >= 0) {
       *tail_addr_ = (tail_ + 1);
     }
+    nb_pushes_++;
 
     if (first) {
       std::cout << "Pushing to tail " << (tail_ & Parent::index_mask())
@@ -338,7 +342,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     nb_pushes_++;
 
     _mm512_storeu_si512((__m512i*)current_element, tmp_element_raw);
-
     tail_ = (tail_ + 1);
 
     return 0;
@@ -420,6 +423,7 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   uint32_t* tail_addr_ = nullptr;
   uint32_t* head_addr_ = nullptr;
   uint32_t core_id_;
+  uint64_t nb_pushes_ = 0;
   int32_t application_id_ = -1;
   bool shared_ = false;
   uint64_t nb_pushes_ = 0;
@@ -478,7 +482,26 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
     if (shared_ || application_id_ >= 0) *head_addr_ = (head_ + 1);
 
     T data = current_element->data;
+
+    // enso::PipeNotification* pipe_notif =
+    //     reinterpret_cast<enso::PipeNotification*>(&data);
+    // if (print_ && pipe_notif->type == enso::NotifType::kWrite) {
+    //   std::cout << "Popped from head " << (head_ & Parent::index_mask())
+    //             << " addr: " << pipe_notif->data[0] << std::endl;
+    // }
+    // if (pipe_notif->type == enso::NotifType::kWrite &&
+    //     pipe_notif->data[3] == 0) {
+    //   std::cout << "DATA UTHREAD ID BEFORE IS 0 and tsc is  "
+    //             << pipe_notif->data[2] << " SIGNAL IS "
+    //             << current_element->signal << std::endl;
+    // }
+    // current_element->data = T{};
     current_element->signal = 0;
+    // if (pipe_notif->type == enso::NotifType::kWrite &&
+    //     pipe_notif->data[3] == 0) {
+    //   std::cout << "DATA UTHREAD ID IS 0 and signal is "
+    //             << current_element->signal << std::endl;
+    // }
 
     head_ = (head_ + 1);
 

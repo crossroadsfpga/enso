@@ -53,6 +53,7 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <random>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -112,6 +113,17 @@ void int_handler(int signal __attribute__((unused))) {
     force_stop = 1;
   }
   keep_running = 0;
+}
+
+uint64_t get_curr_millis() {
+  auto currentTime = std::chrono::system_clock::now();
+  // Get the duration since the epoch
+  auto duration = currentTime.time_since_epoch();
+
+  // Convert the duration to milliseconds
+  auto milliseconds =
+      std::chrono::duration_cast<std::chrono::milliseconds>(duration);
+  return milliseconds.count();
 }
 
 static void print_usage(const char* program_name) {
@@ -430,12 +442,13 @@ struct RxStats {
         rtt_hist_len(rtt_hist_len),
         rtt_hist_offset(rtt_hist_offset) {
     if (rtt_hist_len > 0) {
-      rtt_hist = new uint64_t[rtt_hist_len]();
+      for (uint32_t i = 0; i < nb_seconds; i++)
+        rtt_hist[i] = new uint64_t[rtt_hist_len]();
     }
   }
   ~RxStats() {
     if (rtt_hist_len > 0) {
-      delete[] rtt_hist;
+      for (uint32_t i = 0; i < nb_seconds; i++) delete[] rtt_hist[i];
     }
   }
 
@@ -451,7 +464,10 @@ struct RxStats {
                  (rtt < rtt_hist_offset))) {
       backup_rtt_hist[rtt]++;
     } else {
-      rtt_hist[rtt - rtt_hist_offset]++;
+      if (start_time == 0) start_time = get_curr_millis();
+      uint64_t idx = (get_curr_millis() - start_time) / 1000;
+      if (idx >= nb_seconds) idx = (nb_seconds)-1;
+      rtt_hist[idx][rtt - rtt_hist_offset]++;
     }
   }
 
@@ -459,9 +475,11 @@ struct RxStats {
   uint64_t bytes;
   uint64_t rtt_sum;
   uint64_t nb_batches;
+  uint64_t start_time = 0;
+  uint64_t nb_seconds = 10;
   const uint32_t rtt_hist_len;
   const uint32_t rtt_hist_offset;
-  uint64_t* rtt_hist;
+  uint64_t* rtt_hist[10];
   std::unordered_map<uint32_t, uint64_t> backup_rtt_hist;
 };
 
@@ -676,16 +694,44 @@ void load_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
   }
 }
 
-uint64_t get_curr_millis() {
-  auto currentTime = std::chrono::system_clock::now();
+void load_pcaps_random(struct PcapHandlerContext* context,
+                       uint32_t window_size) {
+  const u_char* pkt_bytes;
+  struct pcap_pkthdr header;
+  uint64_t nb_bytes;
+  uint64_t total_bytes = 0;
+  char errbuf[PCAP_ERRBUF_SIZE];
 
-  // Get the duration since the epoch
-  auto duration = currentTime.time_since_epoch();
+  // Seed for random number generation
+  std::random_device rd;
+  std::mt19937 gen(rd());
 
-  // Convert the duration to milliseconds
-  auto milliseconds =
-      std::chrono::duration_cast<std::chrono::milliseconds>(duration);
-  return milliseconds.count();
+  // Define a distribution for integers between 0 and nb_pcaps-1
+  std::uniform_int_distribution<int> dis(0, context->nb_pcaps - 1);
+
+  while (total_bytes < BUFFER_SIZE) {
+    uint32_t pcap_idx = dis(gen);
+    pcap_t* pcap = context->pcaps[pcap_idx];
+    nb_bytes = 0;
+
+    while (nb_bytes < window_size) {
+      pkt_bytes = pcap_next(pcap, &header);
+      if (!pkt_bytes) {
+        pcap_close(context->pcaps[pcap_idx]);
+        context->pcaps[pcap_idx] =
+            pcap_open_offline(context->pcap_files[pcap_idx].c_str(), errbuf);
+        pcap = context->pcaps[pcap_idx];
+        pkt_bytes = pcap_next(pcap, &header);
+      }
+
+      load_pkt(context, pkt_bytes);
+
+      nb_bytes += enso::get_pkt_len(pkt_bytes);
+    }
+    std::cout << "Loaded " << nb_bytes << " bytes of pcap file "
+              << context->pcap_files[pcap_idx] << std::endl;
+    total_bytes += nb_bytes;
+  }
 }
 
 int main(int argc, char** argv) {
@@ -733,7 +779,7 @@ int main(int argc, char** argv) {
     context.pcap_files[i] = parsed_args.pcap_files[i];
   }
 
-  load_pcaps(&context, parsed_args.window_size);
+  load_pcaps_random(&context, parsed_args.window_size);
 
   std::cout << "Number of enso pipes: " << enso_pipes.size() << std::endl;
 
@@ -841,7 +887,7 @@ int main(int argc, char** argv) {
         socket_fds.push_back(socket_fd);
       }
 
-      enso::enable_device_rate_limit(socket_fd, 1, 10);
+      enso::enable_device_rate_limit(socket_fd, 1, 1000);
       enso::enable_device_round_robin(socket_fd);
 
       if (parsed_args.enable_rtt) {
@@ -915,19 +961,14 @@ int main(int argc, char** argv) {
           while (keep_running) {
             transmit_pkts(tx_args, tx_stats);
             auto curr_time = get_curr_millis();
-            if (slow) {
-              if (curr_time - last_time >= 10000) {
-                last_time = curr_time;
-                enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
-                                               parsed_args.rate_den);
-                slow = !slow;
-              }
-            } else {
-              if (curr_time - last_time >= 2000) {
-                last_time = curr_time;
-                enso::enable_device_rate_limit(socket_fd, 1, 10);
-                slow = !slow;
-              }
+            if (curr_time - last_time >= 1000) {
+              std::cout << "Switching rate limit..." << std::endl;
+              last_time = curr_time;
+              if (slow)
+                enso::enable_device_rate_limit(socket_fd, 1, 100);
+              else
+                enso::enable_device_rate_limit(socket_fd, 1, 1000);
+              slow = !slow;
             }
           }
 
@@ -1056,9 +1097,10 @@ int main(int argc, char** argv) {
   if (parsed_args.save) {
     std::ofstream save_file;
     save_file.open(parsed_args.save_file);
-    save_file
-        << "rx_goodput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
-           "tx_goodput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
+    save_file << "rx_goodput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_"
+                 "packets,"
+                 "tx_goodput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_"
+                 "packets";
     if (parsed_args.enable_rtt) {
       save_file << ",mean_rtt_ns";
     }
@@ -1157,30 +1199,34 @@ int main(int argc, char** argv) {
   ret = 0;
   if (parsed_args.enable_rtt_history) {
     std::ofstream hist_file;
-    hist_file.open(parsed_args.hist_file);
+    for (uint32_t i = 0; i < rx_stats.nb_seconds; i++) {
+      std::string hist_file_name =
+          parsed_args.hist_file + "_" + std::to_string(i);
+      hist_file.open(hist_file_name);
 
-    for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
-      if (rx_stats.rtt_hist[rtt] != 0) {
-        uint32_t corrected_rtt =
-            (rtt + parsed_args.rtt_hist_offset) * enso::kNsPerTimestampCycle;
-        hist_file << corrected_rtt << "," << rx_stats.rtt_hist[rtt]
-                  << std::endl;
+      uint64_t* rtt_hist = rx_stats.rtt_hist[i];
+
+      for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
+        if (rtt_hist[rtt] != 0) {
+          uint32_t corrected_rtt =
+              (rtt + parsed_args.rtt_hist_offset) * enso::kNsPerTimestampCycle;
+          hist_file << corrected_rtt << "," << rtt_hist[rtt] << std::endl;
+        }
       }
-    }
 
-    if (rx_stats.backup_rtt_hist.size() != 0) {
-      std::cout << "Warning: " << rx_stats.backup_rtt_hist.size()
-                << " rtt hist entries in backup" << std::endl;
-      for (auto const& i : rx_stats.backup_rtt_hist) {
-        hist_file << i.first * enso::kNsPerTimestampCycle << "," << i.second
-                  << std::endl;
+      if (rx_stats.backup_rtt_hist.size() != 0) {
+        std::cout << "Warning: " << rx_stats.backup_rtt_hist.size()
+                  << " rtt hist entries in backup" << std::endl;
+        for (auto const& i : rx_stats.backup_rtt_hist) {
+          hist_file << i.first * enso::kNsPerTimestampCycle << "," << i.second
+                    << std::endl;
+        }
       }
+
+      hist_file.close();
+      std::cout << "Saved RTT histogram to \"" << parsed_args.hist_file << "\""
+                << std::endl;
     }
-
-    hist_file.close();
-    std::cout << "Saved RTT histogram to \"" << parsed_args.hist_file << "\""
-              << std::endl;
-
     if (rx_stats.pkts != tx_stats.pkts) {
       std::cout << "Warning: did not get all packets back." << std::endl;
       ret = 1;

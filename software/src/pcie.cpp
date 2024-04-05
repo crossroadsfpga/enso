@@ -66,8 +66,6 @@
 
 namespace enso {
 
-ParkCallback park_callback_;
-
 void set_park_callback(ParkCallback park_callback) {
   park_callback_ = park_callback;
 }
@@ -212,6 +210,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   notification_buf_pair->next_rx_ids_head = 0;
   notification_buf_pair->next_rx_ids_tail = 0;
   notification_buf_pair->tx_full_cnt = 0;
+
   notification_buf_pair->nb_unreported_completions = 0;
   notification_buf_pair->huge_page_prefix = huge_page_prefix;
 
@@ -373,6 +372,10 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     if (!cur_notification->signal) {
       break;
     }
+    // std::cout << "Got notification for notif buf " <<
+    // notification_buf_pair->id
+    //           << " at notif buf head " << notification_buf_head
+    //           << " until tail " << cur_notification->tail << std::endl;
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
@@ -580,10 +583,18 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     uint64_t huge_page_offset = (transf_addr + req_length) % kBufPageSize;
     transf_addr = hugepage_base_addr + huge_page_offset;
 
+    // if (first)
+    //   std::cout << "sent phys addr " << phys_addr << " for notif buf "
+    //             << notification_buf_pair->id << " at tx tail " << tx_tail
+    //             << std::endl;
+
     tx_tail = (tx_tail + 1) % kNotificationBufSize;
     missing_bytes -= req_length;
   }
 
+  // std::cout << "Notif buf " << notification_buf_pair->id << " tx tail is now
+  // "
+  //           << tx_tail << std::endl;
   notification_buf_pair->tx_tail = tx_tail;
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
                            notification_buf_pair->uio_mmap_bar2_addr, first);
@@ -626,6 +637,9 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
     if (tx_notification->signal != 0) {
       break;
     }
+
+    // std::cout << "Notif buf " << notification_buf_pair->id
+    //           << " consumed tx notification at " << head << std::endl;
 
     // Requests that wrap around need two notifications but should only signal
     // a single completion notification. Therefore, we only increment
@@ -670,7 +684,6 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   struct TxNotification* tx_notification = tx_buf + tx_tail;
   *tx_notification = *config_notification;
-  // std::cout << "transmitting tx notification at " << tx_tail << std::endl;
 
   tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;

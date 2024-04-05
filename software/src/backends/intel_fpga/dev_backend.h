@@ -74,6 +74,8 @@ std::optional<PipeNotification> push_to_backend_get_response(
   return res;
 }
 
+bool is_hybrid() { return false; }
+
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {

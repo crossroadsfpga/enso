@@ -46,6 +46,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <atomic>
+#include <csignal>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -64,6 +66,9 @@ std::array<std::unique_ptr<QueueProducer<PipeNotification>>, NCPU>
     queues_to_backend_ = {0};
 std::array<std::unique_ptr<QueueConsumer<PipeNotification>>, NCPU>
     queues_from_backend_ = {0};
+std::atomic<uint64_t> tsc_atomic;
+std::array<uint64_t, enso::kMaxNbFlows> last_tscs_ = {0};
+std::array<uint64_t, enso::kMaxNbFlows> tx_tail_offset_addrs_ = {0};
 
 // These queues are per-kthread, not per-uthread, given that they are
 // thread-local. Will automatically update when switching cores.
@@ -82,7 +87,7 @@ int initialize_queues(uint32_t core_id) {
   core_id_ = core_id;
   if (queues_to_backend_[core_id] != nullptr) return -1;
 
-  // std::cout << "Initializing queue for core " << core_id << std::endl;
+  std::cout << "Initializing queue for core " << core_id << std::endl;
 
   std::string queue_to_app_name =
       std::string(kIpcQueueToAppName) + std::to_string(core_id) + "_";
@@ -160,6 +165,8 @@ std::optional<PipeNotification> push_to_backend_get_response(
   return notification;
 }
 
+bool is_hybrid() { return true; }
+
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
@@ -227,6 +234,7 @@ class DevBackend {
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
           break;
       }
+      // Updates to RX pipe: write directly
       _enso_compiler_memory_barrier();
       *addr = value;
       return;
@@ -235,6 +243,20 @@ class DevBackend {
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
+      switch (offset) {
+        case offsetof(struct enso::QueueRegs, tx_tail):
+          uint64_t actual_offset_addr =
+              tx_tail_offset_addrs_[std::invoke(id_callback_)];
+          if (offset_addr != actual_offset_addr) {
+            std::cout << "Uthread ID: " << std::invoke(id_callback_)
+                      << " offset addr: " << offset_addr
+                      << " actual offset addr: " << actual_offset_addr
+                      << std::endl;
+            raise(SIGINT);
+          }
+          break;
+      }
+
       // Block if full.
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kWrite;
@@ -260,6 +282,7 @@ class DevBackend {
     uint64_t offset_addr =
         (uint64_t)((uint8_t*)addr - (uint8_t*)uio_mmap_bar2_addr);
     enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
+    uint32_t offset = offset_addr % enso::kMemorySpacePerQueue;
     // Read from RX pipe: read directly
     if (queue_id < enso::kMaxNbFlows) {
       _enso_compiler_memory_barrier();
@@ -268,6 +291,13 @@ class DevBackend {
     queue_id -= enso::kMaxNbFlows;
     // Reads from notification buffers.
     if (queue_id < enso::kMaxNbApps) {
+      switch (offset) {
+        case offsetof(struct enso::QueueRegs, tx_tail):
+          std::cout << "Uthread ID: " << std::invoke(id_callback_)
+                    << " offset addr: " << offset_addr << std::endl;
+          tx_tail_offset_addrs_[std::invoke(id_callback_)] = offset_addr;
+          break;
+      }
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kRead;
       mmio_notification.address = offset_addr;
@@ -382,7 +412,6 @@ class DevBackend {
                 << std::endl;
       exit(2);
     }
-    // std::cout << "allocating notif buf" << std::endl;
     struct NotifBufNotification nb_notification;
     nb_notification.type = NotifType::kAllocateNotifBuf;
     nb_notification.uthread_id = (uint64_t)uthread_id;
@@ -397,6 +426,8 @@ class DevBackend {
         (struct NotifBufNotification*)&notification.value();
 
     // std::cout << "recvd response from allocatenotifbuf" << std::endl;
+    std::cout << "Uthread " << uthread_id << " got notif buf "
+              << result->notif_buf_id << std::endl;
 
     assert(result->type == NotifType::kAllocateNotifBuf);
     return result->notif_buf_id;

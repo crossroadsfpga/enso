@@ -458,6 +458,8 @@ void Device::ProcessCompletions() {
       // for applications
       std::invoke(completion_callback_);
     } else {
+      // std::cout << "Processing completion of " << tx_req.nb_bytes
+      //           << " bytes with phys addr " << tx_req.phys_addr << std::endl;
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
       // increments app_end_ for the tx pipe by nb_bytes
       pipe->NotifyCompletion(tx_req.nb_bytes);
