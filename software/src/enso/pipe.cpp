@@ -60,9 +60,10 @@ void set_backend_core_id(uint32_t core_id) {
 }
 
 void initialize_backend(BackendWrapper preempt_enable,
-                        BackendWrapper preempt_disable,
-                        IdCallback id_callback) {
-  return pcie_initialize_backend(preempt_enable, preempt_disable, id_callback);
+                        BackendWrapper preempt_disable, IdCallback id_callback,
+                        TscCallback tsc_callback) {
+  return pcie_initialize_backend(preempt_enable, preempt_disable, id_callback,
+                                 tsc_callback);
 }
 
 void push_to_backend_queues(PipeNotification* notif) {

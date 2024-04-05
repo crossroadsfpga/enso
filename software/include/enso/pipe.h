@@ -66,6 +66,7 @@ class PeekPktIterator;
 
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
+using TscCallback = std::function<uint64_t()>;
 
 void set_backend_core_id(uint32_t core_id);
 
@@ -74,7 +75,8 @@ void set_backend_core_id(uint32_t core_id);
  *
  */
 void initialize_backend(BackendWrapper preempt_enable,
-                        BackendWrapper preempt_disable, IdCallback id_callback);
+                        BackendWrapper preempt_disable, IdCallback id_callback,
+                        TscCallback tsc_callback);
 
 /**
  * @brief Pushes a notification to the backend.

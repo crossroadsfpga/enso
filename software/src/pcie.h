@@ -55,6 +55,7 @@ using CompletionCallback = std::function<void()>;
 using ParkCallback = std::function<void(bool)>;
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
+using TscCallback = std::function<uint64_t()>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
@@ -337,7 +338,7 @@ void pcie_set_backend_core_id(uint32_t core_id);
  */
 void pcie_initialize_backend(BackendWrapper preempt_enable,
                              BackendWrapper preempt_disable,
-                             IdCallback id_callback);
+                             IdCallback id_callback, TscCallback tsc_callback);
 
 /**
  * @brief Push notification to backend.

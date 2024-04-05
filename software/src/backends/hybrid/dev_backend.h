@@ -72,9 +72,11 @@ int64_t shinkansen_notif_buf_id_ = -1;
 
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
+using TscCallback = std::function<uint64_t()>;
 BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
 IdCallback id_callback_;
+TscCallback tsc_callback_;
 
 int initialize_queues(uint32_t core_id) {
   core_id_ = core_id;
@@ -106,10 +108,11 @@ int initialize_queues(uint32_t core_id) {
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
                             BackendWrapper preempt_disable,
-                            IdCallback id_callback) {
+                            IdCallback id_callback, TscCallback tsc_callback) {
   preempt_enable_ = preempt_enable;
   preempt_disable_ = preempt_disable;
   id_callback_ = id_callback;
+  tsc_callback_ = tsc_callback;
 }
 
 void set_backend_core_id_dev(uint32_t core_id) {
@@ -213,6 +216,7 @@ class DevBackend {
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
           mmio_notification.uthread_id = std::invoke(id_callback_);
+          mmio_notification.tsc = std::invoke(tsc_callback_);
 
           pipe_notification = (enso::PipeNotification*)&mmio_notification;
 
@@ -237,6 +241,7 @@ class DevBackend {
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
       mmio_notification.uthread_id = std::invoke(id_callback_);
+      mmio_notification.tsc = std::invoke(tsc_callback_);
 
       if (first)
         std::cout << "Sending mmio notification "
