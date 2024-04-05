@@ -245,20 +245,6 @@ class DevBackend {
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
-      switch (offset) {
-        case offsetof(struct enso::QueueRegs, tx_tail):
-          uint64_t actual_offset_addr =
-              tx_tail_offset_addrs_[std::invoke(id_callback_)];
-          if (offset_addr != actual_offset_addr) {
-            std::cout << "Uthread ID: " << std::invoke(id_callback_)
-                      << " offset addr: " << offset_addr
-                      << " actual offset addr: " << actual_offset_addr
-                      << std::endl;
-            raise(SIGINT);
-          }
-          break;
-      }
-
       // Block if full.
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kWrite;
@@ -267,10 +253,9 @@ class DevBackend {
       mmio_notification.uthread_id = std::invoke(id_callback_);
       mmio_notification.tsc = std::invoke(tsc_callback_);
 
-      if (first)
-        std::cout << "Sending mmio notification with tsc "
-                  << mmio_notification.tsc << " for notif buf id " << queue_id
-                  << " update to tail: " << value << std::endl;
+      // std::cout << "pushing mmio notification with tsc "
+      //           << mmio_notification.tsc << " for notif buf " << queue_id
+      //           << std::endl;
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
