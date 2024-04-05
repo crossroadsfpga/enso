@@ -538,7 +538,7 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
 
 static _enso_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                uint64_t phys_addr, uint32_t len) {
+                uint64_t phys_addr, uint32_t len, bool first) {
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
   uint32_t tx_tail = notification_buf_pair->tx_tail;
   uint32_t missing_bytes = len;
@@ -586,14 +586,14 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
 
   notification_buf_pair->tx_tail = tx_tail;
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
-                           notification_buf_pair->uio_mmap_bar2_addr);
+                           notification_buf_pair->uio_mmap_bar2_addr, first);
 
   return len;
 }
 
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len) {
-  return __send_to_queue(notification_buf_pair, phys_addr, len);
+                       uint64_t phys_addr, uint32_t len, bool first) {
+  return __send_to_queue(notification_buf_pair, phys_addr, len, first);
 }
 
 uint32_t get_unreported_completions(
@@ -815,8 +815,9 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
 }
 
 void pcie_initialize_backend(BackendWrapper preempt_enable,
-                             BackendWrapper preempt_disable) {
-  initialize_backend_dev(preempt_enable, preempt_disable);
+                             BackendWrapper preempt_disable,
+                             IdCallback id_callback) {
+  initialize_backend_dev(preempt_enable, preempt_disable, id_callback);
 }
 
 void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }

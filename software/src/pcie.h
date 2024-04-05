@@ -54,6 +54,7 @@ namespace enso {
 using CompletionCallback = std::function<void()>;
 using ParkCallback = std::function<void(bool)>;
 using BackendWrapper = std::function<void()>;
+using IdCallback = std::function<uint64_t()>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
@@ -214,7 +215,7 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
  * @return number of bytes sent.
  */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len);
+                       uint64_t phys_addr, uint32_t len, bool first = false);
 
 /**
  * @brief Returns the number of transmission requests that were completed since
@@ -335,7 +336,8 @@ void pcie_set_backend_core_id(uint32_t core_id);
  *
  */
 void pcie_initialize_backend(BackendWrapper preempt_enable,
-                             BackendWrapper preempt_disable);
+                             BackendWrapper preempt_disable,
+                             IdCallback id_callback);
 
 /**
  * @brief Push notification to backend.

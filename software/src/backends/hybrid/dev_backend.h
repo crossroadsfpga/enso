@@ -71,8 +71,10 @@ int32_t thread_local core_id_ = -1;
 int64_t shinkansen_notif_buf_id_ = -1;
 
 using BackendWrapper = std::function<void()>;
+using IdCallback = std::function<uint64_t()>;
 BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
+IdCallback id_callback_;
 
 int initialize_queues(uint32_t core_id) {
   core_id_ = core_id;
@@ -103,9 +105,11 @@ int initialize_queues(uint32_t core_id) {
 }
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
-                            BackendWrapper preempt_disable) {
+                            BackendWrapper preempt_disable,
+                            IdCallback id_callback) {
   preempt_enable_ = preempt_enable;
   preempt_disable_ = preempt_disable;
+  id_callback_ = id_callback;
 }
 
 void set_backend_core_id_dev(uint32_t core_id) {
@@ -114,7 +118,7 @@ void set_backend_core_id_dev(uint32_t core_id) {
   initialize_queues(core_id);
 }
 
-void push_to_backend(PipeNotification* notif) {
+void push_to_backend(PipeNotification* notif, bool first = false) {
   std::invoke(preempt_disable_);
   assert(core_id_ == sched_getcpu());
   if (core_id_ < 0) {
@@ -123,13 +127,13 @@ void push_to_backend(PipeNotification* notif) {
     exit(2);
   }
   initialize_queues(core_id_);
-  while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
+  while (queues_to_backend_[core_id_]->Push(*notif, first) != 0) {
   }
   std::invoke(preempt_enable_);
 }
 
 std::optional<PipeNotification> push_to_backend_get_response(
-    PipeNotification* notif) {
+    PipeNotification* notif, bool first = false) {
   std::invoke(preempt_disable_);
 
   assert(core_id_ == sched_getcpu());
@@ -140,7 +144,7 @@ std::optional<PipeNotification> push_to_backend_get_response(
   }
   initialize_queues(core_id_);
 
-  while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
+  while (queues_to_backend_[core_id_]->Push(*notif, first) != 0) {
   }
   std::optional<PipeNotification> notification;
 
@@ -189,7 +193,8 @@ class DevBackend {
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value,
-                                               void* uio_mmap_bar2_addr) {
+                                               void* uio_mmap_bar2_addr,
+                                               bool first = false) {
     uint64_t offset_addr =
         (uint64_t)((uint8_t*)addr - (uint8_t*)uio_mmap_bar2_addr);
     enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
@@ -202,13 +207,12 @@ class DevBackend {
       // Updates to RX pipe: write directly
       // push this to let shinkansen know about queue ID -> notification
       // queue
-      bool rx_mem_low = false;
-      // uint64_t start, end;
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
           mmio_notification.type = NotifType::kWrite;
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
+          mmio_notification.uthread_id = std::invoke(id_callback_);
 
           pipe_notification = (enso::PipeNotification*)&mmio_notification;
 
@@ -217,11 +221,6 @@ class DevBackend {
           // notification buffer ID 0
           mask = enso::kMaxNbApps - 1;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
-          rx_mem_low = true;
-          break;
-        case offsetof(struct enso::QueueRegs, rx_head):
-          // std::cout << "Writing to rx head with value " << value <<
-          // std::endl;
           break;
       }
       _enso_compiler_memory_barrier();
@@ -237,11 +236,16 @@ class DevBackend {
       mmio_notification.type = NotifType::kWrite;
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
+      mmio_notification.uthread_id = std::invoke(id_callback_);
+
+      if (first)
+        std::cout << "Sending mmio notification "
+                  << " for notif buf id " << queue_id << std::endl;
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
 
-      push_to_backend(pipe_notification);
+      push_to_backend(pipe_notification, first);
     }
   }
 
@@ -261,6 +265,7 @@ class DevBackend {
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kRead;
       mmio_notification.address = offset_addr;
+      mmio_notification.uthread_id = std::invoke(id_callback_);
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
