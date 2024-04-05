@@ -244,8 +244,9 @@ class DevBackend {
       mmio_notification.tsc = std::invoke(tsc_callback_);
 
       if (first)
-        std::cout << "Sending mmio notification "
-                  << " for notif buf id " << queue_id << std::endl;
+        std::cout << "Sending mmio notification with tsc "
+                  << mmio_notification.tsc << " for notif buf id " << queue_id
+                  << " update to tail: " << value << std::endl;
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
