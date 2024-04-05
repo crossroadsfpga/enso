@@ -141,7 +141,7 @@ void push_to_backend(PipeNotification* notif, bool first = false) {
 }
 
 std::optional<PipeNotification> push_to_backend_get_response(
-    PipeNotification* notif, bool first = false) {
+    PipeNotification* notif) {
   std::invoke(preempt_disable_);
 
   assert(core_id_ == sched_getcpu());
@@ -152,7 +152,7 @@ std::optional<PipeNotification> push_to_backend_get_response(
   }
   initialize_queues(core_id_);
 
-  while (queues_to_backend_[core_id_]->Push(*notif, first) != 0) {
+  while (queues_to_backend_[core_id_]->Push(*notif) != 0) {
   }
   std::optional<PipeNotification> notification;
 

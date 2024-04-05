@@ -332,7 +332,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     if (shared_ || application_id_ >= 0) {
       *tail_addr_ = (tail_ + 1);
     }
-    nb_pushes_++;
 
     if (first) {
       std::cout << "Pushing to tail " << (tail_ & Parent::index_mask())
