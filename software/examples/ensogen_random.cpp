@@ -53,6 +53,7 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <random>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -87,7 +88,7 @@
 #define DEFAULT_STATS_DELAY 1000
 
 // Number of CLI arguments.
-#define NB_CLI_ARGS 3
+#define NB_CLI_ARGS 2
 
 // Maximum number of bytes that we can receive at once.
 #define RECV_BUF_LEN 10000000
@@ -116,8 +117,9 @@ void int_handler(int signal __attribute__((unused))) {
 
 static void print_usage(const char* program_name) {
   printf(
-      "%s PCAP_FILE RATE_NUM RATE_DEN\n"
+      "%s RATE_NUM RATE_DEN\n"
       " [--help]\n"
+      " [--pcap-file]\n"
       " [--count NB_PKTS]\n"
       " [--core CORE_ID]\n"
       " [--queues NB_QUEUES]\n"
@@ -130,11 +132,11 @@ static void print_usage(const char* program_name) {
       " [--stats-delay STATS_DELAY]\n"
       " [--pcie-addr PCIE_ADDR]\n\n"
 
-      "  PCAP_FILE: Pcap file with packets to transmit.\n"
       "  RATE_NUM: Numerator of the rate used to transmit packets.\n"
       "  RATE_DEN: Denominator of the rate used to transmit packets.\n\n"
 
       "  --help: Show this help and exit.\n"
+      "  --pcap-file: Pcap file with packets to transmit."
       "  --count: Specify number of packets to transmit.\n"
       "  --core: Specify CORE_ID to run on (default: %d).\n"
       "  --queues: Specify number of RX queues (default: %d).\n"
@@ -167,10 +169,16 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_RTT_HIST_LEN "rtt-hist-len"
 #define CMD_OPT_STATS_DELAY "stats-delay"
 #define CMD_OPT_PCIE_ADDR "pcie-addr"
+#define CMD_OPT_PCAP_FILE "pcap-file"
+#define CMD_OPT_WINDOW_SIZE "window-size"
+
+#define MAX_PCAPS 1024
 
 // Map long options to short options.
 enum {
   CMD_OPT_HELP_NUM = 256,
+  CMD_OPT_PCAP_FILE_NUM,
+  CMD_OPT_WINDOW_SIZE_NUM,
   CMD_OPT_COUNT_NUM,
   CMD_OPT_CORE_NUM,
   CMD_OPT_QUEUES_NUM,
@@ -188,6 +196,8 @@ static const char short_options[] = "";
 
 static const struct option long_options[] = {
     {CMD_OPT_HELP, no_argument, NULL, CMD_OPT_HELP_NUM},
+    {CMD_OPT_PCAP_FILE, required_argument, NULL, CMD_OPT_PCAP_FILE_NUM},
+    {CMD_OPT_WINDOW_SIZE, required_argument, NULL, CMD_OPT_WINDOW_SIZE_NUM},
     {CMD_OPT_COUNT, required_argument, NULL, CMD_OPT_COUNT_NUM},
     {CMD_OPT_CORE, required_argument, NULL, CMD_OPT_CORE_NUM},
     {CMD_OPT_QUEUES, required_argument, NULL, CMD_OPT_QUEUES_NUM},
@@ -209,7 +219,9 @@ struct parsed_args_t {
   bool enable_rtt;
   bool enable_rtt_history;
   std::string hist_file;
-  std::string pcap_file;
+  std::string pcap_files[MAX_PCAPS];
+  uint32_t nb_pcaps;
+  uint64_t window_size;
   std::string save_file;
   uint16_t rate_num;
   uint16_t rate_den;
@@ -235,12 +247,21 @@ static int parse_args(int argc, char** argv,
   parsed_args.rtt_hist_offset = DEFAULT_HIST_OFFSET;
   parsed_args.rtt_hist_len = DEFAULT_HIST_LEN;
   parsed_args.stats_delay = DEFAULT_STATS_DELAY;
+  parsed_args.nb_pcaps = 0;
+  parsed_args.window_size = 100000000;
 
   while ((opt = getopt_long(argc, argv, short_options, long_options,
                             &long_index)) != EOF) {
     switch (opt) {
       case CMD_OPT_HELP_NUM:
         return 1;
+      case CMD_OPT_PCAP_FILE_NUM:
+        parsed_args.pcap_files[parsed_args.nb_pcaps] = optarg;
+        parsed_args.nb_pcaps++;
+        break;
+      case CMD_OPT_WINDOW_SIZE_NUM:
+        parsed_args.window_size = atoi(optarg);
+        break;
       case CMD_OPT_COUNT_NUM:
         parsed_args.nb_pkts = atoi(optarg);
         break;
@@ -285,7 +306,6 @@ static int parse_args(int argc, char** argv,
     return -1;
   }
 
-  parsed_args.pcap_file = argv[optind++];
   parsed_args.rate_num = atoi(argv[optind++]);
   parsed_args.rate_den = atoi(argv[optind++]);
 
@@ -397,7 +417,9 @@ struct PcapHandlerContext {
   std::vector<struct EnsoPipe> enso_pipes;
   uint32_t free_flits;
   uint32_t hugepage_offset;
-  pcap_t* pcap;
+  uint32_t nb_pcaps;
+  pcap_t* pcaps[MAX_PCAPS];
+  std::string pcap_files[MAX_PCAPS];
 };
 
 struct RxStats {
@@ -477,50 +499,6 @@ struct TxArgs {
   std::vector<EnsoPipe>::iterator current_enso_pipe;
   int socket_fd;
 };
-
-void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
-                      const u_char* pkt_bytes) {
-  (void)pkt_hdr;
-  struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
-
-  const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
-  if (l2_hdr->ether_type != htons(ETHERTYPE_IP)) {
-    std::cerr << "Non-IPv4 packets are not supported" << std::endl;
-    exit(8);
-  }
-
-  uint32_t len = enso::get_pkt_len(pkt_bytes);
-  uint32_t nb_flits = (len - 1) / 64 + 1;
-
-  if (nb_flits > context->free_flits) {
-    uint8_t* buf;
-    if ((context->hugepage_offset + BUFFER_SIZE) > HUGEPAGE_SIZE) {
-      // Need to allocate another huge page.
-      buf = (uint8_t*)get_huge_page(HUGEPAGE_SIZE);
-      if (buf == NULL) {
-        pcap_breakloop(context->pcap);
-        return;
-      }
-      context->hugepage_offset = BUFFER_SIZE;
-    } else {
-      struct EnsoPipe& enso_pipe = context->enso_pipes.back();
-      buf = enso_pipe.buf + BUFFER_SIZE;
-      context->hugepage_offset += BUFFER_SIZE;
-    }
-    context->enso_pipes.emplace_back(buf, 0, 0, 0);
-    context->free_flits = BUFFER_SIZE / 64;
-  }
-
-  struct EnsoPipe& enso_pipe = context->enso_pipes.back();
-  uint8_t* dest = enso_pipe.buf + enso_pipe.length;
-
-  memcpy(dest, pkt_bytes, len);
-
-  enso_pipe.length += nb_flits * 64;  // Packets must be cache aligned.
-  enso_pipe.good_bytes += len;
-  ++(enso_pipe.nb_pkts);
-  context->free_flits -= nb_flits;
-}
 
 inline uint64_t receive_pkts(const struct RxArgs& rx_args,
                              struct RxStats& rx_stats) {
@@ -628,6 +606,117 @@ inline void reclaim_all_buffers(struct TxArgs& tx_args) {
   }
 }
 
+void load_pkt(struct PcapHandlerContext* context, const u_char* pkt_bytes) {
+  const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
+  if (l2_hdr->ether_type != htons(ETHERTYPE_IP)) {
+    std::cerr << "Non-IPv4 packets are not supported" << std::endl;
+    exit(8);
+  }
+
+  uint32_t len = enso::get_pkt_len(pkt_bytes);
+  uint32_t nb_flits = (len - 1) / 64 + 1;
+
+  if (nb_flits > context->free_flits) {
+    uint8_t* buf;
+    if ((context->hugepage_offset + BUFFER_SIZE) > HUGEPAGE_SIZE) {
+      // Need to allocate another huge page.
+      buf = (uint8_t*)get_huge_page(HUGEPAGE_SIZE);
+      if (buf == NULL) {
+        return;
+      }
+      context->hugepage_offset = BUFFER_SIZE;
+    } else {
+      struct EnsoPipe& enso_pipe = context->enso_pipes.back();
+      buf = enso_pipe.buf + BUFFER_SIZE;
+      context->hugepage_offset += BUFFER_SIZE;
+    }
+    context->enso_pipes.emplace_back(buf, 0, 0, 0);
+    context->free_flits = BUFFER_SIZE / 64;
+  }
+
+  struct EnsoPipe& enso_pipe = context->enso_pipes.back();
+  uint8_t* dest = enso_pipe.buf + enso_pipe.length;
+
+  memcpy(dest, pkt_bytes, len);
+
+  enso_pipe.length += nb_flits * 64;  // Packets must be cache aligned.
+  enso_pipe.good_bytes += len;
+  ++(enso_pipe.nb_pkts);
+  context->free_flits -= nb_flits;
+}
+
+void load_pcaps(struct PcapHandlerContext* context, uint32_t window_size) {
+  const u_char* pkt_bytes;
+  struct pcap_pkthdr header;
+  uint64_t nb_bytes;
+  char errbuf[PCAP_ERRBUF_SIZE];
+
+  for (uint32_t pcap_idx = 0; pcap_idx < context->nb_pcaps; pcap_idx++) {
+    pcap_t* pcap = context->pcaps[pcap_idx];
+    nb_bytes = 0;
+
+    for (uint32_t pkt_idx = 0; pkt_idx < window_size; pkt_idx++) {
+      pkt_bytes = pcap_next(pcap, &header);
+      if (!pkt_bytes) {
+        pcap_close(context->pcaps[pcap_idx]);
+        context->pcaps[pcap_idx] =
+            pcap_open_offline(context->pcap_files[pcap_idx].c_str(), errbuf);
+        pcap = context->pcaps[pcap_idx];
+        pkt_bytes = pcap_next(pcap, &header);
+      }
+
+      load_pkt(context, pkt_bytes);
+
+      nb_bytes += enso::get_pkt_len(pkt_bytes);
+      if (nb_bytes >= window_size) {
+        std::cout << "Loaded " << nb_bytes << " bytes of pcap file "
+                  << context->pcap_files[pcap_idx] << std::endl;
+        break;
+      }
+    }
+  }
+}
+
+void load_pcaps_random(struct PcapHandlerContext* context,
+                       uint32_t window_size) {
+  const u_char* pkt_bytes;
+  struct pcap_pkthdr header;
+  uint64_t nb_bytes;
+  uint64_t total_bytes = 0;
+  char errbuf[PCAP_ERRBUF_SIZE];
+
+  // Seed for random number generation
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  // Define a distribution for integers between 0 and nb_pcaps-1
+  std::uniform_int_distribution<int> dis(0, context->nb_pcaps - 1);
+
+  while (total_bytes < BUFFER_SIZE) {
+    uint32_t pcap_idx = dis(gen);
+    pcap_t* pcap = context->pcaps[pcap_idx];
+    nb_bytes = 0;
+
+    while (nb_bytes < window_size) {
+      pkt_bytes = pcap_next(pcap, &header);
+      if (!pkt_bytes) {
+        pcap_close(context->pcaps[pcap_idx]);
+        context->pcaps[pcap_idx] =
+            pcap_open_offline(context->pcap_files[pcap_idx].c_str(), errbuf);
+        pcap = context->pcaps[pcap_idx];
+        pkt_bytes = pcap_next(pcap, &header);
+      }
+
+      load_pkt(context, pkt_bytes);
+
+      nb_bytes += enso::get_pkt_len(pkt_bytes);
+    }
+    std::cout << "Loaded " << nb_bytes << " bytes of pcap file "
+              << context->pcap_files[pcap_idx] << std::endl;
+    total_bytes += nb_bytes;
+  }
+}
+
 int main(int argc, char** argv) {
   struct parsed_args_t parsed_args;
   int ret = parse_args(argc, argv, parsed_args);
@@ -656,40 +745,42 @@ int main(int argc, char** argv) {
 
   char errbuf[PCAP_ERRBUF_SIZE];
 
-  pcap_t* pcap = pcap_open_offline(parsed_args.pcap_file.c_str(), errbuf);
-  if (pcap == NULL) {
-    std::cerr << "Error loading pcap file (" << errbuf << ")" << std::endl;
-    return 2;
-  }
-
   struct PcapHandlerContext context;
   context.free_flits = 0;
   context.hugepage_offset = HUGEPAGE_SIZE;
-  context.pcap = pcap;
+  context.nb_pcaps = parsed_args.nb_pcaps;
   std::vector<EnsoPipe>& enso_pipes = context.enso_pipes;
 
-  // Initialize packet buffers with packets read from pcap file.
-  if (pcap_loop(pcap, 0, pcap_pkt_handler, (u_char*)&context) < 0) {
-    std::cerr << "Error while reading pcap (" << pcap_geterr(pcap) << ")"
-              << std::endl;
-    return 3;
+  for (uint32_t i = 0; i < parsed_args.nb_pcaps; i++) {
+    pcap_t* pcap = pcap_open_offline(parsed_args.pcap_files[i].c_str(), errbuf);
+    if (pcap == NULL) {
+      std::cerr << "Error loading pcap file (" << errbuf << "): " << i << " "
+                << parsed_args.pcap_files[i] << std::endl;
+      return 2;
+    }
+    context.pcaps[i] = pcap;
+    context.pcap_files[i] = parsed_args.pcap_files[i];
   }
+
+  load_pcaps_random(&context, parsed_args.window_size);
+
+  std::cout << "Number of enso pipes: " << enso_pipes.size() << std::endl;
 
   // For small pcaps we copy the same packets over the remaining of the
   // buffer. This reduces the number of transfers that we need to issue.
-  //   if ((enso_pipes.size() == 1) &&
-  //       (enso_pipes.front().length < BUFFER_SIZE / 2)) {
-  //     EnsoPipe& buffer = enso_pipes.front();
-  //     uint32_t original_buf_length = buffer.length;
-  //     uint32_t original_good_bytes = buffer.good_bytes;
-  //     uint32_t original_nb_pkts = buffer.nb_pkts;
-  //     while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
-  //       memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
-  //       buffer.length += original_buf_length;
-  //       buffer.good_bytes += original_good_bytes;
-  //       buffer.nb_pkts += original_nb_pkts;
-  //     }
-  //   }
+  if ((enso_pipes.size() == 1) &&
+      (enso_pipes.front().length < BUFFER_SIZE / 2)) {
+    EnsoPipe& buffer = enso_pipes.front();
+    uint32_t original_buf_length = buffer.length;
+    uint32_t original_good_bytes = buffer.good_bytes;
+    uint32_t original_nb_pkts = buffer.nb_pkts;
+    while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
+      memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
+      buffer.length += original_buf_length;
+      buffer.good_bytes += original_good_bytes;
+      buffer.nb_pkts += original_nb_pkts;
+    }
+  }
 
   uint64_t total_pkts_in_buffers = 0;
   uint64_t total_bytes_in_buffers = 0;
@@ -978,9 +1069,10 @@ int main(int argc, char** argv) {
   if (parsed_args.save) {
     std::ofstream save_file;
     save_file.open(parsed_args.save_file);
-    save_file
-        << "rx_goodput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_packets,"
-           "tx_goodput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_packets";
+    save_file << "rx_goodput_mbps,rx_tput_mbps,rx_pkt_rate_kpps,rx_bytes,rx_"
+                 "packets,"
+                 "tx_goodput_mbps,tx_tput_mbps,tx_pkt_rate_kpps,tx_bytes,tx_"
+                 "packets";
     if (parsed_args.enable_rtt) {
       save_file << ",mean_rtt_ns";
     }

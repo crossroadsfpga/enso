@@ -60,10 +60,10 @@ void set_backend_core_id(uint32_t core_id) {
 }
 
 void initialize_backend(BackendWrapper preempt_enable,
-                        BackendWrapper preempt_disable,
-                        TscCallback tsc_callback, IdCallback id_callback) {
-  return pcie_initialize_backend(preempt_enable, preempt_disable, tsc_callback,
-                                 id_callback);
+                        BackendWrapper preempt_disable, IdCallback id_callback,
+                        TscCallback tsc_callback) {
+  return pcie_initialize_backend(preempt_enable, preempt_disable, id_callback,
+                                 tsc_callback);
 }
 
 void push_to_backend_queues(PipeNotification* notif) {
@@ -430,11 +430,7 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
   // We need space for two requests because the request may be split into two
   // if the bytes wrap around the end of the buffer.
   while (unlikely(nb_pending_requests >= (kMaxPendingTxRequests - 2))) {
-    // std::cout << "waiting..." << std::endl;
-    if (park_callback_ != nullptr) {
-      // std::cout << "parking" << std::endl;
-      std::invoke(park_callback_, true);
-    }
+    if (park_callback_ != nullptr) std::invoke(park_callback_, false);
     ProcessCompletions();
     nb_pending_requests =
         (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;

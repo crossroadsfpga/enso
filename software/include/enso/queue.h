@@ -311,16 +311,12 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
    * @return 0 on success and a non-zero error code on failure.
    */
   inline int Push(const T& data, bool first = false) {
-    if (shared_ || application_id_ >= 0) {
-      // std::cout << "accessed tail as " << *tail_addr_ << std::endl;
-      tail_ = *tail_addr_;
-    }
+    (void)first;
+    if (shared_ || application_id_ >= 0) tail_ = *tail_addr_;
+    _enso_compiler_memory_barrier();
+
     struct Parent::Element* current_element =
         &(Parent::buf_addr()[tail_ & Parent::index_mask()]);
-    // uint64_t phys = virt_to_phys(Parent::buf_addr());
-    // std::cout << "trying to pushing to tail " << (tail_ &
-    // Parent::index_mask())
-    //           << " phys addr: " << phys << std::endl;
     if (unlikely(current_element->signal)) {
       // std::cout << "Trying to push to tail " << (tail_ &
       // Parent::index_mask())
@@ -334,16 +330,17 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     tmp_element->signal = 1;
     tmp_element->data = data;
 
-    // uint64_t phys_addr = virt_to_phys(current_element);
-    if (first) {
-      std::cout << "Pushing to tail " << (tail_ & Parent::index_mask())
-                << " last nb pushes: " << nb_pushes_ << std::endl;
-      nb_pushes_ = 0;
-    }
+    // if (first) {
+    //   std::cout << "Pushing to tail " << (tail_ & Parent::index_mask())
+    //             << " last nb pushes: " << nb_pushes_ << std::endl;
+    //   nb_pushes_ = 0;
+    // }
     nb_pushes_++;
 
-    if (shared_ || application_id_ >= 0) *tail_addr_ = (tail_ + 1);
     _mm512_storeu_si512((__m512i*)current_element, tmp_element_raw);
+
+    _enso_compiler_memory_barrier();
+    if (shared_ || application_id_ >= 0) *tail_addr_ = (tail_ + 1);
     tail_ = (tail_ + 1);
 
     return 0;
@@ -403,9 +400,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
 
       tail_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
 
-      // uint64_t phys = virt_to_phys(tail_addr_);
-      // std::cout << "phys tail address  of producer: " << phys << std::endl;
-
       huge_page_path = huge_page_prefix_ +
                        std::string(kHugePageQueueHeadPathPrefix) + ":" +
                        std::to_string(application_id_);
@@ -415,12 +409,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
         return -1;
       }
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
-
-      // phys = virt_to_phys(head_addr_);
-      // std::cout << "phys head address  of producer: " << phys << std::endl;
-
-      // std::cout << "producer: allocating head addr: " << head_addr_
-      //           << " for app " << application_id_ << std::endl;
     }
 
     return 0;
@@ -479,9 +467,9 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
    * @return the data on success and an empty optional if the queue is empty.
    */
   inline std::optional<T> Pop() {
-    if (shared_ || application_id_ >= 0) {
-      head_ = *head_addr_;
-    }
+    if (shared_ || application_id_ >= 0) head_ = *head_addr_;
+    _enso_compiler_memory_barrier();
+
     struct Parent::Element* current_element =
         &(Parent::buf_addr()[head_ & Parent::index_mask()]);
 
@@ -489,30 +477,11 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
       return {};  // Queue is empty.
     }
 
-    if (shared_ || application_id_ >= 0) *head_addr_ = (head_ + 1);
-
     T data = current_element->data;
-
-    // enso::PipeNotification* pipe_notif =
-    //     reinterpret_cast<enso::PipeNotification*>(&data);
-    // if (print_ && pipe_notif->type == enso::NotifType::kWrite) {
-    //   std::cout << "Popped from head " << (head_ & Parent::index_mask())
-    //             << " addr: " << pipe_notif->data[0] << std::endl;
-    // }
-    // if (pipe_notif->type == enso::NotifType::kWrite &&
-    //     pipe_notif->data[3] == 0) {
-    //   std::cout << "DATA UTHREAD ID BEFORE IS 0 and tsc is  "
-    //             << pipe_notif->data[2] << " SIGNAL IS "
-    //             << current_element->signal << std::endl;
-    // }
-    // current_element->data = T{};
+    _enso_compiler_memory_barrier();
     current_element->signal = 0;
-    // if (pipe_notif->type == enso::NotifType::kWrite &&
-    //     pipe_notif->data[3] == 0) {
-    //   std::cout << "DATA UTHREAD ID IS 0 and signal is "
-    //             << current_element->signal << std::endl;
-    // }
 
+    if (shared_ || application_id_ >= 0) *head_addr_ = (head_ + 1);
     head_ = (head_ + 1);
 
     return data;

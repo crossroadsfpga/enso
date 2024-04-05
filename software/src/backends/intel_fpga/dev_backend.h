@@ -47,25 +47,18 @@
 namespace enso {
 
 using BackendWrapper = std::function<void()>;
-using TscCallback = std::function<uint64_t()>;
 using IdCallback = std::function<uint64_t()>;
+using TscCallback = std::function<uint64_t()>;
 using ParkCallback = std::function<void(bool)>;
 ParkCallback park_callback_;
-int initialize_queues(uint32_t core_id, BackendWrapper preempt_enable,
-                      BackendWrapper preempt_disable) {
-  (void)core_id;
-  (void)preempt_enable;
-  (void)preempt_disable;
-  return 0;
-}
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
                             BackendWrapper preempt_disable,
-                            TscCallback tsc_callback, IdCallback id_callback) {
+                            IdCallback id_callback, TscCallback tsc_callback) {
   (void)preempt_enable;
   (void)preempt_disable;
-  (void)tsc_callback;
   (void)id_callback;
+  (void)tsc_callback;
 }
 
 void set_backend_core_id_dev(uint32_t core_id) { (void)core_id; }

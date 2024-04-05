@@ -76,13 +76,13 @@ int32_t thread_local core_id_ = -1;
 int64_t shinkansen_notif_buf_id_ = -1;
 
 using BackendWrapper = std::function<void()>;
-using TscCallback = std::function<uint64_t()>;
 using IdCallback = std::function<uint64_t()>;
-using ParkCallback = std::function<void(bool)>;
+using TscCallback = std::function<uint64_t()>;
 BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
-TscCallback tsc_callback_;
 IdCallback id_callback_;
+TscCallback tsc_callback_;
+using ParkCallback = std::function<void(bool)>;
 ParkCallback park_callback_;
 
 int initialize_queues(uint32_t core_id) {
@@ -115,11 +115,11 @@ int initialize_queues(uint32_t core_id) {
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
                             BackendWrapper preempt_disable,
-                            TscCallback tsc_callback, IdCallback id_callback) {
+                            IdCallback id_callback, TscCallback tsc_callback) {
   preempt_enable_ = preempt_enable;
   preempt_disable_ = preempt_disable;
-  tsc_callback_ = tsc_callback;
   id_callback_ = id_callback;
+  tsc_callback_ = tsc_callback;
 }
 
 void set_backend_core_id_dev(uint32_t core_id) {
@@ -216,16 +216,16 @@ class DevBackend {
     struct MmioNotification mmio_notification;
 
     if (queue_id < enso::kMaxNbFlows) {
+      // Updates to RX pipe: write directly
+      // push this to let shinkansen know about queue ID -> notification
+      // queue
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
           mmio_notification.type = NotifType::kWrite;
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
-          mmio_notification.tsc = std::invoke(tsc_callback_);
           mmio_notification.uthread_id = std::invoke(id_callback_);
-          if (mmio_notification.uthread_id == 0) {
-            std::cout << "Uthread ID is 0!" << std::endl;
-          }
+          mmio_notification.tsc = std::invoke(tsc_callback_);
 
           pipe_notification = (enso::PipeNotification*)&mmio_notification;
 
@@ -241,41 +241,21 @@ class DevBackend {
       *addr = value;
       return;
     }
+
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
-      switch (offset) {
-        case offsetof(struct enso::QueueRegs, tx_tail):
-          uint64_t actual_offset_addr =
-              tx_tail_offset_addrs_[std::invoke(id_callback_)];
-          if (offset_addr != actual_offset_addr) {
-            std::cout << "Uthread ID: " << std::invoke(id_callback_)
-                      << " offset addr: " << offset_addr
-                      << " actual offset addr: " << actual_offset_addr
-                      << std::endl;
-            raise(SIGINT);
-          }
-          break;
-      }
-
       // Block if full.
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kWrite;
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
-      mmio_notification.tsc = std::invoke(tsc_callback_);
       mmio_notification.uthread_id = std::invoke(id_callback_);
-      if (mmio_notification.uthread_id == 0) {
-        std::cout << "Uthread ID is 0!" << std::endl;
-      }
-      if (last_tscs_[mmio_notification.uthread_id] >= mmio_notification.tsc) {
-        std::cout << "Got same TSC!" << std::endl;
-      }
-      last_tscs_[mmio_notification.uthread_id] = mmio_notification.tsc;
-      if (first)
-        std::cout << "Sending mmio notification with tsc "
-                  << mmio_notification.tsc << " for notif buf id " << queue_id
-                  << std::endl;
+      mmio_notification.tsc = std::invoke(tsc_callback_);
+
+      // std::cout << "pushing mmio notification with tsc "
+      //           << mmio_notification.tsc << " for notif buf " << queue_id
+      //           << std::endl;
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
@@ -308,7 +288,6 @@ class DevBackend {
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kRead;
       mmio_notification.address = offset_addr;
-      mmio_notification.tsc = std::invoke(tsc_callback_);
       mmio_notification.uthread_id = std::invoke(id_callback_);
 
       enso::PipeNotification* pipe_notification =

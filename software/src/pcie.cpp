@@ -559,7 +559,7 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     while (unlikely(free_slots == 0)) {
       ++notification_buf_pair->tx_full_cnt;
       if (park_callback_ != nullptr) {
-        std::invoke(park_callback_, true);
+        std::invoke(park_callback_, false);
       }
       update_tx_head(notification_buf_pair);
       free_slots =
@@ -678,7 +678,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
     free_slots =
         (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
     if (park_callback_ != nullptr) {
-      std::invoke(park_callback_, true);
+      std::invoke(park_callback_, false);
     }
   }
 
@@ -696,7 +696,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   while (notification_buf_pair->nb_unreported_completions ==
          nb_unreported_completions) {
     if (park_callback_ != nullptr) {
-      std::invoke(park_callback_, true);
+      std::invoke(park_callback_, false);
     }
     update_tx_head(notification_buf_pair);
   }
@@ -829,9 +829,9 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
 
 void pcie_initialize_backend(BackendWrapper preempt_enable,
                              BackendWrapper preempt_disable,
-                             TscCallback tsc_callback, IdCallback id_callback) {
-  initialize_backend_dev(preempt_enable, preempt_disable, tsc_callback,
-                         id_callback);
+                             IdCallback id_callback, TscCallback tsc_callback) {
+  initialize_backend_dev(preempt_enable, preempt_disable, id_callback,
+                         tsc_callback);
 }
 
 void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }

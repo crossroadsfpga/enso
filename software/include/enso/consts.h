@@ -160,8 +160,9 @@ struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
-  uint64_t tsc;
   uint64_t uthread_id;
+  uint64_t tsc;
+  uint64_t padding[2];
 };
 
 struct JoinedNotification {

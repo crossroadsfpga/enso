@@ -12,9 +12,10 @@ executable('echo_copy', 'echo_copy.cpp', dependencies: [thread_dep],
            link_with: enso_lib, include_directories: inc)
 executable('ensogen', 'ensogen.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: enso_lib, include_directories: inc)
-executable('ensogen_burst', 'ensogen_burst.cpp', dependencies: [thread_dep, pcap_dep],
+executable('ensogen_random', 'ensogen_random.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: enso_lib, include_directories: inc)
 executable('capture', 'capture.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: enso_lib, include_directories: inc)
 executable('l2_forward', 'l2_forward.cpp', dependencies: [thread_dep],
            link_with: enso_lib, include_directories: inc)
+ 
