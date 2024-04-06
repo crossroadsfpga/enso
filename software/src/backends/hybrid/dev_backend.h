@@ -74,6 +74,7 @@ std::array<uint64_t, enso::kMaxNbFlows> tx_tail_offset_addrs_ = {0};
 // thread-local. Will automatically update when switching cores.
 int32_t thread_local core_id_ = -1;
 int64_t shinkansen_notif_buf_id_ = -1;
+uint32_t application_id_ = 0;
 
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
@@ -115,11 +116,13 @@ int initialize_queues(uint32_t core_id) {
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
                             BackendWrapper preempt_disable,
-                            IdCallback id_callback, TscCallback tsc_callback) {
+                            IdCallback id_callback, TscCallback tsc_callback,
+                            uint32_t application_id) {
   preempt_enable_ = preempt_enable;
   preempt_disable_ = preempt_disable;
   id_callback_ = id_callback;
   tsc_callback_ = tsc_callback;
+  application_id_ = application_id;
 }
 
 void set_backend_core_id_dev(uint32_t core_id) {
@@ -402,6 +405,7 @@ class DevBackend {
     struct NotifBufNotification nb_notification;
     nb_notification.type = NotifType::kAllocateNotifBuf;
     nb_notification.uthread_id = (uint64_t)uthread_id;
+    nb_notification.application_id = application_id_;
 
     enso::PipeNotification* pipe_notification =
         (enso::PipeNotification*)&nb_notification;

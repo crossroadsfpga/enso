@@ -829,9 +829,10 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
 
 void pcie_initialize_backend(BackendWrapper preempt_enable,
                              BackendWrapper preempt_disable,
-                             IdCallback id_callback, TscCallback tsc_callback) {
+                             IdCallback id_callback, TscCallback tsc_callback,
+                             uint32_t application_id) {
   initialize_backend_dev(preempt_enable, preempt_disable, id_callback,
-                         tsc_callback);
+                         tsc_callback, application_id);
 }
 
 void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }

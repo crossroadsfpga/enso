@@ -54,11 +54,13 @@ ParkCallback park_callback_;
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
                             BackendWrapper preempt_disable,
-                            IdCallback id_callback, TscCallback tsc_callback) {
+                            IdCallback id_callback, TscCallback tsc_callback,
+                            uint32_t application_id) {
   (void)preempt_enable;
   (void)preempt_disable;
   (void)id_callback;
   (void)tsc_callback;
+  (void)application_id;
 }
 
 void set_backend_core_id_dev(uint32_t core_id) { (void)core_id; }

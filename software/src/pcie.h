@@ -338,7 +338,8 @@ void pcie_set_backend_core_id(uint32_t core_id);
  */
 void pcie_initialize_backend(BackendWrapper preempt_enable,
                              BackendWrapper preempt_disable,
-                             IdCallback id_callback, TscCallback tsc_callback);
+                             IdCallback id_callback, TscCallback tsc_callback,
+                             uint32_t application_id);
 
 /**
  * @brief Push notification to backend.
