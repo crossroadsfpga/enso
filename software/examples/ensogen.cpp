@@ -492,6 +492,13 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   uint32_t len = enso::get_pkt_len(pkt_bytes);
   uint32_t nb_flits = (len - 1) / 64 + 1;
 
+  /* TODO (kaajalg): And need to enable pkt delay at beginning */
+
+  /* Take pkt_bytes + kPacketRttOffset to set the offset as the number of cycles
+   */
+
+  /* Use kMaxHardwareFlitRate to convert between hardware cycles and us */
+
   if (nb_flits > context->free_flits) {
     uint8_t* buf;
     if ((context->hugepage_offset + BUFFER_SIZE) > HUGEPAGE_SIZE) {
