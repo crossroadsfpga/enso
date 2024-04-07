@@ -489,6 +489,14 @@ int Device::DisableRateLimiting() {
   return disable_rate_limit(&notification_buf_pair_);
 }
 
+int Device::EnablePerPacketRateLimiting() {
+  return enable_per_packet_rate_limit(&notification_buf_pair_);
+}
+
+int Device::DisablePerPacketRateLimiting() {
+  return disable_per_packet_rate_limit(&notification_buf_pair_);
+}
+
 int Device::EnableRoundRobin() {
   return enable_round_robin(&notification_buf_pair_);
 }

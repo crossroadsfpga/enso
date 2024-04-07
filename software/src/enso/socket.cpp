@@ -222,6 +222,22 @@ int disable_device_rate_limit(int ref_sockfd) {
   return disable_rate_limit(open_sockets[ref_sockfd].notification_buf_pair);
 }
 
+int enable_per_packet_rate_limit(int ref_sockfd) {
+  if (nb_open_sockets == 0) {
+    return -2;
+  }
+  return enable_per_packet_rate_limit(
+      open_sockets[ref_sockfd].notification_buf_pair);
+}
+
+int disable_per_packet_rate_limit(int ref_sockfd) {
+  if (nb_open_sockets == 0) {
+    return -2;
+  }
+  return disable_per_packet_rate_limit(
+      open_sockets[ref_sockfd].notification_buf_pair);
+}
+
 int enable_device_round_robin(int ref_sockfd) {
   if (nb_open_sockets == 0) {
     return -2;

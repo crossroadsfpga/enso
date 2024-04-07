@@ -584,11 +584,6 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     uint64_t huge_page_offset = (transf_addr + req_length) % kBufPageSize;
     transf_addr = hugepage_base_addr + huge_page_offset;
 
-    // if (first)
-    //   std::cout << "sent phys addr " << phys_addr << " for notif buf "
-    //             << notification_buf_pair->id << " at tx tail " << tx_tail
-    //             << std::endl;
-
     tx_tail = (tx_tail + 1) % kNotificationBufSize;
     missing_bytes -= req_length;
   }
