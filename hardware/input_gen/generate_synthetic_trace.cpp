@@ -37,10 +37,12 @@
 #include <pcap/pcap.h>
 #include <sys/time.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -54,9 +56,9 @@ static constexpr uint32_t ip(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
 }
 
 int main(int argc, char const* argv[]) {
-  if (argc != 7) {
+  if (argc != 8) {
     std::cerr << "Usage: " << argv[0]
-              << " NB_PKTS PKT_SIZE NB_SRC NB_DST DST_START "
+              << " NB_PKTS PKT_SIZE NB_SRC NB_DST DST_START REQ_RATE "
               << "OUTPUT_PCAP" << std::endl;
     exit(1);
   }
@@ -66,7 +68,8 @@ int main(int argc, char const* argv[]) {
   const int nb_src = std::stoi(argv[3]);
   const int nb_dst = std::stoi(argv[4]);
   const int dst_start = std::stoi(argv[5]);
-  const std::string output_pcap = argv[6];
+  const int req_rate = std::stoi(argv[6]);
+  const std::string output_pcap = argv[7];
 
   // Skip if pcap with same name already exists.
   {
@@ -118,6 +121,14 @@ int main(int argc, char const* argv[]) {
 
   int nb_pkts = 0;
 
+  // Seed the random generator.
+  std::mt19937 g(dst_start);
+  // Create a packet transmit schedule.
+  std::vector<double> sched(total_nb_packets);
+  std::exponential_distribution<double> rd(1.0 / (1000000.0 / req_rate));
+  std::cout << "average: " << 1.0 / (1000000.0 / req_rate) << std::endl;
+  std::generate(sched.begin(), sched.end(), std::bind(rd, g));
+
   while (nb_pkts < total_nb_packets) {
     for (int i = 0; i < nb_dst; ++i) {
       l3_hdr->daddr = htonl(dst_ip + (uint32_t)i);
@@ -128,13 +139,15 @@ int main(int argc, char const* argv[]) {
 
       pkt_hdr.len = sizeof(*l2_hdr) + sizeof(*l3_hdr) + sizeof(*l4_hdr) + mss;
       pkt_hdr.caplen = pkt_hdr.len;
+      ts.tv_usec = sched[nb_pkts] * 100;
+      pkt_hdr.ts = ts;
+      std::cout << "sched[" << nb_pkts << "]: " << pkt_hdr.ts.tv_usec
+                << std::endl;
 
       l4_hdr->dest = htons(80);
       l4_hdr->source = htons(8080);
       l4_hdr->len = htons(sizeof(*l4_hdr) + mss);
-      /* TODO: implement poisson schedule here: need to change the  */
 
-      ++(ts.tv_usec);
       pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
 
       ++nb_pkts;
