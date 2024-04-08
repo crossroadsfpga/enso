@@ -310,18 +310,17 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
    * @param data data to push.
    * @return 0 on success and a non-zero error code on failure.
    */
-  inline int Push(const T& data) {
-    if (shared_ || application_id_ >= 0) {
-      // std::cout << "accessed tail as " << *tail_addr_ << std::endl;
-      tail_ = *tail_addr_;
-    }
+  inline int Push(const T& data, bool first = false) {
+    (void)first;
+    if (shared_ || application_id_ >= 0) tail_ = *tail_addr_;
+    _enso_compiler_memory_barrier();
+
     struct Parent::Element* current_element =
         &(Parent::buf_addr()[tail_ & Parent::index_mask()]);
-    // uint64_t phys = virt_to_phys(Parent::buf_addr());
-    // std::cout << "trying to pushing to tail " << (tail_ &
-    // Parent::index_mask())
-    //           << " phys addr: " << phys << std::endl;
     if (unlikely(current_element->signal)) {
+      // std::cout << "Trying to push to tail " << (tail_ &
+      // Parent::index_mask())
+      //           << " but it is full" << std::endl;
       return -1;  // Queue is full.
     }
 
@@ -331,20 +330,17 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     tmp_element->signal = 1;
     tmp_element->data = data;
 
-    // std::cout << "pushing to tail " << (tail_ & Parent::index_mask())
-    //           << " phys addr: " << phys << std::endl;
-    if (shared_ || application_id_ >= 0) {
-      // if (application_id_ >= 0)
-      //   std::cout << "pushing to tail " << (tail_ & Parent::index_mask())
-      //             << " phys addr: " << phys << std::endl;
-      // std::cout << "updated tail to " << ((tail_ + 1) &
-      // Parent::index_mask())
-      //           << std::endl;
-      *tail_addr_ = (tail_ + 1);
-    }
+    // if (first) {
+    //   std::cout << "Pushing to tail " << (tail_ & Parent::index_mask())
+    //             << " last nb pushes: " << nb_pushes_ << std::endl;
+    //   nb_pushes_ = 0;
+    // }
+    nb_pushes_++;
 
     _mm512_storeu_si512((__m512i*)current_element, tmp_element_raw);
 
+    _enso_compiler_memory_barrier();
+    if (shared_ || application_id_ >= 0) *tail_addr_ = (tail_ + 1);
     tail_ = (tail_ + 1);
 
     return 0;
@@ -408,9 +404,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
 
       tail_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
 
-      // uint64_t phys = virt_to_phys(tail_addr_);
-      // std::cout << "phys tail address  of producer: " << phys << std::endl;
-
       huge_page_path = huge_page_prefix_ +
                        std::string(kHugePageQueueHeadPathPrefix) + ":" +
                        std::to_string(application_id_);
@@ -425,12 +418,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
       //           std::endl;
 
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
-
-      // phys = virt_to_phys(head_addr_);
-      // std::cout << "phys head address  of producer: " << phys << std::endl;
-
-      // std::cout << "producer: allocating head addr: " << head_addr_
-      //           << " for app " << application_id_ << std::endl;
     }
 
     return 0;
@@ -444,6 +431,7 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   uint32_t* tail_addr_ = nullptr;
   uint32_t* head_addr_ = nullptr;
   uint32_t core_id_;
+  uint64_t nb_pushes_ = 0;
   int32_t application_id_ = -1;
   bool shared_ = false;
   bool print_ = false;
@@ -488,34 +476,29 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
    * @return the data on success and an empty optional if the queue is empty.
    */
   inline std::optional<T> Pop() {
-    if (shared_ || application_id_ >= 0) {
-      head_ = *head_addr_;
-    }
+    if (shared_ || application_id_ >= 0) head_ = *head_addr_;
+    _enso_compiler_memory_barrier();
+
     struct Parent::Element* current_element =
         &(Parent::buf_addr()[head_ & Parent::index_mask()]);
-
-    // uint64_t phys = virt_to_phys(current_element);
-    // std::cout << "trying to pop from " << phys << " at head " << head_
-    //           << std::endl;
 
     if (!current_element->signal) {
       return {};  // Queue is empty.
     }
 
-    if (shared_ || application_id_ >= 0) *head_addr_ = (head_ + 1);
-    // if (application_id_ >= 0)
-    //   std::cout << "popped from head " << (head_ & Parent::index_mask())
-    //             << std::endl;
-
     T data = current_element->data;
+    _enso_compiler_memory_barrier();
     current_element->signal = 0;
 
+    if (shared_ || application_id_ >= 0) *head_addr_ = (head_ + 1);
     head_ = (head_ + 1);
 
     return data;
   }
 
   inline uint32_t GetHead() { return head_; }
+
+  inline uint32_t GetHeadMod() { return head_ & Parent::index_mask(); }
 
   inline bool IsEmpty() {
     struct Parent::Element* current_element =

@@ -87,7 +87,7 @@
 #define DEFAULT_STATS_DELAY 1000
 
 // Number of CLI arguments.
-#define NB_CLI_ARGS 3
+#define NB_CLI_ARGS 1
 
 // Maximum number of bytes that we can receive at once.
 #define RECV_BUF_LEN 10000000
@@ -116,7 +116,7 @@ void int_handler(int signal __attribute__((unused))) {
 
 static void print_usage(const char* program_name) {
   printf(
-      "%s PCAP_FILE RATE_NUM RATE_DEN\n"
+      "%s PCAP_FILE \n"
       " [--help]\n"
       " [--count NB_PKTS]\n"
       " [--core CORE_ID]\n"
@@ -131,8 +131,6 @@ static void print_usage(const char* program_name) {
       " [--pcie-addr PCIE_ADDR]\n\n"
 
       "  PCAP_FILE: Pcap file with packets to transmit.\n"
-      "  RATE_NUM: Numerator of the rate used to transmit packets.\n"
-      "  RATE_DEN: Denominator of the rate used to transmit packets.\n\n"
 
       "  --help: Show this help and exit.\n"
       "  --count: Specify number of packets to transmit.\n"
@@ -211,8 +209,6 @@ struct parsed_args_t {
   std::string hist_file;
   std::string pcap_file;
   std::string save_file;
-  uint16_t rate_num;
-  uint16_t rate_den;
   uint64_t nb_pkts;
   uint32_t rtt_hist_offset;
   uint32_t rtt_hist_len;
@@ -286,18 +282,6 @@ static int parse_args(int argc, char** argv,
   }
 
   parsed_args.pcap_file = argv[optind++];
-  parsed_args.rate_num = atoi(argv[optind++]);
-  parsed_args.rate_den = atoi(argv[optind++]);
-
-  if (parsed_args.rate_num == 0) {
-    std::cerr << "Rate must be greater than 0" << std::endl;
-    return -1;
-  }
-
-  if (parsed_args.rate_den == 0) {
-    std::cerr << "Rate denominator must be greater than 0" << std::endl;
-    return -1;
-  }
 
   return 0;
 }
@@ -480,7 +464,6 @@ struct TxArgs {
 
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
-  (void)pkt_hdr;
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
 
   const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
@@ -491,13 +474,18 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
 
   uint32_t len = enso::get_pkt_len(pkt_bytes);
   uint32_t nb_flits = (len - 1) / 64 + 1;
+  std::cout << "nb flits: " << nb_flits << std::endl;
 
-  /* TODO (kaajalg): And need to enable pkt delay at beginning */
+  uint64_t delay_us = pkt_hdr->ts.tv_usec;
+  std::cout << "delay us: " << delay_us << std::endl;
+  uint64_t delay_cycles = delay_us * (enso::kMaxHardwareFlitRate / 100000000);
+  if (delay_cycles <= nb_flits)
+    delay_cycles = 0;
+  else
+    delay_cycles -= nb_flits;
 
-  /* Take pkt_bytes + kPacketRttOffset to set the offset as the number of cycles
-   */
-
-  /* Use kMaxHardwareFlitRate to convert between hardware cycles and us */
+  std::cout << "delay cycles: " << delay_cycles << std::endl;
+  enso::set_pkt_delay((uint8_t*)pkt_bytes, delay_cycles);
 
   if (nb_flits > context->free_flits) {
     uint8_t* buf;
@@ -765,17 +753,76 @@ int main(int argc, char** argv) {
 
   std::vector<std::thread> threads;
 
-  // When using single_core we use the same thread for RX and TX, otherwise we
-  // launch separate threads for RX and TX.
-  if (!parsed_args.single_core) {
-    std::thread rx_thread = std::thread([&parsed_args, &rx_stats] {
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  std::thread rx_thread = std::thread([&parsed_args, &rx_stats] {
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-      std::vector<int> socket_fds;
+    std::vector<int> socket_fds;
 
-      int socket_fd = 0;
-      for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-        socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
+    int socket_fd = 0;
+    for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
+      socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
+
+      if (socket_fd == -1) {
+        std::cerr << "Problem creating socket (" << errno
+                  << "): " << strerror(errno) << std::endl;
+        exit(2);
+      }
+
+      socket_fds.push_back(socket_fd);
+    }
+
+    enso::enable_device_round_robin(socket_fd);
+    enso::enable_per_packet_rate_limit(socket_fd);
+
+    if (parsed_args.enable_rtt) {
+      enso::enable_device_timestamp(socket_fd);
+    } else {
+      enso::disable_device_timestamp(socket_fd);
+    }
+
+    RxArgs rx_args;
+    rx_args.enable_rtt = parsed_args.enable_rtt;
+    rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
+    rx_args.socket_fd = socket_fd;
+
+    rx_ready = 1;
+
+    while (keep_running) {
+      receive_pkts(rx_args, rx_stats);
+    }
+
+    uint64_t nb_iters_no_pkt = 0;
+
+    // Receive packets until packets stop arriving or user force stops.
+    while (!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
+      uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
+      if (unlikely(nb_pkts == 0)) {
+        ++nb_iters_no_pkt;
+      } else {
+        nb_iters_no_pkt = 0;
+      }
+    }
+
+    rx_done = true;
+
+    enso::disable_device_round_robin(socket_fd);
+    enso::disable_per_packet_rate_limit(socket_fd);
+
+    if (parsed_args.enable_rtt) {
+      enso::disable_device_timestamp(socket_fd);
+    }
+
+    for (auto& s : socket_fds) {
+      enso::shutdown(s, SHUT_RDWR);
+    }
+  });
+
+  std::thread tx_thread =
+      std::thread([total_bytes_to_send, total_good_bytes_to_send,
+                   pkts_in_last_buffer, &parsed_args, &enso_pipes, &tx_stats] {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, false);
 
         if (socket_fd == -1) {
           std::cerr << "Problem creating socket (" << errno
@@ -783,203 +830,44 @@ int main(int argc, char** argv) {
           exit(2);
         }
 
-        socket_fds.push_back(socket_fd);
-      }
+        while (!rx_ready) continue;
 
-      enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
-                                     parsed_args.rate_den);
-      enso::enable_device_round_robin(socket_fd);
+        TxArgs tx_args(enso_pipes, total_bytes_to_send,
+                       total_good_bytes_to_send, pkts_in_last_buffer,
+                       socket_fd);
 
-      if (parsed_args.enable_rtt) {
-        enso::enable_device_timestamp(socket_fd);
-      } else {
-        enso::disable_device_timestamp(socket_fd);
-      }
-
-      RxArgs rx_args;
-      rx_args.enable_rtt = parsed_args.enable_rtt;
-      rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
-      rx_args.socket_fd = socket_fd;
-
-      std::cout << "Running RX on core " << sched_getcpu() << std::endl;
-
-      rx_ready = 1;
-
-      while (keep_running) {
-        receive_pkts(rx_args, rx_stats);
-      }
-
-      uint64_t nb_iters_no_pkt = 0;
-
-      // Receive packets until packets stop arriving or user force stops.
-      while (!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
-        uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
-        if (unlikely(nb_pkts == 0)) {
-          ++nb_iters_no_pkt;
-        } else {
-          nb_iters_no_pkt = 0;
+        while (keep_running) {
+          transmit_pkts(tx_args, tx_stats);
         }
-      }
 
-      rx_done = true;
+        tx_done = 1;
 
-      enso::disable_device_rate_limit(socket_fd);
-      enso::disable_device_round_robin(socket_fd);
+        while (!rx_done) continue;
 
-      if (parsed_args.enable_rtt) {
-        enso::disable_device_timestamp(socket_fd);
-      }
+        reclaim_all_buffers(tx_args);
+      });
 
-      for (auto& s : socket_fds) {
-        enso::shutdown(s, SHUT_RDWR);
-      }
-    });
-
-    std::thread tx_thread = std::thread(
-        [total_bytes_to_send, total_good_bytes_to_send, pkts_in_last_buffer,
-         &parsed_args, &enso_pipes, &tx_stats] {
-          std::this_thread::sleep_for(std::chrono::seconds(1));
-
-          int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, false);
-
-          if (socket_fd == -1) {
-            std::cerr << "Problem creating socket (" << errno
-                      << "): " << strerror(errno) << std::endl;
-            exit(2);
-          }
-
-          while (!rx_ready) continue;
-
-          std::cout << "Running TX on core " << sched_getcpu() << std::endl;
-
-          TxArgs tx_args(enso_pipes, total_bytes_to_send,
-                         total_good_bytes_to_send, pkts_in_last_buffer,
-                         socket_fd);
-
-          while (keep_running) {
-            transmit_pkts(tx_args, tx_stats);
-          }
-
-          tx_done = 1;
-
-          while (!rx_done) continue;
-
-          reclaim_all_buffers(tx_args);
-        });
-
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(parsed_args.core_id, &cpuset);
-    int result = pthread_setaffinity_np(rx_thread.native_handle(),
-                                        sizeof(cpuset), &cpuset);
-    if (result < 0) {
-      std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
-      return 6;
-    }
-
-    CPU_ZERO(&cpuset);
-    CPU_SET(parsed_args.core_id + 1, &cpuset);
-    result = pthread_setaffinity_np(tx_thread.native_handle(), sizeof(cpuset),
-                                    &cpuset);
-    if (result < 0) {
-      std::cerr << "Error setting CPU affinity for TX thread." << std::endl;
-      return 7;
-    }
-
-    threads.push_back(std::move(rx_thread));
-    threads.push_back(std::move(tx_thread));
-
-  } else {
-    // Send and receive packets within the same thread.
-    std::thread rx_tx_thread = std::thread(
-        [&parsed_args, &rx_stats, total_bytes_to_send, total_good_bytes_to_send,
-         pkts_in_last_buffer, &enso_pipes, &tx_stats] {
-          std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-          std::vector<int> socket_fds;
-
-          int socket_fd = 0;
-          for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-            socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
-
-            if (socket_fd == -1) {
-              std::cerr << "Problem creating socket (" << errno
-                        << "): " << strerror(errno) << std::endl;
-              exit(2);
-            }
-
-            socket_fds.push_back(socket_fd);
-          }
-
-          enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
-                                         parsed_args.rate_den);
-          enso::enable_device_round_robin(socket_fd);
-
-          if (parsed_args.enable_rtt) {
-            enso::enable_device_timestamp(socket_fd);
-          }
-
-          std::cout << "Running RX and TX on core " << sched_getcpu()
-                    << std::endl;
-
-          RxArgs rx_args;
-          rx_args.enable_rtt = parsed_args.enable_rtt;
-          rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
-          rx_args.socket_fd = socket_fd;
-
-          TxArgs tx_args(enso_pipes, total_bytes_to_send,
-                         total_good_bytes_to_send, pkts_in_last_buffer,
-                         socket_fd);
-
-          rx_ready = 1;
-
-          while (keep_running) {
-            receive_pkts(rx_args, rx_stats);
-            transmit_pkts(tx_args, tx_stats);
-          }
-
-          tx_done = 1;
-
-          uint64_t nb_iters_no_pkt = 0;
-
-          // Receive packets until packets stop arriving or user force stops.
-          while (!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
-            uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
-            if (unlikely(nb_pkts == 0)) {
-              ++nb_iters_no_pkt;
-            } else {
-              nb_iters_no_pkt = 0;
-            }
-          }
-
-          rx_done = true;
-
-          reclaim_all_buffers(tx_args);
-
-          enso::disable_device_rate_limit(socket_fd);
-          enso::disable_device_round_robin(socket_fd);
-
-          if (parsed_args.enable_rtt) {
-            enso::disable_device_timestamp(socket_fd);
-          }
-
-          for (auto& s : socket_fds) {
-            enso::shutdown(s, SHUT_RDWR);
-          }
-        });
-
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(parsed_args.core_id, &cpuset);
-    int result = pthread_setaffinity_np(rx_tx_thread.native_handle(),
-                                        sizeof(cpuset), &cpuset);
-    if (result < 0) {
-      std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
-      return 6;
-    }
-
-    threads.push_back(std::move(rx_tx_thread));
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(parsed_args.core_id, &cpuset);
+  int result = pthread_setaffinity_np(rx_thread.native_handle(), sizeof(cpuset),
+                                      &cpuset);
+  if (result < 0) {
+    std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
+    return 6;
   }
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(parsed_args.core_id + 1, &cpuset);
+  result = pthread_setaffinity_np(tx_thread.native_handle(), sizeof(cpuset),
+                                  &cpuset);
+  if (result < 0) {
+    std::cerr << "Error setting CPU affinity for TX thread." << std::endl;
+    return 7;
+  }
+
+  threads.push_back(std::move(rx_thread));
+  threads.push_back(std::move(tx_thread));
 
   // Write header to save file.
   if (parsed_args.save) {
