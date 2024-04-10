@@ -379,8 +379,11 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
-    uint64_t time_to_uthread = rdtsc() - cur_notification->pad[0];
-    if (update_callback_) std::invoke(update_callback_, time_to_uthread);
+    uint64_t now = rdtsc();
+    uint64_t time_to_uthread = now - cur_notification->pad[0];
+    uint64_t overall_time = now - cur_notification->pad[1];
+    if (update_callback_)
+      std::invoke(update_callback_, time_to_uthread, overall_time);
     // std::cout << "Got notification for notif buf " <<
     // notification_buf_pair->id
     //           << " at notif buf head " << notification_buf_head
@@ -648,8 +651,11 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
-    uint64_t time_to_uthread = rdtsc() - tx_notification->pad[0];
-    if (update_callback_) std::invoke(update_callback_, time_to_uthread);
+    uint64_t now = rdtsc();
+    uint64_t time_to_uthread = now - tx_notification->pad[0];
+    uint64_t overall_time = now - tx_notification->pad[1];
+    if (update_callback_)
+      std::invoke(update_callback_, time_to_uthread, overall_time);
 
     // std::cout << "Notif buf " << notification_buf_pair->id
     //           << " consumed tx notification at " << head << std::endl;

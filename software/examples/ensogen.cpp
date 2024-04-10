@@ -791,6 +791,7 @@ int main(int argc, char** argv) {
       enso::enable_device_round_robin(socket_fd);
 
       if (parsed_args.enable_rtt) {
+        std::cout << "Enabling timestamping" << std::endl;
         enso::enable_device_timestamp(socket_fd);
       } else {
         enso::disable_device_timestamp(socket_fd);

@@ -79,7 +79,7 @@ uint32_t application_id_ = 0;
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
-using UpdateCallback = std::function<void(uint64_t)>;
+using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
 UpdateCallback update_callback_;
 BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
