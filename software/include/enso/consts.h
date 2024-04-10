@@ -214,7 +214,7 @@ struct FreePipeNotification {
 struct ShinkansenNotification {
   NotifType type;
   uint64_t notif_queue_id;
-  uint64_t padding[3];
+  uint64_t padding[5];
 };
 
 struct UthreadSwitchNotification {
