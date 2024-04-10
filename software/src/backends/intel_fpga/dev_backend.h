@@ -51,7 +51,7 @@ using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
 using ParkCallback = std::function<void(bool)>;
 ParkCallback park_callback_;
-using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
+using UpdateCallback = std::function<void(uint64_t)>;
 UpdateCallback update_callback_;
 
 void initialize_backend_dev(BackendWrapper preempt_enable,
