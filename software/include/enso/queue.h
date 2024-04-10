@@ -139,15 +139,17 @@ class Queue {
    * @return A unique pointer to the object or nullptr if the creation fails.
    */
   static std::unique_ptr<Subclass> Create(
-      const std::string& queue_name, bool shared = false, bool print = false,
-      uint32_t core_id = 0, size_t size = 0, bool join_if_exists = true,
+      const std::string& queue_name, int32_t application_id = -1,
+      bool shared = false, bool print = false, uint32_t core_id = 0,
+      size_t size = 0, bool join_if_exists = true,
       std::string huge_page_prefix = "") noexcept {
     if (huge_page_prefix == "") {
       huge_page_prefix = kHugePageDefaultPrefix;
     }
 
-    std::unique_ptr<Subclass> queue(new (std::nothrow) Subclass(
-        queue_name, core_id, size, huge_page_prefix, shared, print));
+    std::unique_ptr<Subclass> queue(
+        new (std::nothrow) Subclass(queue_name, core_id, size, huge_page_prefix,
+                                    application_id, shared, print));
 
     if (queue == nullptr) {
       return std::unique_ptr<Subclass>{};
@@ -332,12 +334,18 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     return 0;
   }
 
+  uint32_t GetTail() { return tail_; }
+
+  uint32_t* GetHeadPtr() { return head_addr_; }
+
  protected:
   explicit QueueProducer(const std::string& queue_name, uint32_t core_id,
                          size_t size, const std::string& huge_page_prefix,
-                         bool shared, bool print) noexcept
+                         int32_t application_id, bool shared,
+                         bool print) noexcept
       : Queue<T, QueueProducer<T>>(queue_name, size, huge_page_prefix),
         core_id_(core_id),
+        application_id_(application_id),
         shared_(shared),
         print_(print),
         huge_page_prefix_(huge_page_prefix) {}
@@ -353,10 +361,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   int Init(bool join_if_exists) noexcept {
     if (Parent::Init(join_if_exists)) {
       return -1;
-    }
-
-    if (Parent::created_queue()) {
-      return 0;
     }
 
     // Synchronize the pointer in case the queue is not empty.
@@ -392,7 +396,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
         std::cerr << "Failed to allocate shared memory for head" << std::endl;
         return -1;
       }
-
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
     }
 
@@ -405,6 +408,7 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
 
   uint32_t tail_ = 0;
   uint32_t* tail_addr_ = nullptr;
+  uint32_t* head_addr_ = nullptr;
   uint32_t core_id_;
   uint64_t nb_pushes_ = 0;
   int32_t application_id_ = -1;
@@ -437,7 +441,8 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
    * queue is empty.
    */
   inline T* Front() {
-    struct Parent::Element* current_element = &(Parent::buf_addr()[head_]);
+    struct Parent::Element* current_element =
+        &(Parent::buf_addr()[head_ & Parent::index_mask()]);
     if (!current_element->signal) {
       return nullptr;  // Queue is empty.
     }
@@ -483,9 +488,11 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
  protected:
   explicit QueueConsumer(const std::string& queue_name, uint32_t core_id,
                          size_t size, const std::string& huge_page_prefix,
-                         bool shared, bool print) noexcept
+                         int32_t application_id, bool shared,
+                         bool print) noexcept
       : Queue<T, QueueConsumer<T>>(queue_name, size, huge_page_prefix),
         core_id_(core_id),
+        application_id_(application_id),
         shared_(shared),
         print_(print),
         huge_page_prefix_(huge_page_prefix) {}
@@ -501,10 +508,6 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
   int Init(bool join_if_exists) noexcept {
     if (Parent::Init(join_if_exists)) {
       return -1;
-    }
-
-    if (Parent::created_queue()) {
-      return 0;
     }
 
     // Synchronize the pointer in case the queue is not empty.
@@ -542,6 +545,7 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
   uint32_t head_ = 0;
   uint32_t* head_addr_ = nullptr;
   uint32_t core_id_;
+  int32_t application_id_ = -1;
   bool shared_ = false;
   bool print_ = false;
   std::string huge_page_prefix_;
