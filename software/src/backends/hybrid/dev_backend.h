@@ -79,6 +79,8 @@ uint32_t application_id_ = 0;
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
+using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
+UpdateCallback update_callback_;
 BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
 IdCallback id_callback_;
@@ -117,11 +119,13 @@ int initialize_queues(uint32_t core_id) {
 void initialize_backend_dev(BackendWrapper preempt_enable,
                             BackendWrapper preempt_disable,
                             IdCallback id_callback, TscCallback tsc_callback,
+                            UpdateCallback update_callback,
                             uint32_t application_id) {
   preempt_enable_ = preempt_enable;
   preempt_disable_ = preempt_disable;
   id_callback_ = id_callback;
   tsc_callback_ = tsc_callback;
+  update_callback_ = update_callback;
   application_id_ = application_id;
 }
 
@@ -255,6 +259,7 @@ class DevBackend {
       mmio_notification.value = value;
       mmio_notification.uthread_id = std::invoke(id_callback_);
       mmio_notification.tsc = std::invoke(tsc_callback_);
+      mmio_notification.actual_tsc = rdtsc();
 
       // std::cout << "pushing mmio notification with tsc "
       //           << mmio_notification.tsc << " for notif buf " << queue_id

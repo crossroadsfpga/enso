@@ -348,6 +348,12 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
   return enso_pipe_init(enso_pipe, notification_buf_pair, fallback);
 }
 
+static inline uint64_t rdtsc(void) {
+  uint32_t a, d;
+  asm volatile("rdtsc" : "=a"(a), "=d"(d));
+  return ((uint64_t)a) | (((uint64_t)d) << 32);
+}
+
 /**
  * @brief Updates bookkeeping on until where packets are
  *        available for each enso RX pipe, adds to ring buffer with
@@ -372,6 +378,12 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     if (!cur_notification->signal) {
       break;
     }
+
+    uint64_t now = rdtsc();
+    uint64_t time_to_uthread = now - cur_notification->pad[0];
+    uint64_t overall_time = now - cur_notification->pad[1];
+    if (update_callback_)
+      std::invoke(update_callback_, time_to_uthread, overall_time);
     // std::cout << "Got notification for notif buf " <<
     // notification_buf_pair->id
     //           << " at notif buf head " << notification_buf_head
@@ -639,6 +651,12 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
+    uint64_t now = rdtsc();
+    uint64_t time_to_uthread = now - tx_notification->pad[0];
+    uint64_t overall_time = now - tx_notification->pad[1];
+    if (update_callback_)
+      std::invoke(update_callback_, time_to_uthread, overall_time);
+
     // std::cout << "Notif buf " << notification_buf_pair->id
     //           << " consumed tx notification at " << head << std::endl;
 
@@ -831,9 +849,10 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
 void pcie_initialize_backend(BackendWrapper preempt_enable,
                              BackendWrapper preempt_disable,
                              IdCallback id_callback, TscCallback tsc_callback,
+                             UpdateCallback update_callback,
                              uint32_t application_id) {
   initialize_backend_dev(preempt_enable, preempt_disable, id_callback,
-                         tsc_callback, application_id);
+                         tsc_callback, update_callback, application_id);
 }
 
 void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }

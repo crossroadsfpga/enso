@@ -396,7 +396,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
         std::cerr << "Failed to allocate shared memory for head" << std::endl;
         return -1;
       }
-
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
     }
 
