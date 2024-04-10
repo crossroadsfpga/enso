@@ -219,16 +219,9 @@ struct UthreadSwitchNotification {
   NotifType type;
   uint64_t uthread_id;
   uint64_t last_heads;
-  uint64_t next_uthread_id;
-  uint64_t parking;
   uint64_t application_id;
   uint64_t time;
-};
-
-struct UthreadCreateNotification {
-  NotifType type;
-  uint64_t uthread_id;
-  uint64_t padding[5];
+  uint64_t data[2];
 };
 
 struct PipeNotification {
