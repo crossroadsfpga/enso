@@ -37,10 +37,12 @@
 #include <pcap/pcap.h>
 #include <sys/time.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -54,9 +56,9 @@ static constexpr uint32_t ip(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
 }
 
 int main(int argc, char const* argv[]) {
-  if (argc != 7) {
+  if (argc != 8) {
     std::cerr << "Usage: " << argv[0]
-              << " NB_PKTS PKT_SIZE NB_SRC NB_DST DST_START "
+              << " NB_PKTS PKT_SIZE NB_SRC NB_DST DST_START REQ_RATE "
               << "OUTPUT_PCAP" << std::endl;
     exit(1);
   }
@@ -66,7 +68,8 @@ int main(int argc, char const* argv[]) {
   const int nb_src = std::stoi(argv[3]);
   const int nb_dst = std::stoi(argv[4]);
   const int dst_start = std::stoi(argv[5]);
-  const std::string output_pcap = argv[6];
+  const int req_rate = std::stoi(argv[6]);
+  const std::string output_pcap = argv[7];
 
   // Skip if pcap with same name already exists.
   {
@@ -116,30 +119,54 @@ int main(int argc, char const* argv[]) {
   uint32_t mss =
       pkt_size - sizeof(*l2_hdr) - sizeof(*l3_hdr) - sizeof(*l4_hdr) - 4;
 
+  // Seed the random generator.
+  std::mt19937 g(dst_start);
+  // Create a packet transmit schedule.
+  std::vector<double> sched(total_nb_packets);
+  std::exponential_distribution<double> rd(1.0 / (1000000.0 / req_rate));
+  std::cout << "average: " << 1.0 / (1000000.0 / req_rate) << std::endl;
+  std::generate(sched.begin(), sched.end(), std::bind(rd, g));
+
+  int packetsPerDestination = total_nb_packets / nb_dst;
+
+  std::vector<int> result;
+
+  for (int i = 0; i < nb_dst; ++i) {
+    for (int j = 0; j < packetsPerDestination; ++j) {
+      result.push_back(i);
+    }
+  }
+
+  std::random_device rd_;
+  std::mt19937 g_(rd_());
+  std::shuffle(result.begin(), result.end(), g_);
+
   int nb_pkts = 0;
 
   while (nb_pkts < total_nb_packets) {
-    for (int i = 0; i < nb_dst; ++i) {
-      l3_hdr->daddr = htonl(dst_ip + (uint32_t)i);
-      uint32_t src_offset = i / (nb_dst / nb_src);
-      l3_hdr->saddr = htonl(src_ip + src_offset);
+    int i = result[nb_pkts];
+    l3_hdr->daddr = htonl(dst_ip + (uint32_t)i);
+    uint32_t src_offset = i / (nb_dst / nb_src);
+    l3_hdr->saddr = htonl(src_ip + src_offset);
 
-      l3_hdr->tot_len = htons(mss + sizeof(*l3_hdr) + sizeof(*l4_hdr));
+    l3_hdr->tot_len = htons(mss + sizeof(*l3_hdr) + sizeof(*l4_hdr));
 
-      pkt_hdr.len = sizeof(*l2_hdr) + sizeof(*l3_hdr) + sizeof(*l4_hdr) + mss;
-      pkt_hdr.caplen = pkt_hdr.len;
+    pkt_hdr.len = sizeof(*l2_hdr) + sizeof(*l3_hdr) + sizeof(*l4_hdr) + mss;
+    pkt_hdr.caplen = pkt_hdr.len;
+    ts.tv_usec = sched[nb_pkts] * 100;
+    pkt_hdr.ts = ts;
+    std::cout << "sched[" << nb_pkts << "]: " << pkt_hdr.ts.tv_usec
+              << std::endl;
 
-      l4_hdr->dest = htons(80);
-      l4_hdr->source = htons(8080);
-      l4_hdr->len = htons(sizeof(*l4_hdr) + mss);
+    l4_hdr->dest = htons(80);
+    l4_hdr->source = htons(8080);
+    l4_hdr->len = htons(sizeof(*l4_hdr) + mss);
 
-      ++(ts.tv_usec);
-      pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
+    pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
 
-      ++nb_pkts;
-      if (nb_pkts >= total_nb_packets) {
-        break;
-      }
+    ++nb_pkts;
+    if (nb_pkts >= total_nb_packets) {
+      break;
     }
   }
 

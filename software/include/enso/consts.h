@@ -153,17 +153,19 @@ enum class NotifType : uint8_t {
   kFreePipe = 9,
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
-  kKthreadYield = 12,
-  kUthreadSwitch = 13,
-  kJoinedKthread = 14,
-  kUthreadCreate = 15,
+  kUthreadSwitch = 12,
+  kJoinedKthread = 13,
+  kUthreadCreate = 14,
 };
 
 struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
-  uint64_t padding[4];
+  uint64_t uthread_id;
+  uint64_t tsc;
+  uint64_t actual_tsc;
+  uint64_t padding;
 };
 
 struct JoinedNotification {
@@ -191,8 +193,9 @@ struct NotifBufNotification {
   NotifType type;
   uint64_t notif_buf_id;
   uint64_t uthread_id;
+  uint64_t application_id;
   uint64_t result;
-  uint64_t padding[3];
+  uint64_t padding[2];
 };
 
 struct AllocatePipeNotification {
@@ -212,12 +215,6 @@ struct FreePipeNotification {
 struct ShinkansenNotification {
   NotifType type;
   uint64_t notif_queue_id;
-  uint64_t padding[5];
-};
-
-struct KthreadYieldNotification {
-  NotifType type;
-  uint64_t voluntary;
   uint64_t padding[5];
 };
 

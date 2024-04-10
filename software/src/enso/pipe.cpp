@@ -59,10 +59,13 @@ void set_backend_core_id(uint32_t core_id) {
   pcie_set_backend_core_id(core_id);
 }
 
-void initialize_backend_queues(uint32_t core_id, BackendWrapper preempt_enable,
-                               BackendWrapper preempt_disable) {
-  return pcie_initialize_backend_queues(core_id, preempt_enable,
-                                        preempt_disable);
+void initialize_backend(BackendWrapper preempt_enable,
+                        BackendWrapper preempt_disable, IdCallback id_callback,
+                        TscCallback tsc_callback,
+                        UpdateCallback update_callback,
+                        uint32_t application_id) {
+  return pcie_initialize_backend(preempt_enable, preempt_disable, id_callback,
+                                 tsc_callback, update_callback, application_id);
 }
 
 void push_to_backend_queues(PipeNotification* notif) {
@@ -416,10 +419,11 @@ int Device::ApplyConfig(struct TxNotification* notification) {
                      &completion_callback_);
 }
 
-void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
+void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
+                  bool first) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
-  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
+  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes, first);
 
   uint32_t nb_pending_requests =
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
@@ -428,12 +432,13 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
   // We need space for two requests because the request may be split into two
   // if the bytes wrap around the end of the buffer.
   while (unlikely(nb_pending_requests >= (kMaxPendingTxRequests - 2))) {
+    if (park_callback_ != nullptr) std::invoke(park_callback_, false);
     ProcessCompletions();
     nb_pending_requests =
         (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
-    // if (park_callback_) std::invoke(park_callback_);
   }
 
+  tx_pending_requests_[tx_pr_tail_].phys_addr = phys_addr;
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = nb_bytes;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
@@ -455,6 +460,8 @@ void Device::ProcessCompletions() {
       // for applications
       std::invoke(completion_callback_);
     } else {
+      // std::cout << "Processing completion of " << tx_req.nb_bytes
+      //           << " bytes with phys addr " << tx_req.phys_addr << std::endl;
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
       // increments app_end_ for the tx pipe by nb_bytes
       pipe->NotifyCompletion(tx_req.nb_bytes);
@@ -482,6 +489,14 @@ int Device::EnableRateLimiting(uint16_t num, uint16_t den) {
 
 int Device::DisableRateLimiting() {
   return disable_rate_limit(&notification_buf_pair_);
+}
+
+int Device::EnablePerPacketRateLimiting() {
+  return enable_per_packet_rate_limit(&notification_buf_pair_);
+}
+
+int Device::DisablePerPacketRateLimiting() {
+  return disable_per_packet_rate_limit(&notification_buf_pair_);
 }
 
 int Device::EnableRoundRobin() {

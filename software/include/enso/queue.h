@@ -304,12 +304,13 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
    * @param data data to push.
    * @return 0 on success and a non-zero error code on failure.
    */
-  inline int Push(const T& data) {
-    if (shared_) {
-      // std::cout << "accessed tail as " << *tail_addr_ << std::endl;
-      tail_ = *tail_addr_;
-    }
-    struct Parent::Element* current_element = &(Parent::buf_addr()[tail_]);
+  inline int Push(const T& data, bool first = false) {
+    (void)first;
+    if (shared_ || application_id_ >= 0) tail_ = *tail_addr_;
+    _enso_compiler_memory_barrier();
+
+    struct Parent::Element* current_element =
+        &(Parent::buf_addr()[tail_ & Parent::index_mask()]);
     if (unlikely(current_element->signal)) {
       return -1;  // Queue is full.
     }
@@ -320,16 +321,13 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     tmp_element->signal = 1;
     tmp_element->data = data;
 
-    if (shared_) {
-      // if (print_) std::cout << "pushing to tail " << tail_ << std::endl;
-      // std::cout << "updated tail to " << ((tail_ + 1) & Parent::index_mask())
-      //           << std::endl;
-      *tail_addr_ = (tail_ + 1) & Parent::index_mask();
-    }
+    nb_pushes_++;
 
     _mm512_storeu_si512((__m512i*)current_element, tmp_element_raw);
 
-    tail_ = (tail_ + 1) & Parent::index_mask();
+    _enso_compiler_memory_barrier();
+    if (shared_ || application_id_ >= 0) *tail_addr_ = (tail_ + 1);
+    tail_ = (tail_ + 1);
 
     return 0;
   }
@@ -374,6 +372,30 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
       tail_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
     }
 
+    if (application_id_ >= 0) {
+      std::string huge_page_path = huge_page_prefix_ +
+                                   std::string(kHugePageQueueTailPathPrefix) +
+                                   ":" + std::to_string(application_id_);
+      void* addr = get_huge_page(huge_page_path, 0);
+      if (addr == nullptr) {
+        std::cerr << "Failed to allocate shared memory for tail" << std::endl;
+        return -1;
+      }
+
+      tail_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
+
+      huge_page_path = huge_page_prefix_ +
+                       std::string(kHugePageQueueHeadPathPrefix) + ":" +
+                       std::to_string(application_id_);
+      addr = get_huge_page(huge_page_path, 0);
+      if (addr == nullptr) {
+        std::cerr << "Failed to allocate shared memory for head" << std::endl;
+        return -1;
+      }
+
+      head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
+    }
+
     return 0;
   }
 
@@ -384,6 +406,8 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
   uint32_t tail_ = 0;
   uint32_t* tail_addr_ = nullptr;
   uint32_t core_id_;
+  uint64_t nb_pushes_ = 0;
+  int32_t application_id_ = -1;
   bool shared_ = false;
   bool print_ = false;
   std::string huge_page_prefix_;
@@ -426,25 +450,33 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
    * @return the data on success and an empty optional if the queue is empty.
    */
   inline std::optional<T> Pop() {
-    if (shared_) head_ = *head_addr_;
-    struct Parent::Element* current_element = &(Parent::buf_addr()[head_]);
+    if (shared_ || application_id_ >= 0) head_ = *head_addr_;
+    _enso_compiler_memory_barrier();
+
+    struct Parent::Element* current_element =
+        &(Parent::buf_addr()[head_ & Parent::index_mask()]);
+
     if (!current_element->signal) {
       return {};  // Queue is empty.
     }
 
-    if (shared_) *head_addr_ = (head_ + 1) & Parent::index_mask();
-    // if (print_) std::cout << "popped from head " << head_ << std::endl;
-
     T data = current_element->data;
+    _enso_compiler_memory_barrier();
     current_element->signal = 0;
 
-    head_ = (head_ + 1) & Parent::index_mask();
+    if (shared_ || application_id_ >= 0) *head_addr_ = (head_ + 1);
+    head_ = (head_ + 1);
 
     return data;
   }
 
+  inline uint32_t GetHead() { return head_; }
+
+  inline uint32_t GetHeadMod() { return head_ & Parent::index_mask(); }
+
   inline bool IsEmpty() {
-    struct Parent::Element* current_element = &(Parent::buf_addr()[head_]);
+    struct Parent::Element* current_element =
+        &(Parent::buf_addr()[head_ & Parent::index_mask()]);
     return current_element->signal == 0;
   }
 
@@ -484,6 +516,19 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
         std::cerr << "Failed to allocate shared memory for head" << std::endl;
         return -1;
       }
+      head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
+    }
+
+    if (application_id_ >= 0) {
+      std::string huge_page_path = huge_page_prefix_ +
+                                   std::string(kHugePageQueueHeadPathPrefix) +
+                                   ":" + std::to_string(application_id_);
+      void* addr = get_huge_page(huge_page_path, 0);
+      if (addr == nullptr) {
+        std::cerr << "Failed to allocate shared memory for head" << std::endl;
+        return -1;
+      }
+
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
     }
 

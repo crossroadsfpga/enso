@@ -66,8 +66,6 @@
 
 namespace enso {
 
-ParkCallback park_callback_;
-
 void set_park_callback(ParkCallback park_callback) {
   park_callback_ = park_callback;
 }
@@ -212,6 +210,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   notification_buf_pair->next_rx_ids_head = 0;
   notification_buf_pair->next_rx_ids_tail = 0;
   notification_buf_pair->tx_full_cnt = 0;
+
   notification_buf_pair->nb_unreported_completions = 0;
   notification_buf_pair->huge_page_prefix = huge_page_prefix;
 
@@ -349,6 +348,12 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
   return enso_pipe_init(enso_pipe, notification_buf_pair, fallback);
 }
 
+static inline uint64_t rdtsc(void) {
+  uint32_t a, d;
+  asm volatile("rdtsc" : "=a"(a), "=d"(d));
+  return ((uint64_t)a) | (((uint64_t)d) << 32);
+}
+
 /**
  * @brief Updates bookkeeping on until where packets are
  *        available for each enso RX pipe, adds to ring buffer with
@@ -373,6 +378,14 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     if (!cur_notification->signal) {
       break;
     }
+
+    uint64_t now = rdtsc();
+    uint64_t time_to_uthread = now - cur_notification->pad[0];
+    if (update_callback_) std::invoke(update_callback_, time_to_uthread);
+    // std::cout << "Got notification for notif buf " <<
+    // notification_buf_pair->id
+    //           << " at notif buf head " << notification_buf_head
+    //           << " until tail " << cur_notification->tail << std::endl;
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
@@ -517,7 +530,8 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
-  // std::cout << "advance pipe: " << rx_pkt_head << std::endl;
+  // std::cout << "advance pipe " << enso_pipe->id << ": " << rx_pkt_head
+  //           << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, rx_pkt_head,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = rx_pkt_head;
@@ -538,7 +552,7 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
 
 static _enso_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                uint64_t phys_addr, uint32_t len) {
+                uint64_t phys_addr, uint32_t len, bool first) {
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
   uint32_t tx_tail = notification_buf_pair->tx_tail;
   uint32_t missing_bytes = len;
@@ -555,9 +569,9 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     // Block until we can send.
     while (unlikely(free_slots == 0)) {
       ++notification_buf_pair->tx_full_cnt;
-      // if (park_callback_ != nullptr) {
-      //   std::invoke(park_callback_);
-      // }
+      if (park_callback_ != nullptr) {
+        std::invoke(park_callback_, false);
+      }
       update_tx_head(notification_buf_pair);
       free_slots =
           (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
@@ -580,20 +594,28 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     uint64_t huge_page_offset = (transf_addr + req_length) % kBufPageSize;
     transf_addr = hugepage_base_addr + huge_page_offset;
 
+    // if (first)
+    //   std::cout << "sent phys addr " << phys_addr << " for notif buf "
+    //             << notification_buf_pair->id << " at tx tail " << tx_tail
+    //             << std::endl;
+
     tx_tail = (tx_tail + 1) % kNotificationBufSize;
     missing_bytes -= req_length;
   }
 
+  // std::cout << "Notif buf " << notification_buf_pair->id << " tx tail is now
+  // "
+  //           << tx_tail << std::endl;
   notification_buf_pair->tx_tail = tx_tail;
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
-                           notification_buf_pair->uio_mmap_bar2_addr);
+                           notification_buf_pair->uio_mmap_bar2_addr, first);
 
   return len;
 }
 
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len) {
-  return __send_to_queue(notification_buf_pair, phys_addr, len);
+                       uint64_t phys_addr, uint32_t len, bool first) {
+  return __send_to_queue(notification_buf_pair, phys_addr, len, first);
 }
 
 uint32_t get_unreported_completions(
@@ -626,6 +648,13 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
     if (tx_notification->signal != 0) {
       break;
     }
+
+    uint64_t now = rdtsc();
+    uint64_t time_to_uthread = now - tx_notification->pad[0];
+    if (update_callback_) std::invoke(update_callback_, time_to_uthread);
+
+    // std::cout << "Notif buf " << notification_buf_pair->id
+    //           << " consumed tx notification at " << head << std::endl;
 
     // Requests that wrap around need two notifications but should only signal
     // a single completion notification. Therefore, we only increment
@@ -663,14 +692,13 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
     update_tx_head(notification_buf_pair);
     free_slots =
         (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
-    // if (park_callback_ != nullptr) {
-    //   std::invoke(park_callback_);
-    // }
+    if (park_callback_ != nullptr) {
+      std::invoke(park_callback_, false);
+    }
   }
 
   struct TxNotification* tx_notification = tx_buf + tx_tail;
   *tx_notification = *config_notification;
-  // std::cout << "transmitting tx notification at " << tx_tail << std::endl;
 
   tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;
@@ -682,9 +710,9 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
       notification_buf_pair->nb_unreported_completions;
   while (notification_buf_pair->nb_unreported_completions ==
          nb_unreported_completions) {
-    // if (park_callback_ != nullptr) {
-    //   std::invoke(park_callback_);
-    // }
+    if (park_callback_ != nullptr) {
+      std::invoke(park_callback_, false);
+    }
     update_tx_head(notification_buf_pair);
   }
 
@@ -734,7 +762,6 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
   fpga_dev->FreeNotifBuf(notification_buf_pair->id);
-
   DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_low, 0,
                            notification_buf_pair->uio_mmap_bar2_addr);
   DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_high, 0,
@@ -815,10 +842,13 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   return (uint32_t)socket_entry->enso_pipe.id;
 }
 
-void pcie_initialize_backend_queues(uint32_t core_id,
-                                    BackendWrapper preempt_enable,
-                                    BackendWrapper preempt_disable) {
-  initialize_queues(core_id, preempt_enable, preempt_disable);
+void pcie_initialize_backend(BackendWrapper preempt_enable,
+                             BackendWrapper preempt_disable,
+                             IdCallback id_callback, TscCallback tsc_callback,
+                             UpdateCallback update_callback,
+                             uint32_t application_id) {
+  initialize_backend_dev(preempt_enable, preempt_disable, id_callback,
+                         tsc_callback, update_callback, application_id);
 }
 
 void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }
