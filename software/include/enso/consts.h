@@ -231,7 +231,8 @@ struct UthreadSwitchNotification {
 struct UthreadCreateNotification {
   NotifType type;
   uint64_t uthread_id;
-  uint64_t padding[5];
+  uint64_t application_id;
+  uint64_t padding[4];
 };
 
 struct PipeNotification {
