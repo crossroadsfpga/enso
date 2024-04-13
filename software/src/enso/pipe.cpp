@@ -55,6 +55,8 @@
 
 namespace enso {
 
+UpdateCallback pipe_update_callback_ = nullptr;
+
 void set_backend_core_id(uint32_t core_id) {
   pcie_set_backend_core_id(core_id);
 }
@@ -62,10 +64,12 @@ void set_backend_core_id(uint32_t core_id) {
 void initialize_backend(BackendWrapper preempt_enable,
                         BackendWrapper preempt_disable, IdCallback id_callback,
                         TscCallback tsc_callback,
-                        UpdateCallback update_callback,
+                        UpdateCallback update_callback, TxCallback tx_callback,
                         uint32_t application_id) {
+  pipe_update_callback_ = update_callback;
   return pcie_initialize_backend(preempt_enable, preempt_disable, id_callback,
-                                 tsc_callback, update_callback, application_id);
+                                 tsc_callback, update_callback, tx_callback,
+                                 application_id);
 }
 
 void push_to_backend_queues(PipeNotification* notif) {
@@ -93,6 +97,13 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
   uint32_t ret = Peek(buf, max_nb_bytes);
   ConfirmBytes(ret);
   return ret;
+}
+
+inline void RxPipe::SetPktSentTime(uint32_t tail, uint64_t sent_time) {
+  uint32_t* enso_pipe_buf = internal_rx_pipe_.buf;
+  uint8_t* pkt = (uint8_t*)&enso_pipe_buf[tail * 16];
+  // std::cout << "setting sent time " << sent_time << std::endl;
+  set_pkt_sent_time(pkt, sent_time);
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
@@ -151,6 +162,10 @@ int TxPipe::Init() noexcept {
 
   buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
   return 0;
+}
+
+void RxTxPipe::SetPktSentTime(uint32_t tail, uint64_t sent_time) {
+  rx_pipe_->SetPktSentTime(tail, sent_time);
 }
 
 int RxTxPipe::Init(bool fallback) noexcept {
@@ -272,26 +287,27 @@ struct RxNotification* Device::NextRxNotif() {
   struct RxNotification* notif;
 
 #ifdef LATENCY_OPT
-  int32_t id;
+  // int32_t id;
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
   notif = get_next_rx_notif(&notification_buf_pair_);
 
-  while (notif) {
-    id = notif->queue_id;
-    RxPipe* rx_pipe = rx_pipes_map_[id];
-    assert(rx_pipe != nullptr);
+  // while (notif) {
+  //   id = notif->queue_id;
+  //   RxPipe* rx_pipe = rx_pipes_map_[id];
+  //   assert(rx_pipe != nullptr);
 
-    RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
-    uint32_t enso_pipe_head = pipe.rx_tail;
-    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
+  //   RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
+  //   uint32_t enso_pipe_head = pipe.rx_tail;
+  //   uint32_t enso_pipe_tail =
+  //   notification_buf_pair_.pending_rx_pipe_tails[id];
 
-    if (enso_pipe_head != enso_pipe_tail) {
-      rx_pipe->Prefetch();
-      break;
-    }
+  //   if (enso_pipe_head != enso_pipe_tail) {
+  //     rx_pipe->Prefetch();
+  //     break;
+  //   }
 
-    notif = get_next_rx_notif(&notification_buf_pair_);
-  }
+  //   notif = get_next_rx_notif(&notification_buf_pair_);
+  // }
 
 #else  // !LATENCY_OPT
   notif = get_next_rx_notif(&notification_buf_pair_);
@@ -315,6 +331,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   RxPipe* rx_pipe = rx_pipes_map_[id];
   if (!rx_pipe) return NULL;
   rx_pipe->SetAsNextPipe();
+
   return rx_pipe;
 }
 
@@ -324,31 +341,35 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   assert(rx_pipes_.size() == rx_tx_pipes_.size());
   struct RxNotification* notif;
   int32_t id;
+  uint32_t prev_tail = 0;
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  notif = get_next_rx_notif(&notification_buf_pair_);
+  notif = get_next_rx_notif(&notification_buf_pair_, &prev_tail);
 
-  while (notif) {
-    id = notif->queue_id;
-    RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
-    assert(rx_tx_pipe->rx_pipe_ != nullptr);
+  if (notif) id = notif->queue_id;
 
-    RxEnsoPipeInternal& pipe = rx_tx_pipe->rx_pipe_->internal_rx_pipe_;
-    uint32_t enso_pipe_head = pipe.rx_tail;
-    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
+    // while (notif) {
+    //   id = notif->queue_id;
+    //   RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
+    //   assert(rx_tx_pipe->rx_pipe_ != nullptr);
 
-    if (enso_pipe_head != enso_pipe_tail) {
-      rx_tx_pipe->Prefetch();
-      break;
-    }
+    //   RxEnsoPipeInternal& pipe = rx_tx_pipe->rx_pipe_->internal_rx_pipe_;
+    //   uint32_t enso_pipe_head = pipe.rx_tail;
+    //   uint32_t enso_pipe_tail =
+    //   notification_buf_pair_.pending_rx_pipe_tails[id];
 
-    notif = get_next_rx_notif(&notification_buf_pair_);
-  }
+    //   if (enso_pipe_head != enso_pipe_tail) {
+    //     rx_tx_pipe->Prefetch();
+    //     break;
+    //   }
+
+    //   notif = get_next_rx_notif(&notification_buf_pair_);
+    // }
 
 #else  // !LATENCY_OPT
-  notif = get_next_rx_notif(&notification_buf_pair_);
-  id = notif->queue_id;
+  notif = get_next_rx_notif(&notification_buf_pair_, &prev_tail);
+  if (notif) id = notif->queue_id;
 
 #endif  // LATENCY_OPT
 
@@ -357,6 +378,23 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   }
 
   RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
+
+  /* TODO (kaajalg): add notification->pad[1] to packet's payload */
+  uint64_t sent_time = notif->pad[1];
+  // std::cout << "Notif buf " << notification_buf_pair_.id
+  //           << " old tail: " << prev_tail << " new tail: " << notif->tail
+  //           << std::endl;
+  rx_tx_pipe->SetPktSentTime(prev_tail, sent_time);
+
+  uint64_t now = rdtsc();
+  uint64_t time_to_uthread = now - notif->pad[0];
+  uint64_t overall_time = now - notif->pad[1];
+  // std::cout << "Notif buf " << notification_buf_pair_.id
+  //           << ": receiving, time from iokernel: " << notif->pad[1]
+  //           << std::endl;
+  if (pipe_update_callback_)
+    std::invoke(pipe_update_callback_, time_to_uthread, overall_time);
+
   rx_tx_pipe->rx_pipe_->SetAsNextPipe();
   return rx_tx_pipe;
 }
@@ -420,10 +458,10 @@ int Device::ApplyConfig(struct TxNotification* notification) {
 }
 
 void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
-                  bool first) {
+                  bool first, uint64_t sent_time) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
-  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes, first);
+  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes, first, sent_time);
 
   uint32_t nb_pending_requests =
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;

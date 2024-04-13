@@ -57,6 +57,7 @@ using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
 using UpdateCallback = std::function<void(uint64_t)>;
+using TxCallback = std::function<void(uint64_t)>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
@@ -148,7 +149,8 @@ uint32_t peek_next_batch_from_queue(
  * @return Pointer to the RX notification that can be addressed next.
  */
 struct RxNotification* get_next_rx_notif(
-    struct NotificationBufPair* notification_buf_pair);
+    struct NotificationBufPair* notification_buf_pair,
+    uint32_t* prev_tail = NULL);
 
 /**
  * @brief Get next Enso Pipe with pending data.
@@ -217,7 +219,8 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
  * @return number of bytes sent.
  */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len, bool first = false);
+                       uint64_t phys_addr, uint32_t len, bool first = false,
+                       uint64_t sent_time = 0);
 
 /**
  * @brief Returns the number of transmission requests that were completed since
@@ -341,7 +344,7 @@ void pcie_initialize_backend(BackendWrapper preempt_enable,
                              BackendWrapper preempt_disable,
                              IdCallback id_callback, TscCallback tsc_callback,
                              UpdateCallback update_callback,
-                             uint32_t application_id);
+                             TxCallback tx_callback, uint32_t application_id);
 
 /**
  * @brief Push notification to backend.

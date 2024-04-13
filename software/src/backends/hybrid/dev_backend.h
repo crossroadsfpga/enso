@@ -204,12 +204,6 @@ class DevBackend {
     return dev_->uio_mmap(size, mapping);
   }
 
-  static inline uint64_t rdtsc(void) {
-    uint32_t a, d;
-    asm volatile("rdtsc" : "=a"(a), "=d"(d));
-    return ((uint64_t)a) | (((uint64_t)d) << 32);
-  }
-
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value,
                                                void* uio_mmap_bar2_addr,
