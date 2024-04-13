@@ -67,6 +67,7 @@ class PeekPktIterator;
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
+using TxCallback = std::function<void(uint64_t)>;
 using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
 
 void set_backend_core_id(uint32_t core_id);
@@ -78,7 +79,7 @@ void set_backend_core_id(uint32_t core_id);
 void initialize_backend(BackendWrapper preempt_enable,
                         BackendWrapper preempt_disable, IdCallback id_callback,
                         TscCallback tsc_callback,
-                        UpdateCallback update_callback,
+                        UpdateCallback update_callback, TxCallback tx_callback,
                         uint32_t application_id);
 
 /**
@@ -390,7 +391,7 @@ class Device {
    * @return The number of bytes sent.
    */
   void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
-            bool first = false);
+            bool first = false, uint64_t sent_time = 0);
 
   /**
    * @brief Gets the ID of the notification buffer for this device.
@@ -667,6 +668,8 @@ class RxPipe {
    */
   int Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
            uint32_t src_ip, uint32_t protocol);
+
+  inline void SetPktSentTime(uint32_t tail, uint64_t sent_time);
 
   /**
    * @brief Receives a batch of bytes.
@@ -963,9 +966,12 @@ class TxPipe {
     assert(nb_bytes <= kMaxCapacity);
     assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
+    uint8_t* virt_addr = (uint8_t*)((uint64_t)buf_ + app_begin_);
+    uint64_t sent_time = get_pkt_sent_time(virt_addr);
+
     app_begin_ = (app_begin_ + nb_bytes) & kBufMask;
 
-    device_->Send(kId, phys_addr, nb_bytes, first);
+    device_->Send(kId, phys_addr, nb_bytes, first, sent_time);
   }
 
   /**
@@ -1361,6 +1367,8 @@ class RxTxPipe {
    * than this threshold, we process completions.
    */
   static constexpr uint32_t kCompletionsThreshold = kEnsoPipeSize * 64 / 2;
+
+  void SetPktSentTime(uint32_t tail, uint64_t sent_time);
 
   /**
    * RxTxPipes can only be instantiated from a Device object, using the

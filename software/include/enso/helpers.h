@@ -83,6 +83,12 @@ struct alignas(kCacheLineSize) stats_t {
   uint64_t nb_pkts;
 };
 
+static inline uint64_t rdtsc(void) {
+  uint32_t a, d;
+  asm volatile("rdtsc" : "=a"(a), "=d"(d));
+  return ((uint64_t)a) | (((uint64_t)d) << 32);
+}
+
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
  *
@@ -111,6 +117,15 @@ inline uint32_t get_pkt_rtt(const uint8_t* pkt) {
  */
 inline void set_pkt_delay(const uint8_t* pkt, uint32_t delay) {
   *((uint32_t*)(pkt + kPacketRttOffset)) = htobe32(delay);
+}
+
+inline void set_pkt_sent_time(const uint8_t* pkt, uint64_t sent_time) {
+  *((uint64_t*)(pkt)) = htobe64(sent_time);
+}
+
+inline uint64_t get_pkt_sent_time(const uint8_t* pkt) {
+  uint64_t sent_time = *((uint64_t*)(pkt));
+  return be64toh(sent_time);
 }
 
 constexpr uint16_t be_to_le_16(const uint16_t le) {
