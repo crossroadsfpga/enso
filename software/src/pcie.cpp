@@ -562,12 +562,14 @@ static _enso_always_inline uint32_t __send_to_queue(
   uint64_t hugepage_base_addr = transf_addr & hugepage_mask;
   uint64_t hugepage_boundary = hugepage_base_addr + kBufPageSize;
 
-  if (sent_time > 0 && rdtsc() > sent_time) {
-    // std::cout << "Notif buf " << notification_buf_pair->id
-    //           << ": sending out, time from iokernel: " << sent_time
-    //           << std::endl;
-    if (tx_callback_) std::invoke(tx_callback_, rdtsc() - sent_time);
-  }
+  (void)sent_time;
+
+  // if (sent_time > 0 && rdtsc() > sent_time) {
+  //   // std::cout << "Notif buf " << notification_buf_pair->id
+  //   //           << ": sending out, time from iokernel: " << sent_time
+  //   //           << std::endl;
+  //   if (tx_callback_) std::invoke(tx_callback_, rdtsc() - sent_time);
+  // }
 
   // std::cout << "sent time: " << sent_time << std::endl;
 
