@@ -29,8 +29,15 @@ while read -r line; do
   device=$(echo "$line" | awk '{print $4}' | cut -d: -f1)
   device=$((10#$device))
 
+  bus=$(echo "$line" | cut -d " " -f 2)
+  bus=$((10#$bus))
+
+  # capture the right bus
+  bus_line=$(lsusb -t | grep "Bus .*${bus}\." -n | cut -d ":" -f 1)
+  fpga_bus="$(lsusb -t | tail -n +${bus_line} -)"
+
   # Get the port number from lsusb -t using the device number
-  port=$(lsusb -t | grep -m 1 "Dev $device" | awk '{print $3}')
+  port=$(echo "${fpga_bus}" | grep -m 1 "Dev $device" | awk '{print $3}')
   port=${port%?}
 
   # Combine bus and port to get the ID
