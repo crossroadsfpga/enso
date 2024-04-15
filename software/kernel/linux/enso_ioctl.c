@@ -13,7 +13,7 @@ static long alloc_notif_buffer(struct chr_dev_bookkeep *dev_bk,
                                unsigned int __user *user_addr);
 static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
                               unsigned long uarg);
-static long alloc_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+static long alloc_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
                        unsigned int __user *user_addr);
 static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long alloc_tx_pipe(struct chr_dev_bookkeep *dev_bk,
@@ -130,7 +130,7 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
       retval = free_notif_buffer(chr_dev_bk, uarg);
       break;
     case ENSO_IOCTL_ALLOC_PIPE:
-      retval = alloc_pipe(chr_dev_bk, (unsigned int __user *)uarg);
+      retval = alloc_rx_pipe_id(chr_dev_bk, (unsigned int __user *)uarg);
       break;
     case ENSO_IOCTL_FREE_PIPE:
       retval = free_pipe(chr_dev_bk, uarg);
@@ -348,7 +348,7 @@ static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
 }
 
 /**
- * alloc_pipe() - Allocates a pipe for the current device.
+ * alloc_rx_pipe_id() - Allocates a pipe for the current device.
  *
  * @chr_dev_bk: Structure containing information about the current
  *              character file handle.
@@ -359,7 +359,7 @@ static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
  * Return: 0 if successful, negative error code otherwise.
  *
  */
-static long alloc_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+static long alloc_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
                        unsigned int __user *user_addr) {
   int32_t i, j;
   bool is_fallback;
@@ -497,8 +497,13 @@ static long alloc_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   int i = 0;
   int32_t pipe_id = -1;
   struct dev_bookkeep *dev_bk;
-  dev_bk = chr_dev_bk->dev_bk;
+  struct tx_queue_head **queue_heads = NULL;
+  struct tx_queue_head *new_queue_head = NULL;
+  struct sched_queue_head *sqh = NULL;
+  struct sched_queue_node *new_sched_node = NULL;
+  struct sched_queue_node *last_sched_node = NULL;
 
+  dev_bk = chr_dev_bk->dev_bk;
   if (unlikely(down_interruptible(&dev_bk->sem))) {
     printk("interrupted while attempting to obtain device semaphore.");
     return -ERESTARTSYS;
@@ -524,6 +529,53 @@ static long alloc_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
     }
   }
 
+  spin_lock(&dev_bk->lock);
+  queue_heads = dev_bk->queue_heads;
+  sqh = dev_bk->sqh;
+  if(queue_heads[pipe_id] == NULL) {
+    // insert new flow to the scheduler and queue_heads array
+    printk("Adding new flow with id = %d\n", pipe_id);
+    new_queue_head = kzalloc(sizeof(struct tx_queue_head), GFP_KERNEL);
+    if(new_queue_head == NULL) {
+      printk("Failed to allocated memory for the new queue head\n");
+      spin_unlock(&dev_bk->lock);
+      up(&dev_bk->sem);
+      return -ENOMEM;
+    }
+    queue_heads[pipe_id] = new_queue_head;
+
+    new_sched_node = kzalloc(sizeof(struct sched_queue_node), GFP_KERNEL);
+    if(new_sched_node == NULL) {
+      printk("Failed to allocate memory for the new sched node\n");
+      kfree(new_queue_head);
+      spin_unlock(&dev_bk->lock);
+      up(&dev_bk->sem);
+      return -ENOMEM;
+    }
+    new_sched_node->pipe_id = pipe_id;
+    new_sched_node->next = NULL;
+
+    // now add the new sched node to the sched queue
+    if((sqh->front == NULL) && (sqh->rear == NULL)) {
+      // first element in the queue
+      sqh->front = new_sched_node;
+      sqh->rear = new_sched_node;
+      sqh->cur = new_sched_node;
+    }
+    else {
+      last_sched_node = sqh->rear;
+      if(last_sched_node) {
+        last_sched_node->next = new_sched_node;
+        sqh->rear = new_sched_node;
+      }
+    }
+  }
+  else {
+    printk("Pipe ID already allocated\n");
+    return -EFAULT;
+  }
+  spin_unlock(&dev_bk->lock);
+
   up(&dev_bk->sem);
 
   if (pipe_id < 0) {
@@ -545,8 +597,18 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   int32_t i, j;
   int32_t pipe_id = (int32_t)uarg;
   struct dev_bookkeep *dev_bk;
+  struct tx_queue_head **queue_heads = NULL;
+  struct tx_queue_head *pipe_head = NULL;
+  struct tx_queue_node *cur_node = NULL;
+  struct tx_queue_node *next_node = NULL;
+
+  struct sched_queue_head *sqh = NULL;
+  struct sched_queue_node *cur_sched_node = NULL;
+  struct sched_queue_node *prev_sched_node = NULL;
 
   dev_bk = chr_dev_bk->dev_bk;
+  queue_heads = dev_bk->queue_heads;
+  sqh = dev_bk->sqh;
 
   if (unlikely(down_interruptible(&dev_bk->sem))) {
     printk("interrupted while attempting to obtain device semaphore.");
@@ -565,7 +627,77 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   j = pipe_id % 8;
   dev_bk->tx_pipe_status[i] &= ~(1 << j);
   chr_dev_bk->tx_pipe_status[i] &= ~(1 << j);
-  printk("Freed TX pipe with id = %d\n", pipe_id);
+
+  spin_lock(&dev_bk->lock);
+  printk("Freeing TX pipe with id = %d\n", pipe_id);
+
+  // free all the batches that were in line to be sent for the pipe_id being freed
+  pipe_head = queue_heads[pipe_id];
+  cur_node = pipe_head->front;
+  while(cur_node != NULL) {
+    next_node = cur_node->next;
+    kfree(cur_node);
+    cur_node = next_node;
+  }
+  pipe_head->front = NULL;
+  pipe_head->rear = NULL;
+  kfree(pipe_head);
+
+  // mark the corresponding entry in queue_heads as NULL
+  queue_heads[pipe_id] = NULL;
+
+  // delete the flow from the scheduler queue
+  if(sqh) {
+    cur_sched_node = sqh->front;
+    if((sqh->front == sqh->rear)) {
+      if(cur_sched_node->pipe_id != pipe_id) {
+        printk("Only node present in the list but it is not having pipe id = %d\n", pipe_id);
+        return -EFAULT;
+      }
+      kfree(cur_sched_node);
+      sqh->front = NULL;
+      sqh->rear = NULL;
+      sqh->cur = NULL;
+      spin_unlock(&dev_bk->lock);
+      up(&dev_bk->sem);
+      return 0;
+    }
+    if(sqh->front->pipe_id == pipe_id) {
+      // removing from the front
+      sqh->front = sqh->front->next;
+      if(sqh->cur == cur_sched_node) {
+        sqh->cur = sqh->cur->next;
+        if (sqh->cur == NULL) {
+          sqh->cur = sqh->front;
+        }
+      }
+      kfree(cur_sched_node);
+    }
+    else {
+      prev_sched_node = cur_sched_node;
+      cur_sched_node = cur_sched_node->next;
+      while(cur_sched_node != NULL) {
+        if(cur_sched_node->pipe_id == pipe_id) {
+          prev_sched_node->next = cur_sched_node->next;
+          break;
+        }
+        prev_sched_node = cur_sched_node;
+        cur_sched_node = cur_sched_node->next;
+      }
+      // if we removed the last node, update the rear
+      if(cur_sched_node == sqh->rear) {
+        sqh->rear = prev_sched_node;
+      }
+      if(sqh->cur == cur_sched_node) {
+        sqh->cur = sqh->cur->next;
+        if (sqh->cur == NULL) {
+          sqh->cur = sqh->front;
+        }
+      }
+      kfree(cur_sched_node);
+    }
+  }
+  spin_unlock(&dev_bk->lock);
 
   up(&dev_bk->sem);
 
@@ -755,14 +887,14 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
   struct dev_bookkeep *dev_bk;
 
   struct tx_queue_head **queue_heads = NULL;
-  struct tx_queue_head *new_queue_head = NULL;
+  // struct tx_queue_head *new_queue_head = NULL;
   struct tx_queue_head *pipe_queue_head = NULL;
   struct tx_queue_node *new_node = NULL;
   struct tx_queue_node *last_node = NULL;
 
-  struct sched_queue_head *sqh = NULL;
-  struct sched_queue_node *new_sched_node = NULL;
-  struct sched_queue_node *last_sched_node = NULL;
+  // struct sched_queue_head *sqh = NULL;
+  // struct sched_queue_node *new_sched_node = NULL;
+  // struct sched_queue_node *last_sched_node = NULL;
   int pipe_id;
 
   if (copy_from_user(&stpp, (void __user *)uarg, sizeof(stpp))) {
@@ -795,9 +927,9 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
 
   spin_lock(&dev_bk->lock);
 
-  sqh = dev_bk->sqh;
+  // sqh = dev_bk->sqh;
   pipe_id = stpp.pipe_id;
-  if(queue_heads[pipe_id] == NULL) {
+  /*if(queue_heads[pipe_id] == NULL) {
     // insert new flow to the scheduler and queue_heads array
     printk("Adding new flow with id = %d, notif id = %d\n", pipe_id, stpp.notif_buf_id);
     new_queue_head = kzalloc(sizeof(struct tx_queue_head), GFP_KERNEL);
@@ -836,7 +968,7 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
         sqh->rear = new_sched_node;
       }
     }
-  }
+  }*/
 
   pipe_queue_head = queue_heads[pipe_id];
   if (pipe_queue_head) {
