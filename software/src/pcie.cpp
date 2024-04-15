@@ -83,16 +83,17 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   }
   notification_buf_pair->fpga_dev = enso_dev;
 
-  int notif_pipe_id = enso_dev->AllocateNotifBuf();
+  int notif_buf_id = enso_dev->AllocateNotifBuf();
 
-  if (notif_pipe_id < 0) {
+  if (notif_buf_id < 0) {
     std::cerr << "Could not allocate notification buffer" << std::endl;
     return -1;
   }
 
-  enso_dev->AllocNotifBufPair(notif_pipe_id);
+  enso_dev->AllocNotifBufPair(notif_buf_id);
   // this is used later to allocate a huge page for the pipe
   notification_buf_pair->huge_page_prefix = huge_page_prefix;
+  notification_buf_pair->id = notif_buf_id;
 
   return 0;
 }

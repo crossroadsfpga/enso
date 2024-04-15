@@ -506,7 +506,7 @@ static long alloc_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
 
   // Find first available notification buffer. If none are available, return
   // an error.
-  for (i = 0; i < MAX_NB_APPS / 8; ++i) {
+  for (i = 0; i < MAX_NB_FLOWS / 8; ++i) {
     int32_t set_pipe_id = 0;
     uint8_t set = dev_bk->tx_pipe_status[i];
     while (set & 0x1) {
@@ -554,8 +554,8 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   }
 
   // Check that the buffer ID is valid.
-  if (pipe_id < 0 || pipe_id >= MAX_NB_APPS) {
-    printk("invalid buffer ID.");
+  if (pipe_id < 0 || pipe_id >= MAX_NB_FLOWS) {
+    printk("Invalid pipe ID\n");
     return -EINVAL;
   }
 
@@ -799,7 +799,7 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
   pipe_id = stpp.pipe_id;
   if(queue_heads[pipe_id] == NULL) {
     // insert new flow to the scheduler and queue_heads array
-    printk("Adding new flow with id = %d\n", pipe_id);
+    printk("Adding new flow with id = %d, notif id = %d\n", pipe_id, stpp.notif_buf_id);
     new_queue_head = kzalloc(sizeof(struct tx_queue_head), GFP_KERNEL);
     if(new_queue_head == NULL) {
       printk("Failed to allocated memory for the new queue head\n");
@@ -833,7 +833,7 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
       last_sched_node = sqh->rear;
       if(last_sched_node) {
         last_sched_node->next = new_sched_node;
-        sqh->rear = last_sched_node;
+        sqh->rear = new_sched_node;
       }
     }
   }

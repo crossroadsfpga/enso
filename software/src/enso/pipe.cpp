@@ -195,6 +195,7 @@ Device::~Device() {
   }
 
   for (auto& pipe : tx_pipes_) {
+    tx_pipes_map_[pipe->id()] = nullptr;
     delete pipe;
   }
 
@@ -242,6 +243,7 @@ TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
   }
 
   tx_pipes_.push_back(pipe);
+  tx_pipes_map_[pipe->id()] = pipe;
 
   return pipe;
 }
@@ -373,7 +375,7 @@ void Device::ProcessCompletions() {
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
-    TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
+    TxPipe* pipe = tx_pipes_map_[tx_req.pipe_id];
     pipe->NotifyCompletion(tx_req.nb_bytes);
   }
 

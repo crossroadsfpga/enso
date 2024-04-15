@@ -353,6 +353,7 @@ class Device {
   std::vector<RxTxPipe*> rx_tx_pipes_;
 
   std::array<RxPipe*, kMaxNbFlows> rx_pipes_map_ = {};
+  std::array<TxPipe*, kMaxNbFlows> tx_pipes_map_ = {};
   std::array<RxTxPipe*, kMaxNbFlows> rx_tx_pipes_map_ = {};
 
   int32_t next_pipe_id_ = -1;
