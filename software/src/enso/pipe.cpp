@@ -380,11 +380,11 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
 
   /* TODO (kaajalg): add notification->pad[1] to packet's payload */
-  uint64_t sent_time = notif->pad[1];
-  // std::cout << "Notif buf " << notification_buf_pair_.id
-  //           << " old tail: " << prev_tail << " new tail: " << notif->tail
-  //           << std::endl;
-  rx_tx_pipe->SetPktSentTime(prev_tail, sent_time);
+  // uint64_t sent_time = notif->pad[1];
+  // // std::cout << "Notif buf " << notification_buf_pair_.id
+  // //           << " old tail: " << prev_tail << " new tail: " << notif->tail
+  // //           << std::endl;
+  // rx_tx_pipe->SetPktSentTime(prev_tail, sent_time);
 
   uint64_t now = rdtsc();
   uint64_t time_to_uthread = now - notif->pad[0];

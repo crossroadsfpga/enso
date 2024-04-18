@@ -717,7 +717,6 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
 
   struct TxNotification* tx_notification = tx_buf + tx_tail;
   *tx_notification = *config_notification;
-  tx_notification->pad[0] = 0;
 
   tx_tail = (tx_tail + 1) % kNotificationBufSize;
   notification_buf_pair->tx_tail = tx_tail;
