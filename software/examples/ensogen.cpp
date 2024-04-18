@@ -684,19 +684,19 @@ int main(int argc, char** argv) {
 
   // For small pcaps we copy the same packets over the remaining of the
   // buffer. This reduces the number of transfers that we need to issue.
-  //   if ((enso_pipes.size() == 1) &&
-  //       (enso_pipes.front().length < BUFFER_SIZE / 2)) {
-  //     EnsoPipe& buffer = enso_pipes.front();
-  //     uint32_t original_buf_length = buffer.length;
-  //     uint32_t original_good_bytes = buffer.good_bytes;
-  //     uint32_t original_nb_pkts = buffer.nb_pkts;
-  //     while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
-  //       memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
-  //       buffer.length += original_buf_length;
-  //       buffer.good_bytes += original_good_bytes;
-  //       buffer.nb_pkts += original_nb_pkts;
-  //     }
-  //   }
+  if ((enso_pipes.size() == 1) &&
+      (enso_pipes.front().length < BUFFER_SIZE / 2)) {
+    EnsoPipe& buffer = enso_pipes.front();
+    uint32_t original_buf_length = buffer.length;
+    uint32_t original_good_bytes = buffer.good_bytes;
+    uint32_t original_nb_pkts = buffer.nb_pkts;
+    while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
+      memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
+      buffer.length += original_buf_length;
+      buffer.good_bytes += original_good_bytes;
+      buffer.nb_pkts += original_nb_pkts;
+    }
+  }
 
   uint64_t total_pkts_in_buffers = 0;
   uint64_t total_bytes_in_buffers = 0;
