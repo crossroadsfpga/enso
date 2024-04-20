@@ -166,13 +166,6 @@ struct MmioNotification {
   uint64_t padding;
 };
 
-struct JoinedNotification {
-  NotifType type;
-  uint32_t application_id;
-  uint64_t core_id;
-  uint64_t padding[4];
-};
-
 struct FallbackNotification {
   NotifType type;
   uint64_t nb_fallback_queues;
