@@ -225,6 +225,7 @@ class DevBackend {
           mmio_notification.type = NotifType::kWrite;
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
+          mmio_notification.actual_tsc = rdtsc();
 
           pipe_notification = (enso::PipeNotification*)&mmio_notification;
 

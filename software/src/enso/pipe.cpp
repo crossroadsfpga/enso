@@ -386,13 +386,10 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   // //           << std::endl;
   // rx_tx_pipe->SetPktSentTime(prev_tail, sent_time);
 
-  // uint64_t now = rdtsc();
-  // uint64_t time_to_uthread = now - notif->pad[0];
-  // // std::cout << "Notif buf " << notification_buf_pair_.id
-  // //           << ": receiving, time from iokernel: " << notif->pad[1]
-  // //           << std::endl;
-  // if (pipe_update_callback_)
-  //   std::invoke(pipe_update_callback_, time_to_uthread);
+  uint64_t now = rdtsc();
+  uint64_t time_to_uthread = now - notif->pad[0];
+  if (pipe_update_callback_)
+    std::invoke(pipe_update_callback_, time_to_uthread);
 
   rx_tx_pipe->rx_pipe_->SetAsNextPipe();
   return rx_tx_pipe;
