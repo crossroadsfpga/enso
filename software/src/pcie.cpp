@@ -378,10 +378,6 @@ static _enso_always_inline uint16_t __get_new_tails(
     uint64_t now = rdtsc();
     uint64_t time_to_uthread = now - cur_notification->pad[0];
     if (update_callback_) std::invoke(update_callback_, time_to_uthread);
-    // std::cout << "Got notification for notif buf " <<
-    // notification_buf_pair->id
-    //           << " at notif buf head " << notification_buf_head
-    //           << " until tail " << cur_notification->tail << std::endl;
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
