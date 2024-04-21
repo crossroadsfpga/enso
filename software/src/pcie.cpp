@@ -375,17 +375,12 @@ static _enso_always_inline uint16_t __get_new_tails(
       break;
     }
 
-    // uint64_t now = rdtsc();
-    // uint64_t time_to_uthread = now - cur_notification->pad[0];
-    // uint64_t overall_time = now - cur_notification->pad[1];
-    // if (update_callback_)
-    //   std::invoke(update_callback_, time_to_uthread, overall_time);
+    uint64_t now = rdtsc();
+    uint64_t time_to_uthread = now - cur_notification->pad[0];
+    uint64_t overall_time = now - cur_notification->pad[1];
+    if (update_callback_)
+      std::invoke(update_callback_, time_to_uthread, overall_time);
 
-    /* Want to store the pad[1] in the packet*/
-    // std::cout << "Got notification for notif buf " <<
-    // notification_buf_pair->id
-    //           << " at notif buf head " << notification_buf_head
-    //           << " until tail " << cur_notification->tail << std::endl;
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
