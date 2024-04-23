@@ -63,9 +63,8 @@ uint32_t external_peek_next_batch_from_queue(
 
 int RxPipe::Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
                  uint32_t src_ip, uint32_t protocol) {
-  insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip, src_ip,
-                    protocol, id_);
-  return 0;
+  return insert_flow_entry(notification_buf_pair_, dst_port, src_port, dst_ip,
+                           src_ip, protocol, id_);
 }
 
 uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
@@ -197,6 +196,10 @@ RxPipe* Device::AllocateRxPipe(bool fallback) noexcept {
   rx_pipes_map_[pipe->id()] = pipe;
 
   return pipe;
+}
+
+int Device::GetNbFallbackQueues() noexcept {
+  return get_nb_fallback_queues(&notification_buf_pair_);
 }
 
 TxPipe* Device::AllocateTxPipe(uint8_t* buf) noexcept {
@@ -350,6 +353,10 @@ int Device::Init() noexcept {
   return 0;
 }
 
+int Device::ApplyConfig(struct TxNotification* config_notification) {
+  return send_config(&notification_buf_pair_, config_notification);
+}
+
 void Device::Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
                   uint32_t nb_bytes) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
@@ -416,6 +423,10 @@ int Device::DisableRateLimiting() {
 
 int Device::EnableRoundRobin() {
   return enable_round_robin(&notification_buf_pair_);
+}
+
+int Device::GetRoundRobinStatus() noexcept {
+  return get_round_robin_status(&notification_buf_pair_);
 }
 
 int Device::DisableRoundRobin() {

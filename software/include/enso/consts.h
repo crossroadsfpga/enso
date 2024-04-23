@@ -135,17 +135,59 @@ static constexpr std::string_view kIpcQueueToAppName = "enso_ipc_queue_to_app";
 static constexpr std::string_view kIpcQueueFromAppName =
     "enso_ipc_queue_from_app";
 
-enum class MmioNotifType : uint64_t {
+enum class NotifType : uint8_t {
   kWrite = 0,
   kRead = 1,
-  kTranslAddr = 2  // Used to translate physical address to virtual address in
-                   // the software backend address space.
+  kTranslAddr = 2,  // Used to translate physical address to virtual address in
+                    // the software backend address space.
+  kAllocatePipe = 3,
+  kAllocateNotifBuf = 4,
+  kGetNbFallbackQueues = 5,
+  kSetRrStatus = 6,
+  kGetRrStatus = 7,
+  kFreeNotifBuf = 8,
+  kFreePipe = 9
 };
 
 struct MmioNotification {
-  MmioNotifType type;
+  NotifType type;
   uint64_t address;
   uint64_t value;
+};
+
+struct FallbackNotification {
+  NotifType type;
+  uint64_t nb_fallback_queues;
+  uint64_t result;
+};
+
+struct RoundRobinNotification {
+  NotifType type;
+  uint64_t round_robin;
+  uint64_t result;
+};
+
+struct NotifBufNotification {
+  NotifType type;
+  uint64_t notif_buf_id;
+  uint64_t result;
+};
+
+struct AllocatePipeNotification {
+  NotifType type;
+  uint64_t fallback;
+  uint64_t pipe_id;
+};
+
+struct FreePipeNotification {
+  NotifType type;
+  uint64_t pipe_id;
+  uint64_t result;
+};
+
+struct PipeNotification {
+  NotifType type;
+  uint64_t data[2];
 };
 
 }  // namespace enso

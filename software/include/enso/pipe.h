@@ -42,6 +42,7 @@
 #ifndef SOFTWARE_INCLUDE_ENSO_PIPE_H_
 #define SOFTWARE_INCLUDE_ENSO_PIPE_H_
 
+#include <enso/consts.h>
 #include <enso/helpers.h>
 #include <enso/internals.h>
 
@@ -124,10 +125,17 @@ class Device {
    * @brief Allocates a TX pipe.
    *
    * @param buf Buffer address to use for the pipe. It must be a pinned
-   *            hugepage. If not specified, the buffer is allocated internally.
-   * @return A pointer to the pipe. May be null if the pipe cannot be created.
+   *            hugepage. If not specified, the buffer is allocated
+   *            internally.
+   * @return A pointer to the pipe. May be null if the pipe cannot be
+   *         created.
    */
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
+
+  /**
+   * @brief Retrieves the number of fallback queues for this device.
+   */
+  int GetNbFallbackQueues() noexcept;
 
   /**
    * @brief Allocates an RX/TX pipe.
@@ -292,6 +300,22 @@ class Device {
    *
    */
   uint32_t ProcessCompletionsOnly();
+
+  /**
+   * @brief Gets the round robin status for the device.
+   *
+   * @return 0 if round robin is disabled, 1 if round robin is enabled, -1 on
+   *         failure.
+   */
+  int GetRoundRobinStatus() noexcept;
+
+  /**
+   * @brief Sends the given config notification to the device.
+   *
+   * @param config_notification The config notification.
+   * @return 0 on success, -1 on failure.
+   */
+  int ApplyConfig(struct TxNotification* config_notification);
 
  private:
   struct TxPendingRequest {
