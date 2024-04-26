@@ -79,7 +79,7 @@ uint32_t application_id_ = 0;
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
-using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
+using UpdateCallback = std::function<void(uint64_t)>;
 UpdateCallback update_callback_;
 BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
@@ -225,8 +225,7 @@ class DevBackend {
           mmio_notification.type = NotifType::kWrite;
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
-          mmio_notification.uthread_id = std::invoke(id_callback_);
-          mmio_notification.tsc = std::invoke(tsc_callback_);
+          mmio_notification.actual_tsc = rdtsc();
 
           pipe_notification = (enso::PipeNotification*)&mmio_notification;
 
@@ -251,8 +250,6 @@ class DevBackend {
       mmio_notification.type = NotifType::kWrite;
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
-      mmio_notification.uthread_id = std::invoke(id_callback_);
-      mmio_notification.tsc = std::invoke(tsc_callback_);
       mmio_notification.actual_tsc = rdtsc();
 
       // std::cout << "pushing mmio notification with tsc "
@@ -290,7 +287,6 @@ class DevBackend {
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kRead;
       mmio_notification.address = offset_addr;
-      mmio_notification.uthread_id = std::invoke(id_callback_);
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;

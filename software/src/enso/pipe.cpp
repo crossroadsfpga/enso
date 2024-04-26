@@ -381,9 +381,8 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
   uint64_t now = rdtsc();
   uint64_t time_to_uthread = now - notif->pad[0];
-  uint64_t overall_time = now - notif->pad[1];
   if (pipe_update_callback_)
-    std::invoke(pipe_update_callback_, time_to_uthread, overall_time);
+    std::invoke(pipe_update_callback_, time_to_uthread);
 
   rx_tx_pipe->rx_pipe_->SetAsNextPipe();
   return rx_tx_pipe;

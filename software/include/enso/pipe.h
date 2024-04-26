@@ -68,7 +68,7 @@ using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
 using TxCallback = std::function<void(uint64_t)>;
-using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
+using UpdateCallback = std::function<void(uint64_t)>;
 
 void set_backend_core_id(uint32_t core_id);
 

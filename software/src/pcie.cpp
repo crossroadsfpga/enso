@@ -377,10 +377,7 @@ static _enso_always_inline uint16_t __get_new_tails(
 
     uint64_t now = rdtsc();
     uint64_t time_to_uthread = now - cur_notification->pad[0];
-    uint64_t overall_time = now - cur_notification->pad[1];
-    if (update_callback_)
-      std::invoke(update_callback_, time_to_uthread, overall_time);
-
+    if (update_callback_) std::invoke(update_callback_, time_to_uthread);
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
@@ -561,12 +558,14 @@ static _enso_always_inline uint32_t __send_to_queue(
   uint64_t hugepage_base_addr = transf_addr & hugepage_mask;
   uint64_t hugepage_boundary = hugepage_base_addr + kBufPageSize;
 
-  if (sent_time > 0 && rdtsc() > sent_time) {
-    // std::cout << "Notif buf " << notification_buf_pair->id
-    //           << ": sending out, time from iokernel: " << sent_time
-    //           << std::endl;
-    if (tx_callback_) std::invoke(tx_callback_, rdtsc() - sent_time);
-  }
+  (void)sent_time;
+
+  // if (sent_time > 0 && rdtsc() > sent_time) {
+  //   // std::cout << "Notif buf " << notification_buf_pair->id
+  //   //           << ": sending out, time from iokernel: " << sent_time
+  //   //           << std::endl;
+  //   if (tx_callback_) std::invoke(tx_callback_, rdtsc() - sent_time);
+  // }
 
   // std::cout << "sent time: " << sent_time << std::endl;
 
@@ -662,9 +661,7 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
 
     // uint64_t now = rdtsc();
     // uint64_t time_to_uthread = now - tx_notification->pad[0];
-    // uint64_t overall_time = now - tx_notification->pad[1];
-    // if (update_callback_)
-    //   std::invoke(update_callback_, time_to_uthread, overall_time);
+    // if (update_callback_) std::invoke(update_callback_, time_to_uthread);
 
     // std::cout << "Notif buf " << notification_buf_pair->id
     //           << " consumed tx notification at " << head << std::endl;
