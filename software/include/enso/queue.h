@@ -348,6 +348,8 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
 
   uint32_t GetTail() { return tail_; }
 
+  uint32_t GetTailMod() { return tail_ & Parent::index_mask(); }
+
   uint32_t* GetHeadPtr() { return head_addr_; }
 
  protected:
