@@ -159,6 +159,7 @@ int main(int argc, const char* argv[]) {
 
   while (!setup_done) continue;  // Wait for setup to be done.
 
+  std::cout << "The bandwidth statistics are approximated." << std::endl;
   show_stats(thread_stats, &keep_running);
 
   socket_thread.join();

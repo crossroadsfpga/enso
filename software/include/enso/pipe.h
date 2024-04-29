@@ -286,20 +286,25 @@ class Device {
   int DisableRoundRobin();
 
   /**
-   * @brief Vanilla function that sends a given number of bytes from a physical
-   *        address. Used only by Ensogen.
+   * @brief Sends a batch of packets to the NIC by creating and appending a Tx
+   *        Notification. Use this function if you need to only send a batch
+   *        and not process completions as done by `SendAndFree()`.
    *
+   * @param phys_addr Physical address of the buffer that contains the packets.
+   * @param nb_bytes The number of bytes that need to be sent starting from the
+   *                 physical address.
    */
-  void SendOnly(uint64_t phys_addr, uint32_t nb_bytes);
+  void SendBatch(uint64_t phys_addr, uint32_t nb_bytes);
 
   /**
-   * @brief Vanilla function that checks for the number of Tx notifications
-   *        consumed by the NIC. Used only by Ensogen.
+   * @brief Checks and returns the numbers of Tx Notifications consumed by the
+   *        NIC. Use this function if you only need to check the number of
+   *        notification consumed and not process them as done by
+   *        `ProcessCompletions()`.
    *
    * @return number of Tx notifications successfully processed by the NIC.
-   *
    */
-  uint32_t ProcessCompletionsOnly();
+  uint32_t ConsumeBatches();
 
   /**
    * @brief Gets the round robin status for the device.
@@ -860,13 +865,12 @@ class TxPipe {
   }
 
   /*
-   * @brief: Used to get the physical address of the pipe's buffer.
-   * Used only by EnsoGen as of now.
+   * @brief Used to get the physical address of the pipe's buffer starting
+   *        at offset of the current application data.
    *
+   * @return Physical address of the buffer.
    * */
-  inline uint64_t GetBufPhysAddr() {
-    return buf_phys_addr_ + app_begin_;
-  }
+  inline uint64_t GetBufPhysAddr() { return buf_phys_addr_ + app_begin_; }
 
   /**
    * @brief Explicitly requests a best-effort buffer extension.

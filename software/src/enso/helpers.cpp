@@ -43,18 +43,6 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-#include <cmath>
-
-/******************************************************************************
- * Macros
- *****************************************************************************/
-// Scientific notation for 10^6, treated as double. Used for stats calculations.
-#define ONE_MILLION                         1e6
-// FPGA packet overhead for 64 byte packets
-#define FPGA_PACKET_OVERHEAD_64             20
-// FPGA packet overhead for 1536 byte packets
-#define FPGA_PACKET_OVERHEAD_1536           2
-
 namespace enso {
 
 uint16_t get_bdf_from_pcie_addr(const std::string& pcie_addr) {
@@ -155,20 +143,8 @@ int set_core_id(std::thread& thread, int core_id) {
 static void print_stats_line(uint64_t recv_bytes, uint64_t nb_batches,
                              uint64_t nb_pkts, uint64_t delta_bytes,
                              uint64_t delta_pkts, uint64_t delta_batches) {
-  uint64_t rx_tput_mbps = (delta_bytes * 8.) / ONE_MILLION;
-  if(rx_tput_mbps > 0) {
-    uint32_t packet_size = round((long double) delta_bytes / delta_pkts);
-    if(packet_size == 64) {
-      rx_tput_mbps = rx_tput_mbps +
-                     (FPGA_PACKET_OVERHEAD_64 * delta_pkts * 8) / ONE_MILLION;
-    }
-    else if(packet_size == 1536) {
-      rx_tput_mbps = rx_tput_mbps +
-                     (FPGA_PACKET_OVERHEAD_1536 * delta_pkts * 8) / ONE_MILLION;
-    }
-  }
-  std::cout << std::dec << rx_tput_mbps
-            << " Mbps  " << delta_pkts / ONE_MILLION << " Mpps  " << recv_bytes
+  std::cout << std::dec << (delta_bytes + delta_pkts * 20) * 8. / 1e6
+            << " Mbps  " << delta_pkts / 1e6 << " Mpps  " << recv_bytes
             << " B  " << nb_batches << " batches  " << nb_pkts << " pkts";
 
   if (delta_batches > 0) {
