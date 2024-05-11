@@ -1,4 +1,37 @@
+/*
+ * Copyright (c) 2024, Carnegie Mellon University
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the disclaimer
+ * below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *
+ *      * Neither the name of the copyright holder nor the names of its
+ *      contributors may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+ * THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+ * CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT
+ * NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include "enso_ioctl.h"
+
 #include <linux/kthread.h>
 
 /******************************************************************************
@@ -10,34 +43,46 @@ static long get_nb_fallback_queues(struct dev_bookkeep *dev_bk,
 static long set_rr_status(struct dev_bookkeep *dev_bk, bool status);
 static long get_rr_status(struct dev_bookkeep *dev_bk, bool __user *user_addr);
 static long alloc_notif_buffer(struct chr_dev_bookkeep *dev_bk,
-                               unsigned int __user *user_addr);
+                               int __user *user_addr);
 static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
                               unsigned long uarg);
 static long alloc_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
-                       unsigned int __user *user_addr);
+                             int __user *user_addr);
 static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
 static long alloc_tx_pipe(struct chr_dev_bookkeep *dev_bk,
-                               unsigned int __user *user_addr);
+                          int __user *user_addr);
 static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
-                              unsigned long uarg);
+                         unsigned long uarg);
 
-static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsigned int __user *user_addr);
+static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk,
+                                 unsigned long uarg);
+static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                         unsigned long uarg);
+static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk,
+                                       unsigned int __user *user_addr);
 
-static long send_config(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long free_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
-static long prefetch_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg);
+static long send_config(struct chr_dev_bookkeep *chr_dev_bk,
+                        unsigned long uarg);
+static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                          unsigned long uarg);
+static long free_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
+                            unsigned long uarg);
+static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                            unsigned long uarg);
+static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                               unsigned long uarg);
+static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk,
+                           unsigned long uarg);
+static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                         unsigned long uarg);
+static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk,
+                                 unsigned long uarg);
+static long prefetch_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                          unsigned long uarg);
 
 /* Helpers */
 static void free_rx_tx_buf(struct chr_dev_bookkeep *chr_dev_bk);
-static void update_tx_head(struct notification_buf_pair* notif_buf_pair);
+static void update_tx_head(struct notification_buf_pair *notif_buf_pair);
 static int32_t get_next_pipe_id(struct notification_buf_pair *notif_buf_pair);
 static uint32_t consume_queue(struct notification_buf_pair *notif_buf_pair,
                               struct rx_pipe_internal *pipe,
@@ -109,6 +154,11 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
   chr_dev_bk = filp->private_data;
   dev_bk = chr_dev_bk->dev_bk;
 
+  if (unlikely(down_interruptible(&dev_bk->sem))) {
+    printk("interrupted while attempting to obtain device semaphore.");
+    return -ERESTARTSYS;
+  }
+
   // Determine access type.
   switch (cmd) {
     case ENSO_IOCTL_TEST:
@@ -124,13 +174,13 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
       retval = get_rr_status(dev_bk, (bool __user *)uarg);
       break;
     case ENSO_IOCTL_ALLOC_NOTIF_BUFFER:
-      retval = alloc_notif_buffer(chr_dev_bk, (unsigned int __user *)uarg);
+      retval = alloc_notif_buffer(chr_dev_bk, (int __user *)uarg);
       break;
     case ENSO_IOCTL_FREE_NOTIF_BUFFER:
       retval = free_notif_buffer(chr_dev_bk, uarg);
       break;
     case ENSO_IOCTL_ALLOC_PIPE:
-      retval = alloc_rx_pipe_id(chr_dev_bk, (unsigned int __user *)uarg);
+      retval = alloc_rx_pipe_id(chr_dev_bk, (int __user *)uarg);
       break;
     case ENSO_IOCTL_FREE_PIPE:
       retval = free_pipe(chr_dev_bk, uarg);
@@ -142,7 +192,8 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
       retval = send_tx_pipe(chr_dev_bk, uarg);
       break;
     case ENSO_IOCTL_GET_UNREPORTED_COMPLETIONS:
-      retval = get_unreported_completions(chr_dev_bk, (unsigned int __user *) uarg);
+      retval =
+          get_unreported_completions(chr_dev_bk, (unsigned int __user *)uarg);
       break;
     case ENSO_IOCTL_SEND_CONFIG:
       retval = send_config(chr_dev_bk, uarg);
@@ -172,7 +223,7 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
       retval = prefetch_pipe(chr_dev_bk, uarg);
       break;
     case ENSO_IOCTL_ALLOC_TX_PIPE:
-      retval = alloc_tx_pipe(chr_dev_bk, (unsigned int __user *)uarg);
+      retval = alloc_tx_pipe(chr_dev_bk, (int __user *)uarg);
       break;
     case ENSO_IOCTL_FREE_TX_PIPE:
       retval = free_tx_pipe(chr_dev_bk, uarg);
@@ -180,6 +231,8 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
     default:
       retval = -ENOTTY;
   }
+
+  up(&dev_bk->sem);
 
   return retval;
 }
@@ -199,7 +252,8 @@ static int test(void) {
  */
 static long get_nb_fallback_queues(struct dev_bookkeep *dev_bk,
                                    unsigned int __user *user_addr) {
-  unsigned int nb_fb_queues = dev_bk->nb_fb_queues;
+  unsigned int nb_fb_queues;
+  nb_fb_queues = dev_bk->nb_fb_queues;
   if (copy_to_user(user_addr, &nb_fb_queues, sizeof(nb_fb_queues))) {
     printk("couldn't copy nb_fb_queues information to user.");
     return -EFAULT;
@@ -219,15 +273,7 @@ static long set_rr_status(struct dev_bookkeep *dev_bk, bool rr_status) {
   // FIXME(sadok): Right now all this does is to set a variable in the kernel
   // module so that processes can coordinate the current RR status. User space
   // is still responsible for sending the configuration to the NIC.
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
   dev_bk->enable_rr = rr_status;
-
-  up(&dev_bk->sem);
-
   return 0;
 }
 
@@ -240,7 +286,8 @@ static long set_rr_status(struct dev_bookkeep *dev_bk, bool rr_status) {
  * Return: 0 if successful, negative error code otherwise.
  */
 static long get_rr_status(struct dev_bookkeep *dev_bk, bool __user *user_addr) {
-  bool rr_status = dev_bk->enable_rr;
+  bool rr_status;
+  rr_status = dev_bk->enable_rr;
   if (copy_to_user(user_addr, &rr_status, sizeof(rr_status))) {
     printk("couldn't copy rr_status information to user.");
     return -EFAULT;
@@ -259,16 +306,11 @@ static long get_rr_status(struct dev_bookkeep *dev_bk, bool __user *user_addr) {
  * Return: 0 if successful, negative error code otherwise.
  */
 static long alloc_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
-                               unsigned int __user *user_addr) {
+                               int __user *user_addr) {
   int i = 0;
   int32_t buf_id = -1;
   struct dev_bookkeep *dev_bk;
   dev_bk = chr_dev_bk->dev_bk;
-
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
 
   // Find first available notification buffer. If none are available, return
   // an error.
@@ -289,8 +331,6 @@ static long alloc_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
       break;
     }
   }
-
-  up(&dev_bk->sem);
 
   if (buf_id < 0) {
     printk("couldn't allocate notification buffer.");
@@ -324,11 +364,6 @@ static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
 
   dev_bk = chr_dev_bk->dev_bk;
 
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
   // Check that the buffer ID is valid.
   if (buf_id < 0 || buf_id >= MAX_NB_APPS) {
     printk("invalid buffer ID.");
@@ -341,8 +376,6 @@ static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
   j = buf_id % 8;
   dev_bk->notif_q_status[i] &= ~(1 << j);
   chr_dev_bk->notif_q_status[i] &= ~(1 << j);
-
-  up(&dev_bk->sem);
 
   return 0;
 }
@@ -360,17 +393,12 @@ static long free_notif_buffer(struct chr_dev_bookkeep *chr_dev_bk,
  *
  */
 static long alloc_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
-                       unsigned int __user *user_addr) {
+                             int __user *user_addr) {
   int32_t i, j;
   bool is_fallback;
   int32_t pipe_id = -1;
   struct dev_bookkeep *dev_bk;
   dev_bk = chr_dev_bk->dev_bk;
-
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
 
   if (copy_from_user(&is_fallback, user_addr, 1)) {
     printk("couldn't copy is_fallback information from user.");
@@ -395,7 +423,6 @@ static long alloc_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
       // Make sure all fallback pipes are contiguously allocated.
       if (pipe_id != dev_bk->nb_fb_queues) {
         printk("fallback pipes are not contiguous.");
-        up(&dev_bk->sem);
         return -EINVAL;
       }
 
@@ -417,8 +444,6 @@ static long alloc_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
       }
     }
   }
-
-  up(&dev_bk->sem);
 
   if (pipe_id < 0) {
     printk("couldn't allocate pipe.");
@@ -457,11 +482,6 @@ static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
 
   dev_bk = chr_dev_bk->dev_bk;
 
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
   // Check that the pipe ID is valid.
   if (pipe_id < 0 || pipe_id >= MAX_NB_FLOWS) {
     printk("invalid pipe ID.");
@@ -487,13 +507,11 @@ static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
     --(chr_dev_bk->nb_fb_queues);
   }
 
-  up(&dev_bk->sem);
-
   return 0;
 }
 
 static long alloc_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
-                          unsigned int __user *user_addr) {
+                          int __user *user_addr) {
   int i = 0;
   int32_t pipe_id = -1;
   struct dev_bookkeep *dev_bk;
@@ -504,11 +522,6 @@ static long alloc_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   struct sched_queue_node *last_sched_node = NULL;
 
   dev_bk = chr_dev_bk->dev_bk;
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
   // Find first available notification buffer. If none are available, return
   // an error.
   for (i = 0; i < MAX_NB_FLOWS / 8; ++i) {
@@ -532,51 +545,45 @@ static long alloc_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   spin_lock(&dev_bk->lock);
   queue_heads = dev_bk->queue_heads;
   sqh = dev_bk->sqh;
-  if(queue_heads[pipe_id] == NULL) {
+  if (queue_heads[pipe_id] == NULL) {
     // insert new flow to the scheduler and queue_heads array
     printk("Adding new flow with id = %d\n", pipe_id);
     new_queue_head = kzalloc(sizeof(struct tx_queue_head), GFP_KERNEL);
-    if(new_queue_head == NULL) {
+    if (new_queue_head == NULL) {
       printk("Failed to allocated memory for the new queue head\n");
       spin_unlock(&dev_bk->lock);
-      up(&dev_bk->sem);
       return -ENOMEM;
     }
     queue_heads[pipe_id] = new_queue_head;
 
     new_sched_node = kzalloc(sizeof(struct sched_queue_node), GFP_KERNEL);
-    if(new_sched_node == NULL) {
+    if (new_sched_node == NULL) {
       printk("Failed to allocate memory for the new sched node\n");
       kfree(new_queue_head);
       spin_unlock(&dev_bk->lock);
-      up(&dev_bk->sem);
       return -ENOMEM;
     }
     new_sched_node->pipe_id = pipe_id;
     new_sched_node->next = NULL;
 
     // now add the new sched node to the sched queue
-    if((sqh->front == NULL) && (sqh->rear == NULL)) {
+    if ((sqh->front == NULL) && (sqh->rear == NULL)) {
       // first element in the queue
       sqh->front = new_sched_node;
       sqh->rear = new_sched_node;
       sqh->cur = new_sched_node;
-    }
-    else {
+    } else {
       last_sched_node = sqh->rear;
-      if(last_sched_node) {
+      if (last_sched_node) {
         last_sched_node->next = new_sched_node;
         sqh->rear = new_sched_node;
       }
     }
-  }
-  else {
+  } else {
     printk("Pipe ID already allocated\n");
     return -EFAULT;
   }
   spin_unlock(&dev_bk->lock);
-
-  up(&dev_bk->sem);
 
   if (pipe_id < 0) {
     printk("couldn't allocate notification buffer.");
@@ -610,11 +617,6 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   queue_heads = dev_bk->queue_heads;
   sqh = dev_bk->sqh;
 
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
   // Check that the buffer ID is valid.
   if (pipe_id < 0 || pipe_id >= MAX_NB_FLOWS) {
     printk("Invalid pipe ID\n");
@@ -631,10 +633,11 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   spin_lock(&dev_bk->lock);
   printk("Freeing TX pipe with id = %d\n", pipe_id);
 
-  // free all the batches that were in line to be sent for the pipe_id being freed
+  // free all the batches that were in line to be sent for the pipe_id being
+  // freed
   pipe_head = queue_heads[pipe_id];
   cur_node = pipe_head->front;
-  while(cur_node != NULL) {
+  while (cur_node != NULL) {
     next_node = cur_node->next;
     kfree(cur_node);
     cur_node = next_node;
@@ -647,11 +650,13 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   queue_heads[pipe_id] = NULL;
 
   // delete the flow from the scheduler queue
-  if(sqh) {
+  if (sqh) {
     cur_sched_node = sqh->front;
-    if((sqh->front == sqh->rear)) {
-      if(cur_sched_node->pipe_id != pipe_id) {
-        printk("Only node present in the list but it is not having pipe id = %d\n", pipe_id);
+    if ((sqh->front == sqh->rear)) {
+      if (cur_sched_node->pipe_id != pipe_id) {
+        printk(
+            "Only node present in the list but it is not having pipe id = %d\n",
+            pipe_id);
         return -EFAULT;
       }
       kfree(cur_sched_node);
@@ -659,25 +664,23 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
       sqh->rear = NULL;
       sqh->cur = NULL;
       spin_unlock(&dev_bk->lock);
-      up(&dev_bk->sem);
       return 0;
     }
-    if(sqh->front->pipe_id == pipe_id) {
+    if (sqh->front->pipe_id == pipe_id) {
       // removing from the front
       sqh->front = sqh->front->next;
-      if(sqh->cur == cur_sched_node) {
+      if (sqh->cur == cur_sched_node) {
         sqh->cur = sqh->cur->next;
         if (sqh->cur == NULL) {
           sqh->cur = sqh->front;
         }
       }
       kfree(cur_sched_node);
-    }
-    else {
+    } else {
       prev_sched_node = cur_sched_node;
       cur_sched_node = cur_sched_node->next;
-      while(cur_sched_node != NULL) {
-        if(cur_sched_node->pipe_id == pipe_id) {
+      while (cur_sched_node != NULL) {
+        if (cur_sched_node->pipe_id == pipe_id) {
           prev_sched_node->next = cur_sched_node->next;
           break;
         }
@@ -685,10 +688,10 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
         cur_sched_node = cur_sched_node->next;
       }
       // if we removed the last node, update the rear
-      if(cur_sched_node == sqh->rear) {
+      if (cur_sched_node == sqh->rear) {
         sqh->rear = prev_sched_node;
       }
-      if(sqh->cur == cur_sched_node) {
+      if (sqh->cur == cur_sched_node) {
         sqh->cur = sqh->cur->next;
         if (sqh->cur == NULL) {
           sqh->cur = sqh->front;
@@ -698,8 +701,6 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
     }
   }
   spin_unlock(&dev_bk->lock);
-
-  up(&dev_bk->sem);
 
   return 0;
 }
@@ -714,7 +715,8 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
  * Return: 0 if successful, negative error code otherwise.
  *
  */
-static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
+static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk,
+                                 unsigned long uarg) {
   int32_t buf_id = (int32_t)uarg;
   struct dev_bookkeep *dev_bk;
   struct notification_buf_pair *notif_buf_pair;
@@ -727,11 +729,6 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
   notif_buf_pair = chr_dev_bk->notif_buf_pair;
   dev_bk = chr_dev_bk->dev_bk;
 
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
   notif_buf_pair->id = buf_id;
 
   printk("Creating notif buf pair %d\n", buf_id);
@@ -743,17 +740,17 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
   }
 
   // check if notification buf pair already allocated
-  if(notif_buf_pair->allocated) {
+  if (notif_buf_pair->allocated) {
     printk("Notification buf pair already allocated.\n");
     return -EINVAL;
   }
 
   // 2. Map BAR into queue regs
-  bar2_addr = (uint8_t *) global_bk.intel_enso->base_addr;
-  nbp_q_regs = (struct queue_regs *)(bar2_addr
-                                   + (notif_buf_pair->id + MAX_NB_FLOWS)
-                                   * MEM_PER_QUEUE);
-  // TODO:Create wrappers on top of these ioread/write functions
+  bar2_addr = (uint8_t *)global_bk.intel_enso->base_addr;
+  nbp_q_regs =
+      (struct queue_regs *)(bar2_addr + (notif_buf_pair->id + MAX_NB_FLOWS) *
+                                            MEM_PER_QUEUE);
+  // TODO(kshitij): Create wrappers on top of these ioread/write functions
   // initialize the queue registers
   smp_wmb();
   iowrite32(0, &nbp_q_regs->rx_mem_low);
@@ -761,37 +758,34 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
   iowrite32(0, &nbp_q_regs->rx_mem_high);
 
   smp_rmb();
-  while(ioread32(&nbp_q_regs->rx_mem_low) != 0)
-      continue;
+  while (ioread32(&nbp_q_regs->rx_mem_low) != 0) continue;
   smp_rmb();
-  while(ioread32(&nbp_q_regs->rx_mem_high) != 0)
-      continue;
+  while (ioread32(&nbp_q_regs->rx_mem_high) != 0) continue;
 
   smp_wmb();
   iowrite32(0, &nbp_q_regs->rx_tail);
   smp_rmb();
-  while(ioread32(&nbp_q_regs->rx_tail) != 0)
-      continue;
+  while (ioread32(&nbp_q_regs->rx_tail) != 0) continue;
 
   smp_wmb();
   iowrite32(0, &nbp_q_regs->rx_head);
   smp_rmb();
-  while(ioread32(&nbp_q_regs->rx_head) != 0)
-      continue;
+  while (ioread32(&nbp_q_regs->rx_head) != 0) continue;
 
   notif_buf_pair->regs = nbp_q_regs;
 
   // 3. Allocate TX and RX notification buffers
-  // TODO: Think if we can move these buffers in the userspace
-  notif_buf_pair->rx_buf = (struct rx_notification *)kmalloc(rx_tx_buf_size, GFP_DMA);
-  if(notif_buf_pair->rx_buf == NULL) {
+  // TODO(kshitij): Think if we can move these buffers in the userspace
+  notif_buf_pair->rx_buf =
+      (struct rx_notification *)kmalloc(rx_tx_buf_size, GFP_DMA);
+  if (notif_buf_pair->rx_buf == NULL) {
     printk("RX_TX allocation failed");
     return -ENOMEM;
   }
   // reserve these pages, so that they are not swapped out
-  for(;page_ind <  rx_tx_buf_size;
-        page_ind += PAGE_SIZE) {
-    SetPageReserved(virt_to_page(((unsigned long)notif_buf_pair->rx_buf) + page_ind));
+  for (; page_ind < rx_tx_buf_size; page_ind += PAGE_SIZE) {
+    SetPageReserved(
+        virt_to_page(((unsigned long)notif_buf_pair->rx_buf) + page_ind));
   }
   rx_buf_phys_addr = virt_to_phys(notif_buf_pair->rx_buf);
 
@@ -800,8 +794,9 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
   // second half for the tx notification buffers
   memset(notif_buf_pair->rx_buf, 0, NOTIFICATION_BUF_SIZE * 64);
 
-  notif_buf_pair->tx_buf = (struct tx_notification *)(
-                                    (uint64_t) notif_buf_pair->rx_buf + (rx_tx_buf_size/2));
+  notif_buf_pair->tx_buf =
+      (struct tx_notification *)((uint64_t)notif_buf_pair->rx_buf +
+                                 (rx_tx_buf_size / 2));
   memset(notif_buf_pair->tx_buf, 0, NOTIFICATION_BUF_SIZE * 64);
 
   // 4. Initialize notification buf pair finally
@@ -817,24 +812,26 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
   iowrite32(notif_buf_pair->tx_head, &nbp_q_regs->tx_head);
 
   notif_buf_pair->pending_rx_pipe_tails = (uint32_t *)kmalloc(
-                    sizeof(*(notif_buf_pair->pending_rx_pipe_tails)) * 8192, GFP_KERNEL);
-  if(notif_buf_pair->pending_rx_pipe_tails == NULL) {
+      sizeof(*(notif_buf_pair->pending_rx_pipe_tails)) * 8192, GFP_KERNEL);
+  if (notif_buf_pair->pending_rx_pipe_tails == NULL) {
     printk("Pending RX pipe tails allocation failed");
     free_rx_tx_buf(chr_dev_bk);
     return -ENOMEM;
   }
   memset(notif_buf_pair->pending_rx_pipe_tails, 0, 8192);
 
-  notif_buf_pair->wrap_tracker = (uint8_t *)kmalloc(NOTIFICATION_BUF_SIZE / 8, GFP_KERNEL);
-  if(notif_buf_pair->wrap_tracker == NULL) {
+  notif_buf_pair->wrap_tracker =
+      (uint8_t *)kmalloc(NOTIFICATION_BUF_SIZE / 8, GFP_KERNEL);
+  if (notif_buf_pair->wrap_tracker == NULL) {
     kfree(notif_buf_pair->pending_rx_pipe_tails);
     free_rx_tx_buf(chr_dev_bk);
     return -ENOMEM;
   }
   memset(notif_buf_pair->wrap_tracker, 0, NOTIFICATION_BUF_SIZE / 8);
 
-  notif_buf_pair->next_rx_pipe_ids = (uint32_t *) kmalloc(sizeof(uint32_t) * NOTIFICATION_BUF_SIZE, GFP_KERNEL);
-  if(notif_buf_pair->next_rx_pipe_ids == NULL) {
+  notif_buf_pair->next_rx_pipe_ids =
+      (uint32_t *)kmalloc(sizeof(uint32_t) * NOTIFICATION_BUF_SIZE, GFP_KERNEL);
+  if (notif_buf_pair->next_rx_pipe_ids == NULL) {
     printk("Pending RX pipe tails allocation failed");
     kfree(notif_buf_pair->wrap_tracker);
     kfree(notif_buf_pair->pending_rx_pipe_tails);
@@ -866,8 +863,6 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
   // update the notification buffer pair in dev_bk
   dev_bk->notif_buf_pairs[notif_buf_pair->id] = notif_buf_pair;
 
-  up(&dev_bk->sem);
-
   return 0;
 }
 
@@ -881,20 +876,17 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk, unsigned l
  * Return: 0 if successful, negative error code otherwise.
  *
  */
-static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
+static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
+                         unsigned long uarg) {
   struct enso_send_tx_pipe_params stpp;
   struct notification_buf_pair *notif_buf_pair = chr_dev_bk->notif_buf_pair;
   struct dev_bookkeep *dev_bk;
 
   struct tx_queue_head **queue_heads = NULL;
-  // struct tx_queue_head *new_queue_head = NULL;
   struct tx_queue_head *pipe_queue_head = NULL;
   struct tx_queue_node *new_node = NULL;
   struct tx_queue_node *last_node = NULL;
 
-  // struct sched_queue_head *sqh = NULL;
-  // struct sched_queue_node *new_sched_node = NULL;
-  // struct sched_queue_node *last_sched_node = NULL;
   int pipe_id;
 
   if (copy_from_user(&stpp, (void __user *)uarg, sizeof(stpp))) {
@@ -910,8 +902,8 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
 
   new_node = kzalloc(sizeof(struct tx_queue_node), GFP_KERNEL);
   if (new_node == NULL) {
-      printk("Failed to allocated memory for the new queue node");
-      return -ENOMEM;
+    printk("Failed to allocated memory for the new queue node");
+    return -ENOMEM;
   }
   new_node->batch.phys_addr = stpp.phys_addr;
   new_node->batch.notif_buf_id = stpp.notif_buf_id;
@@ -920,55 +912,9 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
   new_node->next = NULL;
   queue_heads = dev_bk->queue_heads;
 
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("send_tx: interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
   spin_lock(&dev_bk->lock);
 
-  // sqh = dev_bk->sqh;
   pipe_id = stpp.pipe_id;
-  /*if(queue_heads[pipe_id] == NULL) {
-    // insert new flow to the scheduler and queue_heads array
-    printk("Adding new flow with id = %d, notif id = %d\n", pipe_id, stpp.notif_buf_id);
-    new_queue_head = kzalloc(sizeof(struct tx_queue_head), GFP_KERNEL);
-    if(new_queue_head == NULL) {
-      printk("Failed to allocated memory for the new queue head\n");
-      kfree(new_node);
-      spin_unlock(&dev_bk->lock);
-      up(&dev_bk->sem);
-      return -ENOMEM;
-    }
-    queue_heads[pipe_id] = new_queue_head;
-
-    new_sched_node = kzalloc(sizeof(struct sched_queue_node), GFP_KERNEL);
-    if(new_sched_node == NULL) {
-      printk("Failed to allocate memory for the new sched node\n");
-      kfree(new_queue_head);
-      kfree(new_node);
-      spin_unlock(&dev_bk->lock);
-      up(&dev_bk->sem);
-      return -ENOMEM;
-    }
-    new_sched_node->pipe_id = pipe_id;
-    new_sched_node->next = NULL;
-
-    // now add the new sched node to the sched queue
-    if((sqh->front == NULL) && (sqh->rear == NULL)) {
-      // first element in the queue
-      sqh->front = new_sched_node;
-      sqh->rear = new_sched_node;
-      sqh->cur = new_sched_node;
-    }
-    else {
-      last_sched_node = sqh->rear;
-      if(last_sched_node) {
-        last_sched_node->next = new_sched_node;
-        sqh->rear = new_sched_node;
-      }
-    }
-  }*/
 
   pipe_queue_head = queue_heads[pipe_id];
   if (pipe_queue_head) {
@@ -976,33 +922,31 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg
       // first element in the queue
       pipe_queue_head->front = new_node;
       pipe_queue_head->rear = new_node;
-    }
-    else {
+    } else {
       last_node = pipe_queue_head->rear;
-      if(last_node) {
-          last_node->next = new_node;
-          pipe_queue_head->rear = new_node;
+      if (last_node) {
+        last_node->next = new_node;
+        pipe_queue_head->rear = new_node;
       }
     }
   }
   spin_unlock(&dev_bk->lock);
-
-  up(&dev_bk->sem);
 
   return 0;
 }
 
 /**
  * get_unreported_completions() - Returns a count of the number of unreported
- *                                TX notifications that have been marked completed
- *                                by the NIC but the application has not freed their buffer.
+ *                                TX notifications that have been marked
+ * completed by the NIC but the application has not freed their buffer.
  *
  * @chr_dev_bk: Structure containing information about the current
  *              character file handle.
  * @user_addr:  Copy the unreported count to this variable in userspace.
  *
  */
-static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsigned int __user *user_addr) {
+static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk,
+                                       unsigned int __user *user_addr) {
   struct dev_bookkeep *dev_bk;
   uint32_t completions;
   struct notification_buf_pair *notif_buf_pair;
@@ -1010,11 +954,7 @@ static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsi
   notif_buf_pair = chr_dev_bk->notif_buf_pair;
   dev_bk = chr_dev_bk->dev_bk;
   // printk(KERN_CRIT "Entered get_unreported_completions\n");
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-  if(notif_buf_pair == NULL) {
+  if (notif_buf_pair == NULL) {
     printk("Notification buf pair is NULL");
     return -EINVAL;
   }
@@ -1027,13 +967,11 @@ static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsi
   if (copy_to_user(user_addr, &completions, sizeof(completions))) {
     printk("couldn't copy information to user.");
     spin_unlock(&dev_bk->lock);
-    up(&dev_bk->sem);
     return -EFAULT;
   }
-  notif_buf_pair->nb_unreported_completions = 0; // reset
+  notif_buf_pair->nb_unreported_completions = 0;  // reset
 
   spin_unlock(&dev_bk->lock);
-  up(&dev_bk->sem);
   return 0;
 }
 
@@ -1046,30 +984,20 @@ static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk, unsi
  *
  * Return: 0 if successful, negative error code otherwise.
  */
-static long send_config(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
+static long send_config(struct chr_dev_bookkeep *chr_dev_bk,
+                        unsigned long uarg) {
   struct notification_buf_pair *notif_buf_pair = chr_dev_bk->notif_buf_pair;
-  struct tx_notification* tx_buf = notif_buf_pair->tx_buf;
+  struct tx_notification *tx_buf = notif_buf_pair->tx_buf;
   uint32_t tx_tail = notif_buf_pair->tx_tail;
   uint32_t free_slots =
       (notif_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
   struct tx_notification *tx_notification;
   struct tx_notification config_notification;
-  struct dev_bookkeep *dev_bk;
   uint32_t nb_unreported_completions;
 
-  if (copy_from_user(&config_notification, (void __user *)uarg, sizeof(config_notification))) {
+  if (copy_from_user(&config_notification, (void __user *)uarg,
+                     sizeof(struct tx_notification))) {
     printk("couldn't copy arg from user.");
-    return -EFAULT;
-  }
-
-  dev_bk = chr_dev_bk->dev_bk;
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
-  // Make sure it's a config notification.
-  if (config_notification.signal < 2) {
     return -EFAULT;
   }
 
@@ -1082,7 +1010,11 @@ static long send_config(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg)
   }
 
   tx_notification = tx_buf + tx_tail;
-  *tx_notification = config_notification;
+  tx_notification->length = config_notification.length;
+  tx_notification->signal = config_notification.signal;
+  tx_notification->phys_addr = config_notification.phys_addr;
+  memcpy(tx_notification->pad, &config_notification.pad,
+         sizeof(config_notification.pad));
 
   tx_tail = (tx_tail + 1) % NOTIFICATION_BUF_SIZE;
   notif_buf_pair->tx_tail = tx_tail;
@@ -1098,13 +1030,11 @@ static long send_config(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg)
   }
   notif_buf_pair->nb_unreported_completions = nb_unreported_completions;
 
-  up(&dev_bk->sem);
-
   return 0;
 }
 
 static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
-                               unsigned long uarg) {
+                          unsigned long uarg) {
   struct enso_pipe_init_params params;
   struct dev_bookkeep *dev_bk;
   struct rx_pipe_internal **rx_pipes;
@@ -1116,11 +1046,6 @@ static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
 
   dev_bk = chr_dev_bk->dev_bk;
 
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
   if (copy_from_user(&params, (void __user *)uarg, sizeof(params))) {
     printk("couldn't copy arg from user.");
     return -EFAULT;
@@ -1129,30 +1054,28 @@ static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   pipe_id = params.id;
   printk("Allocating enso RX pipe with ID = %d\n", pipe_id);
   rx_pipes = chr_dev_bk->rx_pipes;
-  if(rx_pipes == NULL) {
+  if (rx_pipes == NULL) {
     printk("Enso pipes not allocated\n");
     return -EINVAL;
   }
   // check if pipe already allocated
-  if(rx_pipes[pipe_id]) {
-    if(rx_pipes[pipe_id]->allocated) {
+  if (rx_pipes[pipe_id]) {
+    if (rx_pipes[pipe_id]->allocated) {
       printk("Rx enso pipe already allocated.\n");
       return -EINVAL;
     }
   }
   new_enso_rx_pipe = kzalloc(sizeof(struct rx_pipe_internal), GFP_KERNEL);
-  if(new_enso_rx_pipe == NULL) {
+  if (new_enso_rx_pipe == NULL) {
     printk("Memory failure\n");
     return -ENOMEM;
   }
   new_enso_rx_pipe->id = pipe_id;
 
   // 2. Map BAR into queue regs
-  bar2_addr = (uint8_t *) global_bk.intel_enso->base_addr;
-  rep_q_regs = (struct queue_regs *)(bar2_addr
-                                   + (pipe_id
-                                   * MEM_PER_QUEUE));
-  new_enso_rx_pipe->regs = (struct queue_regs *) rep_q_regs;
+  bar2_addr = (uint8_t *)global_bk.intel_enso->base_addr;
+  rep_q_regs = (struct queue_regs *)(bar2_addr + (pipe_id * MEM_PER_QUEUE));
+  new_enso_rx_pipe->regs = (struct queue_regs *)rep_q_regs;
 
   // initialize the queue
   smp_wmb();
@@ -1161,29 +1084,26 @@ static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   iowrite32(0, &rep_q_regs->rx_mem_high);
 
   smp_rmb();
-  while(ioread32(&rep_q_regs->rx_mem_low) != 0)
-    continue;
+  while (ioread32(&rep_q_regs->rx_mem_low) != 0) continue;
   smp_rmb();
-  while(ioread32(&rep_q_regs->rx_mem_high) != 0)
-    continue;
+  while (ioread32(&rep_q_regs->rx_mem_high) != 0) continue;
 
   smp_wmb();
   iowrite32(0, &rep_q_regs->rx_tail);
   smp_rmb();
-  while(ioread32(&rep_q_regs->rx_tail) != 0)
-    continue;
+  while (ioread32(&rep_q_regs->rx_tail) != 0) continue;
 
   smp_wmb();
   iowrite32(0, &rep_q_regs->rx_head);
   smp_rmb();
-  while(ioread32(&rep_q_regs->rx_head) != 0)
-    continue;
+  while (ioread32(&rep_q_regs->rx_head) != 0) continue;
 
-  new_enso_rx_pipe->buf_head_ptr = (uint32_t*)&rep_q_regs->rx_head;
+  new_enso_rx_pipe->buf_head_ptr = (uint32_t *)&rep_q_regs->rx_head;
   new_enso_rx_pipe->rx_head = 0;
   new_enso_rx_pipe->rx_tail = 0;
 
-  chr_dev_bk->notif_buf_pair->pending_rx_pipe_tails[pipe_id] = new_enso_rx_pipe->rx_head;
+  chr_dev_bk->notif_buf_pair->pending_rx_pipe_tails[pipe_id] =
+      new_enso_rx_pipe->rx_head;
   rx_buf_phys_addr = params.phys_addr;
 
   smp_wmb();
@@ -1194,33 +1114,25 @@ static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
 
   new_enso_rx_pipe->allocated = true;
   rx_pipes[pipe_id] = new_enso_rx_pipe;
-
-  up(&dev_bk->sem);
+  printk("Allocated enso RX pipe with ID = %d\n", pipe_id);
 
   return 0;
 }
 
 static long free_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
-                         unsigned long uarg) {
+                            unsigned long uarg) {
   struct dev_bookkeep *dev_bk;
   struct rx_pipe_internal **rx_pipes;
   int32_t pipe_id = (int32_t)uarg;
 
   rx_pipes = chr_dev_bk->rx_pipes;
-  if(rx_pipes[pipe_id] == NULL) {
+  if (rx_pipes[pipe_id] == NULL) {
     printk("Pipe id %d does not exist\n", pipe_id);
     return -EFAULT;
   }
   dev_bk = chr_dev_bk->dev_bk;
 
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
-
   free_rx_pipe(rx_pipes[pipe_id]);
-
-  up(&dev_bk->sem);
 
   return 0;
 }
@@ -1236,15 +1148,10 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   int32_t pipe_id;
 
   dev_bk = chr_dev_bk->dev_bk;
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
 
   if (copy_from_user(&params, (struct enso_consume_rx_params __user *)uarg,
-                    sizeof(struct enso_consume_rx_params))) {
+                     sizeof(struct enso_consume_rx_params))) {
     printk("couldn't copy arg from user.");
-    up(&dev_bk->sem);
     return -EFAULT;
   }
 
@@ -1254,24 +1161,22 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   // in case the userspace sets the pipe_id properly, we need to fetch the
   // new tails for that specific pipe_id. otherwise, if pipe_id is -1,
   // we check which pipe_id is now available and send it back to the userspace
-  if(params.id != -1) {
+  if (params.id != -1) {
     get_new_tails(notif_buf_pair);
     pipe_id = params.id;
   } else {
     pipe_id = get_next_rx_pipe(notif_buf_pair, rx_pipes);
-    if(pipe_id == -1) {
-        // no new pipes are available to be fetched from
-        // return back to userspace
-        up(&dev_bk->sem);
-        return 0;
+    if (pipe_id == -1) {
+      // no new pipes are available to be fetched from
+      // return back to userspace
+      return 0;
     }
     params.id = pipe_id;
   }
 
   pipe = rx_pipes[pipe_id];
-  if(pipe == NULL) {
+  if (pipe == NULL) {
     printk("No pipe with ID = %d\n", pipe_id);
-    up(&dev_bk->sem);
     return -EFAULT;
   }
 
@@ -1279,13 +1184,10 @@ static long consume_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   flit_aligned_size = consume_queue(notif_buf_pair, pipe, &params.new_rx_tail);
 
   if (copy_to_user((struct enso_consume_rx_params __user *)uarg, &params,
-                  sizeof(struct enso_consume_rx_params))) {
+                   sizeof(struct enso_consume_rx_params))) {
     printk("couldn't copy head to user.");
-    up(&dev_bk->sem);
     return -EFAULT;
   }
-
-  up(&dev_bk->sem);
 
   return flit_aligned_size;
 }
@@ -1298,27 +1200,23 @@ static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   uint32_t enso_pipe_id;
 
   dev_bk = chr_dev_bk->dev_bk;
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
 
-  if (copy_from_user(&enso_pipe_id, (void __user *)uarg, sizeof(enso_pipe_id))) {
+  if (copy_from_user(&enso_pipe_id, (void __user *)uarg,
+                     sizeof(enso_pipe_id))) {
     printk("couldn't copy arg from user.");
     return -EFAULT;
   }
 
   rx_enso_pipes = chr_dev_bk->rx_pipes;
   pipe = rx_enso_pipes[enso_pipe_id];
-  if(pipe == NULL) {
-      printk("Pipe ID %d is NULL\n", enso_pipe_id);
-      return -EFAULT;
+  if (pipe == NULL) {
+    printk("Pipe ID %d is NULL\n", enso_pipe_id);
+    return -EFAULT;
   }
   smp_wmb();
   iowrite32(pipe->rx_tail, pipe->buf_head_ptr);
   pipe->rx_head = pipe->rx_tail;
 
-  up(&dev_bk->sem);
   return 0;
 }
 
@@ -1334,10 +1232,6 @@ static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   uint32_t nb_flits;
 
   dev_bk = chr_dev_bk->dev_bk;
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
 
   if (copy_from_user(&param, (struct enso_advance_pipe_params __user *)uarg,
                      sizeof(struct enso_advance_pipe_params))) {
@@ -1349,9 +1243,9 @@ static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   len = param.len;
   rx_enso_pipes = chr_dev_bk->rx_pipes;
   pipe = rx_enso_pipes[enso_pipe_id];
-  if(pipe == NULL) {
-      printk("Pipe ID %d is NULL\n", enso_pipe_id);
-      return -EFAULT;
+  if (pipe == NULL) {
+    printk("Pipe ID %d is NULL\n", enso_pipe_id);
+    return -EFAULT;
   }
 
   rx_pkt_head = pipe->rx_head;
@@ -1362,7 +1256,6 @@ static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   iowrite32(rx_pkt_head, pipe->buf_head_ptr);
   pipe->rx_head = rx_pkt_head;
 
-  up(&dev_bk->sem);
   return 0;
 }
 
@@ -1377,13 +1270,9 @@ static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk,
   int32_t enso_pipe_id;
 
   dev_bk = chr_dev_bk->dev_bk;
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
 
   if (copy_from_user(&params, (struct enso_get_next_batch_params __user *)uarg,
-                    sizeof(struct enso_get_next_batch_params))) {
+                     sizeof(struct enso_get_next_batch_params))) {
     printk("couldn't copy arg from user.");
     return -EFAULT;
   }
@@ -1392,28 +1281,23 @@ static long get_next_batch(struct chr_dev_bookkeep *chr_dev_bk,
 
   enso_pipe_id = get_next_pipe_id(notif_buf_pair);
   params.pipe_id = enso_pipe_id;
-  if(enso_pipe_id == -1) {
-    up(&dev_bk->sem);
+  if (enso_pipe_id == -1) {
     return -EFAULT;
   }
   rx_pipes = chr_dev_bk->rx_pipes;
   pipe = rx_pipes[enso_pipe_id];
-  if(pipe == NULL) {
+  if (pipe == NULL) {
     printk("No pipe with ID = %d\n", enso_pipe_id);
-    up(&dev_bk->sem);
     return -EFAULT;
   }
 
   flit_aligned_size = consume_queue(notif_buf_pair, pipe, &params.new_rx_tail);
 
   if (copy_to_user((struct enso_get_next_batch_params __user *)uarg, &params,
-                  sizeof(struct enso_get_next_batch_params))) {
+                   sizeof(struct enso_get_next_batch_params))) {
     printk("couldn't copy head to user.");
-    up(&dev_bk->sem);
     return -EFAULT;
   }
-
-  up(&dev_bk->sem);
 
   return flit_aligned_size;
 }
@@ -1428,26 +1312,22 @@ static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk,
   uint32_t enso_pipe_head;
   uint32_t enso_pipe_tail;
 
-  (void) uarg;
+  (void)uarg;
   dev_bk = chr_dev_bk->dev_bk;
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
 
   notif_buf_pair = chr_dev_bk->notif_buf_pair;
   rx_enso_pipes = chr_dev_bk->rx_pipes;
 
   pipe_id = get_next_pipe_id(notif_buf_pair);
-  while(pipe_id >= 0) {
+  while (pipe_id >= 0) {
     pipe = rx_enso_pipes[pipe_id];
-    if(pipe == NULL) {
+    if (pipe == NULL) {
       printk("Pipe ID = %d is NULL\n", pipe_id);
       return -1;
     }
     enso_pipe_head = pipe->rx_tail;
     enso_pipe_tail = notif_buf_pair->pending_rx_pipe_tails[pipe_id];
-    if(enso_pipe_head != enso_pipe_tail) {
+    if (enso_pipe_head != enso_pipe_tail) {
       smp_wmb();
       iowrite32(pipe->rx_head, pipe->buf_head_ptr);
       break;
@@ -1455,7 +1335,6 @@ static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk,
     pipe_id = get_next_pipe_id(notif_buf_pair);
   }
 
-  up(&dev_bk->sem);
   return pipe_id;
 }
 
@@ -1468,10 +1347,6 @@ static long prefetch_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   int32_t pipe_id;
 
   dev_bk = chr_dev_bk->dev_bk;
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.");
-    return -ERESTARTSYS;
-  }
 
   if (copy_from_user(&pipe_id, (void __user *)uarg, sizeof(pipe_id))) {
     printk("couldn't copy arg from user.");
@@ -1482,15 +1357,14 @@ static long prefetch_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   rx_enso_pipes = chr_dev_bk->rx_pipes;
   pipe = rx_enso_pipes[pipe_id];
 
-  if(pipe == NULL) {
-      printk("Pipe ID %d is NULL\n", pipe_id);
-      return -EFAULT;
+  if (pipe == NULL) {
+    printk("Pipe ID %d is NULL\n", pipe_id);
+    return -EFAULT;
   }
 
   smp_wmb();
   iowrite32(pipe->rx_head, pipe->buf_head_ptr);
 
-  up(&dev_bk->sem);
   return pipe_id;
 }
 
@@ -1510,15 +1384,14 @@ void free_rx_tx_buf(struct chr_dev_bookkeep *chr_dev_bk) {
   size_t rx_tx_buf_size = 512 * PAGE_SIZE;
   uint32_t page_ind = 0;
   struct rx_notification *rx_notif = NULL;
-  if(chr_dev_bk == NULL) {
+  if (chr_dev_bk == NULL) {
     return;
   }
-  if(chr_dev_bk->notif_buf_pair == NULL) {
+  if (chr_dev_bk->notif_buf_pair == NULL) {
     return;
   }
   rx_notif = chr_dev_bk->notif_buf_pair->rx_buf;
-  for(;page_ind < rx_tx_buf_size;
-       page_ind += PAGE_SIZE) {
+  for (; page_ind < rx_tx_buf_size; page_ind += PAGE_SIZE) {
     ClearPageReserved(virt_to_page(((unsigned long)rx_notif) + page_ind));
   }
   kfree(rx_notif);
@@ -1533,12 +1406,12 @@ void free_rx_tx_buf(struct chr_dev_bookkeep *chr_dev_bk) {
  * @notif_buf_pair: Structure containing information about the notification
  *                  buffer.
  */
-// TODO: Fix the magic numbers.
-void update_tx_head(struct notification_buf_pair* notif_buf_pair) {
-  struct tx_notification* tx_buf = notif_buf_pair->tx_buf;
+// TODO(kshitij): Fix the magic numbers.
+void update_tx_head(struct notification_buf_pair *notif_buf_pair) {
+  struct tx_notification *tx_buf = notif_buf_pair->tx_buf;
   uint32_t head = notif_buf_pair->tx_head;
   uint32_t tail = notif_buf_pair->tx_tail;
-  struct tx_notification* tx_notif;
+  struct tx_notification *tx_notif;
   uint16_t i;
   uint8_t wrap_tracker_mask;
   uint8_t no_wrap;
@@ -1566,8 +1439,7 @@ void update_tx_head(struct notification_buf_pair* notif_buf_pair) {
     // same cache line, we can get rid of `wrap_tracker` and instead check
     // for two notifications.
     wrap_tracker_mask = 1 << (head & 0x7);
-    no_wrap =
-        !(notif_buf_pair->wrap_tracker[head / 8] & wrap_tracker_mask);
+    no_wrap = !(notif_buf_pair->wrap_tracker[head / 8] & wrap_tracker_mask);
     notif_buf_pair->nb_unreported_completions += no_wrap;
     notif_buf_pair->wrap_tracker[head / 8] &= ~wrap_tracker_mask;
 
@@ -1580,12 +1452,12 @@ void update_tx_head(struct notification_buf_pair* notif_buf_pair) {
 int free_rx_pipe(struct rx_pipe_internal *pipe) {
   struct queue_regs *rep_q_regs;
 
-  if(!pipe->allocated) {
+  if (!pipe->allocated) {
     return 0;
   }
 
   rep_q_regs = pipe->regs;
-  printk("Freeing enso RX pipe ID = %d\n", pipe->id);
+  // printk("Freeing enso RX pipe ID = %d\n", pipe->id);
 
   smp_wmb();
   iowrite32(0, &rep_q_regs->rx_mem_low);
@@ -1598,8 +1470,8 @@ int free_rx_pipe(struct rx_pipe_internal *pipe) {
 }
 
 static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair) {
-  struct rx_notification* rx_notif;
-  struct rx_notification* curr_notif;
+  struct rx_notification *rx_notif;
+  struct rx_notification *curr_notif;
   uint32_t notification_buf_head;
   uint16_t next_rx_ids_tail;
   uint16_t nb_consumed_notifications = 0;
@@ -1610,7 +1482,7 @@ static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair) {
   notification_buf_head = notif_buf_pair->rx_head;
   next_rx_ids_tail = notif_buf_pair->next_rx_ids_tail;
 
-  for (;ind < BATCH_SIZE; ++ind) {
+  for (; ind < BATCH_SIZE; ++ind) {
     curr_notif = rx_notif + notification_buf_head;
 
     // Check if the next notification was updated by the NIC.
@@ -1651,16 +1523,15 @@ static uint32_t consume_queue(struct notification_buf_pair *notif_buf_pair,
   uint32_t enso_pipe_new_tail;
 
   enso_pipe_head = pipe->rx_tail;
-  enso_pipe_id = pipe->id; // get the pipe id from the userspace
+  enso_pipe_id = pipe->id;  // get the pipe id from the userspace
   enso_pipe_new_tail = notif_buf_pair->pending_rx_pipe_tails[enso_pipe_id];
-  if(enso_pipe_new_tail == enso_pipe_head) {
-      return 0;
+  if (enso_pipe_new_tail == enso_pipe_head) {
+    return 0;
   }
-  flit_aligned_size = ((enso_pipe_new_tail - enso_pipe_head)
-                                % ENSO_PIPE_SIZE) * 64;
+  flit_aligned_size =
+      ((enso_pipe_new_tail - enso_pipe_head) % ENSO_PIPE_SIZE) * 64;
   // we update the rx tail in the kernel
-  enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64)
-                   % ENSO_PIPE_SIZE;
+  enso_pipe_head = (enso_pipe_head + flit_aligned_size / 64) % ENSO_PIPE_SIZE;
   pipe->rx_tail = enso_pipe_head;
   // we send this back to the application
   *new_rx_tail = enso_pipe_head;
@@ -1686,7 +1557,7 @@ static int32_t get_next_pipe_id(struct notification_buf_pair *notif_buf_pair) {
   enso_pipe_id = notif_buf_pair->next_rx_pipe_ids[next_rx_ids_head];
 
   notif_buf_pair->next_rx_ids_head =
-                 (next_rx_ids_head + 1) % NOTIFICATION_BUF_SIZE;
+      (next_rx_ids_head + 1) % NOTIFICATION_BUF_SIZE;
 
   return enso_pipe_id;
 }
@@ -1699,15 +1570,15 @@ static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
   uint32_t enso_pipe_tail;
 
   pipe_id = get_next_pipe_id(notif_buf_pair);
-  while(pipe_id >= 0) {
+  while (pipe_id >= 0) {
     pipe = rx_enso_pipes[pipe_id];
-    if(pipe == NULL) {
+    if (pipe == NULL) {
       printk("Pipe ID = %d is NULL\n", pipe_id);
       return -1;
     }
     enso_pipe_head = pipe->rx_tail;
     enso_pipe_tail = notif_buf_pair->pending_rx_pipe_tails[pipe_id];
-    if(enso_pipe_head != enso_pipe_tail) {
+    if (enso_pipe_head != enso_pipe_tail) {
       smp_wmb();
       iowrite32(pipe->rx_head, pipe->buf_head_ptr);
       break;
@@ -1720,8 +1591,8 @@ static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
 
 int send_one_batch(struct notification_buf_pair *notif_buf_pair,
                    struct enso_send_tx_pipe_params *stpp) {
-  struct tx_notification* tx_buf;
-  struct tx_notification* new_tx_notification;
+  struct tx_notification *tx_buf;
+  struct tx_notification *new_tx_notification;
   uint32_t tx_tail;
   uint32_t missing_bytes;
   uint32_t missing_bytes_in_page;
@@ -1746,7 +1617,8 @@ int send_one_batch(struct notification_buf_pair *notif_buf_pair,
   hugepage_boundary = hugepage_base_addr + buf_page_size;
 
   while (missing_bytes > 0) {
-    free_slots = (notif_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
+    free_slots =
+        (notif_buf_pair->tx_head - tx_tail - 1) % NOTIFICATION_BUF_SIZE;
 
     // Block until we can send.
     while (unlikely(free_slots == 0)) {
@@ -1757,9 +1629,11 @@ int send_one_batch(struct notification_buf_pair *notif_buf_pair,
     }
 
     new_tx_notification = tx_buf + tx_tail;
-    req_length = (missing_bytes < MAX_TRANSFER_LEN) ? missing_bytes : MAX_TRANSFER_LEN;
+    req_length =
+        (missing_bytes < MAX_TRANSFER_LEN) ? missing_bytes : MAX_TRANSFER_LEN;
     missing_bytes_in_page = hugepage_boundary - transf_addr;
-    req_length = (req_length < missing_bytes_in_page) ? req_length : missing_bytes_in_page;
+    req_length = (req_length < missing_bytes_in_page) ? req_length
+                                                      : missing_bytes_in_page;
 
     // If the transmission needs to be split among multiple requests, we
     // need to set a bit in the wrap tracker.
@@ -1784,7 +1658,7 @@ int send_one_batch(struct notification_buf_pair *notif_buf_pair,
 }
 
 int enso_sched(void *data) {
-  struct dev_bookkeep *dev_bk = (struct dev_bookkeep *) data;
+  struct dev_bookkeep *dev_bk = (struct dev_bookkeep *)data;
   struct tx_queue_head **queue_heads = dev_bk->queue_heads;
   struct tx_queue_head *pipe_queue_head = NULL;
   struct tx_queue_node *first_node = NULL;
@@ -1793,7 +1667,7 @@ int enso_sched(void *data) {
   struct sched_queue_node *to_sched = NULL;
   struct notification_buf_pair *notif_buf_pair = NULL;
 
-  if(sqh == NULL) {
+  if (sqh == NULL) {
     printk("Exiting since sqh is NULL\n");
     dev_bk->sched_run = false;
     return 0;
@@ -1804,35 +1678,37 @@ int enso_sched(void *data) {
     // dequeue an element from the queue and send it
     spin_lock(&dev_bk->lock);
     // if (sqh) {
-      if (sqh->cur != NULL) {
-        to_sched = sqh->cur;
-        pipe_queue_head = queue_heads[to_sched->pipe_id];
-        if (pipe_queue_head != NULL) {
-          if (pipe_queue_head->front != NULL) {
-            first_node = pipe_queue_head->front;
-            pipe_queue_head->front = first_node->next;
-            if (pipe_queue_head->front == NULL) {
-              // we got the last element, set rear to NULL as well
-              pipe_queue_head->rear = NULL;
-            }
-            notif_buf_pair = dev_bk->notif_buf_pairs[first_node->batch.notif_buf_id];
-            if(notif_buf_pair == NULL) {
-              printk("enso_sched: Asserting as notif buf %d is NULL\n", first_node->batch.notif_buf_id);
-              dev_bk->sched_run = false;
-              spin_unlock(&dev_bk->lock);
-              return -1;
-            }
-            send_one_batch(notif_buf_pair, &first_node->batch);
-            kfree(first_node);
-            first_node = NULL;
+    if (sqh->cur != NULL) {
+      to_sched = sqh->cur;
+      pipe_queue_head = queue_heads[to_sched->pipe_id];
+      if (pipe_queue_head != NULL) {
+        if (pipe_queue_head->front != NULL) {
+          first_node = pipe_queue_head->front;
+          pipe_queue_head->front = first_node->next;
+          if (pipe_queue_head->front == NULL) {
+            // we got the last element, set rear to NULL as well
+            pipe_queue_head->rear = NULL;
           }
-        }
-        // move the cur to the next flow to be scheduled
-        sqh->cur = to_sched->next;
-        if (sqh->cur == NULL) {
-          sqh->cur = sqh->front;
+          notif_buf_pair =
+              dev_bk->notif_buf_pairs[first_node->batch.notif_buf_id];
+          if (notif_buf_pair == NULL) {
+            // printk("enso_sched: Asserting as notif buf %d is NULL\n",
+            // first_node->batch.notif_buf_id);
+            dev_bk->sched_run = false;
+            spin_unlock(&dev_bk->lock);
+            return -1;
+          }
+          send_one_batch(notif_buf_pair, &first_node->batch);
+          kfree(first_node);
+          first_node = NULL;
         }
       }
+      // move the cur to the next flow to be scheduled
+      sqh->cur = to_sched->next;
+      if (sqh->cur == NULL) {
+        sqh->cur = sqh->front;
+      }
+    }
     // }
     spin_unlock(&dev_bk->lock);
     yield();

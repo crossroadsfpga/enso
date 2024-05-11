@@ -1,3 +1,35 @@
+/*
+ * Copyright (c) 2024, Carnegie Mellon University
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the disclaimer
+ * below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *
+ *      * Neither the name of the copyright holder nor the names of its
+ *      contributors may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+ * THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+ * CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT
+ * NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include "enso_chr.h"
 
 #include "enso_ioctl.h"
@@ -14,11 +46,10 @@ static void free_rx_pipes(struct chr_dev_bookkeep *chr_dev_bk);
  * File operation functions
  *****************************************************************************/
 const struct file_operations enso_fops = {
-  .owner = THIS_MODULE,
-  .open = enso_chr_open,
-  .release = enso_chr_release,
-  .unlocked_ioctl = enso_unlocked_ioctl
-};
+    .owner = THIS_MODULE,
+    .open = enso_chr_open,
+    .release = enso_chr_release,
+    .unlocked_ioctl = enso_unlocked_ioctl};
 
 /**
  * enso_chr_open() - Responds to the system call open(2).
@@ -33,7 +64,7 @@ static int enso_chr_open(struct inode *inode, struct file *filp) {
   struct chr_dev_bookkeep *chr_dev_bk;
   struct dev_bookkeep *dev_bk = global_bk.dev_bk;
 
-  if(dev_bk == NULL) {
+  if (dev_bk == NULL) {
     printk("dev_bk uninitialized\n");
     return -ENXIO;
   }
@@ -49,18 +80,17 @@ static int enso_chr_open(struct inode *inode, struct file *filp) {
 
   chr_dev_bk->nb_fb_queues = 0;
 
-  chr_dev_bk->notif_buf_pair = kzalloc(sizeof(struct notification_buf_pair),
-                                       GFP_KERNEL);
-  if(chr_dev_bk->notif_buf_pair == NULL) {
+  chr_dev_bk->notif_buf_pair =
+      kzalloc(sizeof(struct notification_buf_pair), GFP_KERNEL);
+  if (chr_dev_bk->notif_buf_pair == NULL) {
     printk("couldn't create notification buffer pair\n");
     goto failed_notif_buf_pair_alloc;
   }
   chr_dev_bk->notif_buf_pair->allocated = false;
 
-  chr_dev_bk->rx_pipes = kzalloc(MAX_NB_FLOWS *
-                                 sizeof(struct rx_pipe_internal *),
-                                 GFP_KERNEL);
-  if(chr_dev_bk->rx_pipes == NULL) {
+  chr_dev_bk->rx_pipes =
+      kzalloc(MAX_NB_FLOWS * sizeof(struct rx_pipe_internal *), GFP_KERNEL);
+  if (chr_dev_bk->rx_pipes == NULL) {
     printk("couldn't create rx_pipes");
     goto failed_rx_pipe_alloc;
   }
@@ -84,12 +114,7 @@ static int enso_chr_open(struct inode *inode, struct file *filp) {
   }
 
   // Increase device open count.
-  if (unlikely(down_interruptible(&dev_bk->sem))) {
-    printk("interrupted while attempting to obtain device semaphore.\n");
-    return -ERESTARTSYS;
-  }
-  ++dev_bk->chr_open_cnt;
-  up(&dev_bk->sem);
+  atomic_inc(&dev_bk->chr_open_cnt);
   return 0;
 
 failed_tx_pipe_status_alloc:
@@ -140,7 +165,6 @@ static int enso_chr_release(struct inode *inode, struct file *filp) {
 
   dev_bk->nb_fb_queues -= chr_dev_bk->nb_fb_queues;
 
-  --dev_bk->chr_open_cnt;
   up(&dev_bk->sem);
 
   // free the notification buffer
@@ -149,6 +173,8 @@ static int enso_chr_release(struct inode *inode, struct file *filp) {
   kfree(chr_dev_bk->notif_q_status);
   kfree(chr_dev_bk->pipe_status);
   kfree(chr_dev_bk);
+  // Decrease device open count.
+  atomic_dec(&dev_bk->chr_open_cnt);
 
   return 0;
 }
@@ -171,7 +197,7 @@ int __init enso_chr_init(void) {
   // we allocate minor numbers starting from 0
   // we need only one device
   ret = alloc_chrdev_region(&dev_id, 0, 1, ENSO_DRIVER_NAME);
-  if(ret) {
+  if (ret) {
     printk("Failed to register char dev\n");
     return -1;
   }
@@ -187,7 +213,7 @@ int __init enso_chr_init(void) {
 
   // link the major/minor numbers to the char dev
   ret = cdev_add(&global_bk.cdev, dev_id, 1);
-  if(ret) {
+  if (ret) {
     printk("Failed to add char device\n");
     goto failed_cdev_add;
   }
@@ -199,8 +225,8 @@ int __init enso_chr_init(void) {
     printk("Failed to create device class\n");
     goto failed_chr_class;
   }
-  dev = device_create(global_bk.chr_class, NULL, dev_id, NULL,
-                      ENSO_DRIVER_NAME);
+  dev =
+      device_create(global_bk.chr_class, NULL, dev_id, NULL, ENSO_DRIVER_NAME);
   if (IS_ERR(dev)) {
     printk("Failed to create device under /dev/.");
     goto failed_dev_create;
@@ -252,33 +278,32 @@ static void free_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk) {
   struct notification_buf_pair *notif_buf_pair = NULL;
   unsigned int page_ind = 0;
 
-  if(chr_dev_bk == NULL) {
+  if (chr_dev_bk == NULL) {
     return;
   }
   notif_buf_pair = chr_dev_bk->notif_buf_pair;
-  if(notif_buf_pair == NULL) {
+  if (notif_buf_pair == NULL) {
     printk("enso_drv: How is this possible\n");
     return;
   }
-  if(!notif_buf_pair->allocated) {
+  if (!notif_buf_pair->allocated) {
     printk("enso_drv: Notif buf pair not allocated\n");
     kfree(notif_buf_pair);
     chr_dev_bk->notif_buf_pair = NULL;
     return;
   }
   printk("enso_drv: Cleaning up notif buf pair ID = %d\n", notif_buf_pair->id);
-  if(notif_buf_pair->rx_buf != NULL) {
+  if (notif_buf_pair->rx_buf != NULL) {
     rx_notif = notif_buf_pair->rx_buf;
-    for(;page_ind < rx_tx_buf_size;
-         page_ind += PAGE_SIZE) {
+    for (; page_ind < rx_tx_buf_size; page_ind += PAGE_SIZE) {
       ClearPageReserved(virt_to_page(((unsigned long)rx_notif) + page_ind));
     }
     kfree(rx_notif);
   }
-  if(notif_buf_pair->pending_rx_pipe_tails != NULL) {
+  if (notif_buf_pair->pending_rx_pipe_tails != NULL) {
     kfree(notif_buf_pair->pending_rx_pipe_tails);
   }
-  if(notif_buf_pair->wrap_tracker != NULL) {
+  if (notif_buf_pair->wrap_tracker != NULL) {
     kfree(notif_buf_pair->wrap_tracker);
   }
 
@@ -290,17 +315,16 @@ static void free_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk) {
 void free_rx_pipes(struct chr_dev_bookkeep *chr_dev_bk) {
   unsigned int ind = 0;
   struct rx_pipe_internal **pipes;
-  if(chr_dev_bk == NULL) {
+  if (chr_dev_bk == NULL) {
     return;
   }
 
   pipes = chr_dev_bk->rx_pipes;
-  if(pipes == NULL) {
+  if (pipes == NULL) {
     return;
   }
-  for(; ind < MAX_NB_FLOWS; ind++) {
-    if(pipes[ind])
-    {
+  for (; ind < MAX_NB_FLOWS; ind++) {
+    if (pipes[ind]) {
       free_rx_pipe(pipes[ind]);
       kfree(pipes[ind]);
       pipes[ind] = NULL;

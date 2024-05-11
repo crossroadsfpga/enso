@@ -3,7 +3,7 @@ obj-m += $(INTEL_MODULE_NAME).o
 $(INTEL_MODULE_NAME)-y := intel_fpga_pcie_chr.o intel_fpga_pcie_dma.o \
         intel_fpga_pcie_setup.o intel_fpga_pcie_ioctl.o event_queue.o \
         event_handler.o
-USE_AVX ?= 0
+USE_AVX ?= 1
 
 ENSO_MODULE_NAME := enso
 obj-m += $(ENSO_MODULE_NAME).o
