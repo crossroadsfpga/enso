@@ -104,6 +104,7 @@ struct enso_send_tx_pipe_params {
 
 struct tx_queue_node {
   struct enso_send_tx_pipe_params batch;
+  unsigned long ftime;
   struct tx_queue_node *next;
 };
 
@@ -121,6 +122,7 @@ struct sched_queue_head {
   struct sched_queue_node *front;
   struct sched_queue_node *rear;
   struct sched_queue_node *cur;
+  unsigned long stime;
 };
 
 /**

@@ -90,8 +90,8 @@ static uint32_t consume_queue(struct notification_buf_pair *notif_buf_pair,
 static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair);
 static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
                                 struct rx_pipe_internal **rx_enso_pipes);
-static int send_one_batch(struct notification_buf_pair *notif_buf_pair,
-                          struct enso_send_tx_pipe_params *stpp);
+static int send_batch(struct notification_buf_pair *notif_buf_pair,
+                      struct enso_send_tx_pipe_params *stpp);
 
 /******************************************************************************
  * Device and I/O control function
@@ -886,6 +886,7 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   struct tx_queue_head *pipe_queue_head = NULL;
   struct tx_queue_node *new_node = NULL;
   struct tx_queue_node *last_node = NULL;
+  struct sched_queue_head *sqh = NULL;
 
   int pipe_id;
 
@@ -911,6 +912,7 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   new_node->batch.len = stpp.len;
   new_node->next = NULL;
   queue_heads = dev_bk->queue_heads;
+  sqh = dev_bk->sqh;
 
   spin_lock(&dev_bk->lock);
 
@@ -920,14 +922,19 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   if (pipe_queue_head) {
     if ((pipe_queue_head->front == NULL) && (pipe_queue_head->rear == NULL)) {
       // first element in the queue
+      new_node->ftime = sqh->stime + stpp.len;
       pipe_queue_head->front = new_node;
       pipe_queue_head->rear = new_node;
     } else {
       last_node = pipe_queue_head->rear;
       if (last_node) {
+        new_node->ftime = last_node->ftime + stpp.len;
         last_node->next = new_node;
         pipe_queue_head->rear = new_node;
       }
+    }
+    if (new_node->ftime > sqh->stime) {
+      sqh->stime = new_node->ftime;
     }
   }
   spin_unlock(&dev_bk->lock);
@@ -953,7 +960,6 @@ static long get_unreported_completions(struct chr_dev_bookkeep *chr_dev_bk,
 
   notif_buf_pair = chr_dev_bk->notif_buf_pair;
   dev_bk = chr_dev_bk->dev_bk;
-  // printk(KERN_CRIT "Entered get_unreported_completions\n");
   if (notif_buf_pair == NULL) {
     printk("Notification buf pair is NULL");
     return -EINVAL;
@@ -1589,8 +1595,8 @@ static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
   return pipe_id;
 }
 
-int send_one_batch(struct notification_buf_pair *notif_buf_pair,
-                   struct enso_send_tx_pipe_params *stpp) {
+int send_batch(struct notification_buf_pair *notif_buf_pair,
+               struct enso_send_tx_pipe_params *stpp) {
   struct tx_notification *tx_buf;
   struct tx_notification *new_tx_notification;
   uint32_t tx_tail;
@@ -1660,12 +1666,16 @@ int send_one_batch(struct notification_buf_pair *notif_buf_pair,
 int enso_sched(void *data) {
   struct dev_bookkeep *dev_bk = (struct dev_bookkeep *)data;
   struct tx_queue_head **queue_heads = dev_bk->queue_heads;
-  struct tx_queue_head *pipe_queue_head = NULL;
-  struct tx_queue_node *first_node = NULL;
+  struct tx_queue_head *cur_pipe_head = NULL;
+  struct tx_queue_head *pipe_to_send = NULL;
+  struct tx_queue_node *front_batch = NULL;
+  struct tx_queue_node *batch_to_send = NULL;
 
   struct sched_queue_head *sqh = dev_bk->sqh;
-  struct sched_queue_node *to_sched = NULL;
+  struct sched_queue_node *cur = NULL;
   struct notification_buf_pair *notif_buf_pair = NULL;
+  unsigned long min_ftime = 0;
+  int min_ftime_pipe_id;
 
   if (sqh == NULL) {
     printk("Exiting since sqh is NULL\n");
@@ -1677,39 +1687,41 @@ int enso_sched(void *data) {
   while (!kthread_should_stop()) {
     // dequeue an element from the queue and send it
     spin_lock(&dev_bk->lock);
-    // if (sqh) {
-    if (sqh->cur != NULL) {
-      to_sched = sqh->cur;
-      pipe_queue_head = queue_heads[to_sched->pipe_id];
-      if (pipe_queue_head != NULL) {
-        if (pipe_queue_head->front != NULL) {
-          first_node = pipe_queue_head->front;
-          pipe_queue_head->front = first_node->next;
-          if (pipe_queue_head->front == NULL) {
-            // we got the last element, set rear to NULL as well
-            pipe_queue_head->rear = NULL;
+    if ((sqh->front != NULL) && (sqh->rear != NULL)) {
+      // find the queue with the least finish time packet at the front
+      cur = sqh->front;
+      min_ftime_pipe_id = -1;
+      // any time that can be chosen should be less than this
+      min_ftime = sqh->stime + 1;
+      // iterate through the queue to find a batch that has the least
+      // ftime among all the other batches that are at the front
+      // TODO(kshitij): Optimize this to do it in O(1)
+      while (cur) {
+        cur_pipe_head = queue_heads[cur->pipe_id];
+        front_batch = cur_pipe_head->front;
+        if (likely(front_batch != NULL)) {
+          if (front_batch->ftime < min_ftime) {
+            min_ftime = front_batch->ftime;
+            min_ftime_pipe_id = cur->pipe_id;
           }
-          notif_buf_pair =
-              dev_bk->notif_buf_pairs[first_node->batch.notif_buf_id];
-          if (notif_buf_pair == NULL) {
-            // printk("enso_sched: Asserting as notif buf %d is NULL\n",
-            // first_node->batch.notif_buf_id);
-            dev_bk->sched_run = false;
-            spin_unlock(&dev_bk->lock);
-            return -1;
-          }
-          send_one_batch(notif_buf_pair, &first_node->batch);
-          kfree(first_node);
-          first_node = NULL;
         }
+        cur = cur->next;
       }
-      // move the cur to the next flow to be scheduled
-      sqh->cur = to_sched->next;
-      if (sqh->cur == NULL) {
-        sqh->cur = sqh->front;
+      if (likely(min_ftime_pipe_id != -1)) {
+        pipe_to_send = queue_heads[min_ftime_pipe_id];
+        batch_to_send = pipe_to_send->front;
+        pipe_to_send->front = batch_to_send->next;
+        if (pipe_to_send->front == NULL) {
+          // we got the last element, set rear to NULL as well
+          pipe_to_send->rear = NULL;
+        }
+        notif_buf_pair =
+            dev_bk->notif_buf_pairs[batch_to_send->batch.notif_buf_id];
+        send_batch(notif_buf_pair, &batch_to_send->batch);
+        kfree(batch_to_send);
+        batch_to_send = NULL;
       }
     }
-    // }
     spin_unlock(&dev_bk->lock);
     yield();
   }
