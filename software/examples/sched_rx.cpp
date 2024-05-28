@@ -62,6 +62,9 @@ void rcv_pkts(enso::stats_t* stats) {
     std::cerr << "Problem creating device" << std::endl;
     exit(2);
   }
+
+  dev->EnableRoundRobin();
+
   std::vector<RxPipe*> rxPipes;
   for (uint32_t i = 0; i < 4; ++i) {
     RxPipe* rxPipe = dev->AllocateRxPipe(true);
