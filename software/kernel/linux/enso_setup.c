@@ -80,60 +80,39 @@ static __init int enso_init(void) {
   dev_bk->notif_q_status = kzalloc(MAX_NB_APPS / 8, GFP_KERNEL);
   if (dev_bk->notif_q_status == NULL) {
     printk("couldn't create notification queue status\n");
-    kfree(dev_bk);
-    return -ENOMEM;
+    goto failed_notif_q_status_alloc;
   }
 
   dev_bk->pipe_status = kzalloc(MAX_NB_FLOWS / 8, GFP_KERNEL);
   if (dev_bk->pipe_status == NULL) {
     printk("couldn't create pipe status for device\n");
-    kfree(dev_bk->notif_q_status);
-    kfree(dev_bk);
-    return -ENOMEM;
+    goto failed_pipe_stats_alloc;
   }
 
   dev_bk->tx_pipe_status = kzalloc(MAX_NB_FLOWS / 8, GFP_KERNEL);
   if (dev_bk->tx_pipe_status == NULL) {
     printk("couldn't create pipe status for device\n");
-    kfree(dev_bk->pipe_status);
-    kfree(dev_bk->notif_q_status);
-    kfree(dev_bk);
-    return -ENOMEM;
+    goto failed_tx_pipe_status_alloc;
   }
 
   dev_bk->queue_heads =
       kzalloc(MAX_NB_FLOWS * sizeof(struct tx_queue_head *), GFP_KERNEL);
   if (dev_bk->queue_heads == NULL) {
     printk("couldn't create queue head for device\n");
-    kfree(dev_bk->tx_pipe_status);
-    kfree(dev_bk->pipe_status);
-    kfree(dev_bk->notif_q_status);
-    kfree(dev_bk);
-    return -ENOMEM;
+    goto failed_queue_heads_alloc;
   }
 
   dev_bk->sqh = kzalloc(sizeof(struct sched_queue_head), GFP_KERNEL);
   if (dev_bk->sqh == NULL) {
     printk("couldn't create sched head for device\n");
-    kfree(dev_bk->queue_heads);
-    kfree(dev_bk->tx_pipe_status);
-    kfree(dev_bk->pipe_status);
-    kfree(dev_bk->notif_q_status);
-    kfree(dev_bk);
-    return -ENOMEM;
+    goto failed_sqh_alloc;
   }
 
   dev_bk->notif_buf_pairs =
       kzalloc(MAX_NB_APPS * sizeof(struct notification_buf_pair *), GFP_KERNEL);
   if (dev_bk->notif_buf_pairs == NULL) {
     printk("couldn't create notif_buf_pairs\n");
-    kfree(dev_bk->sqh);
-    kfree(dev_bk->queue_heads);
-    kfree(dev_bk->tx_pipe_status);
-    kfree(dev_bk->pipe_status);
-    kfree(dev_bk->notif_q_status);
-    kfree(dev_bk);
-    return -ENOMEM;
+    goto failed_notif_buf_pair_alloc;
   }
 
   spin_lock_init(&dev_bk->lock);
@@ -145,6 +124,20 @@ static __init int enso_init(void) {
   global_bk.dev_bk = dev_bk;
 
   return 0;
+
+failed_notif_buf_pair_alloc:
+  kfree(dev_bk->sqh);
+failed_sqh_alloc:
+  kfree(dev_bk->queue_heads);
+failed_queue_heads_alloc:
+  kfree(dev_bk->tx_pipe_status);
+failed_tx_pipe_status_alloc:
+  kfree(dev_bk->pipe_status);
+failed_pipe_stats_alloc:
+  kfree(dev_bk->notif_q_status);
+failed_notif_q_status_alloc:
+  kfree(dev_bk);
+  return -ENOMEM;
 }
 
 void free_tx_queue(struct tx_queue_head *queue_head) {
