@@ -15,7 +15,7 @@ fi
 sudo mkdir -p /mnt/huge
 (sudo mount | grep /mnt/huge) > /dev/null || sudo mount -t hugetlbfs hugetlbfs /mnt/huge
 for i in /sys/devices/system/node/node[0-9]*; do
-    echo 4096 | sudo tee "$i"/hugepages/hugepages-2048kB/nr_hugepages
+    echo 16384 | sudo tee "$i"/hugepages/hugepages-2048kB/nr_hugepages
 done
 
 cd $REPO_DIR/software/kernel/linux/

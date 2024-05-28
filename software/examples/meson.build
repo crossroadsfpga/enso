@@ -18,3 +18,7 @@ executable('simpleTx', 'simpleTx.cpp', dependencies: [pcap_dep, thread_dep],
            link_with: enso_lib, include_directories: inc)
 executable('simpleRx', 'simpleRx.cpp', dependencies: [thread_dep],
            link_with: enso_lib, include_directories: inc)
+executable('sched_tx', 'sched_tx.cpp', dependencies: [pcap_dep, thread_dep],
+           link_with: enso_lib, include_directories: inc)
+executable('sched_rx', 'sched_rx.cpp', dependencies: [thread_dep],
+           link_with: enso_lib, include_directories: inc)

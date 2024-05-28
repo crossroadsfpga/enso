@@ -644,7 +644,8 @@ class RxPipe {
     return RecvMessages<PeekPktIterator>(max_nb_pkts);
   }
 
-  inline MessageBatch<PeekPktIterator> PeekPktsFromTail(int32_t max_nb_pkts = -1) {
+  inline MessageBatch<PeekPktIterator> PeekPktsFromTail(
+      int32_t max_nb_pkts = -1) {
     return RecvMessagesFromTail<PeekPktIterator>(max_nb_pkts);
   }
 
@@ -849,6 +850,22 @@ class TxPipe {
     assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
     app_begin_ = (app_begin_ + nb_bytes) & kBufMask;
+
+    device_->Send(kId, phys_addr, nb_bytes);
+  }
+
+  /**
+   * @brief Sends a given number of bytes.
+   *
+   * Does not free the bytes as opposed to `SendAndFree()`.
+   *
+   * @param nb_bytes The number of bytes to send. Must be a multiple of
+   *                 `kQuantumSize`.
+   */
+  inline void Send(uint32_t nb_bytes) {
+    uint64_t phys_addr = buf_phys_addr_ + app_begin_;
+    assert(nb_bytes <= kMaxCapacity);
+    assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
     device_->Send(kId, phys_addr, nb_bytes);
   }
