@@ -358,8 +358,9 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
  * @param notification_buf_pair
  * @return Number of consumed notifications.
  */
-static _enso_always_inline uint16_t __get_new_tails(
-    struct NotificationBufPair* notification_buf_pair, uint32_t* prev_tail) {
+static _enso_always_inline uint16_t
+__get_new_tails(struct NotificationBufPair* notification_buf_pair,
+                UpdatePacket update_packet) {
   struct RxNotification* notification_buf = notification_buf_pair->rx_buf;
   uint32_t notification_buf_head = notification_buf_pair->rx_head;
   uint16_t nb_consumed_notifications = 0;
@@ -375,21 +376,28 @@ static _enso_always_inline uint16_t __get_new_tails(
       break;
     }
 
+    /* Update stat counters */
     uint64_t now = rdtsc();
     uint64_t time_to_uthread = now - cur_notification->pad[0];
     uint64_t overall_time = now - cur_notification->pad[1];
     if (update_callback_)
       std::invoke(update_callback_, time_to_uthread, overall_time);
 
+    enso_pipe_id_t enso_pipe_id = cur_notification->queue_id;
+
+    /* Update the packet sent time in the packet itself */
+    if (update_packet) {
+      std::invoke(update_packet, enso_pipe_id,
+                  (uint64_t)cur_notification->pad[1],
+                  notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id]);
+    }
+
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
 
-    // updates the 'tail', that is, until where you can read,
-    // for the given enso pipe
-    enso_pipe_id_t enso_pipe_id = cur_notification->queue_id;
-    if (prev_tail)
-      *prev_tail = notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id];
+    /* Must update the corresponding packet in the RX Pipe with the sent time
+     * timestamp */
 
     notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id] =
         (uint32_t)cur_notification->tail;
@@ -415,8 +423,9 @@ static _enso_always_inline uint16_t __get_new_tails(
   return nb_consumed_notifications;
 }
 
-uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair) {
-  return __get_new_tails(notification_buf_pair, NULL);
+uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair,
+                       UpdatePacket update_packet) {
+  return __get_new_tails(notification_buf_pair, update_packet);
 }
 
 static _enso_always_inline uint32_t
@@ -461,7 +470,8 @@ uint32_t peek_next_batch_from_queue(
 }
 
 static _enso_always_inline struct RxNotification* __get_next_rx_notif(
-    struct NotificationBufPair* notification_buf_pair, uint32_t* prev_tail) {
+    struct NotificationBufPair* notification_buf_pair,
+    UpdatePacket update_packet) {
   // Consume up to a batch of notifications at a time. If the number of consumed
   // notifications is the same as the number of pending notifications, we are
   // done processing the last batch and can get the next one. Using batches here
@@ -472,7 +482,7 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
 
   if (next_rx_ids_head == next_rx_ids_tail) {
     uint16_t nb_consumed_notifications =
-        __get_new_tails(notification_buf_pair, prev_tail);
+        __get_new_tails(notification_buf_pair, update_packet);
     if (unlikely(nb_consumed_notifications == 0)) {
       return nullptr;
     }
@@ -488,8 +498,9 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
 }
 
 struct RxNotification* get_next_rx_notif(
-    struct NotificationBufPair* notification_buf_pair, uint32_t* prev_tail) {
-  return __get_next_rx_notif(notification_buf_pair, prev_tail);
+    struct NotificationBufPair* notification_buf_pair,
+    UpdatePacket update_packet) {
+  return __get_next_rx_notif(notification_buf_pair, update_packet);
 }
 
 static _enso_always_inline int32_t
@@ -562,13 +573,10 @@ static _enso_always_inline uint32_t __send_to_queue(
   uint64_t hugepage_boundary = hugepage_base_addr + kBufPageSize;
 
   if (sent_time > 0 && rdtsc() > sent_time) {
-    // std::cout << "Notif buf " << notification_buf_pair->id
-    //           << ": sending out, time from iokernel: " << sent_time
-    //           << std::endl;
     if (tx_callback_) std::invoke(tx_callback_, rdtsc() - sent_time);
   }
 
-  // std::cout << "sent time: " << sent_time << std::endl;
+  // std::cout << "tx sent time: " << sent_time << std::endl;
 
   while (missing_bytes > 0) {
     uint32_t free_slots =
@@ -659,15 +667,6 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
     if (tx_notification->signal != 0) {
       break;
     }
-
-    // uint64_t now = rdtsc();
-    // uint64_t time_to_uthread = now - tx_notification->pad[0];
-    // uint64_t overall_time = now - tx_notification->pad[1];
-    // if (update_callback_)
-    //   std::invoke(update_callback_, time_to_uthread, overall_time);
-
-    // std::cout << "Notif buf " << notification_buf_pair->id
-    //           << " consumed tx notification at " << head << std::endl;
 
     // Requests that wrap around need two notifications but should only signal
     // a single completion notification. Therefore, we only increment

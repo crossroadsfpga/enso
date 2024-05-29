@@ -58,6 +58,7 @@ using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
 using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
 using TxCallback = std::function<void(uint64_t)>;
+using UpdatePacket = std::function<void(enso_pipe_id_t, uint64_t, uint32_t)>;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
@@ -112,7 +113,8 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
  * @param notification_buf_pair Notification buffer to get data from.
  * @return Number of notifications received.
  */
-uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair);
+uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair,
+                       UpdatePacket update_packet = NULL);
 
 /**
  * @brief Gets the next batch of data from the given Enso Pipe.
@@ -150,7 +152,7 @@ uint32_t peek_next_batch_from_queue(
  */
 struct RxNotification* get_next_rx_notif(
     struct NotificationBufPair* notification_buf_pair,
-    uint32_t* prev_tail = NULL);
+    UpdatePacket update_packet = NULL);
 
 /**
  * @brief Get next Enso Pipe with pending data.

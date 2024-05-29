@@ -102,14 +102,11 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
 inline void RxPipe::SetPktSentTime(uint32_t tail, uint64_t sent_time) {
   uint32_t* enso_pipe_buf = internal_rx_pipe_.buf;
   uint8_t* pkt = (uint8_t*)&enso_pipe_buf[tail * 16];
-  // std::cout << "setting sent time " << sent_time << std::endl;
   set_pkt_sent_time(pkt, sent_time);
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
-  // std::cout << "in peek" << std::endl;
   if (!next_pipe_) {
-    // std::cout << "getting new tails" << std::endl;
     get_new_tails(notification_buf_pair_);
   }
   uint32_t ret = peek_next_batch_from_queue(
@@ -285,35 +282,7 @@ struct RxNotification* Device::NextRxNotif() {
   assert(rx_tx_pipes_.size() == 0);
 
   struct RxNotification* notif;
-
-#ifdef LATENCY_OPT
-  // int32_t id;
-  // When LATENCY_OPT is enabled, we always prefetch the next pipe.
   notif = get_next_rx_notif(&notification_buf_pair_);
-
-  // while (notif) {
-  //   id = notif->queue_id;
-  //   RxPipe* rx_pipe = rx_pipes_map_[id];
-  //   assert(rx_pipe != nullptr);
-
-  //   RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
-  //   uint32_t enso_pipe_head = pipe.rx_tail;
-  //   uint32_t enso_pipe_tail =
-  //   notification_buf_pair_.pending_rx_pipe_tails[id];
-
-  //   if (enso_pipe_head != enso_pipe_tail) {
-  //     rx_pipe->Prefetch();
-  //     break;
-  //   }
-
-  //   notif = get_next_rx_notif(&notification_buf_pair_);
-  // }
-
-#else  // !LATENCY_OPT
-  notif = get_next_rx_notif(&notification_buf_pair_);
-
-#endif  // LATENCY_OPT
-
   return notif;
 }
 
@@ -341,42 +310,17 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   assert(rx_pipes_.size() == rx_tx_pipes_.size());
   struct RxNotification* notif;
   int32_t id;
-  uint32_t prev_tail = 0;
 
-#ifdef LATENCY_OPT
-  // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  notif = get_next_rx_notif(&notification_buf_pair_, &prev_tail);
+  notif = get_next_rx_notif(
+      &notification_buf_pair_, [this](enso_pipe_id_t enso_pipe_id,
+                                      uint64_t sent_time, uint32_t prev_tail) {
+        RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[enso_pipe_id];
+        rx_tx_pipe->SetPktSentTime(prev_tail, sent_time);
+      });
 
-  if (notif) id = notif->queue_id;
+  if (!notif) return nullptr;
 
-    // while (notif) {
-    //   id = notif->queue_id;
-    //   RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
-    //   assert(rx_tx_pipe->rx_pipe_ != nullptr);
-
-    //   RxEnsoPipeInternal& pipe = rx_tx_pipe->rx_pipe_->internal_rx_pipe_;
-    //   uint32_t enso_pipe_head = pipe.rx_tail;
-    //   uint32_t enso_pipe_tail =
-    //   notification_buf_pair_.pending_rx_pipe_tails[id];
-
-    //   if (enso_pipe_head != enso_pipe_tail) {
-    //     rx_tx_pipe->Prefetch();
-    //     break;
-    //   }
-
-    //   notif = get_next_rx_notif(&notification_buf_pair_);
-    // }
-
-#else  // !LATENCY_OPT
-  notif = get_next_rx_notif(&notification_buf_pair_, &prev_tail);
-  if (notif) id = notif->queue_id;
-
-#endif  // LATENCY_OPT
-
-  if (!notif) {
-    return nullptr;
-  }
-
+  id = notif->queue_id;
   RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
 
   uint64_t now = rdtsc();
