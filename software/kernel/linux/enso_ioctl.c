@@ -34,6 +34,8 @@
 
 #include <linux/kthread.h>
 
+#include "enso_heap.h"
+
 /******************************************************************************
  * Static function prototypes
  *****************************************************************************/
@@ -925,12 +927,14 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
       new_node->ftime = sqh->stime + stpp.len;
       pipe_queue_head->front = new_node;
       pipe_queue_head->rear = new_node;
+      insert_heap(dev_bk->heap, new_node);
     } else {
       last_node = pipe_queue_head->rear;
       if (last_node) {
         new_node->ftime = last_node->ftime + stpp.len;
         last_node->next = new_node;
         pipe_queue_head->rear = new_node;
+        insert_heap(dev_bk->heap, new_node);
       }
     }
     if (new_node->ftime > sqh->stime) {

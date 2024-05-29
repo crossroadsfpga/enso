@@ -33,6 +33,7 @@
 #include "enso_setup.h"
 
 #include "enso_chr.h"
+#include "enso_heap.h"
 #include "enso_ioctl.h"
 
 struct enso_global_bookkeep global_bk __read_mostly;
@@ -115,6 +116,13 @@ static __init int enso_init(void) {
     goto failed_notif_buf_pair_alloc;
   }
 
+  dev_bk->heap = kzalloc(sizeof(struct min_heap), GFP_KERNEL);
+  if (dev_bk->heap == NULL) {
+    printk("couldn't create the heap\n");
+    goto failed_heap_alloc;
+  }
+  init_heap(dev_bk->heap);
+
   spin_lock_init(&dev_bk->lock);
   dev_bk->enso_sched_thread = kthread_create(enso_sched, dev_bk, "enso_sched");
   kthread_bind(dev_bk->enso_sched_thread, 4);
@@ -125,6 +133,8 @@ static __init int enso_init(void) {
 
   return 0;
 
+failed_heap_alloc:
+  kfree(dev_bk->notif_buf_pairs);
 failed_notif_buf_pair_alloc:
   kfree(dev_bk->sqh);
 failed_sqh_alloc:

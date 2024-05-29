@@ -113,6 +113,16 @@ struct tx_queue_head {
   struct tx_queue_node *rear;
 };
 
+struct min_heap {
+  struct heap_node *harr;
+  uint32_t capacity;
+  uint32_t size;
+};
+
+struct heap_node {
+  struct tx_queue_node *queue_node;
+};
+
 struct sched_queue_node {
   uint32_t pipe_id;
   struct sched_queue_node *next;
@@ -152,6 +162,7 @@ struct dev_bookkeep {
   struct task_struct *enso_sched_thread;
   struct tx_queue_head **queue_heads;
   struct sched_queue_head *sqh;
+  struct min_heap *heap;
   spinlock_t lock;
   bool sched_run;
   struct notification_buf_pair **notif_buf_pairs;
