@@ -63,6 +63,9 @@ void rcv_pkts(enso::stats_t* stats) {
     exit(2);
   }
 
+  // Enable round robin to ensure Rx does not drop packets
+  // TODO(kshitij): Remove this once support is added in HW
+  // for one Tx pipe per flow
   dev->EnableRoundRobin();
 
   std::vector<RxPipe*> rxPipes;
