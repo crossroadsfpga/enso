@@ -32,11 +32,11 @@
 #ifndef SOFTWARE_KERNEL_LINUX_ENSO_SETUP_H_
 #define SOFTWARE_KERNEL_LINUX_ENSO_SETUP_H_
 
-#include <asm/io.h>
 #include <linux/atomic.h>
 #include <linux/cdev.h>
 #include <linux/delay.h>
 #include <linux/fs.h>
+#include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/kthread.h>
 #include <linux/mm.h>
@@ -105,12 +105,10 @@ struct enso_send_tx_pipe_params {
 struct tx_queue_node {
   struct enso_send_tx_pipe_params batch;
   unsigned long ftime;
-  struct tx_queue_node *next;
 };
 
-struct tx_queue_head {
-  struct tx_queue_node *front;
-  struct tx_queue_node *rear;
+struct flow_metadata {
+  unsigned long last_ftime;
 };
 
 struct min_heap {
@@ -121,18 +119,6 @@ struct min_heap {
 
 struct heap_node {
   struct tx_queue_node *queue_node;
-};
-
-struct sched_queue_node {
-  uint32_t pipe_id;
-  struct sched_queue_node *next;
-};
-
-struct sched_queue_head {
-  struct sched_queue_node *front;
-  struct sched_queue_node *rear;
-  struct sched_queue_node *cur;
-  unsigned long stime;
 };
 
 /**
@@ -147,7 +133,10 @@ struct sched_queue_head {
  * @enable_rr:      Enable round-robin scheduling among fallback queues.
  * @notif_q_status: Bit vector to keep track of which notification queue has
  *                  been allocated.
- * @pipe_status:    Bit vector to keep track of which pipe has been allocated.
+ * @rx_pipe_status:    Bit vector to keep track of which rx pipe has been
+ * allocated.
+ * @tx_pipe_status:    Bit vector to keep track of which tx pipe has been
+ * allocated.
  *
  */
 struct dev_bookkeep {
@@ -156,12 +145,12 @@ struct dev_bookkeep {
   uint32_t nb_fb_queues;
   bool enable_rr;
   uint8_t *notif_q_status;
-  uint8_t *pipe_status;
+  uint8_t *rx_pipe_status;
   uint8_t *tx_pipe_status;
 
   struct task_struct *enso_sched_thread;
-  struct tx_queue_head **queue_heads;
-  struct sched_queue_head *sqh;
+  unsigned long stime;
+  struct flow_metadata **tx_flows;
   struct min_heap *heap;
   spinlock_t lock;
   bool sched_run;
@@ -177,7 +166,9 @@ struct dev_bookkeep {
  * @nb_fb_queues:   Number of fallback queues.
  * @notif_q_status: Bit vector to keep track of which notification queue has
  *                  been allocated for this particular character device.
- * @pipe_status:    Bit vector to keep track of which pipe has been allocated
+ * @rx_pipe_status: Bit vector to keep track of which rx pipe has been allocated
+ *                  for this particular character device.
+ * @tx_pipe_status: Bit vector to keep track of which tx pipe has been allocated
  *                  for this particular character device.
  * @notif_buf_pair: Notification buffer pair specific to this device handle.
  * @enso_rx_pipes: Enso RX pipes specific to this device handle.
@@ -187,7 +178,7 @@ struct chr_dev_bookkeep {
   struct dev_bookkeep *dev_bk;
   uint32_t nb_fb_queues;
   uint8_t *notif_q_status;
-  uint8_t *pipe_status;
+  uint8_t *rx_pipe_status;
   uint8_t *tx_pipe_status;
   struct notification_buf_pair *notif_buf_pair;
   struct rx_pipe_internal **rx_pipes;

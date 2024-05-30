@@ -31,8 +31,14 @@
  */
 #include "enso_heap.h"
 
+int parent(int index) { return (index - 1) / 2; }
+
+int left(int index) { return (2 * index) + 1; }
+
+int right(int index) { return (2 * index) + 2; }
+
 void init_heap(struct min_heap *heap) {
-  heap->capacity = 10;
+  heap->capacity = HEAP_SIZE;
   heap->harr = kzalloc(heap->capacity * sizeof(struct heap_node), GFP_KERNEL);
   if (heap->harr == NULL) {
     printk("couldn't create the heap\n");
@@ -41,19 +47,13 @@ void init_heap(struct min_heap *heap) {
   heap->size = 0;
 }
 
-int parent(int index) { return (index - 1) / 2; }
-
-int left(int index) { return (2 * index) + 1; }
-
-int right(int index) { return (2 * index) + 2; }
-
 void insert_heap(struct min_heap *heap, struct tx_queue_node *node) {
   struct heap_node *harr = heap->harr;
   struct heap_node hn;
   struct heap_node temp;
   int ind = 0;
   if (heap->size == heap->capacity) {
-    // printk("Reached max heap capacity\n");
+    printk("Reached max heap capacity\n");
     return;
   }
   hn.queue_node = node;
@@ -68,7 +68,6 @@ void insert_heap(struct min_heap *heap, struct tx_queue_node *node) {
     harr[parent(ind)] = temp;
     ind = parent(ind);
   }
-  // show_heap(heap);
 }
 
 void show_heap(struct min_heap *heap) {
@@ -122,4 +121,9 @@ void heapify(struct min_heap *heap, int ind) {
     heap->harr[ind] = temp;
     heapify(heap, min_ind);
   }
+}
+
+void free_heap(struct min_heap *heap) {
+  kfree(heap->harr);
+  heap->harr = NULL;
 }

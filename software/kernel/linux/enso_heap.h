@@ -34,11 +34,14 @@
 
 #include "enso_setup.h"
 
+#define HEAP_SIZE 10000
+
 void init_heap(struct min_heap *heap);
 void insert_heap(struct min_heap *heap, struct tx_queue_node *node);
 void show_heap(struct min_heap *heap);
 struct tx_queue_node *top(struct min_heap *heap);
 void pop(struct min_heap *heap);
 void heapify(struct min_heap *heap, int ind);
+void free_heap(struct min_heap *heap);
 
 #endif  // SOFTWARE_KERNEL_LINUX_ENSO_HEAP_H_

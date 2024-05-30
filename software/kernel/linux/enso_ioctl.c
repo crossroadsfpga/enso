@@ -410,7 +410,7 @@ static long alloc_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
   if (is_fallback) {  // Fallback pipes are allocated at the front.
     for (i = 0; i < MAX_NB_FLOWS / 8; ++i) {
       int32_t set_pipe_id = 0;
-      uint8_t set = dev_bk->pipe_status[i];
+      uint8_t set = dev_bk->rx_pipe_status[i];
       while (set & 0x1) {
         ++set_pipe_id;
         set >>= 1;
@@ -435,7 +435,7 @@ static long alloc_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
   } else {  // Non-fallback pipes are allocated at the back.
     for (i = MAX_NB_FLOWS / 8 - 1; i >= 0; --i) {
       int32_t set_pipe_id = 7;
-      uint8_t set = dev_bk->pipe_status[i];
+      uint8_t set = dev_bk->rx_pipe_status[i];
       while (set & 0x80) {
         --set_pipe_id;
         set <<= 1;
@@ -456,8 +456,8 @@ static long alloc_rx_pipe_id(struct chr_dev_bookkeep *chr_dev_bk,
   // bitvector.
   i = pipe_id / 8;
   j = pipe_id % 8;
-  dev_bk->pipe_status[i] |= (1 << j);
-  chr_dev_bk->pipe_status[i] |= (1 << j);
+  dev_bk->rx_pipe_status[i] |= (1 << j);
+  chr_dev_bk->rx_pipe_status[i] |= (1 << j);
 
   if (copy_to_user(user_addr, &pipe_id, sizeof(pipe_id))) {
     printk("couldn't copy buf_id information to user.");
@@ -493,15 +493,15 @@ static long free_pipe(struct chr_dev_bookkeep *chr_dev_bk, unsigned long uarg) {
   // Check that the pipe ID is allocated.
   i = pipe_id / 8;
   j = pipe_id % 8;
-  if (!(chr_dev_bk->pipe_status[i] & (1 << j))) {
+  if (!(chr_dev_bk->rx_pipe_status[i] & (1 << j))) {
     printk("pipe ID is not allocated for this file handle.");
     return -EINVAL;
   }
 
   // Clear status bit for both the device bitvector and the character device
   // bitvector.
-  dev_bk->pipe_status[i] &= ~(1 << j);
-  chr_dev_bk->pipe_status[i] &= ~(1 << j);
+  dev_bk->rx_pipe_status[i] &= ~(1 << j);
+  chr_dev_bk->rx_pipe_status[i] &= ~(1 << j);
 
   // Fallback pipes are allocated at the front.
   if (pipe_id < dev_bk->nb_fb_queues) {
@@ -517,11 +517,8 @@ static long alloc_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   int i = 0;
   int32_t pipe_id = -1;
   struct dev_bookkeep *dev_bk;
-  struct tx_queue_head **queue_heads = NULL;
-  struct tx_queue_head *new_queue_head = NULL;
-  struct sched_queue_head *sqh = NULL;
-  struct sched_queue_node *new_sched_node = NULL;
-  struct sched_queue_node *last_sched_node = NULL;
+  struct flow_metadata **tx_flows = NULL;
+  struct flow_metadata *new_tx_flow = NULL;
 
   dev_bk = chr_dev_bk->dev_bk;
   // Find first available notification buffer. If none are available, return
@@ -545,42 +542,18 @@ static long alloc_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   }
 
   spin_lock(&dev_bk->lock);
-  queue_heads = dev_bk->queue_heads;
-  sqh = dev_bk->sqh;
-  if (queue_heads[pipe_id] == NULL) {
-    // insert new flow to the scheduler and queue_heads array
+  tx_flows = dev_bk->tx_flows;
+  if (tx_flows[pipe_id] == NULL) {
+    // insert new flow to the scheduler and tx_flows array
     printk("Adding new flow with id = %d\n", pipe_id);
-    new_queue_head = kzalloc(sizeof(struct tx_queue_head), GFP_KERNEL);
-    if (new_queue_head == NULL) {
-      printk("Failed to allocated memory for the new queue head\n");
+    new_tx_flow = kzalloc(sizeof(struct flow_metadata), GFP_KERNEL);
+    if (new_tx_flow == NULL) {
+      printk("Failed to allocated memory for the new flow metadata\n");
       spin_unlock(&dev_bk->lock);
       return -ENOMEM;
     }
-    queue_heads[pipe_id] = new_queue_head;
-
-    new_sched_node = kzalloc(sizeof(struct sched_queue_node), GFP_KERNEL);
-    if (new_sched_node == NULL) {
-      printk("Failed to allocate memory for the new sched node\n");
-      kfree(new_queue_head);
-      spin_unlock(&dev_bk->lock);
-      return -ENOMEM;
-    }
-    new_sched_node->pipe_id = pipe_id;
-    new_sched_node->next = NULL;
-
-    // now add the new sched node to the sched queue
-    if ((sqh->front == NULL) && (sqh->rear == NULL)) {
-      // first element in the queue
-      sqh->front = new_sched_node;
-      sqh->rear = new_sched_node;
-      sqh->cur = new_sched_node;
-    } else {
-      last_sched_node = sqh->rear;
-      if (last_sched_node) {
-        last_sched_node->next = new_sched_node;
-        sqh->rear = new_sched_node;
-      }
-    }
+    new_tx_flow->last_ftime = 0;
+    tx_flows[pipe_id] = new_tx_flow;
   } else {
     printk("Pipe ID already allocated\n");
     return -EFAULT;
@@ -606,18 +579,10 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   int32_t i, j;
   int32_t pipe_id = (int32_t)uarg;
   struct dev_bookkeep *dev_bk;
-  struct tx_queue_head **queue_heads = NULL;
-  struct tx_queue_head *pipe_head = NULL;
-  struct tx_queue_node *cur_node = NULL;
-  struct tx_queue_node *next_node = NULL;
-
-  struct sched_queue_head *sqh = NULL;
-  struct sched_queue_node *cur_sched_node = NULL;
-  struct sched_queue_node *prev_sched_node = NULL;
+  struct flow_metadata **tx_flows = NULL;
 
   dev_bk = chr_dev_bk->dev_bk;
-  queue_heads = dev_bk->queue_heads;
-  sqh = dev_bk->sqh;
+  tx_flows = dev_bk->tx_flows;
 
   // Check that the buffer ID is valid.
   if (pipe_id < 0 || pipe_id >= MAX_NB_FLOWS) {
@@ -634,74 +599,12 @@ static long free_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
 
   spin_lock(&dev_bk->lock);
   printk("Freeing TX pipe with id = %d\n", pipe_id);
-
-  // free all the batches that were in line to be sent for the pipe_id being
-  // freed
-  pipe_head = queue_heads[pipe_id];
-  cur_node = pipe_head->front;
-  while (cur_node != NULL) {
-    next_node = cur_node->next;
-    kfree(cur_node);
-    cur_node = next_node;
-  }
-  pipe_head->front = NULL;
-  pipe_head->rear = NULL;
-  kfree(pipe_head);
-
-  // mark the corresponding entry in queue_heads as NULL
-  queue_heads[pipe_id] = NULL;
-
-  // delete the flow from the scheduler queue
-  if (sqh) {
-    cur_sched_node = sqh->front;
-    if ((sqh->front == sqh->rear)) {
-      if (cur_sched_node->pipe_id != pipe_id) {
-        printk(
-            "Only node present in the list but it is not having pipe id = %d\n",
-            pipe_id);
-        return -EFAULT;
-      }
-      kfree(cur_sched_node);
-      sqh->front = NULL;
-      sqh->rear = NULL;
-      sqh->cur = NULL;
-      spin_unlock(&dev_bk->lock);
-      return 0;
-    }
-    if (sqh->front->pipe_id == pipe_id) {
-      // removing from the front
-      sqh->front = sqh->front->next;
-      if (sqh->cur == cur_sched_node) {
-        sqh->cur = sqh->cur->next;
-        if (sqh->cur == NULL) {
-          sqh->cur = sqh->front;
-        }
-      }
-      kfree(cur_sched_node);
-    } else {
-      prev_sched_node = cur_sched_node;
-      cur_sched_node = cur_sched_node->next;
-      while (cur_sched_node != NULL) {
-        if (cur_sched_node->pipe_id == pipe_id) {
-          prev_sched_node->next = cur_sched_node->next;
-          break;
-        }
-        prev_sched_node = cur_sched_node;
-        cur_sched_node = cur_sched_node->next;
-      }
-      // if we removed the last node, update the rear
-      if (cur_sched_node == sqh->rear) {
-        sqh->rear = prev_sched_node;
-      }
-      if (sqh->cur == cur_sched_node) {
-        sqh->cur = sqh->cur->next;
-        if (sqh->cur == NULL) {
-          sqh->cur = sqh->front;
-        }
-      }
-      kfree(cur_sched_node);
-    }
-  }
+  kfree(tx_flows[pipe_id]);
+  tx_flows[pipe_id] = NULL;
+  // we should ideally also delete all the batches currently in the
+  // priority queue pertaining to this flow. however, it is easier
+  // to drop the batch if the flow is freed rather than searching in the entire
+  // heap and restructuring it. see enso_sched() that handles this case.
   spin_unlock(&dev_bk->lock);
 
   return 0;
@@ -883,13 +786,9 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   struct enso_send_tx_pipe_params stpp;
   struct notification_buf_pair *notif_buf_pair = chr_dev_bk->notif_buf_pair;
   struct dev_bookkeep *dev_bk;
-
-  struct tx_queue_head **queue_heads = NULL;
-  struct tx_queue_head *pipe_queue_head = NULL;
-  struct tx_queue_node *new_node = NULL;
-  struct tx_queue_node *last_node = NULL;
-  struct sched_queue_head *sqh = NULL;
-
+  struct flow_metadata **tx_flows;
+  struct flow_metadata *flow;
+  struct tx_queue_node *new_node;
   int pipe_id;
 
   if (copy_from_user(&stpp, (void __user *)uarg, sizeof(stpp))) {
@@ -912,37 +811,24 @@ static long send_tx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   new_node->batch.notif_buf_id = stpp.notif_buf_id;
   new_node->batch.pipe_id = stpp.pipe_id;
   new_node->batch.len = stpp.len;
-  new_node->next = NULL;
-  queue_heads = dev_bk->queue_heads;
-  sqh = dev_bk->sqh;
-
-  spin_lock(&dev_bk->lock);
-
+  tx_flows = dev_bk->tx_flows;
   pipe_id = stpp.pipe_id;
 
-  pipe_queue_head = queue_heads[pipe_id];
-  if (pipe_queue_head) {
-    if ((pipe_queue_head->front == NULL) && (pipe_queue_head->rear == NULL)) {
-      // first element in the queue
-      new_node->ftime = sqh->stime + stpp.len;
-      pipe_queue_head->front = new_node;
-      pipe_queue_head->rear = new_node;
-      insert_heap(dev_bk->heap, new_node);
+  spin_lock(&dev_bk->lock);
+  flow = tx_flows[pipe_id];
+  if (flow) {
+    if (flow->last_ftime == 0) {
+      new_node->ftime = dev_bk->stime + stpp.len;
     } else {
-      last_node = pipe_queue_head->rear;
-      if (last_node) {
-        new_node->ftime = last_node->ftime + stpp.len;
-        last_node->next = new_node;
-        pipe_queue_head->rear = new_node;
-        insert_heap(dev_bk->heap, new_node);
-      }
+      new_node->ftime = flow->last_ftime + stpp.len;
     }
-    if (new_node->ftime > sqh->stime) {
-      sqh->stime = new_node->ftime;
+    flow->last_ftime = new_node->ftime;
+    if (new_node->ftime > dev_bk->stime) {
+      dev_bk->stime = new_node->ftime;
     }
+    insert_heap(dev_bk->heap, new_node);
   }
   spin_unlock(&dev_bk->lock);
-
   return 0;
 }
 
@@ -1669,62 +1555,30 @@ int send_batch(struct notification_buf_pair *notif_buf_pair,
 
 int enso_sched(void *data) {
   struct dev_bookkeep *dev_bk = (struct dev_bookkeep *)data;
-  struct tx_queue_head **queue_heads = dev_bk->queue_heads;
-  struct tx_queue_head *cur_pipe_head = NULL;
-  struct tx_queue_head *pipe_to_send = NULL;
-  struct tx_queue_node *front_batch = NULL;
-  struct tx_queue_node *batch_to_send = NULL;
-
-  struct sched_queue_head *sqh = dev_bk->sqh;
-  struct sched_queue_node *cur = NULL;
+  struct flow_metadata **tx_flows = dev_bk->tx_flows;
+  struct flow_metadata *cur_flow = NULL;
   struct notification_buf_pair *notif_buf_pair = NULL;
-  unsigned long min_ftime = 0;
-  int min_ftime_pipe_id;
-
-  if (sqh == NULL) {
-    printk("Exiting since sqh is NULL\n");
-    dev_bk->sched_run = false;
-    return 0;
-  }
+  struct tx_queue_node *front_node = NULL;
+  struct enso_send_tx_pipe_params *front_batch = NULL;
+  uint32_t notif_buf_id = 0;
 
   printk("Starting enso_sched\n");
   while (!kthread_should_stop()) {
-    // dequeue an element from the queue and send it
+    // dequeue an element from the heap and send it
     spin_lock(&dev_bk->lock);
-    if ((sqh->front != NULL) && (sqh->rear != NULL)) {
-      // find the queue with the least finish time packet at the front
-      cur = sqh->front;
-      min_ftime_pipe_id = -1;
-      // any time that can be chosen should be less than this
-      min_ftime = sqh->stime + 1;
-      // iterate through the queue to find a batch that has the least
-      // ftime among all the other batches that are at the front
-      // TODO(kshitij): Optimize this to do it in O(1)
-      while (cur) {
-        cur_pipe_head = queue_heads[cur->pipe_id];
-        front_batch = cur_pipe_head->front;
-        if (likely(front_batch != NULL)) {
-          if (front_batch->ftime < min_ftime) {
-            min_ftime = front_batch->ftime;
-            min_ftime_pipe_id = cur->pipe_id;
-          }
-        }
-        cur = cur->next;
+    front_node = top(dev_bk->heap);
+    if (front_node) {
+      front_batch = &front_node->batch;
+      cur_flow = tx_flows[front_batch->pipe_id];
+      // If this check fails, it means that the flow has probably been
+      // freed from free_tx_pipe(). In that case, we just pop it from the
+      // queue.
+      if (cur_flow) {
+        notif_buf_id = front_batch->notif_buf_id;
+        notif_buf_pair = dev_bk->notif_buf_pairs[notif_buf_id];
+        send_batch(notif_buf_pair, front_batch);
       }
-      if (likely(min_ftime_pipe_id != -1)) {
-        pipe_to_send = queue_heads[min_ftime_pipe_id];
-        batch_to_send = pipe_to_send->front;
-        pipe_to_send->front = batch_to_send->next;
-        if (pipe_to_send->front == NULL) {
-          // we got the last element, set rear to NULL as well
-          pipe_to_send->rear = NULL;
-        }
-        notif_buf_pair =
-            dev_bk->notif_buf_pairs[batch_to_send->batch.notif_buf_id];
-        send_batch(notif_buf_pair, &batch_to_send->batch);
-        kfree(batch_to_send);
-        batch_to_send = NULL;
-      }
+      pop(dev_bk->heap);
     }
     spin_unlock(&dev_bk->lock);
     yield();
