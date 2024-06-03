@@ -338,7 +338,11 @@ static int chr_mmap(struct file *filp, struct vm_area_struct *vma) {
     return -EINVAL;
   }
   vma->vm_ops = &intel_fpga_vm_ops;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+  vm_flags_set(vma, VM_PFNMAP | VM_DONTCOPY | VM_DONTEXPAND);
+#else
   vma->vm_flags |= VM_PFNMAP | VM_DONTCOPY | VM_DONTEXPAND;
+#endif
   vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
   vma->vm_private_data = dev_bk;
 
@@ -378,7 +382,11 @@ int __init intel_fpga_pcie_chr_init(void) {
   }
 
   // Create a class of devices; this also populates sysfs entries
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+  global_bk.chr_class = class_create(INTEL_FPGA_PCIE_DRIVER_NAME);
+#else
   global_bk.chr_class = class_create(THIS_MODULE, INTEL_FPGA_PCIE_DRIVER_NAME);
+#endif
   if (IS_ERR(global_bk.chr_class)) {
     retval = PTR_ERR(global_bk.chr_class);
     INTEL_FPGA_PCIE_ERR("couldn't create device class.");
