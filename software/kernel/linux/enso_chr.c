@@ -220,7 +220,11 @@ int __init enso_chr_init(void) {
 
   // add an entry under /dev/ for the enso device
   // same as running mknod
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+  global_bk.chr_class = class_create(ENSO_DRIVER_NAME);
+#else
   global_bk.chr_class = class_create(THIS_MODULE, ENSO_DRIVER_NAME);
+#endif
   if (IS_ERR(global_bk.chr_class)) {
     printk("Failed to create device class\n");
     goto failed_chr_class;
