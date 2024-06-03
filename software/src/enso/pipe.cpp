@@ -55,8 +55,6 @@
 
 namespace enso {
 
-UpdateCallback pipe_update_callback_ = nullptr;
-
 void set_backend_core_id(uint32_t core_id) {
   pcie_set_backend_core_id(core_id);
 }
@@ -66,7 +64,6 @@ void initialize_backend(BackendWrapper preempt_enable,
                         TscCallback tsc_callback,
                         UpdateCallback update_callback, TxCallback tx_callback,
                         uint32_t application_id) {
-  pipe_update_callback_ = update_callback;
   return pcie_initialize_backend(preempt_enable, preempt_disable, id_callback,
                                  tsc_callback, update_callback, tx_callback,
                                  application_id);
@@ -322,13 +319,6 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
   id = notif->queue_id;
   RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
-
-  uint64_t now = rdtsc();
-  uint64_t time_to_uthread = now - notif->pad[0];
-  uint64_t overall_time = now - notif->pad[1];
-  if (pipe_update_callback_)
-    std::invoke(pipe_update_callback_, time_to_uthread, overall_time);
-
   rx_tx_pipe->rx_pipe_->SetAsNextPipe();
   return rx_tx_pipe;
 }
@@ -432,8 +422,6 @@ void Device::ProcessCompletions() {
       // for applications
       std::invoke(completion_callback_);
     } else {
-      // std::cout << "Processing completion of " << tx_req.nb_bytes
-      //           << " bytes with phys addr " << tx_req.phys_addr << std::endl;
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
       // increments app_end_ for the tx pipe by nb_bytes
       pipe->NotifyCompletion(tx_req.nb_bytes);

@@ -384,6 +384,9 @@ struct PcapHandlerContext {
   pcap_t* pcap;
 };
 
+#define NB_SECONDS 60
+#define NB_ITERS (NB_SECONDS * 10)
+
 uint64_t get_millis() {
   // Get the current time point
   auto currentTime = std::chrono::system_clock::now();
@@ -402,13 +405,18 @@ struct RxStats {
         nb_batches(0),
         rtt_hist_len(rtt_hist_len),
         rtt_hist_offset(rtt_hist_offset) {
+    start = get_millis();
     if (rtt_hist_len > 0) {
-      rtt_hist = new uint64_t[rtt_hist_len]();
+      for (uint32_t i = 0; i < NB_ITERS; ++i) {
+        rtt_hists[i] = new uint64_t[rtt_hist_len]();
+      }
     }
   }
   ~RxStats() {
     if (rtt_hist_len > 0) {
-      delete[] rtt_hist;
+      for (uint32_t i = 0; i < NB_ITERS; ++i) {
+        delete[] rtt_hists[i];
+      }
     }
   }
 
@@ -420,12 +428,10 @@ struct RxStats {
   inline void add_rtt_to_hist(const uint32_t rtt) {
     // Insert RTTs into the rtt_hist array if they are in its range,
     // otherwise use the backup_rtt_hist.
-    if (unlikely((rtt >= (rtt_hist_len - rtt_hist_offset)) ||
-                 (rtt < rtt_hist_offset))) {
-      backup_rtt_hist[rtt]++;
-    } else {
-      rtt_hist[rtt - rtt_hist_offset]++;
-    }
+
+    uint64_t time = get_millis();
+    uint64_t index = (time - start) / 100;
+    rtt_hists[index][rtt - rtt_hist_offset]++;
   }
 
   uint64_t pkts;
@@ -434,7 +440,8 @@ struct RxStats {
   uint64_t nb_batches;
   const uint32_t rtt_hist_len;
   const uint32_t rtt_hist_offset;
-  uint64_t* rtt_hist;
+  uint64_t* rtt_hists[NB_ITERS];
+  uint64_t start;
   std::unordered_map<uint32_t, uint64_t> backup_rtt_hist;
 };
 
@@ -982,34 +989,36 @@ int main(int argc, char** argv) {
 
   ret = 0;
   if (parsed_args.enable_rtt_history) {
-    std::ofstream hist_file;
-    hist_file.open(parsed_args.hist_file);
+    for (int i = 0; i < NB_ITERS; ++i) {
+      std::ofstream hist_file;
+      hist_file.open(parsed_args.hist_file + "_" + std::to_string(i));
 
-    for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
-      if (rx_stats.rtt_hist[rtt] != 0) {
-        uint32_t corrected_rtt =
-            (rtt + parsed_args.rtt_hist_offset) * enso::kNsPerTimestampCycle;
-        hist_file << corrected_rtt << "," << rx_stats.rtt_hist[rtt]
-                  << std::endl;
+      for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
+        if (rx_stats.rtt_hists[i][rtt] != 0) {
+          uint32_t corrected_rtt =
+              (rtt + parsed_args.rtt_hist_offset) * enso::kNsPerTimestampCycle;
+          hist_file << corrected_rtt << "," << rx_stats.rtt_hists[i][rtt]
+                    << std::endl;
+        }
       }
-    }
 
-    if (rx_stats.backup_rtt_hist.size() != 0) {
-      std::cout << "Warning: " << rx_stats.backup_rtt_hist.size()
-                << " rtt hist entries in backup" << std::endl;
-      for (auto const& i : rx_stats.backup_rtt_hist) {
-        hist_file << i.first * enso::kNsPerTimestampCycle << "," << i.second
-                  << std::endl;
+      if (rx_stats.backup_rtt_hist.size() != 0) {
+        std::cout << "Warning: " << rx_stats.backup_rtt_hist.size()
+                  << " rtt hist entries in backup" << std::endl;
+        for (auto const& i : rx_stats.backup_rtt_hist) {
+          hist_file << i.first * enso::kNsPerTimestampCycle << "," << i.second
+                    << std::endl;
+        }
       }
-    }
 
-    hist_file.close();
-    std::cout << "Saved RTT histogram to \"" << parsed_args.hist_file << "\""
-              << std::endl;
+      hist_file.close();
+      std::cout << "Saved RTT histogram to \"" << parsed_args.hist_file << "_"
+                << i << "\"" << std::endl;
 
-    if (rx_stats.pkts != tx_stats.pkts) {
-      std::cout << "Warning: did not get all packets back." << std::endl;
-      ret = 1;
+      if (rx_stats.pkts != tx_stats.pkts) {
+        std::cout << "Warning: did not get all packets back." << std::endl;
+        ret = 1;
+      }
     }
   }
 

@@ -668,6 +668,13 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
       break;
     }
 
+    /* Update stat counters */
+    uint64_t now = rdtsc();
+    uint64_t time_to_uthread = now - tx_notification->pad[0];
+    uint64_t overall_time = now - tx_notification->pad[1];
+    if (update_callback_)
+      std::invoke(update_callback_, time_to_uthread, overall_time);
+
     // Requests that wrap around need two notifications but should only signal
     // a single completion notification. Therefore, we only increment
     // `nb_unreported_completions` in the second notification.
@@ -723,6 +730,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   while (notification_buf_pair->nb_unreported_completions ==
          nb_unreported_completions) {
     if (park_callback_ != nullptr) {
+      std::cout << "parking in send config 2" << std::endl;
       std::invoke(park_callback_, false);
     }
     update_tx_head(notification_buf_pair);
