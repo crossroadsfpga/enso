@@ -576,8 +576,6 @@ static _enso_always_inline uint32_t __send_to_queue(
     if (tx_callback_) std::invoke(tx_callback_, rdtsc() - sent_time);
   }
 
-  // std::cout << "tx sent time: " << sent_time << std::endl;
-
   while (missing_bytes > 0) {
     uint32_t free_slots =
         (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
@@ -730,7 +728,6 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   while (notification_buf_pair->nb_unreported_completions ==
          nb_unreported_completions) {
     if (park_callback_ != nullptr) {
-      std::cout << "parking in send config 2" << std::endl;
       std::invoke(park_callback_, false);
     }
     update_tx_head(notification_buf_pair);
