@@ -43,6 +43,7 @@
 #include <enso/config.h>
 #include <enso/consts.h>
 #include <enso/helpers.h>
+#include <enso_backend.h>
 #include <immintrin.h>
 #include <sched.h>
 #include <string.h>
@@ -61,8 +62,6 @@
 #include <limits>
 #include <stdexcept>
 
-#include <enso_backend.h>
-
 namespace enso {
 
 static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
@@ -74,8 +73,8 @@ static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix) {
-  (void) bdf;
-  (void) bar;
+  (void)bdf;
+  (void)bar;
   EnsoBackend* enso_dev = EnsoBackend::Create();
   if (unlikely(enso_dev == nullptr)) {
     std::cerr << "Could not create device" << std::endl;
@@ -99,18 +98,18 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
 }
 
 int enso_rx_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
-                   struct NotificationBufPair* notification_buf_pair,
-                   bool fallback) {
+                      struct NotificationBufPair* notification_buf_pair,
+                      bool fallback) {
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
 
   // we keep the buffer in the userspace and pass the physical address
   // to the kernel
-  int enso_pipe_id = enso_dev->AllocatePipe(fallback);
-  if(enso_pipe_id < 0) {
-      std::cerr << "Pipe ID allocation failed, err = "
-                << std::strerror(errno) << std::endl;
-      return -1;
+  int enso_pipe_id = enso_dev->AllocateRxPipe(fallback);
+  if (enso_pipe_id < 0) {
+    std::cerr << "Pipe ID allocation failed, err = " << std::strerror(errno)
+              << std::endl;
+    return -1;
   }
   enso_pipe->id = enso_pipe_id;
 
@@ -145,34 +144,36 @@ int enso_tx_pipe_init(struct NotificationBufPair* notification_buf_pair) {
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
   int id = enso_dev->AllocateTxPipe();
-  if(id < 0) {
-      std::cerr << "TxPipeInit failed" << std::endl;
+  if (id < 0) {
+    std::cerr << "TxPipeInit failed" << std::endl;
   }
   return id;
 }
 
-static uint32_t __consume_rx_kernel(struct NotificationBufPair* notification_buf_pair,
-                                    uint32_t &new_rx_tail, int32_t &pipe_id) {
-  EnsoBackend *enso_dev =
+static uint32_t __consume_rx_kernel(
+    struct NotificationBufPair* notification_buf_pair, uint32_t& new_rx_tail,
+    int32_t& pipe_id) {
+  EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
   uint32_t flit_aligned_size = enso_dev->ConsumeRxPipe(pipe_id, new_rx_tail);
   return flit_aligned_size;
 }
 
 uint32_t consume_rx_kernel(struct NotificationBufPair* notification_buf_pair,
-                           uint32_t &new_rx_tail, int32_t &pipe_id) {
+                           uint32_t& new_rx_tail, int32_t& pipe_id) {
   return __consume_rx_kernel(notification_buf_pair, new_rx_tail, pipe_id);
 }
 
 void advance_pipe_kernel(struct NotificationBufPair* notification_buf_pair,
-                        struct RxEnsoPipeInternal* enso_pipe, size_t len) {
+                         struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
   enso_dev->AdvancePipe(enso_pipe->id, len);
 }
 
-void fully_advance_pipe_kernel(struct RxEnsoPipeInternal* enso_pipe,
-                               struct NotificationBufPair* notification_buf_pair) {
+void fully_advance_pipe_kernel(
+    struct RxEnsoPipeInternal* enso_pipe,
+    struct NotificationBufPair* notification_buf_pair) {
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
   enso_dev->FullyAdvancePipe(enso_pipe->id);
@@ -188,8 +189,7 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe,
 static _enso_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
                 uint64_t phys_addr, uint32_t len, uint32_t pipe_id) {
-
-  EnsoBackend* enso_dev = (EnsoBackend*) notification_buf_pair->fpga_dev;
+  EnsoBackend* enso_dev = (EnsoBackend*)notification_buf_pair->fpga_dev;
   enso_dev->SendTxPipe(phys_addr, len, notification_buf_pair->id, pipe_id);
 
   return len;
@@ -202,8 +202,7 @@ uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
 
 uint32_t get_unreported_completions(
     struct NotificationBufPair* notification_buf_pair) {
-
-  EnsoBackend* enso_dev = (EnsoBackend*) notification_buf_pair->fpga_dev;
+  EnsoBackend* enso_dev = (EnsoBackend*)notification_buf_pair->fpga_dev;
   uint32_t completions = enso_dev->GetUnreportedCompletions();
 
   return completions;
@@ -214,7 +213,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
   int ret = enso_dev->SendConfig(config_notification);
-  if(ret != 0) {
+  if (ret != 0) {
     std::cerr << "Send config failed" << std::endl;
     return ret;
   }
@@ -258,9 +257,9 @@ void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
 }
 
 void enso_rx_pipe_free(struct NotificationBufPair* notification_buf_pair,
-                    struct RxEnsoPipeInternal* enso_pipe,
-                    enso_pipe_id_t enso_pipe_id) {
-  (void) enso_pipe;
+                       struct RxEnsoPipeInternal* enso_pipe,
+                       enso_pipe_id_t enso_pipe_id) {
+  (void)enso_pipe;
   EnsoBackend* enso_dev =
       static_cast<EnsoBackend*>(notification_buf_pair->fpga_dev);
 

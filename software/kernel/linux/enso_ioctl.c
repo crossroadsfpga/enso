@@ -181,7 +181,7 @@ long enso_unlocked_ioctl(struct file *filp, unsigned int cmd,
     case ENSO_IOCTL_FREE_NOTIF_BUFFER:
       retval = free_notif_buffer(chr_dev_bk, uarg);
       break;
-    case ENSO_IOCTL_ALLOC_PIPE:
+    case ENSO_IOCTL_ALLOC_RX_PIPE:
       retval = alloc_rx_pipe_id(chr_dev_bk, (int __user *)uarg);
       break;
     case ENSO_IOCTL_FREE_PIPE:

@@ -1,3 +1,34 @@
+/*
+ * Copyright (c) 2023, Carnegie Mellon University
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted (subject to the limitations in the disclaimer
+ * below) provided that the following conditions are met:
+ *
+ *      * Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *
+ *      * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *
+ *      * Neither the name of the copyright holder nor the names of its
+ *      contributors may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+ * THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+ * CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT
+ * NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 #include <sched.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -41,13 +72,9 @@ int EnsoDev::Init() noexcept {
   return 0;
 }
 
-EnsoDev::~EnsoDev(void) {
-  close(m_dev_handle);
-}
+EnsoDev::~EnsoDev(void) { close(m_dev_handle); }
 
-void EnsoDev::test(void) {
-  ioctl(m_dev_handle, ENSO_IOCTL_TEST);
-}
+void EnsoDev::test(void) { ioctl(m_dev_handle, ENSO_IOCTL_TEST); }
 
 int EnsoDev::get_nb_fallback_queues() {
   int result;
@@ -81,8 +108,7 @@ int EnsoDev::get_rr_status() {
 int EnsoDev::allocate_notif_buf() {
   int result;
   unsigned int buf_id;
-  result =
-      ioctl(m_dev_handle, ENSO_IOCTL_ALLOC_NOTIF_BUFFER, &buf_id);
+  result = ioctl(m_dev_handle, ENSO_IOCTL_ALLOC_NOTIF_BUFFER, &buf_id);
 
   if (result != 0) {
     return -1;
@@ -95,10 +121,10 @@ int EnsoDev::free_notif_buf(int id) {
   return ioctl(m_dev_handle, ENSO_IOCTL_FREE_NOTIF_BUFFER, id);
 }
 
-int EnsoDev::allocate_pipe(bool fallback) {
+int EnsoDev::allocate_rx_pipe(bool fallback) {
   int result;
   unsigned int uarg = fallback;
-  result = ioctl(m_dev_handle, ENSO_IOCTL_ALLOC_PIPE, &uarg);
+  result = ioctl(m_dev_handle, ENSO_IOCTL_ALLOC_RX_PIPE, &uarg);
 
   if (result != 0) {
     return -1;
@@ -113,8 +139,7 @@ int EnsoDev::free_pipe(int id) {
 
 int EnsoDev::allocate_notif_buf_pair(int id) {
   int result;
-  result =
-      ioctl(m_dev_handle, ENSO_IOCTL_ALLOC_NOTIF_BUF_PAIR, id);
+  result = ioctl(m_dev_handle, ENSO_IOCTL_ALLOC_NOTIF_BUF_PAIR, id);
 
   if (result != 0) {
     return -1;
@@ -123,15 +148,15 @@ int EnsoDev::allocate_notif_buf_pair(int id) {
   return result;
 }
 
-int EnsoDev::send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t buf_id, uint32_t pipe_id) {
+int EnsoDev::send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t buf_id,
+                          uint32_t pipe_id) {
   int result;
   struct enso_send_tx_pipe_params stpp;
   stpp.phys_addr = phys_addr;
   stpp.len = len;
   stpp.notif_buf_id = buf_id;
   stpp.pipe_id = pipe_id;
-  result =
-      ioctl(m_dev_handle, ENSO_IOCTL_SEND_TX_PIPE, &stpp);
+  result = ioctl(m_dev_handle, ENSO_IOCTL_SEND_TX_PIPE, &stpp);
 
   if (result != 0) {
     std::cout << "failure at send_tx ioctl " << result << std::endl;
@@ -144,8 +169,8 @@ int EnsoDev::send_tx_pipe(uint64_t phys_addr, uint32_t len, uint32_t buf_id, uin
 int EnsoDev::get_unreported_completions() {
   int result;
   unsigned int completions;
-  result = ioctl(m_dev_handle, ENSO_IOCTL_GET_UNREPORTED_COMPLETIONS,
-                 &completions);
+  result =
+      ioctl(m_dev_handle, ENSO_IOCTL_GET_UNREPORTED_COMPLETIONS, &completions);
 
   if (result != 0) {
     std::cout << "unreported completions failed" << std::endl;
@@ -157,8 +182,7 @@ int EnsoDev::get_unreported_completions() {
 
 int EnsoDev::send_config(struct TxNotification *txNotification) {
   int result;
-  result =
-      ioctl(m_dev_handle, ENSO_IOCTL_SEND_CONFIG, txNotification);
+  result = ioctl(m_dev_handle, ENSO_IOCTL_SEND_CONFIG, txNotification);
 
   if (result != 0) {
     std::cout << "failure at send_confif ioctl " << result << std::endl;
@@ -217,7 +241,7 @@ int EnsoDev::get_next_batch(int notif_id, int &pipe_id, uint32_t &krx_tail) {
   param.new_rx_tail = 0;
   param.pipe_id = -1;
   result = ioctl(m_dev_handle, ENSO_IOCTL_GET_NEXT_BATCH, &param);
-  if(result < 0) {
+  if (result < 0) {
     return -1;
   }
   krx_tail = param.new_rx_tail;
