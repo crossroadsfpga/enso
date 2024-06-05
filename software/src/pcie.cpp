@@ -39,7 +39,6 @@
 
 #include "pcie.h"
 
-#include <arpa/inet.h>
 #include <enso/config.h>
 #include <enso/consts.h>
 #include <enso/helpers.h>

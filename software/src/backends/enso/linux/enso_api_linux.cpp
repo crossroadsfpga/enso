@@ -30,7 +30,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sched.h>
-#include <sys/mman.h>
 #include <unistd.h>
 
 #include <iostream>

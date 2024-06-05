@@ -42,7 +42,6 @@ namespace enso_api {
 #include <linux/ioctl.h>
 #include <linux/types.h>
 #include <sys/ioctl.h>
-#include <sys/mman.h>
 
 struct enso_send_tx_pipe_params {
   uint64_t phys_addr;
