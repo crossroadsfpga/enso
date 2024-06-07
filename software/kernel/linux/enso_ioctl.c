@@ -35,6 +35,7 @@
 #include <linux/kthread.h>
 
 #include "enso_heap.h"
+#include "enso_io.h"
 
 /******************************************************************************
  * Static function prototypes
@@ -94,6 +95,8 @@ static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
                                 struct rx_pipe_internal **rx_enso_pipes);
 static int send_batch(struct notification_buf_pair *notif_buf_pair,
                       struct enso_send_tx_pipe_params *stpp);
+void enso_io_write_32(uint32_t data, void *addr);
+uint32_t enso_io_read_32(void *addr);
 
 /******************************************************************************
  * Device and I/O control function
@@ -655,27 +658,17 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk,
   nbp_q_regs =
       (struct queue_regs *)(bar2_addr + (notif_buf_pair->id + MAX_NB_FLOWS) *
                                             MEM_PER_QUEUE);
-  // TODO(kshitij): Create wrappers on top of these ioread/write functions
-  // initialize the queue registers
-  smp_wmb();
-  iowrite32(0, &nbp_q_regs->rx_mem_low);
-  smp_wmb();
-  iowrite32(0, &nbp_q_regs->rx_mem_high);
+  enso_io_write_32(0, &nbp_q_regs->rx_mem_low);
+  enso_io_write_32(0, &nbp_q_regs->rx_mem_high);
 
-  smp_rmb();
-  while (ioread32(&nbp_q_regs->rx_mem_low) != 0) continue;
-  smp_rmb();
-  while (ioread32(&nbp_q_regs->rx_mem_high) != 0) continue;
+  while (enso_io_read_32(&nbp_q_regs->rx_mem_low) != 0) continue;
+  while (enso_io_read_32(&nbp_q_regs->rx_mem_high) != 0) continue;
 
-  smp_wmb();
-  iowrite32(0, &nbp_q_regs->rx_tail);
-  smp_rmb();
-  while (ioread32(&nbp_q_regs->rx_tail) != 0) continue;
+  enso_io_write_32(0, &nbp_q_regs->rx_tail);
+  while (enso_io_read_32(&nbp_q_regs->rx_tail) != 0) continue;
 
-  smp_wmb();
-  iowrite32(0, &nbp_q_regs->rx_head);
-  smp_rmb();
-  while (ioread32(&nbp_q_regs->rx_head) != 0) continue;
+  enso_io_write_32(0, &nbp_q_regs->rx_head);
+  while (enso_io_read_32(&nbp_q_regs->rx_head) != 0) continue;
 
   notif_buf_pair->regs = nbp_q_regs;
 
@@ -706,15 +699,12 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk,
 
   // 4. Initialize notification buf pair finally
   notif_buf_pair->rx_head_ptr = (uint32_t *)&nbp_q_regs->rx_head;
-  smp_rmb();
-  notif_buf_pair->rx_head = ioread32(notif_buf_pair->rx_head_ptr);
+  notif_buf_pair->rx_head = enso_io_read_32(notif_buf_pair->rx_head_ptr);
 
   notif_buf_pair->tx_tail_ptr = (uint32_t *)&nbp_q_regs->tx_tail;
-  smp_rmb();
-  notif_buf_pair->tx_tail = ioread32(notif_buf_pair->tx_tail_ptr);
+  notif_buf_pair->tx_tail = enso_io_read_32(notif_buf_pair->tx_tail_ptr);
   notif_buf_pair->tx_head = notif_buf_pair->tx_tail;
-  smp_wmb();
-  iowrite32(notif_buf_pair->tx_head, &nbp_q_regs->tx_head);
+  enso_io_write_32(notif_buf_pair->tx_head, &nbp_q_regs->tx_head);
 
   notif_buf_pair->pending_rx_pipe_tails = (uint32_t *)kmalloc(
       sizeof(*(notif_buf_pair->pending_rx_pipe_tails)) * 8192, GFP_KERNEL);
@@ -750,18 +740,16 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk,
   notif_buf_pair->nb_unreported_completions = 0;
 
   printk("Rx buf address: %llx\n", rx_buf_phys_addr);
-  smp_wmb();
-  iowrite32((uint32_t)rx_buf_phys_addr, &nbp_q_regs->rx_mem_low);
-  smp_wmb();
-  iowrite32((uint32_t)(rx_buf_phys_addr >> 32), &nbp_q_regs->rx_mem_high);
+  enso_io_write_32((uint32_t)rx_buf_phys_addr, &nbp_q_regs->rx_mem_low);
+  enso_io_write_32((uint32_t)(rx_buf_phys_addr >> 32),
+                   &nbp_q_regs->rx_mem_high);
 
   rx_buf_phys_addr += rx_tx_buf_size / 2;
 
   printk("Tx buf address: %llx\n", rx_buf_phys_addr);
-  smp_wmb();
-  iowrite32((uint32_t)rx_buf_phys_addr, &nbp_q_regs->tx_mem_low);
-  smp_wmb();
-  iowrite32((uint32_t)(rx_buf_phys_addr >> 32), &nbp_q_regs->tx_mem_high);
+  enso_io_write_32((uint32_t)rx_buf_phys_addr, &nbp_q_regs->tx_mem_low);
+  enso_io_write_32((uint32_t)(rx_buf_phys_addr >> 32),
+                   &nbp_q_regs->tx_mem_high);
 
   notif_buf_pair->allocated = true;
 
@@ -915,8 +903,7 @@ static long send_config(struct chr_dev_bookkeep *chr_dev_bk,
   tx_tail = (tx_tail + 1) % NOTIFICATION_BUF_SIZE;
   notif_buf_pair->tx_tail = tx_tail;
 
-  smp_wmb();
-  iowrite32(tx_tail, notif_buf_pair->tx_tail_ptr);
+  enso_io_write_32(tx_tail, notif_buf_pair->tx_tail_ptr);
 
   // Wait for request to be consumed.
   nb_unreported_completions = notif_buf_pair->nb_unreported_completions;
@@ -974,25 +961,17 @@ static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   new_enso_rx_pipe->regs = (struct queue_regs *)rep_q_regs;
 
   // initialize the queue
-  smp_wmb();
-  iowrite32(0, &rep_q_regs->rx_mem_low);
-  smp_wmb();
-  iowrite32(0, &rep_q_regs->rx_mem_high);
+  enso_io_write_32(0, &rep_q_regs->rx_mem_low);
+  enso_io_write_32(0, &rep_q_regs->rx_mem_high);
 
-  smp_rmb();
-  while (ioread32(&rep_q_regs->rx_mem_low) != 0) continue;
-  smp_rmb();
-  while (ioread32(&rep_q_regs->rx_mem_high) != 0) continue;
+  while (enso_io_read_32(&rep_q_regs->rx_mem_low) != 0) continue;
+  while (enso_io_read_32(&rep_q_regs->rx_mem_high) != 0) continue;
 
-  smp_wmb();
-  iowrite32(0, &rep_q_regs->rx_tail);
-  smp_rmb();
-  while (ioread32(&rep_q_regs->rx_tail) != 0) continue;
+  enso_io_write_32(0, &rep_q_regs->rx_tail);
+  while (enso_io_read_32(&rep_q_regs->rx_tail) != 0) continue;
 
-  smp_wmb();
-  iowrite32(0, &rep_q_regs->rx_head);
-  smp_rmb();
-  while (ioread32(&rep_q_regs->rx_head) != 0) continue;
+  enso_io_write_32(0, &rep_q_regs->rx_head);
+  while (enso_io_read_32(&rep_q_regs->rx_head) != 0) continue;
 
   new_enso_rx_pipe->buf_head_ptr = (uint32_t *)&rep_q_regs->rx_head;
   new_enso_rx_pipe->rx_head = 0;
@@ -1002,11 +981,10 @@ static long alloc_rx_pipe(struct chr_dev_bookkeep *chr_dev_bk,
       new_enso_rx_pipe->rx_head;
   rx_buf_phys_addr = params.phys_addr;
 
-  smp_wmb();
-  iowrite32((uint32_t)rx_buf_phys_addr + chr_dev_bk->notif_buf_pair->id,
-            &rep_q_regs->rx_mem_low);
-  smp_wmb();
-  iowrite32((uint32_t)(rx_buf_phys_addr >> 32), &rep_q_regs->rx_mem_high);
+  enso_io_write_32((uint32_t)rx_buf_phys_addr + chr_dev_bk->notif_buf_pair->id,
+                   &rep_q_regs->rx_mem_low);
+  enso_io_write_32((uint32_t)(rx_buf_phys_addr >> 32),
+                   &rep_q_regs->rx_mem_high);
 
   new_enso_rx_pipe->allocated = true;
   rx_pipes[pipe_id] = new_enso_rx_pipe;
@@ -1109,8 +1087,7 @@ static long fully_advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
     printk("Pipe ID %d is NULL\n", enso_pipe_id);
     return -EFAULT;
   }
-  smp_wmb();
-  iowrite32(pipe->rx_tail, pipe->buf_head_ptr);
+  enso_io_write_32(pipe->rx_tail, pipe->buf_head_ptr);
   pipe->rx_head = pipe->rx_tail;
 
   return 0;
@@ -1148,8 +1125,7 @@ static long advance_pipe(struct chr_dev_bookkeep *chr_dev_bk,
   nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
-  smp_wmb();
-  iowrite32(rx_pkt_head, pipe->buf_head_ptr);
+  enso_io_write_32(rx_pkt_head, pipe->buf_head_ptr);
   pipe->rx_head = rx_pkt_head;
 
   return 0;
@@ -1224,8 +1200,7 @@ static long next_rx_pipe_to_recv(struct chr_dev_bookkeep *chr_dev_bk,
     enso_pipe_head = pipe->rx_tail;
     enso_pipe_tail = notif_buf_pair->pending_rx_pipe_tails[pipe_id];
     if (enso_pipe_head != enso_pipe_tail) {
-      smp_wmb();
-      iowrite32(pipe->rx_head, pipe->buf_head_ptr);
+      enso_io_write_32(pipe->rx_head, pipe->buf_head_ptr);
       break;
     }
     pipe_id = get_next_pipe_id(notif_buf_pair);
@@ -1258,8 +1233,7 @@ static long prefetch_pipe(struct chr_dev_bookkeep *chr_dev_bk,
     return -EFAULT;
   }
 
-  smp_wmb();
-  iowrite32(pipe->rx_head, pipe->buf_head_ptr);
+  enso_io_write_32(pipe->rx_head, pipe->buf_head_ptr);
 
   return pipe_id;
 }
@@ -1355,10 +1329,8 @@ int free_rx_pipe(struct rx_pipe_internal *pipe) {
   rep_q_regs = pipe->regs;
   // printk("Freeing enso RX pipe ID = %d\n", pipe->id);
 
-  smp_wmb();
-  iowrite32(0, &rep_q_regs->rx_mem_low);
-  smp_wmb();
-  iowrite32(0, &rep_q_regs->rx_mem_high);
+  enso_io_write_32(0, &rep_q_regs->rx_mem_low);
+  enso_io_write_32(0, &rep_q_regs->rx_mem_high);
 
   pipe->allocated = false;
 
@@ -1403,8 +1375,7 @@ static uint16_t get_new_tails(struct notification_buf_pair *notif_buf_pair) {
 
   if (likely(nb_consumed_notifications > 0)) {
     // Update notification buffer head.
-    smp_wmb();
-    iowrite32(notification_buf_head, notif_buf_pair->rx_head_ptr);
+    enso_io_write_32(notification_buf_head, notif_buf_pair->rx_head_ptr);
     notif_buf_pair->rx_head = notification_buf_head;
   }
   return nb_consumed_notifications;
@@ -1475,8 +1446,7 @@ static int32_t get_next_rx_pipe(struct notification_buf_pair *notif_buf_pair,
     enso_pipe_head = pipe->rx_tail;
     enso_pipe_tail = notif_buf_pair->pending_rx_pipe_tails[pipe_id];
     if (enso_pipe_head != enso_pipe_tail) {
-      smp_wmb();
-      iowrite32(pipe->rx_head, pipe->buf_head_ptr);
+      enso_io_write_32(pipe->rx_head, pipe->buf_head_ptr);
       break;
     }
     pipe_id = get_next_pipe_id(notif_buf_pair);
@@ -1548,9 +1518,18 @@ int send_batch(struct notification_buf_pair *notif_buf_pair,
   }
 
   notif_buf_pair->tx_tail = tx_tail;
-  smp_wmb();
-  iowrite32(tx_tail, notif_buf_pair->tx_tail_ptr);
+  enso_io_write_32(tx_tail, notif_buf_pair->tx_tail_ptr);
   return 0;
+}
+
+void enso_io_write_32(uint32_t data, void *addr) {
+  smp_wmb();
+  iowrite32(data, addr);
+}
+
+uint32_t enso_io_read_32(void *addr) {
+  smp_rmb();
+  return ioread32(addr);
 }
 
 int enso_sched(void *data) {

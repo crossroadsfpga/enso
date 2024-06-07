@@ -252,7 +252,6 @@ failed_cdev_add:
 /**
  * enso_chr_exit() - Undo everything done by enso_chr_init().
  *
- * @return: Nothing
  */
 void enso_chr_exit(void) {
   unregister_chrdev_region(MKDEV(global_bk.chr_major, global_bk.chr_minor), 1);
