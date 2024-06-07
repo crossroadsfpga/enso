@@ -432,7 +432,6 @@ static _enso_always_inline uint32_t
 __consume_queue(struct RxEnsoPipeInternal* enso_pipe,
                 struct NotificationBufPair* notification_buf_pair, void** buf,
                 bool peek = false) {
-  // std::cout << "consuming queue" << std::endl;
   uint32_t* enso_pipe_buf = enso_pipe->buf;
   uint32_t enso_pipe_head = enso_pipe->rx_tail;
   int queue_id = enso_pipe->id;
