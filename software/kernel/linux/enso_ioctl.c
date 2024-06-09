@@ -673,7 +673,6 @@ static long alloc_notif_buf_pair(struct chr_dev_bookkeep *chr_dev_bk,
   notif_buf_pair->regs = nbp_q_regs;
 
   // 3. Allocate TX and RX notification buffers
-  // TODO(kshitij): Think if we can move these buffers in the userspace
   notif_buf_pair->rx_buf =
       (struct rx_notification *)kmalloc(rx_tx_buf_size, GFP_DMA);
   if (notif_buf_pair->rx_buf == NULL) {
