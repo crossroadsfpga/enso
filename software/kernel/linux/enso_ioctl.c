@@ -879,6 +879,9 @@ static long send_config(struct chr_dev_bookkeep *chr_dev_bk,
   struct tx_notification config_notification;
   uint32_t nb_unreported_completions;
 
+  // TODO(kshitij): AVX enabled drivers break due to initialization of
+  // `tx_notification` with `config_notification` for newer kernels.
+  // Update this function if a fix is found in the future.
   if (copy_from_user(&config_notification, (void __user *)uarg,
                      sizeof(struct tx_notification))) {
     printk("couldn't copy arg from user.");
@@ -894,11 +897,7 @@ static long send_config(struct chr_dev_bookkeep *chr_dev_bk,
   }
 
   tx_notification = tx_buf + tx_tail;
-  tx_notification->length = config_notification.length;
-  tx_notification->signal = config_notification.signal;
-  tx_notification->phys_addr = config_notification.phys_addr;
-  memcpy(tx_notification->pad, &config_notification.pad,
-         sizeof(config_notification.pad));
+  *tx_notification = config_notification;
 
   tx_tail = (tx_tail + 1) % NOTIFICATION_BUF_SIZE;
   notif_buf_pair->tx_tail = tx_tail;
