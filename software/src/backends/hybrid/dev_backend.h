@@ -85,7 +85,7 @@ BackendWrapper preempt_enable_;
 BackendWrapper preempt_disable_;
 IdCallback id_callback_;
 TscCallback tsc_callback_;
-using ParkCallback = std::function<void(bool)>;
+using ParkCallback = std::function<void()>;
 ParkCallback park_callback_;
 
 int initialize_queues(uint32_t core_id) {

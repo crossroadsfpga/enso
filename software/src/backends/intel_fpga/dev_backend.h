@@ -49,7 +49,7 @@ namespace enso {
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
-using ParkCallback = std::function<void(bool)>;
+using ParkCallback = std::function<void()>;
 ParkCallback park_callback_;
 using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
 UpdateCallback update_callback_;

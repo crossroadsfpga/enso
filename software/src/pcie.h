@@ -52,7 +52,7 @@
 namespace enso {
 
 using CompletionCallback = std::function<void()>;
-using ParkCallback = std::function<void(bool)>;
+using ParkCallback = std::function<void()>;
 using BackendWrapper = std::function<void()>;
 using IdCallback = std::function<uint64_t()>;
 using TscCallback = std::function<uint64_t()>;
