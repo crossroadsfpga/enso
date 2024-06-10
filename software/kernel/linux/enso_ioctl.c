@@ -35,7 +35,6 @@
 #include <linux/kthread.h>
 
 #include "enso_heap.h"
-#include "enso_io.h"
 
 /******************************************************************************
  * Static function prototypes
