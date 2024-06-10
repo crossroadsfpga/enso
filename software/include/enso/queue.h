@@ -318,9 +318,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     struct Parent::Element* current_element =
         &(Parent::buf_addr()[tail_ & Parent::index_mask()]);
     if (unlikely(current_element->signal)) {
-      // std::cout << "Trying to push to tail " << (tail_ &
-      // Parent::index_mask())
-      //           << " but it is full" << std::endl;
       return -1;  // Queue is full.
     }
 
@@ -330,11 +327,6 @@ class QueueProducer : public Queue<T, QueueProducer<T>> {
     tmp_element->signal = 1;
     tmp_element->data = data;
 
-    // if (first) {
-    //   std::cout << "Pushing to tail " << (tail_ & Parent::index_mask())
-    //             << " last nb pushes: " << nb_pushes_ << std::endl;
-    //   nb_pushes_ = 0;
-    // }
     nb_pushes_++;
 
     _mm512_storeu_si512((__m512i*)current_element, tmp_element_raw);
