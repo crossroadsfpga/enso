@@ -158,6 +158,17 @@ static void print_stats_line(uint64_t recv_bytes, uint64_t nb_batches,
 #define ONE_MILLION 1e6
 #define ONE_THOUSAND 1e3
 
+static void print_tx_flow_line(uint64_t delta_bytes, uint64_t delta_pkts) {
+  uint64_t tx_tput_mbps =
+      (delta_bytes + delta_pkts * FPGA_PACKET_OVERHEAD) * 8. / (ONE_MILLION);
+  uint64_t tx_pkt_rate_kpps = delta_pkts / ONE_THOUSAND;
+
+  std::cout << std::dec << tx_tput_mbps << " Mbps  " << tx_pkt_rate_kpps
+            << " Mpps  ";
+
+  std::cout << std::endl;
+}
+
 static void print_tx_stats_line(uint64_t nb_bytes, uint64_t nb_pkts,
                                 uint64_t delta_bytes, uint64_t delta_pkts) {
   uint64_t tx_tput_mbps =
@@ -245,6 +256,61 @@ void show_stats(const std::vector<stats_t>& thread_stats,
   }
 }
 
+void show_rx_flow_stats(const std::vector<uint64_t>& flow_stats,
+                        const stats_t* rx_stats, uint32_t flow_stats_size,
+                        volatile bool* keep_running) {
+  std::vector<uint64_t> nb_pkts_before;
+  std::vector<uint64_t> nb_pkts_after;
+  nb_pkts_before.reserve(flow_stats_size);
+  nb_pkts_after.reserve(flow_stats_size);
+
+  uint64_t total_nb_bytes_before;
+  uint64_t total_nb_batches_before;
+  uint64_t total_nb_pkts_before;
+
+  uint64_t total_nb_bytes_after;
+  uint64_t total_nb_batches_after;
+  uint64_t total_nb_pkts_after;
+
+  while (*keep_running) {
+    uint64_t total_delta_bytes = 0;
+    uint64_t total_delta_pkts = 0;
+    uint64_t total_delta_batches = 0;
+
+    for (uint32_t i = 0; i < flow_stats_size; i++) {
+      nb_pkts_before[i] = flow_stats[i];
+    }
+    total_nb_bytes_before = rx_stats->recv_bytes;
+    total_nb_pkts_before = rx_stats->nb_pkts;
+    total_nb_batches_before = rx_stats->nb_batches;
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    for (uint32_t i = 0; i < flow_stats_size; i++) {
+      nb_pkts_after[i] = flow_stats[i];
+    }
+    total_nb_bytes_after = rx_stats->recv_bytes;
+    total_nb_pkts_after = rx_stats->nb_pkts;
+    total_nb_batches_after = rx_stats->nb_batches;
+
+    total_delta_bytes = total_nb_bytes_after - total_nb_bytes_before;
+    total_delta_pkts = total_nb_pkts_after - total_nb_pkts_before;
+    total_delta_batches = total_nb_batches_after - total_nb_batches_before;
+
+    for (uint16_t i = 0; i < flow_stats_size; ++i) {
+      uint64_t nb_pkts = nb_pkts_after[i];
+      uint64_t delta_pkts = nb_pkts - nb_pkts_before[i];
+
+      std::cout << "  Flow " << i << ":";
+      std::cout << "    " << delta_pkts / ONE_THOUSAND << std::endl;
+    }
+    print_stats_line(rx_stats->recv_bytes, rx_stats->nb_batches,
+                     rx_stats->nb_pkts, total_delta_bytes, total_delta_pkts,
+                     total_delta_batches);
+    std::cout << std::endl;
+  }
+}
+
 void show_tx_stats(const std::vector<tx_stats_t>& thread_stats,
                    volatile bool* keep_running) {
   while (*keep_running) {
@@ -302,6 +368,72 @@ void show_tx_stats(const std::vector<tx_stats_t>& thread_stats,
                         total_delta_pkts);
 
     if (thread_stats.size() > 1) {
+      std::cout << std::endl;
+    }
+  }
+}
+
+void show_tx_flow_stats(const std::vector<tx_stats_t>& tx_flows,
+                        uint32_t flows_size, volatile bool* keep_running) {
+  std::vector<uint64_t> nb_bytes_before;
+  std::vector<uint64_t> nb_pkts_before;
+
+  std::vector<uint64_t> nb_bytes_after;
+  std::vector<uint64_t> nb_pkts_after;
+
+  nb_bytes_before.reserve(flows_size);
+  nb_pkts_before.reserve(flows_size);
+
+  nb_bytes_after.reserve(flows_size);
+  nb_pkts_after.reserve(flows_size);
+  uint64_t total_nb_bytes = 0;
+  uint64_t total_nb_pkts = 0;
+
+  while (*keep_running) {
+    uint64_t total_nb_bytes_before = 0;
+    uint64_t total_nb_pkts_before = 0;
+
+    uint64_t total_nb_bytes_after = 0;
+    uint64_t total_nb_pkts_after = 0;
+
+    for (uint32_t i = 0; i < flows_size; i++) {
+      nb_bytes_before[i] = tx_flows[i].nb_bytes;
+      nb_pkts_before[i] = tx_flows[i].nb_pkts;
+      total_nb_bytes_before += tx_flows[i].nb_bytes;
+      total_nb_pkts_before += tx_flows[i].nb_pkts;
+    }
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    for (uint32_t i = 0; i < flows_size; i++) {
+      nb_bytes_after[i] = tx_flows[i].nb_bytes;
+      nb_pkts_after[i] = tx_flows[i].nb_pkts;
+      total_nb_bytes_after += tx_flows[i].nb_bytes;
+      total_nb_pkts_after += tx_flows[i].nb_pkts;
+    }
+
+    total_nb_bytes = total_nb_bytes_after;
+    total_nb_pkts = total_nb_pkts_after;
+    uint64_t total_delta_bytes = total_nb_bytes_after - total_nb_bytes_before;
+    uint64_t total_delta_pkts = total_nb_pkts_after - total_nb_pkts_before;
+
+    for (uint16_t i = 0; i < flows_size; ++i) {
+      uint64_t nb_bytes = nb_bytes_after[i];
+      uint64_t nb_pkts = nb_pkts_after[i];
+
+      uint64_t delta_bytes = nb_bytes - nb_bytes_before[i];
+      uint64_t delta_pkts = nb_pkts - nb_pkts_before[i];
+
+      if (flows_size > 1) {
+        std::cout << "  Flow " << i << ":";
+        std::cout << "    ";
+        print_tx_flow_line(delta_bytes, delta_pkts);
+      }
+    }
+    print_tx_stats_line(total_nb_bytes, total_nb_pkts, total_delta_bytes,
+                        total_delta_pkts);
+
+    if (flows_size > 1) {
       std::cout << std::endl;
     }
   }

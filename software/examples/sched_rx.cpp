@@ -49,13 +49,14 @@
 #define ONE_THOUSAND 1e3
 #define FPGA_PACKET_OVERHEAD 20
 #define MIN_PACKET_SIZE 64
+#define DEFAULT_NB_QUEUES 4
 
 using enso::Device;
 using enso::RxPipe;
 
 static volatile bool keep_running = true;
 
-void rcv_pkts(enso::stats_t* stats) {
+void rcv_pkts(enso::stats_t* stats, std::vector<uint64_t>& pkts_per_flow) {
   // create the device and initialize the RxPipe
   std::unique_ptr<Device> dev = Device::Create(INTEL_FPGA_PCIE_BDF);
   if (!dev) {
@@ -69,13 +70,12 @@ void rcv_pkts(enso::stats_t* stats) {
   dev->EnableRoundRobin();
 
   std::vector<RxPipe*> rxPipes;
-  for (uint32_t i = 0; i < 4; ++i) {
+  for (uint32_t i = 0; i < DEFAULT_NB_QUEUES; ++i) {
     RxPipe* rxPipe = dev->AllocateRxPipe(true);
     if (!rxPipe) {
       std::cerr << "Problem creating RX pipe" << std::endl;
       exit(3);
     }
-
     rxPipes.push_back(rxPipe);
   }
 
@@ -90,8 +90,8 @@ void rcv_pkts(enso::stats_t* stats) {
     auto batch = rx_pipe->PeekPktsFromTail();
     for (auto pkt : batch) {
       (void)pkt;
-      // uint16_t pkt_dst = enso::get_pkt_dst_lsb(pkt);
-      // pkts_per_flow[pkt_dst]++;
+      uint16_t pkt_dst = enso::get_pkt_dst_lsb(pkt);
+      pkts_per_flow[pkt_dst]++;
       nb_pkts++;
     }
     uint32_t batch_length = batch.processed_bytes();
@@ -122,24 +122,24 @@ int main(int argc, const char* argv[]) {
   signal(SIGINT, int_handler);
 
   std::vector<enso::stats_t> thread_stats(1);
-  // std::vector<uint64_t> pkts_per_flow(5000);
+  std::vector<uint64_t> pkts_per_flow(4096);
   uint32_t num_expected_flows = atoi(argv[1]);
 
   // start the RX thread
-  std::thread rx_thread(rcv_pkts, &thread_stats[0]);
+  std::thread rx_thread(rcv_pkts, &thread_stats[0], std::ref(pkts_per_flow));
   enso::set_core_id(rx_thread, 0);
 
   // start the stats collection in the main thread
-  show_stats(thread_stats, &keep_running);
+  enso::show_rx_flow_stats(pkts_per_flow, &thread_stats[0], num_expected_flows,
+                           &keep_running);
 
   rx_thread.join();
 
-  (void)num_expected_flows;
-  /*uint64_t total_pkts = 0;
-  for(uint32_t i = 0; i < num_expected_flows; i++) {
-      std::cout << "Flow " << i << ": " << pkts_per_flow[i] << std::endl;
-      total_pkts += pkts_per_flow[i];
+  uint64_t total_pkts = 0;
+  for (uint32_t i = 0; i < num_expected_flows; i++) {
+    std::cout << "Flow " << i << ": " << pkts_per_flow[i] << std::endl;
+    total_pkts += pkts_per_flow[i];
   }
-  std::cout << "Total packets received: " << total_pkts << std::endl;*/
+  std::cout << "Total packets received: " << total_pkts << std::endl;
   return 0;
 }

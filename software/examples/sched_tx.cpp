@@ -81,11 +81,6 @@ struct PcapHandler {
 
 static volatile bool keep_running = true;
 
-/*
- * Interrupt handler for SIG_INT.
- * Sets the run variable to 0 so that the TX thread exists.
- *
- * */
 void int_handler(int signal __attribute__((unused))) { keep_running = false; }
 
 void fill_pipe_with_packets(uint8_t* pipe_buf, uint32_t& a_bytes,
@@ -101,10 +96,6 @@ void fill_pipe_with_packets(uint8_t* pipe_buf, uint32_t& a_bytes,
   }
 }
 
-/*
- * PCAP packet handler for reading PCAP files.
- *
- * */
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
   (void)pkt_hdr;
@@ -129,24 +120,16 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   etp.nb_aligned_bytes = nb_flits * MIN_PACKET_SIZE;
   etp.nb_raw_bytes = len;
   etp.nb_pkts = 1;
+  // if(pipe->id() % 2 == 0) {
+  // std::cout << "Filling pipe id " << pipe->id() << std::endl;
   fill_pipe_with_packets(pipe_buf, etp.nb_aligned_bytes, etp.nb_raw_bytes,
                          etp.nb_pkts);
+  // }
   context->txPipes.push_back(etp);
 }
 
-/*
- * Continuously sends packets until interrupted by the user.
- *
- * @param pipe: Enso TxPipe object.
- * @param main_buf: Buffer that holds the packets copied from the PCAP file.
- * @param total_bytes_in_main_buf: Total number of bytes in main_buf.
- * @param total_pkts_in_main_buf: Total number of packets in main_buf.
- * @param stats: TxStats pointer that is shared between the sending thread and
- * the main thread.
- *
- * */
-void run_tx(enso::tx_stats_t* stats, uint32_t core_id, uint32_t nb_queues,
-            std::vector<struct EnsoTxPipe>& pipes) {
+void run_tx(std::vector<enso::tx_stats_t>& stats, uint32_t core_id,
+            uint32_t nb_queues, std::vector<struct EnsoTxPipe>& pipes) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
   std::cout << "Running on core " << sched_getcpu() << std::endl;
   int startPipeInd = core_id * nb_queues;
@@ -156,8 +139,8 @@ void run_tx(enso::tx_stats_t* stats, uint32_t core_id, uint32_t nb_queues,
       // send the packets
       pipes[i].tx_pipe->Send(pipes[i].nb_aligned_bytes);
       // update the stats
-      stats->nb_bytes += pipes[i].nb_raw_bytes;
-      stats->nb_pkts += pipes[i].nb_pkts;
+      stats[pipes[i].tx_pipe->id()].nb_bytes += pipes[i].nb_raw_bytes;
+      stats[pipes[i].tx_pipe->id()].nb_pkts += pipes[i].nb_pkts;
     }
   }
 }
@@ -210,10 +193,10 @@ int main(int argc, const char* argv[]) {
 
   // stats to record the metrics
   std::vector<std::thread> threads;
-  std::vector<enso::tx_stats_t> thread_stats(nb_cores);
+  std::vector<enso::tx_stats_t> thread_stats(nb_cores * nb_flows);
 
   for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
-    threads.emplace_back(run_tx, &(thread_stats[core_id]), core_id, nb_flows,
+    threads.emplace_back(run_tx, std::ref(thread_stats), core_id, nb_flows,
                          std::ref(tx_pipes));
     if (enso::set_core_id(threads.back(), core_id)) {
       std::cerr << "Error setting CPU affinity" << std::endl;
@@ -222,7 +205,7 @@ int main(int argc, const char* argv[]) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
-  show_tx_stats(thread_stats, &keep_running);
+  show_tx_flow_stats(thread_stats, nb_cores * nb_flows, &keep_running);
 
   for (auto& thread : threads) {
     thread.join();
