@@ -38,7 +38,7 @@ int left(int index) { return (2 * index) + 1; }
 int right(int index) { return (2 * index) + 2; }
 
 void init_heap(struct min_heap *heap) {
-  heap->capacity = HEAP_SIZE;
+  heap->capacity = MAX_HEAP_SIZE;
   heap->harr = kzalloc(heap->capacity * sizeof(struct heap_node), GFP_KERNEL);
   if (heap->harr == NULL) {
     printk("couldn't create the heap\n");
@@ -62,7 +62,7 @@ void insert_heap(struct min_heap *heap, struct tx_queue_node *node) {
   heap->size++;
 
   while ((ind != 0) &&
-         harr[parent(ind)].queue_node->ftime > harr[ind].queue_node->ftime) {
+         (harr[parent(ind)].queue_node->ftime > harr[ind].queue_node->ftime)) {
     temp = harr[ind];
     harr[ind] = harr[parent(ind)];
     harr[parent(ind)] = temp;
@@ -70,14 +70,17 @@ void insert_heap(struct min_heap *heap, struct tx_queue_node *node) {
   }
 }
 
+uint32_t get_heap_size(struct min_heap *heap) { return heap->size; }
+
 void show_heap(struct min_heap *heap) {
   int ind = 0;
   struct tx_queue_node *node;
-  printk("Entered show_heap\n");
+  printk("Entered show_heap, size = %d\n", heap->size);
   for (; ind < heap->size; ind++) {
     node = heap->harr[ind].queue_node;
     printk("ftime: %ld\n", node->ftime);
   }
+  printk("Exit show_heap\n");
 }
 
 struct tx_queue_node *top(struct min_heap *heap) {

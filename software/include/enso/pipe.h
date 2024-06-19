@@ -334,7 +334,7 @@ class Device {
    * @param nb_bytes The number of bytes to send.
    * @return The number of bytes sent.
    */
-  void Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+  int Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
   void FreeTxPipe(uint32_t tx_enso_pipe_id);
 
   friend class RxPipe;
@@ -862,12 +862,12 @@ class TxPipe {
    * @param nb_bytes The number of bytes to send. Must be a multiple of
    *                 `kQuantumSize`.
    */
-  inline void Send(uint32_t nb_bytes) {
+  inline int Send(uint32_t nb_bytes) {
     uint64_t phys_addr = buf_phys_addr_ + app_begin_;
     assert(nb_bytes <= kMaxCapacity);
     assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
-    device_->Send(kId, phys_addr, nb_bytes);
+    return device_->Send(kId, phys_addr, nb_bytes);
   }
 
   /**

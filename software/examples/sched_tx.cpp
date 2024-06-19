@@ -50,6 +50,13 @@
 using enso::Device;
 using enso::TxPipe;
 
+struct parsed_args_t {
+  uint32_t nb_cores;
+  uint32_t nb_flows;
+  std::string pcap_filename;
+  uint64_t total_pkts;
+};
+
 /**
  * @brief Structure to store an Enso TxPipe object and attributes related
  * to it.
@@ -120,43 +127,63 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   etp.nb_aligned_bytes = nb_flits * MIN_PACKET_SIZE;
   etp.nb_raw_bytes = len;
   etp.nb_pkts = 1;
-  // if(pipe->id() % 2 == 0) {
-  // std::cout << "Filling pipe id " << pipe->id() << std::endl;
   fill_pipe_with_packets(pipe_buf, etp.nb_aligned_bytes, etp.nb_raw_bytes,
                          etp.nb_pkts);
-  // }
   context->txPipes.push_back(etp);
 }
 
 void run_tx(std::vector<enso::tx_stats_t>& stats, uint32_t core_id,
-            uint32_t nb_queues, std::vector<struct EnsoTxPipe>& pipes) {
+            uint32_t nb_flows, std::vector<struct EnsoTxPipe>& pipes,
+            uint64_t total_pkts) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
   std::cout << "Running on core " << sched_getcpu() << std::endl;
-  int startPipeInd = core_id * nb_queues;
-  int endPipeInd = startPipeInd + nb_queues;
+  int start_pipe_ind = core_id * nb_flows;
+  int end_pipe_ind = start_pipe_ind + nb_flows;
+  uint64_t pkts_sent = 0;
   while (keep_running) {
-    for (int i = startPipeInd; i < endPipeInd; i++) {
+    for (int i = start_pipe_ind; i < end_pipe_ind; i++) {
       // send the packets
       pipes[i].tx_pipe->Send(pipes[i].nb_aligned_bytes);
       // update the stats
       stats[pipes[i].tx_pipe->id()].nb_bytes += pipes[i].nb_raw_bytes;
       stats[pipes[i].tx_pipe->id()].nb_pkts += pipes[i].nb_pkts;
+      pkts_sent += pipes[i].nb_pkts;
+      if (total_pkts <= pkts_sent) {
+        keep_running = false;
+        return;
+      }
     }
   }
 }
 
-int main(int argc, const char* argv[]) {
-  if (argc != 4) {
-    std::cerr << "Usage: " << argv[0] << " NB_CORES NB_QUEUES" << std::endl;
+void parse_args(int argc, const char* argv[],
+                struct parsed_args_t* parsed_args) {
+  if (argc == 4) {
+    parsed_args->nb_cores = atoi(argv[1]);
+    parsed_args->nb_flows = atoi(argv[2]);
+    parsed_args->pcap_filename = argv[3];
+    parsed_args->total_pkts = 0xffffffffffffffff;
+  } else if (argc == 5) {
+    parsed_args->nb_cores = atoi(argv[1]);
+    parsed_args->nb_flows = atoi(argv[2]);
+    parsed_args->pcap_filename = argv[3];
+    parsed_args->total_pkts = strtoull(argv[4], NULL, 10);
+  } else {
+    std::cerr << "Usage: " << argv[0]
+              << " NB_CORES NB_FLOWS PCAP_PATH [OPTIONAL] TOTAL_PKTS"
+              << std::endl;
     std::cerr << "NB_CORES: Number of cores to use." << std::endl;
-    std::cerr << "NB_QUEUES: Number of Tx flows per core." << std::endl;
+    std::cerr << "NB_FLOWS: Number of Tx flows per core." << std::endl;
     std::cerr << "PCAP_PATH: Path to the PCAP file." << std::endl;
-    return 1;
+    std::cerr << "[OPTIONAL] PKTS_COUNT: Total no. of packets to send."
+              << std::endl;
+    exit(0);
   }
+}
 
-  uint32_t nb_cores = atoi(argv[1]);
-  uint32_t nb_flows = atoi(argv[2]);
-  std::string pcap_file = argv[3];
+int main(int argc, const char* argv[]) {
+  struct parsed_args_t parsed_args;
+  parse_args(argc, argv, &parsed_args);
 
   // init signal handler
   signal(SIGINT, int_handler);
@@ -168,7 +195,7 @@ int main(int argc, const char* argv[]) {
   }
 
   char errbuf[PCAP_ERRBUF_SIZE];
-  pcap_t* pcap = pcap_open_offline(pcap_file.c_str(), errbuf);
+  pcap_t* pcap = pcap_open_offline(parsed_args.pcap_filename.c_str(), errbuf);
   if (pcap == NULL) {
     std::cerr << "Error loading pcap file (" << errbuf << ")" << std::endl;
     return 2;
@@ -183,21 +210,23 @@ int main(int argc, const char* argv[]) {
     return -2;
   }
 
-  if (tx_pipes.size() != (nb_cores * nb_flows)) {
+  if (tx_pipes.size() != (parsed_args.nb_cores * parsed_args.nb_flows)) {
     std::cerr << "PCAP file does not have the same number of flows"
               << std::endl;
-    std::cerr << nb_flows * nb_cores << " expected. " << tx_pipes.size()
-              << " found." << std::endl;
+    std::cerr << parsed_args.nb_flows * parsed_args.nb_cores << " expected. "
+              << tx_pipes.size() << " found." << std::endl;
     return -2;
   }
 
   // stats to record the metrics
   std::vector<std::thread> threads;
-  std::vector<enso::tx_stats_t> thread_stats(nb_cores * nb_flows);
+  std::vector<enso::tx_stats_t> thread_stats(parsed_args.nb_cores *
+                                             parsed_args.nb_flows);
 
-  for (uint32_t core_id = 0; core_id < nb_cores; ++core_id) {
-    threads.emplace_back(run_tx, std::ref(thread_stats), core_id, nb_flows,
-                         std::ref(tx_pipes));
+  for (uint32_t core_id = 0; core_id < parsed_args.nb_cores; ++core_id) {
+    threads.emplace_back(run_tx, std::ref(thread_stats), core_id,
+                         parsed_args.nb_flows, std::ref(tx_pipes),
+                         parsed_args.total_pkts);
     if (enso::set_core_id(threads.back(), core_id)) {
       std::cerr << "Error setting CPU affinity" << std::endl;
       return 6;
@@ -205,7 +234,8 @@ int main(int argc, const char* argv[]) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
-  show_tx_flow_stats(thread_stats, nb_cores * nb_flows, &keep_running);
+  show_tx_flow_stats(thread_stats, parsed_args.nb_cores * parsed_args.nb_flows,
+                     &keep_running);
 
   for (auto& thread : threads) {
     thread.join();

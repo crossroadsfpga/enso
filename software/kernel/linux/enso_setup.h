@@ -54,6 +54,7 @@
 #define HUGE_PAGE_SIZE (0x1ULL << 21)
 #define MEM_PER_QUEUE (0x1ULL << 12)
 #define BATCH_SIZE 64
+#define SCHED_CORE_NUM 4
 
 // These determine the maximum number of notification buffers and enso pipes.
 // These macros also exist in hardware and **must be kept in sync**. Update the

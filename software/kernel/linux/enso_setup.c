@@ -119,7 +119,7 @@ static __init int enso_init(void) {
 
   spin_lock_init(&dev_bk->lock);
   dev_bk->enso_sched_thread = kthread_create(enso_sched, dev_bk, "enso_sched");
-  kthread_bind(dev_bk->enso_sched_thread, 4);
+  kthread_bind(dev_bk->enso_sched_thread, SCHED_CORE_NUM);
   wake_up_process(dev_bk->enso_sched_thread);
   dev_bk->sched_run = true;
 
