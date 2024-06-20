@@ -5,8 +5,7 @@ public_enso_headers = files(
     'ixy_helpers.h',
     'internals.h',
     'queue.h',
-    'pipe.h',
-    'socket.h'
+    'pipe.h'
 )
 
 install_headers(public_enso_headers, subdir: 'enso')
