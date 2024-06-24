@@ -282,8 +282,6 @@ class DevBackend {
     if (queue_id < enso::kMaxNbApps) {
       switch (offset) {
         case offsetof(struct enso::QueueRegs, tx_tail):
-          std::cout << "Uthread ID: " << std::invoke(id_callback_)
-                    << " offset addr: " << offset_addr << std::endl;
           tx_tail_offset_addrs_[std::invoke(id_callback_)] = offset_addr;
           break;
       }
