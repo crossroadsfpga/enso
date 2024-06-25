@@ -66,11 +66,9 @@
 
 namespace enso {
 
-TxCallback tx_callback_ = nullptr;
-
-void set_park_callback(ParkCallback park_callback) {
-  park_callback_ = park_callback;
-}
+ParkCallback park_callback_ = NULL;
+UpdateCallback update_callback_ = NULL;
+TxCallback tx_callback_ = NULL;
 
 static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 #ifdef __CLFLUSHOPT__
@@ -858,14 +856,9 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   return (uint32_t)socket_entry->enso_pipe.id;
 }
 
-void pcie_initialize_backend(BackendWrapper preempt_enable,
-                             BackendWrapper preempt_disable,
-                             IdCallback id_callback, TscCallback tsc_callback,
-                             UpdateCallback update_callback,
-                             TxCallback tx_callback, uint32_t application_id) {
-  tx_callback_ = tx_callback;
-  initialize_backend_dev(preempt_enable, preempt_disable, id_callback,
-                         tsc_callback, update_callback, application_id);
+void pcie_initialize_backend(CounterCallback counter_callback,
+                             uint32_t application_id) {
+  initialize_backend_dev(counter_callback, application_id);
 }
 
 void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }

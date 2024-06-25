@@ -53,19 +53,19 @@ namespace enso {
 
 using CompletionCallback = std::function<void()>;
 using ParkCallback = std::function<void()>;
-using BackendWrapper = std::function<void()>;
-using IdCallback = std::function<uint64_t()>;
-using TscCallback = std::function<uint64_t()>;
+using CounterCallback = std::function<uint64_t()>;
 using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
 using TxCallback = std::function<void(uint64_t)>;
 using UpdatePacket = std::function<void(enso_pipe_id_t, uint64_t, uint32_t)>;
+
+extern ParkCallback park_callback_;
+extern UpdateCallback update_callback_;
+extern TxCallback tx_callback_;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
-
-void set_park_callback(ParkCallback park_callback);
 
 /**
  * @brief Initializes the notification buffer pair.
@@ -342,11 +342,8 @@ void pcie_set_backend_core_id(uint32_t core_id);
  * @brief Initializes queues to and from backend for this thread.
  *
  */
-void pcie_initialize_backend(BackendWrapper preempt_enable,
-                             BackendWrapper preempt_disable,
-                             IdCallback id_callback, TscCallback tsc_callback,
-                             UpdateCallback update_callback,
-                             TxCallback tx_callback, uint32_t application_id);
+void pcie_initialize_backend(CounterCallback counter_callback,
+                             uint32_t application_id);
 
 /**
  * @brief Push notification to backend.

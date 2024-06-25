@@ -59,14 +59,14 @@ void set_backend_core_id(uint32_t core_id) {
   pcie_set_backend_core_id(core_id);
 }
 
-void initialize_backend(BackendWrapper preempt_enable,
-                        BackendWrapper preempt_disable, IdCallback id_callback,
-                        TscCallback tsc_callback,
+void initialize_backend(ParkCallback park_callback,
+                        CounterCallback counter_callback,
                         UpdateCallback update_callback, TxCallback tx_callback,
                         uint32_t application_id) {
-  return pcie_initialize_backend(preempt_enable, preempt_disable, id_callback,
-                                 tsc_callback, update_callback, tx_callback,
-                                 application_id);
+  park_callback_ = park_callback;
+  update_callback_ = update_callback;
+  tx_callback_ = tx_callback;
+  pcie_initialize_backend(counter_callback, application_id);
 }
 
 void push_to_backend_queues(PipeNotification* notif) {
@@ -178,19 +178,14 @@ int RxTxPipe::Init(bool fallback) noexcept {
   return 0;
 }
 
-std::unique_ptr<Device> Device::Create(const std::string& pcie_addr,
-                                       const std::string& huge_page_prefix,
-                                       int32_t uthread_id,
-                                       CompletionCallback completion_callback,
-                                       ParkCallback park_callback) noexcept {
-  std::unique_ptr<Device> dev(
-      new (std::nothrow) Device(uthread_id, completion_callback, park_callback,
-                                pcie_addr, huge_page_prefix));
+std::unique_ptr<Device> Device::Create(
+    const std::string& pcie_addr, const std::string& huge_page_prefix,
+    int32_t uthread_id, CompletionCallback completion_callback) noexcept {
+  std::unique_ptr<Device> dev(new (std::nothrow) Device(
+      uthread_id, completion_callback, pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
-
-  set_park_callback(park_callback);
 
   if (dev->Init(uthread_id)) {
     return std::unique_ptr<Device>{};
