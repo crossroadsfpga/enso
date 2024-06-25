@@ -64,9 +64,8 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
-using BackendWrapper = std::function<void()>;
-using IdCallback = std::function<uint64_t()>;
-using TscCallback = std::function<uint64_t()>;
+using ParkCallback = std::function<void()>;
+using CounterCallback = std::function<uint64_t()>;
 using TxCallback = std::function<void(uint64_t)>;
 using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
 
@@ -76,9 +75,8 @@ void set_backend_core_id(uint32_t core_id);
  * @brief Initializes queues to and from the backend.
  *
  */
-void initialize_backend(BackendWrapper preempt_enable,
-                        BackendWrapper preempt_disable, IdCallback id_callback,
-                        TscCallback tsc_callback,
+void initialize_backend(ParkCallback park_callback,
+                        CounterCallback counter_callback,
                         UpdateCallback update_callback, TxCallback tx_callback,
                         uint32_t application_id);
 
@@ -116,8 +114,10 @@ uint32_t external_peek_next_batch_from_queue(
 class Device {
  public:
   using CompletionCallback = std::function<void()>;
-  using ParkCallback = std::function<void(bool)>;
+  using ParkCallback = std::function<void()>;
+
   /**
+   *
    * @brief Factory method to create a device.
    *
    * @param uthread_id The unique ID of the uthread creating the device.
@@ -134,8 +134,7 @@ class Device {
   static std::unique_ptr<Device> Create(
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
-      CompletionCallback completion_callback = NULL,
-      ParkCallback park_callback = NULL) noexcept;
+      CompletionCallback completion_callback = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -437,11 +436,9 @@ class Device {
    * Use `Create` factory method to instantiate objects externally.
    */
   Device(int32_t uthread_id, CompletionCallback completion_callback,
-         ParkCallback park_callback, const std::string& pcie_addr,
-         std::string huge_page_prefix) noexcept
+         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
       : kPcieAddr(pcie_addr),
         completion_callback_(completion_callback),
-        park_callback_(park_callback),
         uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
@@ -473,7 +470,6 @@ class Device {
   uint16_t bdf_;
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_ = NULL;
-  ParkCallback park_callback_ = NULL;
   int32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;
