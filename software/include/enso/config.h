@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_CONFIG_H_
-#define SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_
 
 #include <enso/internals.h>
 
@@ -165,4 +165,4 @@ int update_fallback_queues_config(
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_

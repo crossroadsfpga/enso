@@ -37,14 +37,25 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#define ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
 
 #include <enso/helpers.h>
 
 #include "intel_fpga_pcie_api.hpp"
 
 namespace enso {
+
+int initialize_queues() { return 0; }
+
+void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
+
+std::optional<PipeNotification> push_to_backend_get_response(
+    enso::PipeNotification* notif) {
+  (void)notif;
+  std::optional<PipeNotification> res;
+  return res;
+}
 
 class DevBackend {
  public:
@@ -74,12 +85,16 @@ class DevBackend {
   }
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
-                                               uint32_t value) {
+                                               uint32_t value,
+                                               void* uio_mmap_bar2_addr) {
+    (void)uio_mmap_bar2_addr;
     _enso_compiler_memory_barrier();
     *addr = value;
   }
 
-  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
+  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr,
+                                                  void* uio_mmap_bar2_addr) {
+    (void)uio_mmap_bar2_addr;
     _enso_compiler_memory_barrier();
     return *addr;
   }
@@ -120,11 +135,26 @@ class DevBackend {
   int GetRrStatus() { return dev_->get_rr_status(); }
 
   /**
+   * @brief Sends a message to the IOKernel that the uthread is yielding.
+   *
+   * @param notif_buf_id The notification buffer ID of the current device.
+   */
+  void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
+                    uint32_t last_tx_consumed_head) {
+    (void)notif_buf_id;
+    (void)last_rx_notif_head;
+    (void)last_tx_consumed_head;
+  }
+
+  /**
    * @brief Allocates a notification buffer.
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
-  int AllocateNotifBuf() { return dev_->allocate_notif_buf(); }
+  int AllocateNotifBuf(int32_t uthread_id) {
+    (void)uthread_id;
+    return dev_->allocate_notif_buf();
+  }
 
   /**
    * @brief Frees a notification buffer.
@@ -174,11 +204,13 @@ class DevBackend {
     return 0;
   }
 
+  // NOTE: require all devbackends to be the same size
   intel_fpga_pcie_api::IntelFpgaPcieDev* dev_;
   unsigned int bdf_;
+  int core_id_;
   int bar_;
 };
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_

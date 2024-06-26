@@ -38,8 +38,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#define ENSO_SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
 
 #include <assert.h>
 #include <sched.h>
@@ -59,6 +59,17 @@ namespace enso {
 thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
 thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
     queue_from_backend_;
+
+int initialize_queues() { return 0; }
+
+void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
+
+std::optional<PipeNotification> push_to_backend_get_response(
+    enso::PipeNotification* notif) {
+  (void)notif;
+  std::optional<PipeNotification> res;
+  return res;
+}
 
 class DevBackend {
  public:
@@ -83,11 +94,14 @@ class DevBackend {
 
   void* uio_mmap([[maybe_unused]] size_t size,
                  [[maybe_unused]] unsigned int mapping) {
-    return 0;  // Not a valid address. We use the offset to emulate MMIO access.
+    return 0;  // Not a valid address. We use the offset to emulate MMIO
+               // access.
   }
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
-                                               uint32_t value) {
+                                               uint32_t value,
+                                               void* uio_mmap_bar2_addr) {
+    (void)uio_mmap_bar2_addr;
     // Block if full.
     struct MmioNotification mmio_notification;
     mmio_notification.type = NotifType::kWrite;
@@ -116,7 +130,8 @@ class DevBackend {
     std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
+    while (
+        !(notification = (struct MmioNotification)queue_from_backend_->Pop())) {
     }
 
     struct MmioNotification* result =
@@ -128,8 +143,8 @@ class DevBackend {
   }
 
   /**
-   * @brief Converts an address in the application's virtual address space to an
-   *        address that can be used by the device.
+   * @brief Converts an address in the application's virtual address space to
+   * an address that can be used by the device.
    * @param virt_addr Address in the application's virtual address space.
    * @return Converted address or 0 if the address cannot be translated.
    */
@@ -151,7 +166,8 @@ class DevBackend {
     std::optional<PipeNotification> notification;
 
     // Block until receive.
-    while (!(notification = queue_from_backend_->Pop())) {
+    while (
+        !(notification = (struct MmioNotification)queue_from_backend_->Pop())) {
     }
 
     struct MmioNotification* result =
@@ -248,13 +264,28 @@ class DevBackend {
   }
 
   /**
+   * @brief Sends a message to the IOKernel that the uthread is yielding.
+   *
+   * @param notif_buf_id The notification buffer ID of the current device.
+   */
+  void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
+                    uint32_t last_tx_consumed_head) {
+    (void)notif_buf_id;
+    (void)last_rx_notif_head;
+    (void)last_tx_consumed_head;
+  }
+  /**
    * @brief Allocates a notification buffer.
    *
-   * @return Notification buffer ID. On error, -1 is returned and errno is set.
+   * @param uthread_id ID of currently running uthread.
+   *
+   * @return Notification buffer ID. On error, -1 is returned and errno is
+   * set.
    */
-  int AllocateNotifBuf() {
+  int AllocateNotifBuf(int32_t uthread_id) {
     struct NotifBufNotification nb_notification;
     nb_notification.type = NotifType::kAllocateNotifBuf;
+    nb_notification.uthread_id = (uint64_t)uthread_id;
 
     enso::PipeNotification* pipe_notification =
         (enso::PipeNotification*)&nb_notification;
@@ -309,8 +340,8 @@ class DevBackend {
   /**
    * @brief Allocates a pipe.
    *
-   * @param fallback If true, allocates a fallback pipe. Otherwise, allocates a
-   *                regular pipe.
+   * @param fallback If true, allocates a fallback pipe. Otherwise, allocates
+   * a regular pipe.
    * @return Pipe ID. On error, -1 is returned and errno is set.
    */
   int AllocatePipe(bool fallback = false) {
@@ -414,4 +445,4 @@ class DevBackend {
 };
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_SOFTWARE_DEV_BACKEND_H_

@@ -36,8 +36,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_HELPERS_H_
-#define SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_HELPERS_H_
 
 #include <endian.h>
 #include <enso/consts.h>
@@ -128,6 +128,20 @@ void print_pkt_header(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
 
+/**
+ * @brief Sets the core ID of current thread using C methods.
+ *
+ * @param core_id the core ID to set the thread to.
+ *
+ * @return Success/failure of sched_setaffinity.
+ */
+int set_self_core_id(int core_id);
+
+/**
+ * @brief Gets the TID of the current thread.
+ */
+pid_t get_tid(void);
+
 int set_core_id(std::thread& thread, int core_id);
 
 void show_stats(const std::vector<stats_t>& thread_stats,
@@ -180,4 +194,4 @@ _enso_always_inline void memcpy_64_align(void* dst, const void* src, size_t n) {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_HELPERS_H_

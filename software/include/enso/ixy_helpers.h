@@ -35,8 +35,8 @@
  *        [ixy driver](https://github.com/emmericp/ixy/blob/master/src/memory.c)
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_IXY_HELPERS_H_
-#define SOFTWARE_INCLUDE_ENSO_IXY_HELPERS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_IXY_HELPERS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_IXY_HELPERS_H_
 
 #include <cstdint>
 #include <string>
@@ -70,4 +70,4 @@ void* get_huge_page(const std::string& path, size_t size = 0,
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_IXY_HELPERS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_IXY_HELPERS_H_

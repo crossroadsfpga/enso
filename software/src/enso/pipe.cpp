@@ -55,6 +55,17 @@
 
 namespace enso {
 
+void initialize_backend_queues() { return pcie_initialize_backend_queues(); }
+
+void push_to_backend_queues(PipeNotification* notif) {
+  return pcie_push_to_backend(notif);
+}
+
+std::optional<PipeNotification> push_to_backend_queues_get_response(
+    PipeNotification* notif) {
+  return pcie_push_to_backend_get_response(notif);
+}
+
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
@@ -126,7 +137,6 @@ int TxPipe::Init() noexcept {
   struct NotificationBufPair* notif_buf = &(device_->notification_buf_pair_);
 
   buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
-
   return 0;
 }
 
@@ -147,15 +157,15 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    const std::string& pcie_addr,
-    const std::string& huge_page_prefix) noexcept {
-  std::unique_ptr<Device> dev(new (std::nothrow)
-                                  Device(pcie_addr, huge_page_prefix));
+    const std::string& pcie_addr, const std::string& huge_page_prefix,
+    int32_t uthread_id, CompletionCallback completion_callback) noexcept {
+  std::unique_ptr<Device> dev(new (std::nothrow) Device(
+      uthread_id, completion_callback, pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
 
-  if (dev->Init()) {
+  if (dev->Init(uthread_id)) {
     return std::unique_ptr<Device>{};
   }
 
@@ -237,18 +247,19 @@ RxTxPipe* Device::AllocateRxTxPipe(bool fallback) noexcept {
   return pipe;
 }
 
-// TODO(sadok): DRY this code.
-RxPipe* Device::NextRxPipeToRecv() {
+struct RxNotification* Device::NextRxNotif() {
   // This function can only be used when there are **no** RxTx pipes.
   assert(rx_tx_pipes_.size() == 0);
 
-  int32_t id;
+  struct RxNotification* notif;
 
 #ifdef LATENCY_OPT
+  int32_t id;
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_rx_notif(&notification_buf_pair_);
 
-  while (id >= 0) {
+  while (notif) {
+    id = notif->queue_id;
     RxPipe* rx_pipe = rx_pipes_map_[id];
     assert(rx_pipe != nullptr);
 
@@ -261,19 +272,30 @@ RxPipe* Device::NextRxPipeToRecv() {
       break;
     }
 
-    id = get_next_enso_pipe_id(&notification_buf_pair_);
+    notif = get_next_rx_notif(&notification_buf_pair_);
   }
 
 #else  // !LATENCY_OPT
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_rx_notif(&notification_buf_pair_);
 
 #endif  // LATENCY_OPT
 
-  if (id < 0) {
+  return notif;
+}
+
+// TODO(sadok): DRY this code.
+RxPipe* Device::NextRxPipeToRecv() {
+  // This function can only be used when there are **no** RxTx pipes.
+  assert(rx_tx_pipes_.size() == 0);
+
+  struct RxNotification* notification = NextRxNotif();
+  if (!notification) {
     return nullptr;
   }
+  int32_t id = notification->queue_id;
 
   RxPipe* rx_pipe = rx_pipes_map_[id];
+  if (!rx_pipe) return NULL;
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
 }
@@ -282,13 +304,15 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   ProcessCompletions();
   // This function can only be used when there are only RxTx pipes.
   assert(rx_pipes_.size() == rx_tx_pipes_.size());
+  struct RxNotification* notif;
   int32_t id;
 
 #ifdef LATENCY_OPT
   // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_rx_notif(&notification_buf_pair_);
 
-  while (id >= 0) {
+  while (notif) {
+    id = notif->queue_id;
     RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
     assert(rx_tx_pipe->rx_pipe_ != nullptr);
 
@@ -301,15 +325,16 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
       break;
     }
 
-    id = get_next_enso_pipe_id(&notification_buf_pair_);
+    notif = get_next_rx_notif(&notification_buf_pair_);
   }
 
 #else  // !LATENCY_OPT
-  id = get_next_enso_pipe_id(&notification_buf_pair_);
+  notif = get_next_rx_notif(&notification_buf_pair_);
+  id = notif->queue_id;
 
 #endif  // LATENCY_OPT
 
-  if (id < 0) {
+  if (!notif) {
     return nullptr;
   }
 
@@ -318,7 +343,9 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   return rx_tx_pipe;
 }
 
-int Device::Init() noexcept {
+int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
+
+int Device::Init(int32_t uthread_id) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
@@ -343,8 +370,9 @@ int Device::Init() noexcept {
             << std::endl;
   std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
 
+  // initialize entire notification buf information for uthreads to access
   int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
-                                  huge_page_prefix_);
+                                  huge_page_prefix_, uthread_id);
   if (ret != 0) {
     // Could not initialize notification buffer.
     return 3;
@@ -353,12 +381,15 @@ int Device::Init() noexcept {
   return 0;
 }
 
-int Device::ApplyConfig(struct TxNotification* config_notification) {
-  return send_config(&notification_buf_pair_, config_notification);
+int Device::ApplyConfig(struct TxNotification* notification) {
+  tx_pending_requests_[tx_pr_tail_].pipe_id = -1;
+  tx_pending_requests_[tx_pr_tail_].nb_bytes = 0;
+  tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
+  return send_config(&notification_buf_pair_, notification,
+                     &completion_callback_);
 }
 
-void Device::Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
-                  uint32_t nb_bytes) {
+void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
   send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
@@ -380,14 +411,26 @@ void Device::Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr,
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
 }
 
+/**
+ * @brief Processes the completed transmissions of packets by checking
+ * the TX notification buffer.
+ *
+ */
 void Device::ProcessCompletions() {
   uint32_t tx_completions = get_unreported_completions(&notification_buf_pair_);
   for (uint32_t i = 0; i < tx_completions; ++i) {
     TxPendingRequest tx_req = tx_pending_requests_[tx_pr_head_];
     tx_pr_head_ = (tx_pr_head_ + 1) & kPendingTxRequestsBufMask;
 
-    TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
-    pipe->NotifyCompletion(tx_req.nb_bytes);
+    if (tx_req.pipe_id < 0) {
+      // on receiving this, shinkansen should update the notification->signal
+      // for applications
+      std::invoke(completion_callback_);
+    } else {
+      TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
+      // increments app_end_ for the tx pipe by nb_bytes
+      pipe->NotifyCompletion(tx_req.nb_bytes);
+    }
   }
 
   // RxTx pipes need to be explicitly notified so that they can free space for
@@ -395,6 +438,10 @@ void Device::ProcessCompletions() {
   for (RxTxPipe* pipe : rx_tx_pipes_) {
     pipe->ProcessCompletions();
   }
+}
+
+void Device::SendUthreadYield() {
+  return send_uthread_yield(&notification_buf_pair_);
 }
 
 int Device::EnableTimeStamping() {

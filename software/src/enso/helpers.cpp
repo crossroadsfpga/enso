@@ -38,11 +38,16 @@
  */
 
 #include <enso/helpers.h>
+#include <pthread.h>
+#include <sched.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include <cstdio>
 #include <iostream>
 #include <thread>
 #include <vector>
+
 namespace enso {
 
 uint16_t get_bdf_from_pcie_addr(const std::string& pcie_addr) {
@@ -132,12 +137,24 @@ void print_pkt_header(uint8_t* pkt) {
   }
 }
 
+int set_self_core_id(int core_id) {
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(core_id, &cpuset);
+  return sched_setaffinity(0, sizeof(cpuset), &cpuset);
+}
+
 int set_core_id(std::thread& thread, int core_id) {
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
   CPU_SET(core_id, &cpuset);
   return pthread_setaffinity_np(thread.native_handle(), sizeof(cpuset),
                                 &cpuset);
+}
+
+pid_t get_tid() {
+  pid_t tid = syscall(SYS_gettid);
+  return tid;
 }
 
 static void print_stats_line(uint64_t recv_bytes, uint64_t nb_batches,
