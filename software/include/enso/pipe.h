@@ -88,20 +88,6 @@ void push_to_backend_queues(PipeNotification* notif);
 std::optional<PipeNotification> push_to_backend_queues_get_response(
     PipeNotification* notif);
 
-/**
- * @brief Updates the huge page information for the queues to the I/O Kernel.
- *
- * @param notification_buf_pair  Notification buffer pair to use.
- */
-void update_queues();
-
-/**
- * @brief Accesses the queues in case some other thread has added to them.
- *
- * @param notification_buf_pair  Notification buffer pair to use.
- */
-void access_queues();
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
@@ -121,6 +107,7 @@ uint32_t external_peek_next_batch_from_queue(
 class Device {
  public:
   using CompletionCallback = std::function<void()>;
+  using ParkCallback = std::function<void()>;
   /**
    * @brief Factory method to create a device.
    *
@@ -138,7 +125,8 @@ class Device {
   static std::unique_ptr<Device> Create(
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
-      CompletionCallback completion_callback = NULL) noexcept;
+      CompletionCallback completion_callback = NULL,
+      ParkCallback park_callback = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -368,6 +356,34 @@ class Device {
   int GetNotifQueueId() noexcept;
 
   /**
+   * @brief Get the RX Notif Queue virtual address.
+   *
+   * @return void*
+   */
+  struct RxNotification* GetRxNotifQueueBuf() noexcept;
+
+  /**
+   * @brief Get the TX Notif Queue virtual address.
+   *
+   * @return void*
+   */
+  struct TxNotification* GetTxNotifQueueBuf() noexcept;
+
+  /**
+   * @brief Get the current head of the RX notification buffer.
+   *
+   * @return uint32_t
+   */
+  uint32_t GetRxHead() noexcept;
+
+  /**
+   * @brief Get the current head of the TX notification buffer.
+   *
+   * @return uint32_t
+   */
+  uint32_t GetTxHead() noexcept;
+
+  /**
    * @brief Yields the current uthread to the running kthread, enabling other
    * uthreads to run on the current core.
    *
@@ -389,9 +405,11 @@ class Device {
    * Use `Create` factory method to instantiate objects externally.
    */
   Device(int32_t uthread_id, CompletionCallback completion_callback,
-         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
+         ParkCallback park_callback, const std::string& pcie_addr,
+         std::string huge_page_prefix) noexcept
       : kPcieAddr(pcie_addr),
         completion_callback_(completion_callback),
+        park_callback_(park_callback),
         uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
@@ -422,7 +440,8 @@ class Device {
   int16_t core_id_;
   uint16_t bdf_;
   std::string huge_page_prefix_;
-  CompletionCallback completion_callback_;
+  CompletionCallback completion_callback_ = NULL;
+  ParkCallback park_callback_ = NULL;
   int32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;

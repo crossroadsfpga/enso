@@ -69,10 +69,6 @@ std::optional<PipeNotification> push_to_backend_queues_get_response(
   return pcie_push_to_backend_get_response(notif);
 }
 
-void update_queues() { return pcie_update_queues(); }
-
-void access_queues() { return pcie_access_queues(); }
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
@@ -92,7 +88,9 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
+  // std::cout << "in peek" << std::endl;
   if (!next_pipe_) {
+    // std::cout << "getting new tails" << std::endl;
     get_new_tails(notification_buf_pair_);
   }
   uint32_t ret = peek_next_batch_from_queue(
@@ -163,14 +161,19 @@ int RxTxPipe::Init(bool fallback) noexcept {
   return 0;
 }
 
-std::unique_ptr<Device> Device::Create(
-    const std::string& pcie_addr, const std::string& huge_page_prefix,
-    int32_t uthread_id, CompletionCallback completion_callback) noexcept {
-  std::unique_ptr<Device> dev(new (std::nothrow) Device(
-      uthread_id, completion_callback, pcie_addr, huge_page_prefix));
+std::unique_ptr<Device> Device::Create(const std::string& pcie_addr,
+                                       const std::string& huge_page_prefix,
+                                       int32_t uthread_id,
+                                       CompletionCallback completion_callback,
+                                       ParkCallback park_callback) noexcept {
+  std::unique_ptr<Device> dev(
+      new (std::nothrow) Device(uthread_id, completion_callback, park_callback,
+                                pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
+
+  set_park_callback(park_callback);
 
   if (dev->Init(uthread_id)) {
     return std::unique_ptr<Device>{};
@@ -352,6 +355,18 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
+struct RxNotification* Device::GetRxNotifQueueBuf() noexcept {
+  return notification_buf_pair_.rx_buf;
+}
+
+struct TxNotification* Device::GetTxNotifQueueBuf() noexcept {
+  return notification_buf_pair_.tx_buf;
+}
+
+uint32_t Device::GetRxHead() noexcept { return notification_buf_pair_.rx_head; }
+
+uint32_t Device::GetTxHead() noexcept { return notification_buf_pair_.tx_head; }
+
 int Device::Init(int32_t uthread_id) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
@@ -411,6 +426,7 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
     ProcessCompletions();
     nb_pending_requests =
         (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
+    if (park_callback_) std::invoke(park_callback_);
   }
 
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
@@ -445,11 +461,6 @@ void Device::ProcessCompletions() {
   for (RxTxPipe* pipe : rx_tx_pipes_) {
     pipe->ProcessCompletions();
   }
-}
-
-void Device::SendUthreadYield(int32_t next_uthread_id, bool get_notified) {
-  return send_uthread_yield(&notification_buf_pair_, next_uthread_id,
-                            get_notified);
 }
 
 int Device::EnableTimeStamping() {

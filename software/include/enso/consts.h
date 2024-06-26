@@ -153,15 +153,30 @@ enum class NotifType : uint8_t {
   kFreePipe = 9,
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
-  kUthreadWaiting = 12,
-  kKthreadYield = 13,
-  kUthreadStart = 14
+  kKthreadYield = 12,
+  kProcessedCompletion = 13,
+  kJoinedKthread = 14,
 };
 
 struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
+  uint64_t padding[4];
+};
+
+struct CompletionNotification {
+  NotifType type;
+  uint64_t notif_buf_id;
+  uint64_t old_head;
+  uint64_t new_head;
+  uint64_t padding[3];
+};
+
+struct JoinedNotification {
+  NotifType type;
+  uint32_t application_id;
+  uint64_t core_id;
   uint64_t padding[4];
 };
 
@@ -207,25 +222,9 @@ struct ShinkansenNotification {
   uint64_t padding[5];
 };
 
-struct KthreadNotification {
+struct KthreadYieldNotification {
   NotifType type;
-  uint64_t application_id;
-  uint64_t padding[5];
-};
-
-struct YieldNotification {
-  NotifType type;
-  uint64_t notif_buf_id;
-  uint64_t last_rx_notif_head;
-  uint64_t last_tx_consumed_head;
-  uint64_t get_notified;
-  uint64_t next_uthread;
-  uint64_t next_uthread_id;
-};
-
-struct UthreadStartNotification {
-  NotifType type;
-  uint64_t uthread_id;
+  uint64_t voluntary;
   uint64_t padding[5];
 };
 
