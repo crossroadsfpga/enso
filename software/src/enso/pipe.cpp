@@ -55,6 +55,17 @@
 
 namespace enso {
 
+void initialize_backend_queues() { return pcie_initialize_backend_queues(); }
+
+void push_to_backend_queues(PipeNotification* notif) {
+  return pcie_push_to_backend(notif);
+}
+
+std::optional<PipeNotification> push_to_backend_queues_get_response(
+    PipeNotification* notif) {
+  return pcie_push_to_backend_get_response(notif);
+}
+
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
@@ -103,9 +114,6 @@ int RxPipe::Init(bool fallback) noexcept {
 
   id_ = ret;
 
-  std::cout << "initialized rxpipe with id " << id_
-            << " and tail: " << internal_rx_pipe_.rx_tail << std::endl;
-
   return 0;
 }
 
@@ -149,16 +157,15 @@ int RxTxPipe::Init(bool fallback) noexcept {
 }
 
 std::unique_ptr<Device> Device::Create(
-    uint32_t application_id, CompletionCallback completion_callback,
-    const std::string& pcie_addr,
-    const std::string& huge_page_prefix) noexcept {
+    const std::string& pcie_addr, const std::string& huge_page_prefix,
+    int32_t uthread_id, CompletionCallback completion_callback) noexcept {
   std::unique_ptr<Device> dev(new (std::nothrow) Device(
-      pcie_addr, huge_page_prefix, completion_callback));
+      uthread_id, completion_callback, pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
 
-  if (dev->Init(application_id)) {
+  if (dev->Init(uthread_id)) {
     return std::unique_ptr<Device>{};
   }
 
@@ -288,6 +295,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   int32_t id = notification->queue_id;
 
   RxPipe* rx_pipe = rx_pipes_map_[id];
+  if (!rx_pipe) return NULL;
   rx_pipe->SetAsNextPipe();
   return rx_pipe;
 }
@@ -337,7 +345,7 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
 
-int Device::Init(uint32_t application_id) noexcept {
+int Device::Init(int32_t uthread_id) noexcept {
   if (core_id_ < 0) {
     core_id_ = sched_getcpu();
     if (core_id_ < 0) {
@@ -362,8 +370,9 @@ int Device::Init(uint32_t application_id) noexcept {
             << std::endl;
   std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
 
+  // initialize entire notification buf information for uthreads to access
   int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
-                                  huge_page_prefix_, application_id);
+                                  huge_page_prefix_, uthread_id);
   if (ret != 0) {
     // Could not initialize notification buffer.
     return 3;
@@ -419,6 +428,7 @@ void Device::ProcessCompletions() {
       std::invoke(completion_callback_);
     } else {
       TxPipe* pipe = tx_pipes_[tx_req.pipe_id];
+      // increments app_end_ for the tx pipe by nb_bytes
       pipe->NotifyCompletion(tx_req.nb_bytes);
     }
   }
@@ -428,6 +438,10 @@ void Device::ProcessCompletions() {
   for (RxTxPipe* pipe : rx_tx_pipes_) {
     pipe->ProcessCompletions();
   }
+}
+
+void Device::SendUthreadYield() {
+  return send_uthread_yield(&notification_buf_pair_);
 }
 
 int Device::EnableTimeStamping() {

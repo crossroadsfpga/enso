@@ -73,7 +73,7 @@ struct SocketInternal {
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
                           const std::string& huge_page_prefix,
-                          uint32_t application_id);
+                          int32_t uthread_id);
 
 /**
  * @brief Initializes an Enso Pipe.
@@ -293,6 +293,14 @@ uint64_t get_dev_addr_from_virt_addr(
     struct NotificationBufPair* notification_buf_pair, void* virt_addr);
 
 /**
+ * @brief Sends a message to the I/O Kernel indicating that this uthread has
+ * yielded.
+ *
+ * @param notification_buf_pair  Notification buffer pair to use.
+ */
+void send_uthread_yield(struct NotificationBufPair* notification_buf_pair);
+
+/**
  * @brief Frees the notification buffer pair.
  *
  * @param notification_buf_pair Notification buffer pair to free.
@@ -323,6 +331,28 @@ int dma_finish(struct SocketInternal* socket_entry);
  * @deprecated This function is deprecated and will be removed in the future.
  */
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
+
+/**
+ * @brief Initializes queues to and from backend for this thread.
+ *
+ */
+void pcie_initialize_backend_queues();
+
+/**
+ * @brief Push notification to backend.
+ *
+ * @param notif Notification to push
+ */
+void pcie_push_to_backend(PipeNotification* notif);
+
+/**
+ * @brief Push notification to backend and wait for a response.
+ *
+ * @param notif Notification to push.
+ * @return Response notification.
+ */
+std::optional<PipeNotification> pcie_push_to_backend_get_response(
+    PipeNotification* notif);
 
 /**
  * @brief Prints statistics for a given socket.

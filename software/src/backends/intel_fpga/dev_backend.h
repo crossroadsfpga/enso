@@ -46,6 +46,17 @@
 
 namespace enso {
 
+int initialize_queues() { return 0; }
+
+void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
+
+std::optional<PipeNotification> push_to_backend_get_response(
+    enso::PipeNotification* notif) {
+  (void)notif;
+  std::optional<PipeNotification> res;
+  return res;
+}
+
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
@@ -124,12 +135,24 @@ class DevBackend {
   int GetRrStatus() { return dev_->get_rr_status(); }
 
   /**
+   * @brief Sends a message to the IOKernel that the uthread is yielding.
+   *
+   * @param notif_buf_id The notification buffer ID of the current device.
+   */
+  void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
+                    uint32_t last_tx_consumed_head) {
+    (void)notif_buf_id;
+    (void)last_rx_notif_head;
+    (void)last_tx_consumed_head;
+  }
+
+  /**
    * @brief Allocates a notification buffer.
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
-  int AllocateNotifBuf(uint32_t application_id) {
-    (void)application_id;
+  int AllocateNotifBuf(int32_t uthread_id) {
+    (void)uthread_id;
     return dev_->allocate_notif_buf();
   }
 
@@ -181,8 +204,10 @@ class DevBackend {
     return 0;
   }
 
+  // NOTE: require all devbackends to be the same size
   intel_fpga_pcie_api::IntelFpgaPcieDev* dev_;
   unsigned int bdf_;
+  int core_id_;
   int bar_;
 };
 
