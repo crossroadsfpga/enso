@@ -543,10 +543,6 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
       }
 
       head_addr_ = &reinterpret_cast<uint32_t*>(addr)[core_id_];
-      // uint64_t phys = virt_to_phys(head_addr_);
-      // std::cout << "phys head address  of consumer: " << phys << std::endl;
-      //   std::cout << "consumer: allocating head addr: " << head_addr_
-      //             << " for app " << application_id_ << std::endl;
     }
 
     return 0;
