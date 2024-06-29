@@ -74,8 +74,6 @@ void initialize_backend_dev(BackendWrapper preempt_enable,
   (void)application_id;
 }
 
-void set_backend_core_id_dev(uint32_t core_id) { (void)core_id; }
-
 void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
 
 void update_backend_queues() {}
@@ -118,10 +116,8 @@ class DevBackend {
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value,
-                                               void* uio_mmap_bar2_addr,
-                                               bool first = false) {
+                                               void* uio_mmap_bar2_addr) {
     (void)uio_mmap_bar2_addr;
-    (void)first;
     // Block if full.
     struct MmioNotification mmio_notification;
     mmio_notification.type = NotifType::kWrite;

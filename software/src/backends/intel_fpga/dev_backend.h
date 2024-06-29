@@ -54,6 +54,11 @@ ParkCallback park_callback_;
 using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
 UpdateCallback update_callback_;
 
+int initialize_queue(uint32_t id) {
+  (void)id;
+  return 0;
+}
+
 void initialize_backend_dev(BackendWrapper preempt_enable,
                             BackendWrapper preempt_disable,
                             IdCallback id_callback, TscCallback tsc_callback,
@@ -67,8 +72,6 @@ void initialize_backend_dev(BackendWrapper preempt_enable,
   (void)application_id;
 }
 
-void set_backend_core_id_dev(uint32_t core_id) { (void)core_id; }
-
 void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
 
 void update_backend_queues() {}
@@ -81,8 +84,6 @@ std::optional<PipeNotification> push_to_backend_get_response(
   std::optional<PipeNotification> res;
   return res;
 }
-
-bool is_hybrid() { return false; }
 
 class DevBackend {
  public:
@@ -113,10 +114,8 @@ class DevBackend {
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
                                                uint32_t value,
-                                               void* uio_mmap_bar2_addr,
-                                               bool first = false) {
+                                               void* uio_mmap_bar2_addr) {
     (void)uio_mmap_bar2_addr;
-    (void)first;
     _enso_compiler_memory_barrier();
     *addr = value;
   }

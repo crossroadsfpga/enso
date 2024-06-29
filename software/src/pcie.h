@@ -65,6 +65,8 @@ struct SocketInternal {
   struct RxEnsoPipeInternal enso_pipe;
 };
 
+int pcie_initialize_queue(uint32_t id);
+
 void set_park_callback(ParkCallback park_callback);
 
 /**
@@ -221,7 +223,7 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
  * @return number of bytes sent.
  */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len, bool first = false,
+                       uint64_t phys_addr, uint32_t len,
                        uint64_t sent_time = 0);
 
 /**
@@ -336,8 +338,6 @@ int dma_finish(struct SocketInternal* socket_entry);
  */
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 
-void pcie_set_backend_core_id(uint32_t core_id);
-
 /**
  * @brief Initializes queues to and from backend for this thread.
  *
@@ -347,22 +347,6 @@ void pcie_initialize_backend(BackendWrapper preempt_enable,
                              IdCallback id_callback, TscCallback tsc_callback,
                              UpdateCallback update_callback,
                              TxCallback tx_callback, uint32_t application_id);
-
-/**
- * @brief Push notification to backend.
- *
- * @param notif Notification to push
- */
-void pcie_push_to_backend(PipeNotification* notif);
-
-/**
- * @brief Push notification to backend and wait for a response.
- *
- * @param notif Notification to push.
- * @return Response notification.
- */
-std::optional<PipeNotification> pcie_push_to_backend_get_response(
-    PipeNotification* notif);
 
 /**
  * @brief Prints statistics for a given socket.

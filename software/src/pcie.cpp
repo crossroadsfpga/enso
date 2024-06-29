@@ -68,6 +68,8 @@ namespace enso {
 
 TxCallback tx_callback_ = nullptr;
 
+int pcie_initialize_queue(uint32_t id) { return initialize_queue(id); }
+
 void set_park_callback(ParkCallback park_callback) {
   park_callback_ = park_callback;
 }
@@ -539,16 +541,12 @@ void advance_pipe(struct RxEnsoPipeInternal* enso_pipe, size_t len) {
   uint32_t nb_flits = ((uint64_t)len - 1) / 64 + 1;
   rx_pkt_head = (rx_pkt_head + nb_flits) % ENSO_PIPE_SIZE;
 
-  // std::cout << "advance pipe " << enso_pipe->id << ": " << rx_pkt_head
-  //           << std::endl;
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, rx_pkt_head,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = rx_pkt_head;
 }
 
 void fully_advance_pipe(struct RxEnsoPipeInternal* enso_pipe) {
-  // std::cout << "fully advance pipe: " << enso_pipe->rx_tail << std::endl;
-
   DevBackend::mmio_write32(enso_pipe->buf_head_ptr, enso_pipe->rx_tail,
                            enso_pipe->uio_mmap_bar2_addr);
   enso_pipe->rx_head = enso_pipe->rx_tail;
@@ -559,9 +557,9 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
                            enso_pipe->uio_mmap_bar2_addr);
 }
 
-static _enso_always_inline uint32_t __send_to_queue(
-    struct NotificationBufPair* notification_buf_pair, uint64_t phys_addr,
-    uint32_t len, bool first, uint64_t sent_time) {
+static _enso_always_inline uint32_t
+__send_to_queue(struct NotificationBufPair* notification_buf_pair,
+                uint64_t phys_addr, uint32_t len, uint64_t sent_time) {
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
   uint32_t tx_tail = notification_buf_pair->tx_tail;
   uint32_t missing_bytes = len;
@@ -608,30 +606,20 @@ static _enso_always_inline uint32_t __send_to_queue(
     uint64_t huge_page_offset = (transf_addr + req_length) % kBufPageSize;
     transf_addr = hugepage_base_addr + huge_page_offset;
 
-    // if (first)
-    //   std::cout << "sent phys addr " << phys_addr << " for notif buf "
-    //             << notification_buf_pair->id << " at tx tail " << tx_tail
-    //             << std::endl;
-
     tx_tail = (tx_tail + 1) % kNotificationBufSize;
     missing_bytes -= req_length;
   }
 
-  // std::cout << "Notif buf " << notification_buf_pair->id << " tx tail is now
-  // "
-  //           << tx_tail << std::endl;
   notification_buf_pair->tx_tail = tx_tail;
   DevBackend::mmio_write32(notification_buf_pair->tx_tail_ptr, tx_tail,
-                           notification_buf_pair->uio_mmap_bar2_addr, first);
+                           notification_buf_pair->uio_mmap_bar2_addr);
 
   return len;
 }
 
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len, bool first,
-                       uint64_t sent_time) {
-  return __send_to_queue(notification_buf_pair, phys_addr, len, first,
-                         sent_time);
+                       uint64_t phys_addr, uint32_t len, uint64_t sent_time) {
+  return __send_to_queue(notification_buf_pair, phys_addr, len, sent_time);
 }
 
 uint32_t get_unreported_completions(
@@ -850,10 +838,6 @@ int dma_finish(struct SocketInternal* socket_entry) {
   return 0;
 }
 
-void pcie_set_backend_core_id(uint32_t core_id) {
-  set_backend_core_id_dev(core_id);
-}
-
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   return (uint32_t)socket_entry->enso_pipe.id;
 }
@@ -866,13 +850,6 @@ void pcie_initialize_backend(BackendWrapper preempt_enable,
   tx_callback_ = tx_callback;
   initialize_backend_dev(preempt_enable, preempt_disable, id_callback,
                          tsc_callback, update_callback, application_id);
-}
-
-void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }
-
-std::optional<PipeNotification> pcie_push_to_backend_get_response(
-    PipeNotification* notif) {
-  return push_to_backend_get_response(notif);
 }
 
 void print_stats(struct SocketInternal* socket_entry, bool print_global) {

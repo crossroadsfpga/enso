@@ -55,9 +55,7 @@
 
 namespace enso {
 
-void set_backend_core_id(uint32_t core_id) {
-  pcie_set_backend_core_id(core_id);
-}
+int initialize_backend_queue(uint32_t id) { return pcie_initialize_queue(id); }
 
 void initialize_backend(BackendWrapper preempt_enable,
                         BackendWrapper preempt_disable, IdCallback id_callback,
@@ -67,15 +65,6 @@ void initialize_backend(BackendWrapper preempt_enable,
   return pcie_initialize_backend(preempt_enable, preempt_disable, id_callback,
                                  tsc_callback, update_callback, tx_callback,
                                  application_id);
-}
-
-void push_to_backend_queues(PipeNotification* notif) {
-  return pcie_push_to_backend(notif);
-}
-
-std::optional<PipeNotification> push_to_backend_queues_get_response(
-    PipeNotification* notif) {
-  return pcie_push_to_backend_get_response(notif);
 }
 
 uint32_t external_peek_next_batch_from_queue(
@@ -382,10 +371,10 @@ int Device::ApplyConfig(struct TxNotification* notification) {
 }
 
 void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
-                  bool first, uint64_t sent_time) {
+                  uint64_t sent_time) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
-  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes, first, sent_time);
+  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes, sent_time);
 
   uint32_t nb_pending_requests =
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
