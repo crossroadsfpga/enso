@@ -55,18 +55,6 @@
 
 namespace enso {
 
-int initialize_backend_queue(uint32_t id) { return pcie_initialize_queue(id); }
-
-void initialize_backend(BackendWrapper preempt_enable,
-                        BackendWrapper preempt_disable, IdCallback id_callback,
-                        TscCallback tsc_callback,
-                        UpdateCallback update_callback, TxCallback tx_callback,
-                        uint32_t application_id) {
-  return pcie_initialize_backend(preempt_enable, preempt_disable, id_callback,
-                                 tsc_callback, update_callback, tx_callback,
-                                 application_id);
-}
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
@@ -167,19 +155,14 @@ int RxTxPipe::Init(bool fallback) noexcept {
   return 0;
 }
 
-std::unique_ptr<Device> Device::Create(const std::string& pcie_addr,
-                                       const std::string& huge_page_prefix,
-                                       int32_t uthread_id,
-                                       CompletionCallback completion_callback,
-                                       ParkCallback park_callback) noexcept {
-  std::unique_ptr<Device> dev(
-      new (std::nothrow) Device(uthread_id, completion_callback, park_callback,
-                                pcie_addr, huge_page_prefix));
+std::unique_ptr<Device> Device::Create(
+    const std::string& pcie_addr, const std::string& huge_page_prefix,
+    int32_t uthread_id, CompletionCallback completion_callback) noexcept {
+  std::unique_ptr<Device> dev(new (std::nothrow) Device(
+      uthread_id, completion_callback, pcie_addr, huge_page_prefix));
   if (unlikely(!dev)) {
     return std::unique_ptr<Device>{};
   }
-
-  set_park_callback(park_callback);
 
   if (dev->Init(uthread_id)) {
     return std::unique_ptr<Device>{};
@@ -347,10 +330,6 @@ int Device::Init(int32_t uthread_id) noexcept {
 
   int bar = -1;
 
-  std::cerr << "Running with NOTIFICATION_BUF_SIZE: " << kNotificationBufSize
-            << std::endl;
-  std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
-
   // initialize entire notification buf information for uthreads to access
   int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
                                   huge_page_prefix_, uthread_id);
@@ -458,6 +437,19 @@ int Device::GetRoundRobinStatus() noexcept {
 
 int Device::DisableRoundRobin() {
   return disable_round_robin(&notification_buf_pair_);
+}
+
+int Device::InitializeBackendQueues(uint32_t id) {
+  return pcie_initialize_queues(id);
+}
+
+void Device::InitializeBackend(CounterCallback counter_callback,
+                               TxCallback tx_callback,
+                               ParkCallback park_callback,
+                               UpdateCallback update_callback,
+                               uint32_t application_id) {
+  return pcie_initialize_backend(counter_callback, tx_callback, park_callback,
+                                 update_callback, application_id);
 }
 
 }  // namespace enso

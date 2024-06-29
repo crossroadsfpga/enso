@@ -51,24 +51,14 @@
 
 namespace enso {
 
-using CompletionCallback = std::function<void()>;
-using ParkCallback = std::function<void(bool)>;
-using BackendWrapper = std::function<void()>;
-using IdCallback = std::function<uint64_t()>;
-using TscCallback = std::function<uint64_t()>;
-using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
-using TxCallback = std::function<void(uint64_t)>;
-using UpdatePacket = std::function<void(enso_pipe_id_t, uint64_t, uint32_t)>;
+extern TxCallback tx_callback_;
+extern UpdateCallback update_callback_;
+extern ParkCallback park_callback_;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
-
-int pcie_initialize_queue(uint32_t id);
-
-void set_park_callback(ParkCallback park_callback);
-
 /**
  * @brief Initializes the notification buffer pair.
  *
@@ -339,14 +329,21 @@ int dma_finish(struct SocketInternal* socket_entry);
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 
 /**
- * @brief Initializes queues to and from backend for this thread.
+ * @brief Initializes essential backend variables.
  *
  */
-void pcie_initialize_backend(BackendWrapper preempt_enable,
-                             BackendWrapper preempt_disable,
-                             IdCallback id_callback, TscCallback tsc_callback,
+void pcie_initialize_backend(CounterCallback counter_callback,
+                             TxCallback tx_callback, ParkCallback park_callback,
                              UpdateCallback update_callback,
-                             TxCallback tx_callback, uint32_t application_id);
+                             uint32_t application_id);
+
+/**
+ * @brief Initializes backend queues to and from the IOKernel.
+ *
+ * @param id The ID of the kthread requesting the queues.
+ * @return 0 on success, negative on error.
+ */
+int pcie_initialize_queues(uint32_t id);
 
 /**
  * @brief Prints statistics for a given socket.

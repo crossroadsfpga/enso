@@ -69,22 +69,11 @@ thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
 int64_t shinkansen_notif_buf_id_ = -1;
 uint32_t application_id_ = 0;
 
-using BackendWrapper = std::function<void()>;
-using IdCallback = std::function<uint64_t()>;
-using TscCallback = std::function<uint64_t()>;
-using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
-UpdateCallback update_callback_;
-BackendWrapper preempt_enable_;
-BackendWrapper preempt_disable_;
-IdCallback id_callback_;
-TscCallback tsc_callback_;
-using ParkCallback = std::function<void(bool)>;
-ParkCallback park_callback_;
+using CounterCallback = std::function<uint64_t()>;
+CounterCallback counter_callback_;
 
-int initialize_queue(uint32_t id) {
+int initialize_queues(uint32_t id) {
   if (queue_to_backend_ != nullptr) return -1;
-
-  std::cout << "Initializing queue for ID " << id << std::endl;
 
   std::string queue_to_app_name = std::string(kIpcQueueToAppName) +
                                   std::to_string(application_id_) + ":" +
@@ -110,16 +99,9 @@ int initialize_queue(uint32_t id) {
   return 0;
 }
 
-void initialize_backend_dev(BackendWrapper preempt_enable,
-                            BackendWrapper preempt_disable,
-                            IdCallback id_callback, TscCallback tsc_callback,
-                            UpdateCallback update_callback,
+void initialize_backend_dev(CounterCallback counter_callback,
                             uint32_t application_id) {
-  preempt_enable_ = preempt_enable;
-  preempt_disable_ = preempt_disable;
-  id_callback_ = id_callback;
-  tsc_callback_ = tsc_callback;
-  update_callback_ = update_callback;
+  counter_callback_ = counter_callback;
   application_id_ = application_id;
 }
 
@@ -143,8 +125,6 @@ std::optional<PipeNotification> push_to_backend_get_response(
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
-    std::cerr << "Using hybrid backend" << std::endl;
-
     DevBackend* dev = new (std::nothrow) DevBackend(bdf, bar);
 
     if (dev == nullptr) {
@@ -188,8 +168,7 @@ class DevBackend {
           mmio_notification.type = NotifType::kWrite;
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
-          mmio_notification.uthread_id = std::invoke(id_callback_);
-          mmio_notification.tsc = std::invoke(tsc_callback_);
+          mmio_notification.counter = std::invoke(counter_callback_);
 
           pipe_notification = (enso::PipeNotification*)&mmio_notification;
 
@@ -214,9 +193,8 @@ class DevBackend {
       mmio_notification.type = NotifType::kWrite;
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
-      mmio_notification.uthread_id = std::invoke(id_callback_);
-      mmio_notification.tsc = std::invoke(tsc_callback_);
-      mmio_notification.actual_tsc = rdtsc();
+      mmio_notification.counter = std::invoke(counter_callback_);
+      mmio_notification.tsc = rdtsc();
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
@@ -241,7 +219,6 @@ class DevBackend {
       struct MmioNotification mmio_notification;
       mmio_notification.type = NotifType::kRead;
       mmio_notification.address = offset_addr;
-      mmio_notification.uthread_id = std::invoke(id_callback_);
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
@@ -365,10 +342,6 @@ class DevBackend {
 
     struct NotifBufNotification* result =
         (struct NotifBufNotification*)&notification.value();
-
-    // std::cout << "recvd response from allocatenotifbuf" << std::endl;
-    std::cout << "Uthread " << uthread_id << " got notif buf "
-              << result->notif_buf_id << std::endl;
 
     assert(result->type == NotifType::kAllocateNotifBuf);
     return result->notif_buf_id;

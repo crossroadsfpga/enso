@@ -64,23 +64,6 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
-using BackendWrapper = std::function<void()>;
-using IdCallback = std::function<uint64_t()>;
-using TscCallback = std::function<uint64_t()>;
-using TxCallback = std::function<void(uint64_t)>;
-using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
-int initialize_backend_queue(uint32_t id);
-
-/**
- * @brief Initializes queues to and from the backend.
- *
- */
-void initialize_backend(BackendWrapper preempt_enable,
-                        BackendWrapper preempt_disable, IdCallback id_callback,
-                        TscCallback tsc_callback,
-                        UpdateCallback update_callback, TxCallback tx_callback,
-                        uint32_t application_id);
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
@@ -100,7 +83,7 @@ uint32_t external_peek_next_batch_from_queue(
 class Device {
  public:
   using CompletionCallback = std::function<void()>;
-  using ParkCallback = std::function<void(bool)>;
+
   /**
    * @brief Factory method to create a device.
    *
@@ -118,8 +101,7 @@ class Device {
   static std::unique_ptr<Device> Create(
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
-      CompletionCallback completion_callback = NULL,
-      ParkCallback park_callback = NULL) noexcept;
+      CompletionCallback completion_callback = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -127,6 +109,24 @@ class Device {
   Device& operator=(Device&&) = delete;
 
   ~Device();
+
+  /**
+   * @brief Initialize the queues for communication with the IOKernel.
+   *
+   * @param id The ID of the kthread requesting a queue.
+   * @return 0 on success, negative on failure.
+   */
+  static int InitializeBackendQueues(uint32_t id);
+
+  /**
+   * @brief Set some backend constants.
+   *
+   */
+  static void InitializeBackend(CounterCallback counter_callback,
+                                TxCallback tx_callback,
+                                ParkCallback park_callback,
+                                UpdateCallback update_callback,
+                                uint32_t application_id);
 
   /**
    * @brief Allocates an RX pipe.
@@ -421,11 +421,9 @@ class Device {
    * Use `Create` factory method to instantiate objects externally.
    */
   Device(int32_t uthread_id, CompletionCallback completion_callback,
-         ParkCallback park_callback, const std::string& pcie_addr,
-         std::string huge_page_prefix) noexcept
+         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
       : kPcieAddr(pcie_addr),
         completion_callback_(completion_callback),
-        park_callback_(park_callback),
         uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
@@ -457,7 +455,6 @@ class Device {
   uint16_t bdf_;
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_ = NULL;
-  ParkCallback park_callback_ = NULL;
   int32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;

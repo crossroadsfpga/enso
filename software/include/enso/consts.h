@@ -41,10 +41,20 @@
 #ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 #define ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 
+#include <enso/internals.h>
+
 #include <cstdint>
+#include <functional>
 #include <string>
 
 namespace enso {
+
+using CompletionCallback = std::function<void()>;
+using ParkCallback = std::function<void(bool)>;
+using CounterCallback = std::function<uint64_t()>;
+using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
+using TxCallback = std::function<void(uint64_t)>;
+using UpdatePacket = std::function<void(enso_pipe_id_t, uint64_t, uint32_t)>;
 
 // These determine the maximum number of notification buffers and enso pipes,
 // these macros also exist in hardware and **must be kept in sync**. Update the
@@ -160,10 +170,9 @@ struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
-  uint64_t uthread_id;
+  uint64_t counter;
   uint64_t tsc;
-  uint64_t actual_tsc;
-  uint64_t padding;
+  uint64_t padding[2];
 };
 
 struct FallbackNotification {
