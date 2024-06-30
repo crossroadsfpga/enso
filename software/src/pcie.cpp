@@ -577,7 +577,7 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     while (unlikely(free_slots == 0)) {
       ++notification_buf_pair->tx_full_cnt;
       if (park_callback_ != nullptr) {
-        std::invoke(park_callback_, false);
+        std::invoke(park_callback_);
       }
       update_tx_head(notification_buf_pair);
       free_slots =
@@ -693,7 +693,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
     free_slots =
         (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
     if (park_callback_ != nullptr) {
-      std::invoke(park_callback_, false);
+      std::invoke(park_callback_);
     }
   }
 
@@ -711,7 +711,7 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
   while (notification_buf_pair->nb_unreported_completions ==
          nb_unreported_completions) {
     if (park_callback_ != nullptr) {
-      std::invoke(park_callback_, false);
+      std::invoke(park_callback_);
     }
     update_tx_head(notification_buf_pair);
   }

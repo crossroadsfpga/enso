@@ -362,7 +362,7 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
   // We need space for two requests because the request may be split into two
   // if the bytes wrap around the end of the buffer.
   while (unlikely(nb_pending_requests >= (kMaxPendingTxRequests - 2))) {
-    if (park_callback_ != nullptr) std::invoke(park_callback_, false);
+    if (park_callback_ != nullptr) std::invoke(park_callback_);
     ProcessCompletions();
     nb_pending_requests =
         (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
