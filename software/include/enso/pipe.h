@@ -947,8 +947,9 @@ class TxPipe {
     assert(nb_bytes <= kMaxCapacity);
     assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
-    uint8_t* virt_addr = (uint8_t*)((uint64_t)buf_ + app_begin_);
-    uint64_t sent_time = get_pkt_sent_time(virt_addr);
+    // uint8_t* virt_addr = (uint8_t*)((uint64_t)buf_ + app_begin_);
+    // uint64_t sent_time = get_pkt_sent_time(virt_addr);
+    uint64_t sent_time = 0;
 
     app_begin_ = (app_begin_ + nb_bytes) & kBufMask;
 

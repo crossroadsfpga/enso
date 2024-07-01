@@ -74,9 +74,11 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
 }
 
 inline void RxPipe::SetPktSentTime(uint32_t tail, uint64_t sent_time) {
-  uint32_t* enso_pipe_buf = internal_rx_pipe_.buf;
-  uint8_t* pkt = (uint8_t*)&enso_pipe_buf[tail * 16];
-  set_pkt_sent_time(pkt, sent_time);
+  // uint32_t* enso_pipe_buf = internal_rx_pipe_.buf;
+  // uint8_t* pkt = (uint8_t*)&enso_pipe_buf[tail * 16];
+  // set_pkt_sent_time(pkt, sent_time);
+  (void)tail;
+  (void)sent_time;
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {

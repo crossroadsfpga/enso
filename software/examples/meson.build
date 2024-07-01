@@ -14,8 +14,6 @@ executable('ensogen', 'ensogen.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: enso_lib, include_directories: inc)
 executable('ensogen_random', 'ensogen_random.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: enso_lib, include_directories: inc)
-executable('ensogen_poisson', 'ensogen_poisson.cpp', dependencies: [thread_dep, pcap_dep],
-           link_with: enso_lib, include_directories: inc)
 executable('capture', 'capture.cpp', dependencies: [thread_dep, pcap_dep],
            link_with: enso_lib, include_directories: inc)
 executable('l2_forward', 'l2_forward.cpp', dependencies: [thread_dep],

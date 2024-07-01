@@ -124,7 +124,6 @@ int main(int argc, char const* argv[]) {
   // Create a packet transmit schedule.
   std::vector<double> sched(total_nb_packets);
   std::exponential_distribution<double> rd(1.0 / (1000000.0 / req_rate));
-  std::cout << "average: " << 1.0 / (1000000.0 / req_rate) << std::endl;
   std::generate(sched.begin(), sched.end(), std::bind(rd, g));
 
   int packetsPerDestination = total_nb_packets / nb_dst;
@@ -155,8 +154,6 @@ int main(int argc, char const* argv[]) {
     pkt_hdr.caplen = pkt_hdr.len;
     ts.tv_usec = sched[nb_pkts] * 100;
     pkt_hdr.ts = ts;
-    std::cout << "sched[" << nb_pkts << "]: " << pkt_hdr.ts.tv_usec
-              << std::endl;
 
     l4_hdr->dest = htons(80);
     l4_hdr->source = htons(8080);

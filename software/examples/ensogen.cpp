@@ -53,6 +53,7 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <random>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -106,6 +107,9 @@ static volatile int force_stop = 0;
 static volatile int rx_ready = 0;
 static volatile int rx_done = 0;
 static volatile int tx_done = 0;
+
+std::mt19937 g(0);
+std::exponential_distribution<float> wd(1.0 / (3095 * 10.0));
 
 void int_handler(int signal __attribute__((unused))) {
   if (!keep_running) {
@@ -167,6 +171,7 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_RTT_HIST_LEN "rtt-hist-len"
 #define CMD_OPT_STATS_DELAY "stats-delay"
 #define CMD_OPT_PCIE_ADDR "pcie-addr"
+#define CMD_OPT_DISTRIBUTION "distribution"
 
 // Map long options to short options.
 enum {
@@ -182,6 +187,7 @@ enum {
   CMD_OPT_RTT_HIST_LEN_NUM,
   CMD_OPT_STATS_DELAY_NUM,
   CMD_OPT_PCIE_ADDR_NUM,
+  CMD_OPT_DISTRIBUTION_NUM
 };
 
 static const char short_options[] = "";
@@ -199,6 +205,7 @@ static const struct option long_options[] = {
     {CMD_OPT_RTT_HIST_LEN, required_argument, NULL, CMD_OPT_RTT_HIST_LEN_NUM},
     {CMD_OPT_STATS_DELAY, required_argument, NULL, CMD_OPT_STATS_DELAY_NUM},
     {CMD_OPT_PCIE_ADDR, required_argument, NULL, CMD_OPT_PCIE_ADDR_NUM},
+    {CMD_OPT_DISTRIBUTION, required_argument, NULL, CMD_OPT_DISTRIBUTION_NUM},
     {0, 0, 0, 0}};
 
 struct parsed_args_t {
@@ -218,6 +225,7 @@ struct parsed_args_t {
   uint32_t rtt_hist_len;
   uint32_t stats_delay;
   std::string pcie_addr;
+  std::string distribution;
 };
 
 static int parse_args(int argc, char** argv,
@@ -275,6 +283,9 @@ static int parse_args(int argc, char** argv,
         break;
       case CMD_OPT_PCIE_ADDR_NUM:
         parsed_args.pcie_addr = optarg;
+        break;
+      case CMD_OPT_DISTRIBUTION_NUM:
+        parsed_args.distribution = optarg;
         break;
       default:
         return -1;
@@ -398,6 +409,7 @@ struct PcapHandlerContext {
   uint32_t free_flits;
   uint32_t hugepage_offset;
   pcap_t* pcap;
+  std::string distribution;
 };
 
 struct RxStats {
@@ -491,11 +503,12 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
 
   uint32_t len = enso::get_pkt_len(pkt_bytes);
   uint32_t nb_flits = (len - 1) / 64 + 1;
-
-  /* TODO (kaajalg): And need to enable pkt delay at beginning */
-
-  /* Take pkt_bytes + kPacketRttOffset to set the offset as the number of cycles
-   */
+  uint64_t cycles = 0;
+  if (context->distribution == "exponential")
+    cycles = wd(g);
+  else if (context->distribution == "constant")
+    cycles = 10 * 3095;
+  enso::set_pkt_cycles(pkt_bytes, cycles);
 
   /* Use kMaxHardwareFlitRate to convert between hardware cycles and us */
 
@@ -673,6 +686,7 @@ int main(int argc, char** argv) {
   context.free_flits = 0;
   context.hugepage_offset = HUGEPAGE_SIZE;
   context.pcap = pcap;
+  context.distribution = parsed_args.distribution;
   std::vector<EnsoPipe>& enso_pipes = context.enso_pipes;
 
   // Initialize packet buffers with packets read from pcap file.

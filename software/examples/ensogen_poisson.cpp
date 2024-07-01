@@ -486,14 +486,12 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   uint32_t nb_flits = (len - 1) / 64 + 1;
 
   uint64_t delay_us = pkt_hdr->ts.tv_usec;
-  // std::cout << "delay us: " << delay_us << std::endl;
   uint64_t delay_cycles = delay_us * (enso::kMaxHardwareFlitRate / 100000000);
   if (delay_cycles <= nb_flits)
     delay_cycles = 0;
   else
     delay_cycles -= nb_flits;
 
-  // std::cout << "delay cycles: " << delay_cycles << std::endl;
   enso::set_pkt_delay((uint8_t*)pkt_bytes, delay_cycles);
 
   if (nb_flits > context->free_flits) {

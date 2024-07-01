@@ -119,14 +119,23 @@ inline void set_pkt_delay(const uint8_t* pkt, uint32_t delay) {
   *((uint32_t*)(pkt + kPacketRttOffset)) = htobe32(delay);
 }
 
-inline void set_pkt_sent_time(const uint8_t* pkt, uint64_t sent_time) {
-  *((uint64_t*)(pkt)) = htobe64(sent_time);
+inline void set_pkt_cycles(const uint8_t* pkt, uint64_t cycles) {
+  *((uint64_t*)(pkt)) = htobe64(cycles);
 }
 
-inline uint64_t get_pkt_sent_time(const uint8_t* pkt) {
-  uint64_t sent_time = *((uint64_t*)(pkt));
-  return be64toh(sent_time);
+inline uint64_t get_pkt_cycles(const uint8_t* pkt) {
+  uint64_t cycles = *((uint64_t*)(pkt));
+  return be64toh(cycles);
 }
+
+// inline void set_pkt_sent_time(const uint8_t* pkt, uint64_t sent_time) {
+//   *((uint64_t*)(pkt)) = htobe64(sent_time);
+// }
+
+// inline uint64_t get_pkt_sent_time(const uint8_t* pkt) {
+//   uint64_t sent_time = *((uint64_t*)(pkt));
+//   return be64toh(sent_time);
+// }
 
 constexpr uint16_t be_to_le_16(const uint16_t le) {
   return ((le & (uint16_t)0x00ff) << 8) | ((le & (uint16_t)0xff00) >> 8);
