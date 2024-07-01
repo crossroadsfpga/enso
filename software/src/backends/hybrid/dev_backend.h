@@ -69,7 +69,6 @@ thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
 int64_t shinkansen_notif_buf_id_ = -1;
 uint32_t application_id_ = 0;
 
-using CounterCallback = std::function<uint64_t()>;
 CounterCallback counter_callback_;
 
 int initialize_queues(uint32_t id) {
@@ -168,7 +167,6 @@ class DevBackend {
           mmio_notification.type = NotifType::kWrite;
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
-          mmio_notification.counter = std::invoke(counter_callback_);
 
           pipe_notification = (enso::PipeNotification*)&mmio_notification;
 
@@ -193,7 +191,7 @@ class DevBackend {
       mmio_notification.type = NotifType::kWrite;
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
-      mmio_notification.counter = std::invoke(counter_callback_);
+      mmio_notification.counter = std::invoke(counter_callback_, queue_id);
       mmio_notification.tsc = rdtsc();
 
       enso::PipeNotification* pipe_notification =
@@ -332,7 +330,6 @@ class DevBackend {
     struct NotifBufNotification nb_notification;
     nb_notification.type = NotifType::kAllocateNotifBuf;
     nb_notification.uthread_id = (uint64_t)uthread_id;
-    nb_notification.application_id = application_id_;
 
     enso::PipeNotification* pipe_notification =
         (enso::PipeNotification*)&nb_notification;

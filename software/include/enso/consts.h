@@ -51,7 +51,7 @@ namespace enso {
 
 using CompletionCallback = std::function<void()>;
 using ParkCallback = std::function<void()>;
-using CounterCallback = std::function<uint64_t()>;
+using CounterCallback = std::function<uint64_t(uint32_t)>;
 using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
 using TxCallback = std::function<void(uint64_t)>;
 using UpdatePacket = std::function<void(enso_pipe_id_t, uint64_t, uint32_t)>;
@@ -193,9 +193,8 @@ struct NotifBufNotification {
   NotifType type;
   uint64_t notif_buf_id;
   uint64_t uthread_id;
-  uint64_t application_id;
   uint64_t result;
-  uint64_t padding[2];
+  uint64_t padding[3];
 };
 
 struct AllocatePipeNotification {

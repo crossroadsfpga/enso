@@ -46,8 +46,6 @@
 
 namespace enso {
 
-using CounterCallback = std::function<uint64_t()>;
-
 int initialize_queues(uint32_t id) {
   (void)id;
   return 0;
