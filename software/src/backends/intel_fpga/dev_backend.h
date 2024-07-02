@@ -46,12 +46,15 @@
 
 namespace enso {
 
-using BackendWrapper = std::function<void()>;
-int initialize_queues(BackendWrapper preempt_enable,
-                      BackendWrapper preempt_disable) {
-  (void)preempt_enable;
-  (void)preempt_disable;
+int initialize_queues(uint32_t id) {
+  (void)id;
   return 0;
+}
+
+void initialize_backend_dev(CounterCallback counter_callback,
+                            uint32_t application_id) {
+  (void)counter_callback;
+  (void)application_id;
 }
 
 void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
@@ -107,13 +110,6 @@ class DevBackend {
     (void)uio_mmap_bar2_addr;
     _enso_compiler_memory_barrier();
     return *addr;
-  }
-
-  void ProcessedCompletions(uint32_t notif_buf_id, uint32_t old_head,
-                            uint32_t new_head) {
-    (void)notif_buf_id;
-    (void)old_head;
-    (void)new_head;
   }
 
   /**

@@ -83,6 +83,12 @@ struct alignas(kCacheLineSize) stats_t {
   uint64_t nb_pkts;
 };
 
+static inline uint64_t rdtsc(void) {
+  uint32_t a, d;
+  asm volatile("rdtsc" : "=a"(a), "=d"(d));
+  return ((uint64_t)a) | (((uint64_t)d) << 32);
+}
+
 /**
  * @brief Returns RTT, in number of cycles, for a given packet.
  *
@@ -99,6 +105,37 @@ inline uint32_t get_pkt_rtt(const uint8_t* pkt) {
   uint32_t rtt = *((uint32_t*)(pkt + kPacketRttOffset));
   return be32toh(rtt);
 }
+
+/**
+ * @brief Sets the the delay for a packet.
+ *
+ * To use this, per-packet timestamping must be enabled. To enable per-packet
+ * timestamping call the `Device::EnablePerPacketRateLimiting` method.
+ *
+ * @param pkt Packet to set the delay for.
+ * @param delay Delay in number of cycles.
+ */
+inline void set_pkt_delay(const uint8_t* pkt, uint32_t delay) {
+  *((uint32_t*)(pkt + kPacketRttOffset)) = htobe32(delay);
+}
+
+inline void set_pkt_cycles(const uint8_t* pkt, uint64_t cycles) {
+  *((uint64_t*)(pkt)) = htobe64(cycles);
+}
+
+inline uint64_t get_pkt_cycles(const uint8_t* pkt) {
+  uint64_t cycles = *((uint64_t*)(pkt));
+  return be64toh(cycles);
+}
+
+// inline void set_pkt_sent_time(const uint8_t* pkt, uint64_t sent_time) {
+//   *((uint64_t*)(pkt)) = htobe64(sent_time);
+// }
+
+// inline uint64_t get_pkt_sent_time(const uint8_t* pkt) {
+//   uint64_t sent_time = *((uint64_t*)(pkt));
+//   return be64toh(sent_time);
+// }
 
 constexpr uint16_t be_to_le_16(const uint16_t le) {
   return ((le & (uint16_t)0x00ff) << 8) | ((le & (uint16_t)0xff00) >> 8);

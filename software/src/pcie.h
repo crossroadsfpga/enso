@@ -51,17 +51,14 @@
 
 namespace enso {
 
-using CompletionCallback = std::function<void()>;
-using ParkCallback = std::function<void()>;
-using BackendWrapper = std::function<void()>;
+extern TxCallback tx_callback_;
+extern UpdateCallback update_callback_;
+extern ParkCallback park_callback_;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
-
-void set_park_callback(ParkCallback park_callback);
-
 /**
  * @brief Initializes the notification buffer pair.
  *
@@ -108,7 +105,8 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
  * @param notification_buf_pair Notification buffer to get data from.
  * @return Number of notifications received.
  */
-uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair);
+uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair,
+                       UpdatePacket update_packet = NULL);
 
 /**
  * @brief Gets the next batch of data from the given Enso Pipe.
@@ -145,7 +143,8 @@ uint32_t peek_next_batch_from_queue(
  * @return Pointer to the RX notification that can be addressed next.
  */
 struct RxNotification* get_next_rx_notif(
-    struct NotificationBufPair* notification_buf_pair);
+    struct NotificationBufPair* notification_buf_pair,
+    UpdatePacket update_packet = NULL);
 
 /**
  * @brief Get next Enso Pipe with pending data.
@@ -214,7 +213,8 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
  * @return number of bytes sent.
  */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len);
+                       uint64_t phys_addr, uint32_t len,
+                       uint64_t sent_time = 0);
 
 /**
  * @brief Returns the number of transmission requests that were completed since
@@ -329,27 +329,21 @@ int dma_finish(struct SocketInternal* socket_entry);
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 
 /**
- * @brief Initializes queues to and from backend for this thread.
+ * @brief Initializes essential backend variables.
  *
  */
-void pcie_initialize_backend_queues(BackendWrapper preempt_enable,
-                                    BackendWrapper preempt_disable);
+void pcie_initialize_backend(CounterCallback counter_callback,
+                             TxCallback tx_callback, ParkCallback park_callback,
+                             UpdateCallback update_callback,
+                             uint32_t application_id);
 
 /**
- * @brief Push notification to backend.
+ * @brief Initializes backend queues to and from the IOKernel.
  *
- * @param notif Notification to push
+ * @param id The ID of the kthread requesting the queues.
+ * @return 0 on success, negative on error.
  */
-void pcie_push_to_backend(PipeNotification* notif);
-
-/**
- * @brief Push notification to backend and wait for a response.
- *
- * @param notif Notification to push.
- * @return Response notification.
- */
-std::optional<PipeNotification> pcie_push_to_backend_get_response(
-    PipeNotification* notif);
+int pcie_initialize_queues(uint32_t id);
 
 /**
  * @brief Prints statistics for a given socket.

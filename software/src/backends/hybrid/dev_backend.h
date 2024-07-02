@@ -46,6 +46,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <atomic>
+#include <csignal>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -58,58 +60,57 @@
 
 namespace enso {
 
-// These queues are per-kthread, not per-uthread, given that they are
-// thread-local. Will automatically update when switching cores.
 thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
 thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
     queue_from_backend_;
+
+// These queues are per-kthread, not per-uthread, given that they are
+// thread-local. Will automatically update when switching cores.
 int64_t shinkansen_notif_buf_id_ = -1;
+uint32_t application_id_ = 0;
 
-using BackendWrapper = std::function<void()>;
-BackendWrapper preempt_enable_;
-BackendWrapper preempt_disable_;
+CounterCallback counter_callback_;
 
-int initialize_queues(BackendWrapper preempt_enable,
-                      BackendWrapper preempt_disable) {
-  (void)preempt_enable;
-  (void)preempt_disable;
-  uint32_t core_id = sched_getcpu();
+int initialize_queues(uint32_t id) {
+  if (queue_to_backend_ != nullptr) return -1;
 
-  std::string queue_to_app_name =
-      std::string(kIpcQueueToAppName) + std::to_string(core_id) + "_";
-  std::string queue_from_app_name =
-      std::string(kIpcQueueFromAppName) + std::to_string(core_id) + "_";
+  std::string queue_to_app_name = std::string(kIpcQueueToAppName) +
+                                  std::to_string(application_id_) + ":" +
+                                  std::to_string(id) + "_";
+  std::string queue_from_app_name = std::string(kIpcQueueFromAppName) +
+                                    std::to_string(application_id_) + ":" +
+                                    std::to_string(id) + "_";
 
-  queue_to_backend_ = QueueProducer<PipeNotification>::Create(
-      queue_from_app_name, true, true, core_id);
+  queue_to_backend_ =
+      QueueProducer<PipeNotification>::Create(queue_from_app_name);
   if (queue_to_backend_ == nullptr) {
     std::cerr << "Could not create queue to backend" << std::endl;
     return -1;
   }
 
-  queue_from_backend_ = QueueConsumer<PipeNotification>::Create(
-      queue_to_app_name, true, true, core_id);
+  queue_from_backend_ =
+      QueueConsumer<PipeNotification>::Create(queue_to_app_name);
   if (queue_from_backend_ == nullptr) {
     std::cerr << "Could not create queue from backend" << std::endl;
     return -1;
   }
 
-  preempt_enable_ = preempt_enable;
-  preempt_disable_ = preempt_disable;
-
   return 0;
 }
 
+void initialize_backend_dev(CounterCallback counter_callback,
+                            uint32_t application_id) {
+  counter_callback_ = counter_callback;
+  application_id_ = application_id;
+}
+
 void push_to_backend(PipeNotification* notif) {
-  // std::invoke(preempt_disable_);
   while (queue_to_backend_->Push(*notif) != 0) {
   }
-  // std::invoke(preempt_enable_);
 }
 
 std::optional<PipeNotification> push_to_backend_get_response(
     PipeNotification* notif) {
-  // std::invoke(preempt_disable_);
   while (queue_to_backend_->Push(*notif) != 0) {
   }
   std::optional<PipeNotification> notification;
@@ -117,15 +118,12 @@ std::optional<PipeNotification> push_to_backend_get_response(
   // Block until receive.
   while (!(notification = queue_from_backend_->Pop())) {
   }
-  // std::invoke(preempt_enable_);
+
   return notification;
 }
-
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
-    std::cerr << "Using hybrid backend" << std::endl;
-
     DevBackend* dev = new (std::nothrow) DevBackend(bdf, bar);
 
     if (dev == nullptr) {
@@ -178,15 +176,13 @@ class DevBackend {
           mask = enso::kMaxNbApps - 1;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
           break;
-        case offsetof(struct enso::QueueRegs, rx_head):
-          // std::cout << "Writing to rx head with value " << value <<
-          // std::endl;
-          break;
       }
+      // Updates to RX pipe: write directly
       _enso_compiler_memory_barrier();
       *addr = value;
       return;
     }
+
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
@@ -195,6 +191,7 @@ class DevBackend {
       mmio_notification.type = NotifType::kWrite;
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
+      mmio_notification.counter = std::invoke(counter_callback_, queue_id);
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
@@ -234,19 +231,6 @@ class DevBackend {
       return result->value;
     }
     return -1;
-  }
-
-  void ProcessedCompletions(uint32_t notif_buf_id, uint32_t old_head,
-                            uint32_t new_head) {
-    struct CompletionNotification completion_notification;
-    completion_notification.type = NotifType::kProcessedCompletion;
-    completion_notification.notif_buf_id = notif_buf_id;
-    completion_notification.old_head = old_head;
-    completion_notification.new_head = new_head;
-    enso::PipeNotification* pipe_notification =
-        (enso::PipeNotification*)&completion_notification;
-
-    push_to_backend(pipe_notification);
   }
 
   /**

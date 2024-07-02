@@ -100,6 +100,25 @@ TEST(TestQueue, QueueFull) {
   EXPECT_EQ(q_prod->Push(42), -1);
 }
 
+TEST(TestQueue, QueueFullCorrect) {
+  auto q_prod =
+      enso::QueueProducer<int>::Create("QueueFullCorrect", enso::kBufPageSize);
+  auto q_cons =
+      enso::QueueConsumer<int>::Create("QueueFullCorrect", enso::kBufPageSize);
+  EXPECT_NE(q_prod, nullptr);
+
+  uint32_t capacity = enso::kBufPageSize / enso::kCacheLineSize;
+  EXPECT_EQ(q_prod->capacity(), capacity);
+
+  for (uint32_t i = 0; i < capacity; ++i) {
+    EXPECT_EQ(q_prod->Push(i), 0);
+  }
+
+  EXPECT_EQ(q_prod->Push(42), -1);
+  EXPECT_EQ(q_cons->Pop().value_or(-1), 0);
+  EXPECT_EQ(q_prod->Push(42), 0);
+}
+
 // TEST(TestQueue, EmptyAfterFull) {
 //   using elem_t = std::array<int32_t, 2 * enso::kCacheLineSize / 4>;
 //   auto q_prod =

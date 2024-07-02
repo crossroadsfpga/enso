@@ -41,10 +41,20 @@
 #ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 #define ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 
+#include <enso/internals.h>
+
 #include <cstdint>
+#include <functional>
 #include <string>
 
 namespace enso {
+
+using CompletionCallback = std::function<void()>;
+using ParkCallback = std::function<void()>;
+using CounterCallback = std::function<uint64_t(uint32_t)>;
+using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
+using TxCallback = std::function<void(uint64_t)>;
+using UpdatePacket = std::function<void(enso_pipe_id_t, uint64_t, uint32_t)>;
 
 // These determine the maximum number of notification buffers and enso pipes,
 // these macros also exist in hardware and **must be kept in sync**. Update the
@@ -153,31 +163,15 @@ enum class NotifType : uint8_t {
   kFreePipe = 9,
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
-  kKthreadYield = 12,
-  kProcessedCompletion = 13,
-  kJoinedKthread = 14,
+  kJoinedKthread = 12,
 };
 
 struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
-  uint64_t padding[4];
-};
-
-struct CompletionNotification {
-  NotifType type;
-  uint64_t notif_buf_id;
-  uint64_t old_head;
-  uint64_t new_head;
+  uint64_t counter;
   uint64_t padding[3];
-};
-
-struct JoinedNotification {
-  NotifType type;
-  uint32_t application_id;
-  uint64_t core_id;
-  uint64_t padding[4];
 };
 
 struct FallbackNotification {
@@ -219,12 +213,6 @@ struct FreePipeNotification {
 struct ShinkansenNotification {
   NotifType type;
   uint64_t notif_queue_id;
-  uint64_t padding[5];
-};
-
-struct KthreadYieldNotification {
-  NotifType type;
-  uint64_t voluntary;
   uint64_t padding[5];
 };
 

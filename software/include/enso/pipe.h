@@ -64,30 +64,6 @@ class RxTxPipe;
 class PktIterator;
 class PeekPktIterator;
 
-using BackendWrapper = std::function<void()>;
-
-/**
- * @brief Initializes queues to and from the backend.
- *
- */
-void initialize_backend_queues(BackendWrapper preempt_enable,
-                               BackendWrapper preempt_disable);
-
-/**
- * @brief Pushes a notification to the backend.
- *
- * @param notif The notification to push.
- */
-void push_to_backend_queues(PipeNotification* notif);
-
-/**
- * @brief Pushes a notification to the backend and waits for a response.
- *
- * @param notif The notification to push.
- */
-std::optional<PipeNotification> push_to_backend_queues_get_response(
-    PipeNotification* notif);
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
@@ -107,7 +83,7 @@ uint32_t external_peek_next_batch_from_queue(
 class Device {
  public:
   using CompletionCallback = std::function<void()>;
-  using ParkCallback = std::function<void()>;
+
   /**
    * @brief Factory method to create a device.
    *
@@ -125,8 +101,7 @@ class Device {
   static std::unique_ptr<Device> Create(
       const std::string& pcie_addr = "",
       const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
-      CompletionCallback completion_callback = NULL,
-      ParkCallback park_callback = NULL) noexcept;
+      CompletionCallback completion_callback = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -134,6 +109,24 @@ class Device {
   Device& operator=(Device&&) = delete;
 
   ~Device();
+
+  /**
+   * @brief Initialize the queues for communication with the IOKernel.
+   *
+   * @param id The ID of the kthread requesting a queue.
+   * @return 0 on success, negative on failure.
+   */
+  static int InitializeBackendQueues(uint32_t id);
+
+  /**
+   * @brief Set some backend constants.
+   *
+   */
+  static void InitializeBackend(CounterCallback counter_callback,
+                                TxCallback tx_callback,
+                                ParkCallback park_callback,
+                                UpdateCallback update_callback,
+                                uint32_t application_id);
 
   /**
    * @brief Allocates an RX pipe.
@@ -164,6 +157,11 @@ class Device {
    *         created.
    */
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
+
+  /**
+   * @brief Retrieves the number of fallback queues for this device.
+   */
+  int GetNbFallbackQueues() noexcept;
 
   /**
    * @brief Allocates an RX/TX pipe.
@@ -294,9 +292,37 @@ class Device {
   int DisableRateLimiting();
 
   /**
-   * @brief Retrieves the number of fallback queues for this device.
+   * @brief Enables per-packet rate limiting.
+   *
+   * This function enables per-packet rate limiting. This means that every
+   * packet should have a "delay" in number of cycles that the NIC will wait
+   * before sending the packet. This delay should be specified in the packet
+   * itself at the same offset used for the timestamp (`enso::PacketRttOffset`).
+   *
+   * Use `enso::kMaxHardwareFlitRate` or `enso::kNsPerTimestampCycle` to convert
+   * the delay between nanoseconds and cycles and the helper function
+   * `enso::set_pkt_delay` to set the delay in the packet.
+   *
+   * @note This setting applies to all pipes that share the same hardware
+   *      device.
+   *
+   * @see DisablePerPacketRateLimiting
+   *
+   * @return 0 if configuration was successful.
    */
-  int GetNbFallbackQueues() noexcept;
+  int EnablePerPacketRateLimiting();
+
+  /**
+   * @brief Disables per-packet rate limiting.
+   *
+   * @note This setting applies to all pipes that share the same hardware
+   *      device.
+   *
+   * @see EnablePerPacketRateLimiting
+   *
+   * @return 0 if configuration was successful.
+   */
+  int DisablePerPacketRateLimiting();
 
   /**
    * @brief Enables round robing of packets among the fallback pipes.
@@ -348,7 +374,8 @@ class Device {
    * @param nb_bytes The number of bytes to send.
    * @return The number of bytes sent.
    */
-  void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+  void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
+            uint64_t sent_time = 0);
 
   /**
    * @brief Gets the ID of the notification buffer for this device.
@@ -383,33 +410,20 @@ class Device {
    */
   uint32_t GetTxHead() noexcept;
 
-  /**
-   * @brief Yields the current uthread to the running kthread, enabling other
-   * uthreads to run on the current core.
-   *
-   * @param next_uthread_id The ID of the next uthread that will be run.
-   * @param get_notified Whether the uthread should be added to the runqueue
-   * when new notification comes.
-   *
-   * NOTE: Only to be used with the hybrid backend.
-   */
-  void SendUthreadYield(int32_t next_uthread_id, bool get_notified);
-
  private:
   struct TxPendingRequest {
     int pipe_id;
     uint32_t nb_bytes;
+    uint64_t phys_addr;
   };
 
   /**
    * Use `Create` factory method to instantiate objects externally.
    */
   Device(int32_t uthread_id, CompletionCallback completion_callback,
-         ParkCallback park_callback, const std::string& pcie_addr,
-         std::string huge_page_prefix) noexcept
+         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
       : kPcieAddr(pcie_addr),
         completion_callback_(completion_callback),
-        park_callback_(park_callback),
         uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
@@ -441,7 +455,6 @@ class Device {
   uint16_t bdf_;
   std::string huge_page_prefix_;
   CompletionCallback completion_callback_ = NULL;
-  ParkCallback park_callback_ = NULL;
   int32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;
@@ -636,6 +649,8 @@ class RxPipe {
    */
   int Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
            uint32_t src_ip, uint32_t protocol);
+
+  inline void SetPktSentTime(uint32_t tail, uint64_t sent_time);
 
   /**
    * @brief Receives a batch of bytes.
@@ -932,9 +947,13 @@ class TxPipe {
     assert(nb_bytes <= kMaxCapacity);
     assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
+    // uint8_t* virt_addr = (uint8_t*)((uint64_t)buf_ + app_begin_);
+    // uint64_t sent_time = get_pkt_sent_time(virt_addr);
+    uint64_t sent_time = 0;
+
     app_begin_ = (app_begin_ + nb_bytes) & kBufMask;
 
-    device_->Send(kId, phys_addr, nb_bytes);
+    device_->Send(kId, phys_addr, nb_bytes, sent_time);
   }
 
   /**
@@ -1330,6 +1349,8 @@ class RxTxPipe {
    * than this threshold, we process completions.
    */
   static constexpr uint32_t kCompletionsThreshold = kEnsoPipeSize * 64 / 2;
+
+  void SetPktSentTime(uint32_t tail, uint64_t sent_time);
 
   /**
    * RxTxPipes can only be instantiated from a Device object, using the

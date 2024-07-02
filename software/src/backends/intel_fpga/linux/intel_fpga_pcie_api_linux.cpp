@@ -163,8 +163,6 @@ int IntelFpgaPcieDev::Init(unsigned int bdf, int bar) noexcept {
     return -1;
   }
 
-  std::cout << "Using UIO device: " << device_name << std::endl;
-
   fd = open(device_name, O_RDWR | O_CLOEXEC);
 
   if (fd == -1) {
