@@ -374,13 +374,6 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair,
       break;
     }
 
-    /* Update stat counters */
-    uint64_t now = rdtsc();
-    uint64_t time_to_uthread = now - cur_notification->pad[0];
-    uint64_t overall_time = now - cur_notification->pad[1];
-    if (update_callback_)
-      std::invoke(update_callback_, time_to_uthread, overall_time);
-
     enso_pipe_id_t enso_pipe_id = cur_notification->queue_id;
 
     /* Update the packet sent time in the packet itself */
@@ -565,10 +558,6 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
   uint64_t hugepage_base_addr = transf_addr & hugepage_mask;
   uint64_t hugepage_boundary = hugepage_base_addr + kBufPageSize;
 
-  if (sent_time > 0 && rdtsc() > sent_time) {
-    if (tx_callback_) std::invoke(tx_callback_, rdtsc() - sent_time);
-  }
-
   while (missing_bytes > 0) {
     uint32_t free_slots =
         (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
@@ -648,13 +637,6 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair) {
     if (tx_notification->signal != 0) {
       break;
     }
-
-    /* Update stat counters */
-    uint64_t now = rdtsc();
-    uint64_t time_to_uthread = now - tx_notification->pad[0];
-    uint64_t overall_time = now - tx_notification->pad[1];
-    if (update_callback_)
-      std::invoke(update_callback_, time_to_uthread, overall_time);
 
     // Requests that wrap around need two notifications but should only signal
     // a single completion notification. Therefore, we only increment

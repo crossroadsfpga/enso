@@ -192,7 +192,6 @@ class DevBackend {
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
       mmio_notification.counter = std::invoke(counter_callback_, queue_id);
-      mmio_notification.tsc = rdtsc();
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;

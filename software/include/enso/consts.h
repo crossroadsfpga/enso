@@ -171,8 +171,7 @@ struct MmioNotification {
   uint64_t address;
   uint64_t value;
   uint64_t counter;
-  uint64_t tsc;
-  uint64_t padding[2];
+  uint64_t padding[3];
 };
 
 struct FallbackNotification {
