@@ -51,6 +51,7 @@ namespace enso {
 
 using CompletionCallback = std::function<void()>;
 using ParkCallback = std::function<void()>;
+using LockCallback = std::function<void()>;
 using CounterCallback = std::function<uint64_t(uint32_t)>;
 using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
 using TxCallback = std::function<void(uint64_t)>;

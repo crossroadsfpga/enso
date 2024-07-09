@@ -126,6 +126,8 @@ class Device {
                                 TxCallback tx_callback,
                                 ParkCallback park_callback,
                                 UpdateCallback update_callback,
+                                LockCallback lock_runtime,
+                                LockCallback unlock_runtime,
                                 uint32_t application_id);
 
   /**
@@ -1277,6 +1279,11 @@ class RxTxPipe {
   inline void ProcessCompletions() {
     uint32_t new_capacity = tx_pipe_->capacity();
 
+    // Lock();
+    // std::cout << "New capacity of pipe " << rx_pipe_->id() << " is "
+    //           << new_capacity << " and old capacity is "
+    //           << last_tx_pipe_capacity_ << std::endl;
+    // Unlock();
     // If the capacity has increased, we need to free up space in the RX pipe.
     if (new_capacity > last_tx_pipe_capacity_) {
       rx_pipe_->Free(new_capacity - last_tx_pipe_capacity_);
@@ -1366,6 +1373,10 @@ class RxTxPipe {
    * in charge of deallocating them.
    */
   ~RxTxPipe() = default;
+
+  void Lock();
+
+  void Unlock();
 
   /**
    * @brief Initializes the RX/TX pipe.

@@ -141,6 +141,14 @@ void RxTxPipe::SetPktSentTime(uint32_t tail, uint64_t sent_time) {
   rx_pipe_->SetPktSentTime(tail, sent_time);
 }
 
+void RxTxPipe::Lock() {
+  if (lock_runtime_) std::invoke(lock_runtime_);
+}
+
+void RxTxPipe::Unlock() {
+  if (unlock_runtime_) std::invoke(unlock_runtime_);
+}
+
 int RxTxPipe::Init(bool fallback) noexcept {
   rx_pipe_ = device_->AllocateRxPipe(fallback);
   if (rx_pipe_ == nullptr) {
@@ -449,9 +457,12 @@ void Device::InitializeBackend(CounterCallback counter_callback,
                                TxCallback tx_callback,
                                ParkCallback park_callback,
                                UpdateCallback update_callback,
+                               LockCallback lock_runtime,
+                               LockCallback unlock_runtime,
                                uint32_t application_id) {
   return pcie_initialize_backend(counter_callback, tx_callback, park_callback,
-                                 update_callback, application_id);
+                                 update_callback, lock_runtime, unlock_runtime,
+                                 application_id);
 }
 
 }  // namespace enso

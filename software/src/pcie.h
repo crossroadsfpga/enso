@@ -54,6 +54,8 @@ namespace enso {
 extern TxCallback tx_callback_;
 extern UpdateCallback update_callback_;
 extern ParkCallback park_callback_;
+extern LockCallback lock_runtime_;
+extern LockCallback unlock_runtime_;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
@@ -335,6 +337,8 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 void pcie_initialize_backend(CounterCallback counter_callback,
                              TxCallback tx_callback, ParkCallback park_callback,
                              UpdateCallback update_callback,
+                             LockCallback lock_runtime,
+                             LockCallback unlock_runtime,
                              uint32_t application_id);
 
 /**

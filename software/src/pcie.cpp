@@ -69,6 +69,8 @@ namespace enso {
 TxCallback tx_callback_ = nullptr;
 UpdateCallback update_callback_ = nullptr;
 ParkCallback park_callback_ = nullptr;
+LockCallback lock_runtime_ = nullptr;
+LockCallback unlock_runtime_ = nullptr;
 
 static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 #ifdef __CLFLUSHOPT__
@@ -241,7 +243,9 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
+  if (lock_runtime_) std::invoke(lock_runtime_);
   int enso_pipe_id = fpga_dev->AllocatePipe(fallback);
+  if (unlock_runtime_) std::invoke(unlock_runtime_);
 
   if (enso_pipe_id < 0) {
     std::cerr << "Could not allocate pipe" << std::endl;
@@ -823,10 +827,14 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
 void pcie_initialize_backend(CounterCallback counter_callback,
                              TxCallback tx_callback, ParkCallback park_callback,
                              UpdateCallback update_callback,
+                             LockCallback lock_runtime,
+                             LockCallback unlock_runtime,
                              uint32_t application_id) {
   tx_callback_ = tx_callback;
   park_callback_ = park_callback;
   update_callback_ = update_callback;
+  lock_runtime_ = lock_runtime;
+  unlock_runtime_ = unlock_runtime;
   initialize_backend_dev(counter_callback, application_id);
 }
 
