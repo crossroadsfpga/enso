@@ -109,7 +109,8 @@ static volatile int rx_done = 0;
 static volatile int tx_done = 0;
 
 std::mt19937 g(0);
-std::exponential_distribution<float> wd(1.0 / (3095 * 10.0));
+std::exponential_distribution<float> exp_dist(1.0 / (3095 * 10.0));
+std::uniform_int_distribution<> bimodal_dist(1, 100);
 
 void int_handler(int signal __attribute__((unused))) {
   if (!keep_running) {
@@ -505,9 +506,11 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
   uint32_t nb_flits = (len - 1) / 64 + 1;
   uint64_t cycles = 0;
   if (context->distribution == "exponential")
-    cycles = wd(g);
+    cycles = exp_dist(g);
   else if (context->distribution == "constant")
     cycles = 10 * 3095;
+  else if (context->distribution == "bimodal")
+    cycles = (bimodal_dist(g) <= 10 ? 55 : 5) * 3095;
   enso::set_pkt_cycles(pkt_bytes, cycles);
 
   /* Use kMaxHardwareFlitRate to convert between hardware cycles and us */
