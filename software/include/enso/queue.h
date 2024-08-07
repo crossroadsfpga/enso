@@ -255,7 +255,7 @@ class Queue {
     }
 
     if (!join_if_exists && !create_queue) {
-      std::cerr << "Queue already exists!!" << std::endl;
+      std::cerr << "Queue already exists" << std::endl;
       return -1;
     }
 
