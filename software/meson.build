@@ -1,7 +1,5 @@
 if dev_backend == 'intel_fpga'
     library_name = 'enso'
-elif dev_backend == 'software'
-    library_name = 'enso_sw'
 elif dev_backend == 'hybrid'
     library_name = 'enso_hybrid'
 else
