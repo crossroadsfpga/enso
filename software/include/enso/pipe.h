@@ -949,8 +949,6 @@ class TxPipe {
     assert(nb_bytes <= kMaxCapacity);
     assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
-    // uint8_t* virt_addr = (uint8_t*)((uint64_t)buf_ + app_begin_);
-    // uint64_t sent_time = get_pkt_sent_time(virt_addr);
     uint64_t sent_time = 0;
 
     app_begin_ = (app_begin_ + nb_bytes) & kBufMask;
@@ -1279,11 +1277,6 @@ class RxTxPipe {
   inline void ProcessCompletions() {
     uint32_t new_capacity = tx_pipe_->capacity();
 
-    // Lock();
-    // std::cout << "New capacity of pipe " << rx_pipe_->id() << " is "
-    //           << new_capacity << " and old capacity is "
-    //           << last_tx_pipe_capacity_ << std::endl;
-    // Unlock();
     // If the capacity has increased, we need to free up space in the RX pipe.
     if (new_capacity > last_tx_pipe_capacity_) {
       rx_pipe_->Free(new_capacity - last_tx_pipe_capacity_);
@@ -1357,6 +1350,12 @@ class RxTxPipe {
    */
   static constexpr uint32_t kCompletionsThreshold = kEnsoPipeSize * 64 / 2;
 
+  /**
+   * @brief Set the cycles at which that a packet
+   *
+   * @param tail
+   * @param sent_time
+   */
   void SetPktSentTime(uint32_t tail, uint64_t sent_time);
 
   /**
@@ -1373,10 +1372,6 @@ class RxTxPipe {
    * in charge of deallocating them.
    */
   ~RxTxPipe() = default;
-
-  void Lock();
-
-  void Unlock();
 
   /**
    * @brief Initializes the RX/TX pipe.

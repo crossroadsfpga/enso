@@ -30,11 +30,12 @@ if [ ! -f $GET_PCAP_SIZE_CMD_PATH ]; then
     exit 3
 fi
 
-rate=$1
-extra_args=${@:2}
+pcap_file=$1
+rate=$2
+extra_args=${@:3}
 
 pattern="Average packet size:"
-mean_pkt_size=60
+mean_pkt_size=$($GET_PCAP_SIZE_CMD_PATH $pcap_file)
 
 num_den=$(python3 <<EOF
 import math
