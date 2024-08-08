@@ -39,8 +39,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_PIPE_H_
-#define SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
 
 #include <enso/consts.h>
 #include <enso/helpers.h>
@@ -48,6 +48,7 @@
 
 #include <array>
 #include <cassert>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -62,6 +63,27 @@ class RxTxPipe;
 
 class PktIterator;
 class PeekPktIterator;
+
+/**
+ * @brief Initializes queues to and from the backend.
+ *
+ */
+void initialize_backend_queues();
+
+/**
+ * @brief Pushes a notification to the backend.
+ *
+ * @param notif The notification to push.
+ */
+void push_to_backend_queues(PipeNotification* notif);
+
+/**
+ * @brief Pushes a notification to the backend and waits for a response.
+ *
+ * @param notif The notification to push.
+ */
+std::optional<PipeNotification> push_to_backend_queues_get_response(
+    PipeNotification* notif);
 
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
@@ -81,9 +103,14 @@ uint32_t external_peek_next_batch_from_queue(
  */
 class Device {
  public:
+  using CompletionCallback = std::function<void()>;
   /**
    * @brief Factory method to create a device.
    *
+   * @param uthread_id The unique ID of the uthread creating the device.
+   *                       Should be less than kMaxNbFlows.
+   * @param completion_callback Function to call once a transmission has
+   * completed.
    * @param pcie_addr The PCIe address of the device. If empty, uses the first
    *                  device found.
    * @param huge_page_prefix The prefix to use for huge pages file. If empty,
@@ -93,7 +120,8 @@ class Device {
    */
   static std::unique_ptr<Device> Create(
       const std::string& pcie_addr = "",
-      const std::string& huge_page_prefix = "") noexcept;
+      const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
+      CompletionCallback completion_callback = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -133,11 +161,6 @@ class Device {
   TxPipe* AllocateTxPipe(uint8_t* buf = nullptr) noexcept;
 
   /**
-   * @brief Retrieves the number of fallback queues for this device.
-   */
-  int GetNbFallbackQueues() noexcept;
-
-  /**
    * @brief Allocates an RX/TX pipe.
    *
    * @param fallback Whether this pipe is a fallback pipe. Fallback pipes can
@@ -155,6 +178,11 @@ class Device {
    * @return A pointer to the pipe. May be null if the pipe cannot be created.
    */
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
+
+  /**
+   * @brief Gets the next RX notification received by this device.
+   */
+  struct RxNotification* NextRxNotif();
 
   /**
    * @brief Gets the next RxPipe that has data pending.
@@ -261,6 +289,11 @@ class Device {
   int DisableRateLimiting();
 
   /**
+   * @brief Retrieves the number of fallback queues for this device.
+   */
+  int GetNbFallbackQueues() noexcept;
+
+  /**
    * @brief Enables round robing of packets among the fallback pipes.
    *
    * @note This setting applies to all pipes that share the same hardware
@@ -294,24 +327,43 @@ class Device {
   int GetRoundRobinStatus() noexcept;
 
   /**
-   * @brief Sends the given config notification to the device.
+   * @brief Sends a certain number of bytes to the device. This is designed to
+   * be used by a TxPipe object.
    *
-   * @param config_notification The config notification.
-   * @return 0 on success, -1 on failure.
+   * @param tx_enso_pipe_id The ID of the TxPipe.
+   * @param phys_addr The physical address of the buffer region to send.
+   * @param nb_bytes The number of bytes to send.
+   * @return The number of bytes sent.
    */
-  int ApplyConfig(struct TxNotification* config_notification);
+  void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+
+  /**
+   * @brief Gets the ID of the notification buffer for this device.
+   */
+  int GetNotifQueueId() noexcept;
+
+  /**
+   * @brief Yields the current uthread to the running kthread, enabling other
+   * uthreads to run on the current core.
+   *
+   * NOTE: Only to be used with the hybrid backend.
+   */
+  void SendUthreadYield();
 
  private:
   struct TxPendingRequest {
-    uint32_t pipe_id;
+    int pipe_id;
     uint32_t nb_bytes;
   };
 
   /**
    * Use `Create` factory method to instantiate objects externally.
    */
-  Device(const std::string& pcie_addr, std::string huge_page_prefix) noexcept
-      : kPcieAddr(pcie_addr) {
+  Device(int32_t uthread_id, CompletionCallback completion_callback,
+         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
+      : kPcieAddr(pcie_addr),
+        completion_callback_(completion_callback),
+        uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
               << std::endl;
@@ -325,20 +377,11 @@ class Device {
   /**
    * @brief Initializes the device.
    *
+   * @param uthread_id ID of the uthread creating this device.
+   *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init() noexcept;
-
-  /**
-   * @brief Sends a certain number of bytes to the device. This is designed to
-   * be used by a TxPipe object.
-   *
-   * @param tx_enso_pipe_id The ID of the TxPipe.
-   * @param phys_addr The physical address of the buffer region to send.
-   * @param nb_bytes The number of bytes to send.
-   * @return The number of bytes sent.
-   */
-  void Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+  int Init(int32_t uthread_id) noexcept;
 
   friend class RxPipe;
   friend class TxPipe;
@@ -350,6 +393,8 @@ class Device {
   int16_t core_id_;
   uint16_t bdf_;
   std::string huge_page_prefix_;
+  CompletionCallback completion_callback_;
+  int32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -362,7 +407,8 @@ class Device {
 
   uint32_t tx_pr_head_ = 0;
   uint32_t tx_pr_tail_ = 0;
-  std::array<TxPendingRequest, kMaxPendingTxRequests + 1> tx_pending_requests_;
+  std::array<TxPendingRequest, kMaxPendingTxRequests + 1> tx_pending_requests_ =
+      {};
   static constexpr uint32_t kPendingTxRequestsBufMask = kMaxPendingTxRequests;
   static_assert((kMaxPendingTxRequests & (kMaxPendingTxRequests + 1)) == 0,
                 "kMaxPendingTxRequests + 1 must be a power of 2");
@@ -1409,4 +1455,4 @@ class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_

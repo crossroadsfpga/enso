@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_QUEUE_H_
-#define SOFTWARE_INCLUDE_ENSO_QUEUE_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_QUEUE_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_QUEUE_H_
 
 #include <enso/consts.h>
 #include <enso/helpers.h>
@@ -461,4 +461,4 @@ class QueueConsumer : public Queue<T, QueueConsumer<T>> {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_QUEUE_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_QUEUE_H_

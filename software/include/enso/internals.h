@@ -39,8 +39,8 @@
  */
 
 // TODO(sadok): Do not expose this header.
-#ifndef SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
-#define SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
 
 #include <stdint.h>
 
@@ -83,7 +83,10 @@ struct __attribute__((__packed__)) TxNotification {
 struct NotificationBufPair {
   // First cache line:
   struct RxNotification* rx_buf;
-  enso_pipe_id_t* next_rx_pipe_ids;  // Next pipe ids to consume from rx_buf.
+  struct RxNotification**
+      next_rx_pipe_notifs;  // Next pipe notifications to consume from rx_buf:
+                            // stored in ring buffer by next_rx_ids_head and
+                            // next_rx_ids_tail
   struct TxNotification* tx_buf;
   uint32_t* rx_head_ptr;
   uint32_t* tx_tail_ptr;
@@ -118,8 +121,9 @@ struct RxEnsoPipeInternal {
   uint64_t phys_buf_offset;  // Use to convert between phys and virt address.
   enso_pipe_id_t id;
   std::string huge_page_prefix;
+  void* uio_mmap_bar2_addr;  // UIO mmap address for BAR 2.
 };
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_INTERNALS_H_
