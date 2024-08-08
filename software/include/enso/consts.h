@@ -41,10 +41,21 @@
 #ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 #define ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
 
+#include <enso/internals.h>
+
 #include <cstdint>
+#include <functional>
 #include <string>
 
 namespace enso {
+
+using CompletionCallback = std::function<void()>;
+using ParkCallback = std::function<void()>;
+using LockCallback = std::function<void()>;
+using CounterCallback = std::function<uint64_t(uint32_t)>;
+using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
+using TxCallback = std::function<void(uint64_t)>;
+using UpdatePacket = std::function<void(enso_pipe_id_t, uint64_t, uint32_t)>;
 
 // These determine the maximum number of notification buffers and enso pipes,
 // these macros also exist in hardware and **must be kept in sync**. Update the
@@ -153,29 +164,29 @@ enum class NotifType : uint8_t {
   kFreePipe = 9,
   kGetShinkansenNotifBufId = 10,
   kRegisterKthread = 11,
-  kUthreadWaiting = 12,
-  kKthreadYield = 13
+  kJoinedKthread = 12,
 };
 
 struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
-  uint64_t padding;
+  uint64_t counter;
+  uint64_t padding[3];
 };
 
 struct FallbackNotification {
   NotifType type;
   uint64_t nb_fallback_queues;
   uint64_t result;
-  uint64_t padding;
+  uint64_t padding[4];
 };
 
 struct RoundRobinNotification {
   NotifType type;
   uint64_t round_robin;
   uint64_t result;
-  uint64_t padding;
+  uint64_t padding[4];
 };
 
 struct NotifBufNotification {
@@ -183,44 +194,32 @@ struct NotifBufNotification {
   uint64_t notif_buf_id;
   uint64_t uthread_id;
   uint64_t result;
+  uint64_t padding[3];
 };
 
 struct AllocatePipeNotification {
   NotifType type;
   uint64_t fallback;
   uint64_t pipe_id;
-  uint64_t padding;
+  uint64_t padding[4];
 };
 
 struct FreePipeNotification {
   NotifType type;
   uint64_t pipe_id;
   uint64_t result;
-  uint64_t padding;
+  uint64_t padding[4];
 };
 
 struct ShinkansenNotification {
   NotifType type;
   uint64_t notif_queue_id;
-  uint64_t padding[2];
-};
-
-struct KthreadNotification {
-  NotifType type;
-  uint64_t application_id;
-  uint64_t padding[2];
-};
-
-struct YieldNotification {
-  NotifType type;
-  uint64_t notif_buf_id;
-  uint64_t last_rx_notif_head;
-  uint64_t last_tx_consumed_head;
+  uint64_t padding[5];
 };
 
 struct PipeNotification {
   NotifType type;
-  uint64_t data[3];
+  uint64_t data[6];
 };
 
 }  // namespace enso

@@ -42,6 +42,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <numeric>  // for std::accumulate
 #include <random>
 #include <string>
 #include <vector>
@@ -56,20 +57,17 @@ static constexpr uint32_t ip(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
 }
 
 int main(int argc, char const* argv[]) {
-  if (argc != 8) {
-    std::cerr << "Usage: " << argv[0]
-              << " NB_PKTS PKT_SIZE NB_SRC NB_DST DST_START REQ_RATE "
+  if (argc != 6) {
+    std::cerr << "Usage: " << argv[0] << " PKT_SIZE NB_SRC NB_DST DST_START "
               << "OUTPUT_PCAP" << std::endl;
     exit(1);
   }
 
-  const int total_nb_packets = std::stoi(argv[1]);
-  const int pkt_size = std::stoi(argv[2]);
-  const int nb_src = std::stoi(argv[3]);
-  const int nb_dst = std::stoi(argv[4]);
-  const int dst_start = std::stoi(argv[5]);
-  const int req_rate = std::stoi(argv[6]);
-  const std::string output_pcap = argv[7];
+  const int pkt_size = std::stoi(argv[1]);
+  const int nb_src = std::stoi(argv[2]);
+  const int nb_dst = std::stoi(argv[3]);
+  const int dst_start = std::stoi(argv[4]);
+  const std::string output_pcap = argv[5];
 
   // Skip if pcap with same name already exists.
   {
@@ -113,6 +111,9 @@ int main(int argc, char const* argv[]) {
   struct pcap_pkthdr pkt_hdr;
   pkt_hdr.ts = ts;
 
+  uint64_t rate_1 = 100000;
+  uint64_t rate_2 = 5000000;
+
   uint32_t src_ip = ip(192, 168, 0, 0);
   uint32_t dst_ip = ip(192, 168, 0, dst_start);
 
@@ -121,29 +122,44 @@ int main(int argc, char const* argv[]) {
 
   // Seed the random generator.
   std::mt19937 g(dst_start);
+
   // Create a packet transmit schedule.
-  std::vector<double> sched(total_nb_packets);
-  std::exponential_distribution<double> rd(1.0 / (1000000.0 / req_rate));
-  std::generate(sched.begin(), sched.end(), std::bind(rd, g));
+  std::vector<double> sched_1(rate_1);
+  std::exponential_distribution<double> rd_1(1.0 / (1000000.0 / rate_1));
+  std::generate(sched_1.begin(), sched_1.end(), std::bind(rd_1, g));
 
-  int packetsPerDestination = total_nb_packets / nb_dst;
+  std::vector<double> sched_2(rate_2);
+  std::exponential_distribution<double> rd_2(1.0 / (1000000.0 / rate_2));
+  std::generate(sched_2.begin(), sched_2.end(), std::bind(rd_2, g));
 
-  std::vector<int> result;
+  int packetsPerDestination_1 = (rate_1) / nb_dst;
+  int packetsPerDestination_2 = (rate_2) / nb_dst;
+
+  std::vector<int> result_1;
+  std::vector<int> result_2;
 
   for (int i = 0; i < nb_dst; ++i) {
-    for (int j = 0; j < packetsPerDestination; ++j) {
-      result.push_back(i);
+    for (int j = 0; j < packetsPerDestination_1; ++j) {
+      result_1.push_back(i);
+    }
+  }
+
+  for (int i = 0; i < nb_dst; ++i) {
+    for (int j = 0; j < packetsPerDestination_2; ++j) {
+      result_2.push_back(i);
     }
   }
 
   std::random_device rd_;
   std::mt19937 g_(rd_());
-  std::shuffle(result.begin(), result.end(), g_);
+  std::shuffle(result_1.begin(), result_1.end(), g_);
+  std::shuffle(result_2.begin(), result_2.end(), g_);
 
-  int nb_pkts = 0;
+  double nb_pkts = 0;
 
-  while (nb_pkts < total_nb_packets) {
-    int i = result[nb_pkts];
+  while (nb_pkts < rate_1) {
+    // std::cout << nb_pkts << "/" << rate_1 << std::endl;
+    int i = result_1[nb_pkts];
     l3_hdr->daddr = htonl(dst_ip + (uint32_t)i);
     uint32_t src_offset = i / (nb_dst / nb_src);
     l3_hdr->saddr = htonl(src_ip + src_offset);
@@ -152,8 +168,10 @@ int main(int argc, char const* argv[]) {
 
     pkt_hdr.len = sizeof(*l2_hdr) + sizeof(*l3_hdr) + sizeof(*l4_hdr) + mss;
     pkt_hdr.caplen = pkt_hdr.len;
-    ts.tv_usec = sched[nb_pkts] * 100;
+    ts.tv_usec = sched_1[nb_pkts] * 100;
     pkt_hdr.ts = ts;
+    // std::cout << "sched[" << nb_pkts << "]: " << pkt_hdr.ts.tv_usec
+    //           << std::endl;
 
     l4_hdr->dest = htons(80);
     l4_hdr->source = htons(8080);
@@ -162,7 +180,35 @@ int main(int argc, char const* argv[]) {
     pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
 
     ++nb_pkts;
-    if (nb_pkts >= total_nb_packets) {
+    if (nb_pkts >= rate_1) {
+      break;
+    }
+  }
+
+  while (nb_pkts < rate_2) {
+    // std::cout << nb_pkts << "/" << rate_2 << std::endl;
+    int i = result_2[nb_pkts];
+    l3_hdr->daddr = htonl(dst_ip + (uint32_t)i);
+    uint32_t src_offset = i / (nb_dst / nb_src);
+    l3_hdr->saddr = htonl(src_ip + src_offset);
+
+    l3_hdr->tot_len = htons(mss + sizeof(*l3_hdr) + sizeof(*l4_hdr));
+
+    pkt_hdr.len = sizeof(*l2_hdr) + sizeof(*l3_hdr) + sizeof(*l4_hdr) + mss;
+    pkt_hdr.caplen = pkt_hdr.len;
+    ts.tv_usec = sched_2[nb_pkts] * 100;
+    pkt_hdr.ts = ts;
+    // std::cout << "sched[" << nb_pkts << "]: " << pkt_hdr.ts.tv_usec
+    //           << std::endl;
+
+    l4_hdr->dest = htons(80);
+    l4_hdr->source = htons(8080);
+    l4_hdr->len = htons(sizeof(*l4_hdr) + mss);
+
+    pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
+
+    ++nb_pkts;
+    if (nb_pkts >= rate_2) {
       break;
     }
   }

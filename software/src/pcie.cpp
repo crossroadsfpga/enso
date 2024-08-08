@@ -66,6 +66,12 @@
 
 namespace enso {
 
+TxCallback tx_callback_ = nullptr;
+UpdateCallback update_callback_ = nullptr;
+ParkCallback park_callback_ = nullptr;
+LockCallback lock_runtime_ = nullptr;
+LockCallback unlock_runtime_ = nullptr;
+
 static _enso_always_inline void try_clflush([[maybe_unused]] void* addr) {
 #ifdef __CLFLUSHOPT__
   _mm_clflushopt(addr);
@@ -206,6 +212,7 @@ int notification_buf_init(uint32_t bdf, int32_t bar,
   notification_buf_pair->next_rx_ids_head = 0;
   notification_buf_pair->next_rx_ids_tail = 0;
   notification_buf_pair->tx_full_cnt = 0;
+
   notification_buf_pair->nb_unreported_completions = 0;
   notification_buf_pair->huge_page_prefix = huge_page_prefix;
 
@@ -236,7 +243,9 @@ int enso_pipe_init(struct RxEnsoPipeInternal* enso_pipe,
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
+  if (lock_runtime_) std::invoke(lock_runtime_);
   int enso_pipe_id = fpga_dev->AllocatePipe(fallback);
+  if (unlock_runtime_) std::invoke(unlock_runtime_);
 
   if (enso_pipe_id < 0) {
     std::cerr << "Could not allocate pipe" << std::endl;
@@ -352,7 +361,8 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
  * @return Number of consumed notifications.
  */
 static _enso_always_inline uint16_t
-__get_new_tails(struct NotificationBufPair* notification_buf_pair) {
+__get_new_tails(struct NotificationBufPair* notification_buf_pair,
+                UpdatePacket update_packet) {
   struct RxNotification* notification_buf = notification_buf_pair->rx_buf;
   uint32_t notification_buf_head = notification_buf_pair->rx_head;
   uint16_t nb_consumed_notifications = 0;
@@ -367,13 +377,23 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
     if (!cur_notification->signal) {
       break;
     }
+
+    enso_pipe_id_t enso_pipe_id = cur_notification->queue_id;
+
+    /* Update the packet sent time in the packet itself */
+    if (update_packet) {
+      std::invoke(update_packet, enso_pipe_id,
+                  (uint64_t)cur_notification->pad[1],
+                  notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id]);
+    }
+
     cur_notification->signal = 0;
 
     notification_buf_head = (notification_buf_head + 1) % kNotificationBufSize;
 
-    // updates the 'tail', that is, until where you can read,
-    // for the given enso pipe
-    enso_pipe_id_t enso_pipe_id = cur_notification->queue_id;
+    /* Must update the corresponding packet in the RX Pipe with the sent time
+     * timestamp */
+
     notification_buf_pair->pending_rx_pipe_tails[enso_pipe_id] =
         (uint32_t)cur_notification->tail;
 
@@ -398,8 +418,9 @@ __get_new_tails(struct NotificationBufPair* notification_buf_pair) {
   return nb_consumed_notifications;
 }
 
-uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair) {
-  return __get_new_tails(notification_buf_pair);
+uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair,
+                       UpdatePacket update_packet) {
+  return __get_new_tails(notification_buf_pair, update_packet);
 }
 
 static _enso_always_inline uint32_t
@@ -443,7 +464,8 @@ uint32_t peek_next_batch_from_queue(
 }
 
 static _enso_always_inline struct RxNotification* __get_next_rx_notif(
-    struct NotificationBufPair* notification_buf_pair) {
+    struct NotificationBufPair* notification_buf_pair,
+    UpdatePacket update_packet) {
   // Consume up to a batch of notifications at a time. If the number of consumed
   // notifications is the same as the number of pending notifications, we are
   // done processing the last batch and can get the next one. Using batches here
@@ -453,7 +475,8 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
   uint16_t next_rx_ids_tail = notification_buf_pair->next_rx_ids_tail;
 
   if (next_rx_ids_head == next_rx_ids_tail) {
-    uint16_t nb_consumed_notifications = __get_new_tails(notification_buf_pair);
+    uint16_t nb_consumed_notifications =
+        __get_new_tails(notification_buf_pair, update_packet);
     if (unlikely(nb_consumed_notifications == 0)) {
       return nullptr;
     }
@@ -469,8 +492,9 @@ static _enso_always_inline struct RxNotification* __get_next_rx_notif(
 }
 
 struct RxNotification* get_next_rx_notif(
-    struct NotificationBufPair* notification_buf_pair) {
-  return __get_next_rx_notif(notification_buf_pair);
+    struct NotificationBufPair* notification_buf_pair,
+    UpdatePacket update_packet) {
+  return __get_next_rx_notif(notification_buf_pair, update_packet);
 }
 
 static _enso_always_inline int32_t
@@ -489,7 +513,7 @@ int32_t get_next_enso_pipe_id(
 uint32_t get_next_batch(struct NotificationBufPair* notification_buf_pair,
                         struct SocketInternal* socket_entries,
                         int* enso_pipe_id, void** buf) {
-  RxNotification* notif = __get_next_rx_notif(notification_buf_pair);
+  RxNotification* notif = __get_next_rx_notif(notification_buf_pair, NULL);
 
   if (unlikely(!notif)) {
     return 0;
@@ -528,7 +552,7 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe) {
 
 static _enso_always_inline uint32_t
 __send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                uint64_t phys_addr, uint32_t len) {
+                uint64_t phys_addr, uint32_t len, uint64_t sent_time) {
   struct TxNotification* tx_buf = notification_buf_pair->tx_buf;
   uint32_t tx_tail = notification_buf_pair->tx_tail;
   uint32_t missing_bytes = len;
@@ -545,6 +569,9 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     // Block until we can send.
     while (unlikely(free_slots == 0)) {
       ++notification_buf_pair->tx_full_cnt;
+      if (park_callback_ != nullptr) {
+        std::invoke(park_callback_);
+      }
       update_tx_head(notification_buf_pair);
       free_slots =
           (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
@@ -561,8 +588,9 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
     notification_buf_pair->wrap_tracker[tx_tail / 8] |= wrap_tracker_mask;
 
     tx_notification->length = req_length;
-    tx_notification->signal = 1;
     tx_notification->phys_addr = transf_addr;
+    tx_notification->pad[0] = sent_time;
+    tx_notification->signal = 1;
 
     uint64_t huge_page_offset = (transf_addr + req_length) % kBufPageSize;
     transf_addr = hugepage_base_addr + huge_page_offset;
@@ -579,8 +607,8 @@ __send_to_queue(struct NotificationBufPair* notification_buf_pair,
 }
 
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len) {
-  return __send_to_queue(notification_buf_pair, phys_addr, len);
+                       uint64_t phys_addr, uint32_t len, uint64_t sent_time) {
+  return __send_to_queue(notification_buf_pair, phys_addr, len, sent_time);
 }
 
 uint32_t get_unreported_completions(
@@ -650,6 +678,9 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
     update_tx_head(notification_buf_pair);
     free_slots =
         (notification_buf_pair->tx_head - tx_tail - 1) % kNotificationBufSize;
+    if (park_callback_ != nullptr) {
+      std::invoke(park_callback_);
+    }
   }
 
   struct TxNotification* tx_notification = tx_buf + tx_tail;
@@ -665,8 +696,12 @@ int send_config(struct NotificationBufPair* notification_buf_pair,
       notification_buf_pair->nb_unreported_completions;
   while (notification_buf_pair->nb_unreported_completions ==
          nb_unreported_completions) {
+    if (park_callback_ != nullptr) {
+      std::invoke(park_callback_);
+    }
     update_tx_head(notification_buf_pair);
   }
+
   // iterate over all nb_unreported_completions and invoke completion callback
   if (completion_callback != nullptr) {
     uint32_t unreported_config_completions =
@@ -708,20 +743,11 @@ uint64_t get_dev_addr_from_virt_addr(
   return dev_addr;
 }
 
-void send_uthread_yield(struct NotificationBufPair* notification_buf_pair) {
-  DevBackend* fpga_dev =
-      static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
-  fpga_dev->YieldUthread(notification_buf_pair->id,
-                         notification_buf_pair->rx_head,
-                         notification_buf_pair->tx_head);
-}
-
 void notification_buf_free(struct NotificationBufPair* notification_buf_pair) {
   DevBackend* fpga_dev =
       static_cast<DevBackend*>(notification_buf_pair->fpga_dev);
 
   fpga_dev->FreeNotifBuf(notification_buf_pair->id);
-
   DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_low, 0,
                            notification_buf_pair->uio_mmap_bar2_addr);
   DevBackend::mmio_write32(&notification_buf_pair->regs->rx_mem_high, 0,
@@ -798,14 +824,21 @@ uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry) {
   return (uint32_t)socket_entry->enso_pipe.id;
 }
 
-void pcie_initialize_backend_queues() { initialize_queues(); }
-
-void pcie_push_to_backend(PipeNotification* notif) { push_to_backend(notif); }
-
-std::optional<PipeNotification> pcie_push_to_backend_get_response(
-    PipeNotification* notif) {
-  return push_to_backend_get_response(notif);
+void pcie_initialize_backend(CounterCallback counter_callback,
+                             TxCallback tx_callback, ParkCallback park_callback,
+                             UpdateCallback update_callback,
+                             LockCallback lock_runtime,
+                             LockCallback unlock_runtime,
+                             uint32_t application_id) {
+  tx_callback_ = tx_callback;
+  park_callback_ = park_callback;
+  update_callback_ = update_callback;
+  lock_runtime_ = lock_runtime;
+  unlock_runtime_ = unlock_runtime;
+  initialize_backend_dev(counter_callback, application_id);
 }
+
+int pcie_initialize_queues(uint32_t id) { return initialize_queues(id); }
 
 void print_stats(struct SocketInternal* socket_entry, bool print_global) {
   struct NotificationBufPair* notification_buf_pair =

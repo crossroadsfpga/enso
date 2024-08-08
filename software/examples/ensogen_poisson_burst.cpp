@@ -53,7 +53,6 @@
 #include <fstream>
 #include <future>
 #include <iostream>
-#include <random>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -88,7 +87,7 @@
 #define DEFAULT_STATS_DELAY 1000
 
 // Number of CLI arguments.
-#define NB_CLI_ARGS 3
+#define NB_CLI_ARGS 1
 
 // Maximum number of bytes that we can receive at once.
 #define RECV_BUF_LEN 10000000
@@ -108,10 +107,6 @@ static volatile int rx_ready = 0;
 static volatile int rx_done = 0;
 static volatile int tx_done = 0;
 
-std::mt19937 g(0);
-std::exponential_distribution<float> exp_dist(1.0 / (3095 * 10.0));
-std::uniform_int_distribution<> bimodal_dist(1, 100);
-
 void int_handler(int signal __attribute__((unused))) {
   if (!keep_running) {
     force_stop = 1;
@@ -121,7 +116,7 @@ void int_handler(int signal __attribute__((unused))) {
 
 static void print_usage(const char* program_name) {
   printf(
-      "%s PCAP_FILE RATE_NUM RATE_DEN\n"
+      "%s PCAP_FILE \n"
       " [--help]\n"
       " [--count NB_PKTS]\n"
       " [--core CORE_ID]\n"
@@ -136,8 +131,6 @@ static void print_usage(const char* program_name) {
       " [--pcie-addr PCIE_ADDR]\n\n"
 
       "  PCAP_FILE: Pcap file with packets to transmit.\n"
-      "  RATE_NUM: Numerator of the rate used to transmit packets.\n"
-      "  RATE_DEN: Denominator of the rate used to transmit packets.\n\n"
 
       "  --help: Show this help and exit.\n"
       "  --count: Specify number of packets to transmit.\n"
@@ -172,7 +165,6 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_RTT_HIST_LEN "rtt-hist-len"
 #define CMD_OPT_STATS_DELAY "stats-delay"
 #define CMD_OPT_PCIE_ADDR "pcie-addr"
-#define CMD_OPT_DISTRIBUTION "distribution"
 
 // Map long options to short options.
 enum {
@@ -188,7 +180,6 @@ enum {
   CMD_OPT_RTT_HIST_LEN_NUM,
   CMD_OPT_STATS_DELAY_NUM,
   CMD_OPT_PCIE_ADDR_NUM,
-  CMD_OPT_DISTRIBUTION_NUM
 };
 
 static const char short_options[] = "";
@@ -206,7 +197,6 @@ static const struct option long_options[] = {
     {CMD_OPT_RTT_HIST_LEN, required_argument, NULL, CMD_OPT_RTT_HIST_LEN_NUM},
     {CMD_OPT_STATS_DELAY, required_argument, NULL, CMD_OPT_STATS_DELAY_NUM},
     {CMD_OPT_PCIE_ADDR, required_argument, NULL, CMD_OPT_PCIE_ADDR_NUM},
-    {CMD_OPT_DISTRIBUTION, required_argument, NULL, CMD_OPT_DISTRIBUTION_NUM},
     {0, 0, 0, 0}};
 
 struct parsed_args_t {
@@ -219,14 +209,11 @@ struct parsed_args_t {
   std::string hist_file;
   std::string pcap_file;
   std::string save_file;
-  uint16_t rate_num;
-  uint16_t rate_den;
   uint64_t nb_pkts;
   uint32_t rtt_hist_offset;
   uint32_t rtt_hist_len;
   uint32_t stats_delay;
   std::string pcie_addr;
-  std::string distribution;
 };
 
 static int parse_args(int argc, char** argv,
@@ -285,9 +272,6 @@ static int parse_args(int argc, char** argv,
       case CMD_OPT_PCIE_ADDR_NUM:
         parsed_args.pcie_addr = optarg;
         break;
-      case CMD_OPT_DISTRIBUTION_NUM:
-        parsed_args.distribution = optarg;
-        break;
       default:
         return -1;
     }
@@ -298,18 +282,6 @@ static int parse_args(int argc, char** argv,
   }
 
   parsed_args.pcap_file = argv[optind++];
-  parsed_args.rate_num = atoi(argv[optind++]);
-  parsed_args.rate_den = atoi(argv[optind++]);
-
-  if (parsed_args.rate_num == 0) {
-    std::cerr << "Rate must be greater than 0" << std::endl;
-    return -1;
-  }
-
-  if (parsed_args.rate_den == 0) {
-    std::cerr << "Rate denominator must be greater than 0" << std::endl;
-    return -1;
-  }
 
   return 0;
 }
@@ -410,8 +382,20 @@ struct PcapHandlerContext {
   uint32_t free_flits;
   uint32_t hugepage_offset;
   pcap_t* pcap;
-  std::string distribution;
 };
+
+#define NB_SECONDS 60
+#define NB_ITERS (NB_SECONDS * 10)
+
+uint64_t get_millis() {
+  // Get the current time point
+  auto currentTime = std::chrono::system_clock::now();
+
+  // Convert the time point to milliseconds
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             currentTime.time_since_epoch())
+      .count();
+}
 
 struct RxStats {
   explicit RxStats(uint32_t rtt_hist_len = 0, uint32_t rtt_hist_offset = 0)
@@ -421,13 +405,18 @@ struct RxStats {
         nb_batches(0),
         rtt_hist_len(rtt_hist_len),
         rtt_hist_offset(rtt_hist_offset) {
+    start = get_millis();
     if (rtt_hist_len > 0) {
-      rtt_hist = new uint64_t[rtt_hist_len]();
+      for (uint32_t i = 0; i < NB_ITERS; ++i) {
+        rtt_hists[i] = new uint64_t[rtt_hist_len]();
+      }
     }
   }
   ~RxStats() {
     if (rtt_hist_len > 0) {
-      delete[] rtt_hist;
+      for (uint32_t i = 0; i < NB_ITERS; ++i) {
+        delete[] rtt_hists[i];
+      }
     }
   }
 
@@ -439,12 +428,10 @@ struct RxStats {
   inline void add_rtt_to_hist(const uint32_t rtt) {
     // Insert RTTs into the rtt_hist array if they are in its range,
     // otherwise use the backup_rtt_hist.
-    if (unlikely((rtt >= (rtt_hist_len - rtt_hist_offset)) ||
-                 (rtt < rtt_hist_offset))) {
-      backup_rtt_hist[rtt]++;
-    } else {
-      rtt_hist[rtt - rtt_hist_offset]++;
-    }
+
+    uint64_t time = get_millis();
+    uint64_t index = (time - start) / 100;
+    rtt_hists[index][rtt - rtt_hist_offset]++;
   }
 
   uint64_t pkts;
@@ -453,7 +440,8 @@ struct RxStats {
   uint64_t nb_batches;
   const uint32_t rtt_hist_len;
   const uint32_t rtt_hist_offset;
-  uint64_t* rtt_hist;
+  uint64_t* rtt_hists[NB_ITERS];
+  uint64_t start;
   std::unordered_map<uint32_t, uint64_t> backup_rtt_hist;
 };
 
@@ -493,7 +481,6 @@ struct TxArgs {
 
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
-  (void)pkt_hdr;
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
 
   const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
@@ -504,16 +491,17 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
 
   uint32_t len = enso::get_pkt_len(pkt_bytes);
   uint32_t nb_flits = (len - 1) / 64 + 1;
-  uint64_t cycles = 0;
-  if (context->distribution == "exponential")
-    cycles = exp_dist(g);
-  else if (context->distribution == "constant")
-    cycles = 10 * 3095;
-  else if (context->distribution == "bimodal")
-    cycles = (bimodal_dist(g) <= 10 ? 55 : 5) * 3095;
-  enso::set_pkt_cycles(pkt_bytes, cycles);
 
-  /* Use kMaxHardwareFlitRate to convert between hardware cycles and us */
+  uint64_t delay_us = pkt_hdr->ts.tv_usec;
+  // std::cout << "delay us: " << delay_us << std::endl;
+  uint64_t delay_cycles = delay_us * (enso::kMaxHardwareFlitRate / 100000000);
+  if (delay_cycles <= nb_flits)
+    delay_cycles = 0;
+  else
+    delay_cycles -= nb_flits;
+
+  // std::cout << "delay cycles: " << delay_cycles << std::endl;
+  enso::set_pkt_delay((uint8_t*)pkt_bytes, delay_cycles);
 
   if (nb_flits > context->free_flits) {
     uint8_t* buf;
@@ -689,7 +677,6 @@ int main(int argc, char** argv) {
   context.free_flits = 0;
   context.hugepage_offset = HUGEPAGE_SIZE;
   context.pcap = pcap;
-  context.distribution = parsed_args.distribution;
   std::vector<EnsoPipe>& enso_pipes = context.enso_pipes;
 
   // Initialize packet buffers with packets read from pcap file.
@@ -701,19 +688,19 @@ int main(int argc, char** argv) {
 
   // For small pcaps we copy the same packets over the remaining of the
   // buffer. This reduces the number of transfers that we need to issue.
-  if ((enso_pipes.size() == 1) &&
-      (enso_pipes.front().length < BUFFER_SIZE / 2)) {
-    EnsoPipe& buffer = enso_pipes.front();
-    uint32_t original_buf_length = buffer.length;
-    uint32_t original_good_bytes = buffer.good_bytes;
-    uint32_t original_nb_pkts = buffer.nb_pkts;
-    while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
-      memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
-      buffer.length += original_buf_length;
-      buffer.good_bytes += original_good_bytes;
-      buffer.nb_pkts += original_nb_pkts;
-    }
-  }
+  //   if ((enso_pipes.size() == 1) &&
+  //       (enso_pipes.front().length < BUFFER_SIZE / 2)) {
+  //     EnsoPipe& buffer = enso_pipes.front();
+  //     uint32_t original_buf_length = buffer.length;
+  //     uint32_t original_good_bytes = buffer.good_bytes;
+  //     uint32_t original_nb_pkts = buffer.nb_pkts;
+  //     while ((buffer.length + original_buf_length) <= BUFFER_SIZE) {
+  //       memcpy(buffer.buf + buffer.length, buffer.buf, original_buf_length);
+  //       buffer.length += original_buf_length;
+  //       buffer.good_bytes += original_good_bytes;
+  //       buffer.nb_pkts += original_nb_pkts;
+  //     }
+  //   }
 
   uint64_t total_pkts_in_buffers = 0;
   uint64_t total_bytes_in_buffers = 0;
@@ -782,17 +769,76 @@ int main(int argc, char** argv) {
 
   std::vector<std::thread> threads;
 
-  // When using single_core we use the same thread for RX and TX, otherwise we
-  // launch separate threads for RX and TX.
-  if (!parsed_args.single_core) {
-    std::thread rx_thread = std::thread([&parsed_args, &rx_stats] {
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  std::thread rx_thread = std::thread([&parsed_args, &rx_stats] {
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-      std::vector<int> socket_fds;
+    std::vector<int> socket_fds;
 
-      int socket_fd = 0;
-      for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-        socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
+    int socket_fd = 0;
+    for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
+      socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
+
+      if (socket_fd == -1) {
+        std::cerr << "Problem creating socket (" << errno
+                  << "): " << strerror(errno) << std::endl;
+        exit(2);
+      }
+
+      socket_fds.push_back(socket_fd);
+    }
+
+    enso::enable_device_round_robin(socket_fd);
+    enso::enable_per_packet_rate_limit(socket_fd);
+
+    if (parsed_args.enable_rtt) {
+      enso::enable_device_timestamp(socket_fd);
+    } else {
+      enso::disable_device_timestamp(socket_fd);
+    }
+
+    RxArgs rx_args;
+    rx_args.enable_rtt = parsed_args.enable_rtt;
+    rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
+    rx_args.socket_fd = socket_fd;
+
+    rx_ready = 1;
+
+    while (keep_running) {
+      receive_pkts(rx_args, rx_stats);
+    }
+
+    uint64_t nb_iters_no_pkt = 0;
+
+    // Receive packets until packets stop arriving or user force stops.
+    while (!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
+      uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
+      if (unlikely(nb_pkts == 0)) {
+        ++nb_iters_no_pkt;
+      } else {
+        nb_iters_no_pkt = 0;
+      }
+    }
+
+    rx_done = true;
+
+    enso::disable_device_round_robin(socket_fd);
+    enso::disable_per_packet_rate_limit(socket_fd);
+
+    if (parsed_args.enable_rtt) {
+      enso::disable_device_timestamp(socket_fd);
+    }
+
+    for (auto& s : socket_fds) {
+      enso::shutdown(s, SHUT_RDWR);
+    }
+  });
+
+  std::thread tx_thread =
+      std::thread([total_bytes_to_send, total_good_bytes_to_send,
+                   pkts_in_last_buffer, &parsed_args, &enso_pipes, &tx_stats] {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, false);
 
         if (socket_fd == -1) {
           std::cerr << "Problem creating socket (" << errno
@@ -800,204 +846,44 @@ int main(int argc, char** argv) {
           exit(2);
         }
 
-        socket_fds.push_back(socket_fd);
-      }
+        while (!rx_ready) continue;
 
-      enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
-                                     parsed_args.rate_den);
-      enso::enable_device_round_robin(socket_fd);
+        TxArgs tx_args(enso_pipes, total_bytes_to_send,
+                       total_good_bytes_to_send, pkts_in_last_buffer,
+                       socket_fd);
 
-      if (parsed_args.enable_rtt) {
-        std::cout << "Enabling timestamping" << std::endl;
-        enso::enable_device_timestamp(socket_fd);
-      } else {
-        enso::disable_device_timestamp(socket_fd);
-      }
-
-      RxArgs rx_args;
-      rx_args.enable_rtt = parsed_args.enable_rtt;
-      rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
-      rx_args.socket_fd = socket_fd;
-
-      std::cout << "Running RX on core " << sched_getcpu() << std::endl;
-
-      rx_ready = 1;
-
-      while (keep_running) {
-        receive_pkts(rx_args, rx_stats);
-      }
-
-      uint64_t nb_iters_no_pkt = 0;
-
-      // Receive packets until packets stop arriving or user force stops.
-      while (!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
-        uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
-        if (unlikely(nb_pkts == 0)) {
-          ++nb_iters_no_pkt;
-        } else {
-          nb_iters_no_pkt = 0;
+        while (keep_running) {
+          transmit_pkts(tx_args, tx_stats);
         }
-      }
 
-      rx_done = true;
+        tx_done = 1;
 
-      enso::disable_device_rate_limit(socket_fd);
-      enso::disable_device_round_robin(socket_fd);
+        while (!rx_done) continue;
 
-      if (parsed_args.enable_rtt) {
-        enso::disable_device_timestamp(socket_fd);
-      }
+        reclaim_all_buffers(tx_args);
+      });
 
-      for (auto& s : socket_fds) {
-        enso::shutdown(s, SHUT_RDWR);
-      }
-    });
-
-    std::thread tx_thread = std::thread(
-        [total_bytes_to_send, total_good_bytes_to_send, pkts_in_last_buffer,
-         &parsed_args, &enso_pipes, &tx_stats] {
-          std::this_thread::sleep_for(std::chrono::seconds(1));
-
-          int socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, false);
-
-          if (socket_fd == -1) {
-            std::cerr << "Problem creating socket (" << errno
-                      << "): " << strerror(errno) << std::endl;
-            exit(2);
-          }
-
-          while (!rx_ready) continue;
-
-          std::cout << "Running TX on core " << sched_getcpu() << std::endl;
-
-          TxArgs tx_args(enso_pipes, total_bytes_to_send,
-                         total_good_bytes_to_send, pkts_in_last_buffer,
-                         socket_fd);
-
-          while (keep_running) {
-            transmit_pkts(tx_args, tx_stats);
-          }
-
-          tx_done = 1;
-
-          while (!rx_done) continue;
-
-          reclaim_all_buffers(tx_args);
-        });
-
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(parsed_args.core_id, &cpuset);
-    int result = pthread_setaffinity_np(rx_thread.native_handle(),
-                                        sizeof(cpuset), &cpuset);
-    if (result < 0) {
-      std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
-      return 6;
-    }
-
-    CPU_ZERO(&cpuset);
-    CPU_SET(parsed_args.core_id + 1, &cpuset);
-    result = pthread_setaffinity_np(tx_thread.native_handle(), sizeof(cpuset),
-                                    &cpuset);
-    if (result < 0) {
-      std::cerr << "Error setting CPU affinity for TX thread." << std::endl;
-      return 7;
-    }
-
-    threads.push_back(std::move(rx_thread));
-    threads.push_back(std::move(tx_thread));
-
-  } else {
-    // Send and receive packets within the same thread.
-    std::thread rx_tx_thread = std::thread(
-        [&parsed_args, &rx_stats, total_bytes_to_send, total_good_bytes_to_send,
-         pkts_in_last_buffer, &enso_pipes, &tx_stats] {
-          std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-          std::vector<int> socket_fds;
-
-          int socket_fd = 0;
-          for (uint32_t i = 0; i < parsed_args.nb_queues; ++i) {
-            socket_fd = enso::socket(AF_INET, SOCK_DGRAM, 0, true);
-
-            if (socket_fd == -1) {
-              std::cerr << "Problem creating socket (" << errno
-                        << "): " << strerror(errno) << std::endl;
-              exit(2);
-            }
-
-            socket_fds.push_back(socket_fd);
-          }
-
-          enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
-                                         parsed_args.rate_den);
-          enso::enable_device_round_robin(socket_fd);
-
-          if (parsed_args.enable_rtt) {
-            enso::enable_device_timestamp(socket_fd);
-          }
-
-          std::cout << "Running RX and TX on core " << sched_getcpu()
-                    << std::endl;
-
-          RxArgs rx_args;
-          rx_args.enable_rtt = parsed_args.enable_rtt;
-          rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
-          rx_args.socket_fd = socket_fd;
-
-          TxArgs tx_args(enso_pipes, total_bytes_to_send,
-                         total_good_bytes_to_send, pkts_in_last_buffer,
-                         socket_fd);
-
-          rx_ready = 1;
-
-          while (keep_running) {
-            receive_pkts(rx_args, rx_stats);
-            transmit_pkts(tx_args, tx_stats);
-          }
-
-          tx_done = 1;
-
-          uint64_t nb_iters_no_pkt = 0;
-
-          // Receive packets until packets stop arriving or user force stops.
-          while (!force_stop && (nb_iters_no_pkt < ITER_NO_PKT_THRESH)) {
-            uint64_t nb_pkts = receive_pkts(rx_args, rx_stats);
-            if (unlikely(nb_pkts == 0)) {
-              ++nb_iters_no_pkt;
-            } else {
-              nb_iters_no_pkt = 0;
-            }
-          }
-
-          rx_done = true;
-
-          reclaim_all_buffers(tx_args);
-
-          enso::disable_device_rate_limit(socket_fd);
-          enso::disable_device_round_robin(socket_fd);
-
-          if (parsed_args.enable_rtt) {
-            enso::disable_device_timestamp(socket_fd);
-          }
-
-          for (auto& s : socket_fds) {
-            enso::shutdown(s, SHUT_RDWR);
-          }
-        });
-
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(parsed_args.core_id, &cpuset);
-    int result = pthread_setaffinity_np(rx_tx_thread.native_handle(),
-                                        sizeof(cpuset), &cpuset);
-    if (result < 0) {
-      std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
-      return 6;
-    }
-
-    threads.push_back(std::move(rx_tx_thread));
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(parsed_args.core_id, &cpuset);
+  int result = pthread_setaffinity_np(rx_thread.native_handle(), sizeof(cpuset),
+                                      &cpuset);
+  if (result < 0) {
+    std::cerr << "Error setting CPU affinity for RX thread." << std::endl;
+    return 6;
   }
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(parsed_args.core_id + 1, &cpuset);
+  result = pthread_setaffinity_np(tx_thread.native_handle(), sizeof(cpuset),
+                                  &cpuset);
+  if (result < 0) {
+    std::cerr << "Error setting CPU affinity for TX thread." << std::endl;
+    return 7;
+  }
+
+  threads.push_back(std::move(rx_thread));
+  threads.push_back(std::move(tx_thread));
 
   // Write header to save file.
   if (parsed_args.save) {
@@ -1103,34 +989,36 @@ int main(int argc, char** argv) {
 
   ret = 0;
   if (parsed_args.enable_rtt_history) {
-    std::ofstream hist_file;
-    hist_file.open(parsed_args.hist_file);
+    for (int i = 0; i < NB_ITERS; ++i) {
+      std::ofstream hist_file;
+      hist_file.open(parsed_args.hist_file + "_" + std::to_string(i));
 
-    for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
-      if (rx_stats.rtt_hist[rtt] != 0) {
-        uint32_t corrected_rtt =
-            (rtt + parsed_args.rtt_hist_offset) * enso::kNsPerTimestampCycle;
-        hist_file << corrected_rtt << "," << rx_stats.rtt_hist[rtt]
-                  << std::endl;
+      for (uint32_t rtt = 0; rtt < parsed_args.rtt_hist_len; ++rtt) {
+        if (rx_stats.rtt_hists[i][rtt] != 0) {
+          uint32_t corrected_rtt =
+              (rtt + parsed_args.rtt_hist_offset) * enso::kNsPerTimestampCycle;
+          hist_file << corrected_rtt << "," << rx_stats.rtt_hists[i][rtt]
+                    << std::endl;
+        }
       }
-    }
 
-    if (rx_stats.backup_rtt_hist.size() != 0) {
-      std::cout << "Warning: " << rx_stats.backup_rtt_hist.size()
-                << " rtt hist entries in backup" << std::endl;
-      for (auto const& i : rx_stats.backup_rtt_hist) {
-        hist_file << i.first * enso::kNsPerTimestampCycle << "," << i.second
-                  << std::endl;
+      if (rx_stats.backup_rtt_hist.size() != 0) {
+        std::cout << "Warning: " << rx_stats.backup_rtt_hist.size()
+                  << " rtt hist entries in backup" << std::endl;
+        for (auto const& i : rx_stats.backup_rtt_hist) {
+          hist_file << i.first * enso::kNsPerTimestampCycle << "," << i.second
+                    << std::endl;
+        }
       }
-    }
 
-    hist_file.close();
-    std::cout << "Saved RTT histogram to \"" << parsed_args.hist_file << "\""
-              << std::endl;
+      hist_file.close();
+      std::cout << "Saved RTT histogram to \"" << parsed_args.hist_file << "_"
+                << i << "\"" << std::endl;
 
-    if (rx_stats.pkts != tx_stats.pkts) {
-      std::cout << "Warning: did not get all packets back." << std::endl;
-      ret = 1;
+      if (rx_stats.pkts != tx_stats.pkts) {
+        std::cout << "Warning: did not get all packets back." << std::endl;
+        ret = 1;
+      }
     }
   }
 

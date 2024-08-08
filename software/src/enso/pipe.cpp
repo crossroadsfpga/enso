@@ -55,17 +55,6 @@
 
 namespace enso {
 
-void initialize_backend_queues() { return pcie_initialize_backend_queues(); }
-
-void push_to_backend_queues(PipeNotification* notif) {
-  return pcie_push_to_backend(notif);
-}
-
-std::optional<PipeNotification> push_to_backend_queues_get_response(
-    PipeNotification* notif) {
-  return pcie_push_to_backend_get_response(notif);
-}
-
 uint32_t external_peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf) {
@@ -82,6 +71,14 @@ uint32_t RxPipe::Recv(uint8_t** buf, uint32_t max_nb_bytes) {
   uint32_t ret = Peek(buf, max_nb_bytes);
   ConfirmBytes(ret);
   return ret;
+}
+
+inline void RxPipe::SetPktSentTime(uint32_t tail, uint64_t sent_time) {
+  // uint32_t* enso_pipe_buf = internal_rx_pipe_.buf;
+  // uint8_t* pkt = (uint8_t*)&enso_pipe_buf[tail * 16];
+  // set_pkt_sent_time(pkt, sent_time);
+  (void)tail;
+  (void)sent_time;
 }
 
 inline uint32_t RxPipe::Peek(uint8_t** buf, uint32_t max_nb_bytes) {
@@ -138,6 +135,18 @@ int TxPipe::Init() noexcept {
 
   buf_phys_addr_ = get_dev_addr_from_virt_addr(notif_buf, buf_);
   return 0;
+}
+
+void RxTxPipe::SetPktSentTime(uint32_t tail, uint64_t sent_time) {
+  rx_pipe_->SetPktSentTime(tail, sent_time);
+}
+
+void RxTxPipe::Lock() {
+  if (lock_runtime_) std::invoke(lock_runtime_);
+}
+
+void RxTxPipe::Unlock() {
+  if (unlock_runtime_) std::invoke(unlock_runtime_);
 }
 
 int RxTxPipe::Init(bool fallback) noexcept {
@@ -252,34 +261,7 @@ struct RxNotification* Device::NextRxNotif() {
   assert(rx_tx_pipes_.size() == 0);
 
   struct RxNotification* notif;
-
-#ifdef LATENCY_OPT
-  int32_t id;
-  // When LATENCY_OPT is enabled, we always prefetch the next pipe.
   notif = get_next_rx_notif(&notification_buf_pair_);
-
-  while (notif) {
-    id = notif->queue_id;
-    RxPipe* rx_pipe = rx_pipes_map_[id];
-    assert(rx_pipe != nullptr);
-
-    RxEnsoPipeInternal& pipe = rx_pipe->internal_rx_pipe_;
-    uint32_t enso_pipe_head = pipe.rx_tail;
-    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
-
-    if (enso_pipe_head != enso_pipe_tail) {
-      rx_pipe->Prefetch();
-      break;
-    }
-
-    notif = get_next_rx_notif(&notification_buf_pair_);
-  }
-
-#else  // !LATENCY_OPT
-  notif = get_next_rx_notif(&notification_buf_pair_);
-
-#endif  // LATENCY_OPT
-
   return notif;
 }
 
@@ -297,6 +279,7 @@ RxPipe* Device::NextRxPipeToRecv() {
   RxPipe* rx_pipe = rx_pipes_map_[id];
   if (!rx_pipe) return NULL;
   rx_pipe->SetAsNextPipe();
+
   return rx_pipe;
 }
 
@@ -307,43 +290,34 @@ RxTxPipe* Device::NextRxTxPipeToRecv() {
   struct RxNotification* notif;
   int32_t id;
 
-#ifdef LATENCY_OPT
-  // When LATENCY_OPT is enabled, we always prefetch the next pipe.
-  notif = get_next_rx_notif(&notification_buf_pair_);
+  notif = get_next_rx_notif(
+      &notification_buf_pair_, [this](enso_pipe_id_t enso_pipe_id,
+                                      uint64_t sent_time, uint32_t prev_tail) {
+        RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[enso_pipe_id];
+        rx_tx_pipe->SetPktSentTime(prev_tail, sent_time);
+      });
 
-  while (notif) {
-    id = notif->queue_id;
-    RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
-    assert(rx_tx_pipe->rx_pipe_ != nullptr);
+  if (!notif) return nullptr;
 
-    RxEnsoPipeInternal& pipe = rx_tx_pipe->rx_pipe_->internal_rx_pipe_;
-    uint32_t enso_pipe_head = pipe.rx_tail;
-    uint32_t enso_pipe_tail = notification_buf_pair_.pending_rx_pipe_tails[id];
-
-    if (enso_pipe_head != enso_pipe_tail) {
-      rx_tx_pipe->Prefetch();
-      break;
-    }
-
-    notif = get_next_rx_notif(&notification_buf_pair_);
-  }
-
-#else  // !LATENCY_OPT
-  notif = get_next_rx_notif(&notification_buf_pair_);
   id = notif->queue_id;
-
-#endif  // LATENCY_OPT
-
-  if (!notif) {
-    return nullptr;
-  }
-
   RxTxPipe* rx_tx_pipe = rx_tx_pipes_map_[id];
   rx_tx_pipe->rx_pipe_->SetAsNextPipe();
   return rx_tx_pipe;
 }
 
 int Device::GetNotifQueueId() noexcept { return notification_buf_pair_.id; }
+
+struct RxNotification* Device::GetRxNotifQueueBuf() noexcept {
+  return notification_buf_pair_.rx_buf;
+}
+
+struct TxNotification* Device::GetTxNotifQueueBuf() noexcept {
+  return notification_buf_pair_.tx_buf;
+}
+
+uint32_t Device::GetRxHead() noexcept { return notification_buf_pair_.rx_head; }
+
+uint32_t Device::GetTxHead() noexcept { return notification_buf_pair_.tx_head; }
 
 int Device::Init(int32_t uthread_id) noexcept {
   if (core_id_ < 0) {
@@ -366,10 +340,6 @@ int Device::Init(int32_t uthread_id) noexcept {
 
   int bar = -1;
 
-  std::cerr << "Running with NOTIFICATION_BUF_SIZE: " << kNotificationBufSize
-            << std::endl;
-  std::cerr << "Running with ENSO_PIPE_SIZE: " << kEnsoPipeSize << std::endl;
-
   // initialize entire notification buf information for uthreads to access
   int ret = notification_buf_init(bdf_, bar, &notification_buf_pair_,
                                   huge_page_prefix_, uthread_id);
@@ -389,10 +359,11 @@ int Device::ApplyConfig(struct TxNotification* notification) {
                      &completion_callback_);
 }
 
-void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
+void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
+                  uint64_t sent_time) {
   // TODO(sadok): We might be able to improve performance by avoiding the wrap
   // tracker currently used inside send_to_queue.
-  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
+  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes, sent_time);
 
   uint32_t nb_pending_requests =
       (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
@@ -401,11 +372,13 @@ void Device::Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes) {
   // We need space for two requests because the request may be split into two
   // if the bytes wrap around the end of the buffer.
   while (unlikely(nb_pending_requests >= (kMaxPendingTxRequests - 2))) {
+    if (park_callback_ != nullptr) std::invoke(park_callback_);
     ProcessCompletions();
     nb_pending_requests =
         (tx_pr_tail_ - tx_pr_head_) & kPendingTxRequestsBufMask;
   }
 
+  tx_pending_requests_[tx_pr_tail_].phys_addr = phys_addr;
   tx_pending_requests_[tx_pr_tail_].pipe_id = tx_enso_pipe_id;
   tx_pending_requests_[tx_pr_tail_].nb_bytes = nb_bytes;
   tx_pr_tail_ = (tx_pr_tail_ + 1) & kPendingTxRequestsBufMask;
@@ -440,10 +413,6 @@ void Device::ProcessCompletions() {
   }
 }
 
-void Device::SendUthreadYield() {
-  return send_uthread_yield(&notification_buf_pair_);
-}
-
 int Device::EnableTimeStamping() {
   return enable_timestamp(&notification_buf_pair_);
 }
@@ -460,6 +429,14 @@ int Device::DisableRateLimiting() {
   return disable_rate_limit(&notification_buf_pair_);
 }
 
+int Device::EnablePerPacketRateLimiting() {
+  return enable_per_packet_rate_limit(&notification_buf_pair_);
+}
+
+int Device::DisablePerPacketRateLimiting() {
+  return disable_per_packet_rate_limit(&notification_buf_pair_);
+}
+
 int Device::EnableRoundRobin() {
   return enable_round_robin(&notification_buf_pair_);
 }
@@ -470,6 +447,22 @@ int Device::GetRoundRobinStatus() noexcept {
 
 int Device::DisableRoundRobin() {
   return disable_round_robin(&notification_buf_pair_);
+}
+
+int Device::InitializeBackendQueues(uint32_t id) {
+  return pcie_initialize_queues(id);
+}
+
+void Device::InitializeBackend(CounterCallback counter_callback,
+                               TxCallback tx_callback,
+                               ParkCallback park_callback,
+                               UpdateCallback update_callback,
+                               LockCallback lock_runtime,
+                               LockCallback unlock_runtime,
+                               uint32_t application_id) {
+  return pcie_initialize_backend(counter_callback, tx_callback, park_callback,
+                                 update_callback, lock_runtime, unlock_runtime,
+                                 application_id);
 }
 
 }  // namespace enso

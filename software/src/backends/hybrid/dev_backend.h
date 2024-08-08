@@ -46,6 +46,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <atomic>
+#include <csignal>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -58,20 +60,26 @@
 
 namespace enso {
 
-// These queues are per-kthread, not per-uthread, given that they are
-// thread-local. Will automatically update when switching cores.
 thread_local std::unique_ptr<QueueProducer<PipeNotification>> queue_to_backend_;
 thread_local std::unique_ptr<QueueConsumer<PipeNotification>>
     queue_from_backend_;
-thread_local int64_t shinkansen_notif_buf_id_ = -1;
 
-int initialize_queues() {
-  uint32_t core_id = sched_getcpu();
+// These queues are per-kthread, not per-uthread, given that they are
+// thread-local. Will automatically update when switching cores.
+int64_t shinkansen_notif_buf_id_ = -1;
+uint32_t application_id_ = 0;
 
-  std::string queue_to_app_name =
-      std::string(kIpcQueueToAppName) + std::to_string(core_id) + "_";
-  std::string queue_from_app_name =
-      std::string(kIpcQueueFromAppName) + std::to_string(core_id) + "_";
+CounterCallback counter_callback_;
+
+int initialize_queues(uint32_t id) {
+  if (queue_to_backend_ != nullptr) return -1;
+
+  std::string queue_to_app_name = std::string(kIpcQueueToAppName) +
+                                  std::to_string(application_id_) + ":" +
+                                  std::to_string(id) + "_";
+  std::string queue_from_app_name = std::string(kIpcQueueFromAppName) +
+                                    std::to_string(application_id_) + ":" +
+                                    std::to_string(id) + "_";
 
   queue_to_backend_ =
       QueueProducer<PipeNotification>::Create(queue_from_app_name);
@@ -90,6 +98,12 @@ int initialize_queues() {
   return 0;
 }
 
+void initialize_backend_dev(CounterCallback counter_callback,
+                            uint32_t application_id) {
+  counter_callback_ = counter_callback;
+  application_id_ = application_id;
+}
+
 void push_to_backend(PipeNotification* notif) {
   while (queue_to_backend_->Push(*notif) != 0) {
   }
@@ -104,14 +118,12 @@ std::optional<PipeNotification> push_to_backend_get_response(
   // Block until receive.
   while (!(notification = queue_from_backend_->Pop())) {
   }
+
   return notification;
 }
-
 class DevBackend {
  public:
   static DevBackend* Create(unsigned int bdf, int bar) noexcept {
-    std::cerr << "Using hybrid backend" << std::endl;
-
     DevBackend* dev = new (std::nothrow) DevBackend(bdf, bar);
 
     if (dev == nullptr) {
@@ -142,6 +154,9 @@ class DevBackend {
         (uint64_t)((uint8_t*)addr - (uint8_t*)uio_mmap_bar2_addr);
     enso::enso_pipe_id_t queue_id = offset_addr / enso::kMemorySpacePerQueue;
     uint32_t offset = offset_addr % enso::kMemorySpacePerQueue;
+    uint64_t mask;
+    enso::PipeNotification* pipe_notification;
+    struct MmioNotification mmio_notification;
 
     if (queue_id < enso::kMaxNbFlows) {
       // Updates to RX pipe: write directly
@@ -149,25 +164,25 @@ class DevBackend {
       // queue
       switch (offset) {
         case offsetof(struct enso::QueueRegs, rx_mem_low):
-          struct MmioNotification mmio_notification;
           mmio_notification.type = NotifType::kWrite;
           mmio_notification.address = offset_addr;
           mmio_notification.value = value;
 
-          enso::PipeNotification* pipe_notification =
-              (enso::PipeNotification*)&mmio_notification;
+          pipe_notification = (enso::PipeNotification*)&mmio_notification;
 
           push_to_backend(pipe_notification);
           // remove notification queue ID from value being sent: make
           // notification buffer ID 0
-          uint64_t mask = (1L << 8L) - 1L;
+          mask = enso::kMaxNbApps - 1;
           value = (value & ~(mask)) | shinkansen_notif_buf_id_;
           break;
       }
+      // Updates to RX pipe: write directly
       _enso_compiler_memory_barrier();
       *addr = value;
       return;
     }
+
     queue_id -= enso::kMaxNbFlows;
     // Updates to notification buffers.
     if (queue_id < enso::kMaxNbApps) {
@@ -176,6 +191,7 @@ class DevBackend {
       mmio_notification.type = NotifType::kWrite;
       mmio_notification.address = offset_addr;
       mmio_notification.value = value;
+      mmio_notification.counter = std::invoke(counter_callback_, queue_id);
 
       enso::PipeNotification* pipe_notification =
           (enso::PipeNotification*)&mmio_notification;
@@ -372,24 +388,6 @@ class DevBackend {
    * @return 0 on success. On error, -1 is returned and errno is set.
    */
   int FreePipe(int pipe_id) { return dev_->free_pipe(pipe_id); }
-
-  /**
-   * @brief Sends a message to the IOKernel that the uthread is yielding.
-   *
-   * @param notif_buf_id The notification buffer ID of the current device.
-   */
-  void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
-                    uint32_t last_tx_consumed_head) {
-    struct YieldNotification yield_notification;
-    yield_notification.type = NotifType::kUthreadWaiting;
-    yield_notification.notif_buf_id = notif_buf_id;
-    yield_notification.last_rx_notif_head = last_rx_notif_head;
-    yield_notification.last_tx_consumed_head = last_tx_consumed_head;
-
-    enso::PipeNotification* pipe_notification =
-        (enso::PipeNotification*)&yield_notification;
-    push_to_backend(pipe_notification);
-  }
 
  private:
   explicit DevBackend(unsigned int bdf, int bar) noexcept

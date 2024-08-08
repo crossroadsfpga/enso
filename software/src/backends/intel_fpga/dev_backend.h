@@ -46,9 +46,22 @@
 
 namespace enso {
 
-int initialize_queues() { return 0; }
+int initialize_queues(uint32_t id) {
+  (void)id;
+  return 0;
+}
+
+void initialize_backend_dev(CounterCallback counter_callback,
+                            uint32_t application_id) {
+  (void)counter_callback;
+  (void)application_id;
+}
 
 void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
+
+void update_backend_queues() {}
+
+void access_backend_queues() {}
 
 std::optional<PipeNotification> push_to_backend_get_response(
     enso::PipeNotification* notif) {
@@ -133,18 +146,6 @@ class DevBackend {
    *         returned and errno is set.
    */
   int GetRrStatus() { return dev_->get_rr_status(); }
-
-  /**
-   * @brief Sends a message to the IOKernel that the uthread is yielding.
-   *
-   * @param notif_buf_id The notification buffer ID of the current device.
-   */
-  void YieldUthread(int notif_buf_id, uint32_t last_rx_notif_head,
-                    uint32_t last_tx_consumed_head) {
-    (void)notif_buf_id;
-    (void)last_rx_notif_head;
-    (void)last_tx_consumed_head;
-  }
 
   /**
    * @brief Allocates a notification buffer.
