@@ -37,10 +37,27 @@ Traditionally, NICs expose a *packetized* interface that software (applications 
 In order to accommodate [Hermes](https://github.com/kaajalbgupta/hermes), some modifications were made to the Enso interface.
 
 ### Hybrid Backend
-A new backend was added for applications using Hermes, called the hybrid backend. This incorporates features from the Intel FPGA backend and the software backend. It involves having notifications travel through a separate core, the [IOKernel](https://github.com/kaajalbgupta/shinkansen_sw) (which runs with the Intel FPGA backend), while data gets sent directly to applications' Enso pipes.
+The hybrid backend is introduced here: in which Enso Pipes and notification buffers are split in communication. Applications running with the hybrid backend will only receive data in their Enso Pipes from the NIC, while the notifications will go to the [IOKernel](https://github.com/kaajalbgupta/shinkansen_sw). This communication is set up by having applications access the notification buffer ID of the IOKernel and using it when registering their Enso Pipes with the NIC in the backend.
+
+This backend can be set up as follows:
+
+```
+cd enso/
+meson setup --native-file gcc.ini -Ddev_backend=hybrid build_hybrid
+cd build_hybrid/
+sudo ninja install
+```
 
 ### Callbacks
 As Hermes uses Enso as a dependency, for Hermes to make decisions in the Enso codebase itself, a few callbacks were added that could use internal Enso information in Hermes.
 
 ### Ensogen
 A few new options were incorporated in Ensogen to accommodate the Poisson scheduling of packets in a PCAP file and to include information on the number of cycles to spin for each packet.
+
+To get the poisson bitstream, run:
+```
+sudo -i
+./enso/scripts/update_bitstream.sh /home/kaajalg/poisson.sof
+```
+
+Then, must load the machine with that bitstream: `enso enso/ --host mxhost --fpga 1-12`. The correct sha256 for this bitstream is `2f12a0862f51c2ca5c293216bfe46de60db7f27523ef3ee9114286d0ecbab2b7`.
