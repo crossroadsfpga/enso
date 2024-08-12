@@ -32,3 +32,15 @@ Traditionally, NICs expose a *packetized* interface that software (applications 
 - Understanding the primitives: [RX Ensō Pipe](https://enso.cs.cmu.edu/primitives/rx_enso_pipe/), [TX Ensō Pipe](https://enso.cs.cmu.edu/primitives/tx_enso_pipe/), [RX/TX Ensō Pipe](https://enso.cs.cmu.edu/primitives/rx_tx_enso_pipe/)
 - Examples: [Echo Server](https://github.com/crossroadsfpga/enso/blob/master/software/examples/echo.cpp), [Packet Capture](https://github.com/crossroadsfpga/enso/blob/master/software/examples/capture.cpp), [EnsōGen Packet Generator](https://github.com/crossroadsfpga/enso/blob/master/software/examples/ensogen.cpp)
 - API References: [Software](https://enso.cs.cmu.edu/software/), [Hardware](https://enso.cs.cmu.edu/hardware/)
+
+## Hermes Additions
+In order to accommodate [Hermes](https://github.com/kaajalbgupta/hermes), some modifications were made to the Enso interface.
+
+### Hybrid Backend
+A new backend was added for applications using Hermes, called the hybrid backend. This incorporates features from the Intel FPGA backend and the software backend. It involves having notifications travel through a separate core, the [IOKernel](https://github.com/kaajalbgupta/shinkansen_sw) (which runs with the Intel FPGA backend), while data gets sent directly to applications' Enso pipes.
+
+### Callbacks
+As Hermes uses Enso as a dependency, for Hermes to make decisions in the Enso codebase itself, a few callbacks were added that could use internal Enso information in Hermes.
+
+### Ensogen
+A few new options were incorporated in Ensogen to accommodate the Poisson scheduling of packets in a PCAP file and to include information on the number of cycles to spin for each packet.
