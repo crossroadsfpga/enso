@@ -141,14 +141,6 @@ void RxTxPipe::SetPktSentTime(uint32_t tail, uint64_t sent_time) {
   rx_pipe_->SetPktSentTime(tail, sent_time);
 }
 
-void RxTxPipe::Lock() {
-  if (lock_runtime_) std::invoke(lock_runtime_);
-}
-
-void RxTxPipe::Unlock() {
-  if (unlock_runtime_) std::invoke(unlock_runtime_);
-}
-
 int RxTxPipe::Init(bool fallback) noexcept {
   rx_pipe_ = device_->AllocateRxPipe(fallback);
   if (rx_pipe_ == nullptr) {
