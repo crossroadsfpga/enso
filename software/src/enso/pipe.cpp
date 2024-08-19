@@ -397,6 +397,14 @@ void Device::ProcessCompletions() {
   }
 }
 
+void Device::SendBatch(uint64_t phys_addr, uint32_t nb_bytes) {
+  send_to_queue(&notification_buf_pair_, phys_addr, nb_bytes);
+}
+
+uint32_t Device::ConsumeBatches() {
+  return get_unreported_completions(&notification_buf_pair_);
+}
+
 int Device::EnableTimeStamping() {
   return enable_timestamp(&notification_buf_pair_);
 }
