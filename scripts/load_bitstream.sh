@@ -10,6 +10,12 @@ FPGA_NB=${1:-"1-13"}
 
 cd $SCRIPT_DIR
 
+# Check if quartus_pgm is in the PATH.
+if ! command -v quartus_pgm &> /dev/null; then
+    echo-e  "${RED}quartus_pgm not in PATH. Add it to PATH and try again.${NC}"
+    exit 1
+fi
+
 # We use taskset and chrt to benefit from multiple cores even when they are
 # isolated from the linux scheduler. This significantly speeds up loading the
 # bitstream. Note that we use all but the last core.
