@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 module="intel_fpga_pcie_drv"
 device="intel_fpga_pcie_drv"
 mode="666"
