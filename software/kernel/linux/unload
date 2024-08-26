@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 sudo rmmod intel_fpga_pcie_drv
 
 # Remove device manually in case udev isn't set up to do so.
