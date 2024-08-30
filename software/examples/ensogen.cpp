@@ -128,7 +128,8 @@ static void print_usage(const char* program_name) {
       " [--rtt-hist-offset HIST_OFFSET]\n"
       " [--rtt-hist-len HIST_LEN]\n"
       " [--stats-delay STATS_DELAY]\n"
-      " [--pcie-addr PCIE_ADDR]\n\n"
+      " [--pcie-addr PCIE_ADDR]\n"
+      " [--timestamp-offset]\n\n"
 
       "  PCAP_FILE: Pcap file with packets to transmit.\n"
       "  RATE_NUM: Numerator of the rate used to transmit packets.\n"
@@ -150,9 +151,11 @@ static void print_usage(const char* program_name) {
       "                  performance penalty.\n"
       "  --stats-delay: Delay between displayed stats in milliseconds\n"
       "                 (default: %d).\n"
-      "  --pcie-addr: Specify the PCIe address of the NIC to use.\n",
+      "  --pcie-addr: Specify the PCIe address of the NIC to use.\n"
+      "  --timestamp-offset: Specify the packet offset to place the timestamp\n"
+      "                      on (default: %d).\n",
       program_name, DEFAULT_CORE_ID, DEFAULT_NB_QUEUES, DEFAULT_HIST_OFFSET,
-      DEFAULT_HIST_LEN, DEFAULT_STATS_DELAY);
+      DEFAULT_HIST_LEN, DEFAULT_STATS_DELAY, enso::kDefaultRttOffset);
 }
 
 #define CMD_OPT_HELP "help"
@@ -167,6 +170,7 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_RTT_HIST_LEN "rtt-hist-len"
 #define CMD_OPT_STATS_DELAY "stats-delay"
 #define CMD_OPT_PCIE_ADDR "pcie-addr"
+#define CMD_OPT_TIMESTAMP_OFFSET "timestamp-offset"
 
 // Map long options to short options.
 enum {
@@ -182,6 +186,7 @@ enum {
   CMD_OPT_RTT_HIST_LEN_NUM,
   CMD_OPT_STATS_DELAY_NUM,
   CMD_OPT_PCIE_ADDR_NUM,
+  CMD_OPT_TIMESTAMP_OFFSET_NUM
 };
 
 static const char short_options[] = "";
@@ -199,6 +204,8 @@ static const struct option long_options[] = {
     {CMD_OPT_RTT_HIST_LEN, required_argument, NULL, CMD_OPT_RTT_HIST_LEN_NUM},
     {CMD_OPT_STATS_DELAY, required_argument, NULL, CMD_OPT_STATS_DELAY_NUM},
     {CMD_OPT_PCIE_ADDR, required_argument, NULL, CMD_OPT_PCIE_ADDR_NUM},
+    {CMD_OPT_TIMESTAMP_OFFSET, required_argument, NULL,
+     CMD_OPT_TIMESTAMP_OFFSET_NUM},
     {0, 0, 0, 0}};
 
 struct parsed_args_t {
@@ -218,6 +225,7 @@ struct parsed_args_t {
   uint32_t rtt_hist_len;
   uint32_t stats_delay;
   std::string pcie_addr;
+  uint8_t timestamp_offset;
 };
 
 static int parse_args(int argc, char** argv,
@@ -235,6 +243,7 @@ static int parse_args(int argc, char** argv,
   parsed_args.rtt_hist_offset = DEFAULT_HIST_OFFSET;
   parsed_args.rtt_hist_len = DEFAULT_HIST_LEN;
   parsed_args.stats_delay = DEFAULT_STATS_DELAY;
+  parsed_args.timestamp_offset = enso::kDefaultRttOffset;
 
   while ((opt = getopt_long(argc, argv, short_options, long_options,
                             &long_index)) != EOF) {
@@ -276,6 +285,15 @@ static int parse_args(int argc, char** argv,
       case CMD_OPT_PCIE_ADDR_NUM:
         parsed_args.pcie_addr = optarg;
         break;
+      case CMD_OPT_TIMESTAMP_OFFSET_NUM: {
+        int timestamp_offset = atoi(optarg);
+        if (timestamp_offset < 0 || timestamp_offset > 60) {
+          std::cerr << "Invalid timestamp offset" << std::endl;
+          return -1;
+        }
+        parsed_args.timestamp_offset = (uint8_t)timestamp_offset;
+        break;
+      }
       default:
         return -1;
     }
@@ -448,6 +466,7 @@ struct RxArgs {
   bool enable_rtt;
   bool enable_rtt_history;
   int socket_fd;
+  uint8_t timestamp_offset;
 };
 
 struct TxStats {
@@ -550,7 +569,7 @@ inline uint64_t receive_pkts(const struct RxArgs& rx_args,
       uint16_t pkt_aligned_len = nb_flits * 64;
 
       if (rx_args.enable_rtt) {
-        uint32_t rtt = enso::get_pkt_rtt(pkt);
+        uint32_t rtt = enso::get_pkt_rtt(pkt, rx_args.timestamp_offset);
         rx_stats.rtt_sum += rtt;
 
         if (rx_args.enable_rtt_history) {
@@ -784,7 +803,7 @@ int main(int argc, char** argv) {
       enso::enable_device_round_robin(socket_fd);
 
       if (parsed_args.enable_rtt) {
-        enso::enable_device_timestamp(socket_fd);
+        enso::enable_device_timestamp(socket_fd, parsed_args.timestamp_offset);
       } else {
         enso::disable_device_timestamp(socket_fd);
       }
@@ -792,6 +811,7 @@ int main(int argc, char** argv) {
       RxArgs rx_args;
       rx_args.enable_rtt = parsed_args.enable_rtt;
       rx_args.enable_rtt_history = parsed_args.enable_rtt_history;
+      rx_args.timestamp_offset = parsed_args.timestamp_offset;
       rx_args.socket_fd = socket_fd;
 
       std::cout << "Running RX on core " << sched_getcpu() << std::endl;

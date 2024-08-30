@@ -112,9 +112,10 @@ constexpr uint32_t kAlignedDscBufPairSize =
 constexpr uint32_t kNsPerTimestampCycle = 5;
 
 /**
- * @brief Offset of the RTT when timestamp is enabled (in bytes).
+ * @brief Default timestamp offset of the RTT when timestamp is enabled (in
+ *        bytes). Uses bytes 4--7 of IPv4 header.
  */
-constexpr uint32_t kPacketRttOffset = 18;
+constexpr uint8_t kDefaultRttOffset = 18;
 
 /**
  * @brief Maximum number of flits (64 byte chunks) that the hardware can send

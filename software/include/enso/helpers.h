@@ -92,11 +92,13 @@ struct alignas(kCacheLineSize) stats_t {
  * To convert from number of cycles to ns. Do `cycles * kNsPerTimestampCycle`.
  *
  * @param pkt Packet to retrieve the RTT from.
+ * @param rtt_offset Offset in bytes where the RTT is stored.
  * @return Return RTT measure for the packet in number of cycles. If timestamp
  *         is not enabled on the NIC, the value returned is undefined.
  */
-inline uint32_t get_pkt_rtt(const uint8_t* pkt) {
-  uint32_t rtt = *((uint32_t*)(pkt + kPacketRttOffset));
+inline uint32_t get_pkt_rtt(
+    const uint8_t* pkt, const uint8_t rtt_offset = kDefaultRttOffset) {
+  uint32_t rtt = *((uint32_t*)(pkt + rtt_offset));
   return be32toh(rtt);
 }
 

@@ -42,6 +42,7 @@
 #define SOFTWARE_INCLUDE_ENSO_SOCKET_H_
 
 #include <arpa/inet.h>
+#include <enso/consts.h>
 #include <linux/types.h>
 
 namespace enso {
@@ -104,7 +105,7 @@ uint32_t get_completions(int ref_sockfd);
 /*
  * Enable hardware timestamping for the device. This applies to all sockets.
  */
-int enable_device_timestamp(int ref_sockfd);
+int enable_device_timestamp(int ref_sockfd, uint8_t offset = kDefaultRttOffset);
 
 /*
  * Disable hardware timestamping for the device. This applies to all sockets.
