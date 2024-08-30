@@ -196,9 +196,9 @@ class Device {
    * @see get_pkt_rtt
    *
    * @param offset Packet offset to place the timestamp, default is
-   *               `kDefaultTimestampOffset` bytes.
+   *               `kDefaultRttOffset` bytes.
    */
-  int EnableTimeStamping(uint8_t offset = kDefaultTimestampOffset);
+  int EnableTimeStamping(uint8_t offset = kDefaultRttOffset);
 
   /**
    * @brief Disables hardware time stamping.

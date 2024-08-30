@@ -75,11 +75,11 @@ int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
  * @param notification_buf_pair Notification buffer to send configuration
  *                              through.
  * @param offset Packet offset to place the timestamp, default is
- *               `kDefaultTimestampOffset` bytes.
+ *               `kDefaultRttOffset` bytes.
  * @return 0 if configuration was successful, -1 otherwise.
  */
 int enable_timestamp(struct NotificationBufPair* notification_buf_pair,
-                     uint8_t offset = kDefaultTimestampOffset);
+                     uint8_t offset = kDefaultRttOffset);
 
 /**
  * @brief Disables hardware timestamping.
