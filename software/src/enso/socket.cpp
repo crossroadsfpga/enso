@@ -193,11 +193,12 @@ void free_enso_pipe(int sockfd, size_t len) {
   advance_pipe(&(open_sockets[sockfd].enso_pipe), len);
 }
 
-int enable_device_timestamp(int ref_sockfd) {
+int enable_device_timestamp(int ref_sockfd, uint8_t offset) {
   if (nb_open_sockets == 0) {
     return -2;
   }
-  return enable_timestamp(open_sockets[ref_sockfd].notification_buf_pair);
+  return enable_timestamp(open_sockets[ref_sockfd].notification_buf_pair,
+                          offset);
 }
 
 int disable_device_timestamp(int ref_sockfd) {

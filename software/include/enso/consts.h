@@ -128,6 +128,11 @@ constexpr uint32_t kMemorySpacePerQueue = 1 << 12;
 
 constexpr uint32_t kCacheLineSize = 64;  // bytes.
 
+/**
+ * @brief Default timestamp offset in bytes. Uses bytes 4--7 of IPv4 header.
+ */
+constexpr uint8_t kDefaultTimestampOffset = 18;
+
 // Software backend definitions.
 
 // IPC queue names for software backend.

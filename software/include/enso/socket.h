@@ -44,6 +44,8 @@
 #include <arpa/inet.h>
 #include <linux/types.h>
 
+#include <enso/consts.h>
+
 namespace enso {
 
 typedef unsigned short sa_family_t;
@@ -104,7 +106,8 @@ uint32_t get_completions(int ref_sockfd);
 /*
  * Enable hardware timestamping for the device. This applies to all sockets.
  */
-int enable_device_timestamp(int ref_sockfd);
+int enable_device_timestamp(int ref_sockfd,
+                            uint8_t offset = kDefaultTimestampOffset);
 
 /*
  * Disable hardware timestamping for the device. This applies to all sockets.

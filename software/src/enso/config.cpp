@@ -72,7 +72,8 @@ struct __attribute__((__packed__)) TimestampConfig {
   uint64_t signal;
   uint64_t config_id;
   uint64_t enable;
-  uint8_t pad[40];
+  uint64_t offset;
+  uint8_t pad[32];
 };
 
 struct __attribute__((__packed__)) RateLimitConfig {
@@ -119,12 +120,18 @@ int insert_flow_entry(struct NotificationBufPair* notification_buf_pair,
   return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }
 
-int enable_timestamp(struct NotificationBufPair* notification_buf_pair) {
+int enable_timestamp(struct NotificationBufPair* notification_buf_pair,
+                     uint8_t offset) {
+  if (offset > 60) {
+    return -1;
+  }
+
   TimestampConfig config;
 
   config.signal = 2;
   config.config_id = TIMESTAMP_CONFIG_ID;
   config.enable = -1;
+  config.offset = offset;
 
   return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }
