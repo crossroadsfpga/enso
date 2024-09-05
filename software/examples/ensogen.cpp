@@ -160,7 +160,7 @@ static void print_usage(const char* program_name) {
       "                 (default: %d).\n"
       "  --pcie-addr: Specify the PCIe address of the NIC to use.\n"
       "  --timestamp-offset: Specify the packet offset to place the timestamp\n"
-      "                      on (default: %d).\n",
+      "                      on (default: %d).\n"
       "  --distribution: Specify the distribution to use for packet cycles.\n"
       "  --poisson: Use a poisson distribution for packet transmission.\n",
       program_name, DEFAULT_CORE_ID, DEFAULT_NB_QUEUES, DEFAULT_HIST_OFFSET,
