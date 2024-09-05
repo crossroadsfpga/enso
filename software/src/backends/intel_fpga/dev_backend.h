@@ -37,14 +37,38 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
-#define SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#ifndef ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#define ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
 
 #include <enso/helpers.h>
 
 #include "intel_fpga_pcie_api.hpp"
 
 namespace enso {
+
+int initialize_queues(uint32_t id) {
+  (void)id;
+  return 0;
+}
+
+void initialize_backend_dev(CounterCallback counter_callback,
+                            uint32_t application_id) {
+  (void)counter_callback;
+  (void)application_id;
+}
+
+void push_to_backend(enso::PipeNotification* notif) { (void)notif; }
+
+void update_backend_queues() {}
+
+void access_backend_queues() {}
+
+std::optional<PipeNotification> push_to_backend_get_response(
+    enso::PipeNotification* notif) {
+  (void)notif;
+  std::optional<PipeNotification> res;
+  return res;
+}
 
 class DevBackend {
  public:
@@ -74,12 +98,16 @@ class DevBackend {
   }
 
   static _enso_always_inline void mmio_write32(volatile uint32_t* addr,
-                                               uint32_t value) {
+                                               uint32_t value,
+                                               void* uio_mmap_bar2_addr) {
+    (void)uio_mmap_bar2_addr;
     _enso_compiler_memory_barrier();
     *addr = value;
   }
 
-  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr) {
+  static _enso_always_inline uint32_t mmio_read32(volatile uint32_t* addr,
+                                                  void* uio_mmap_bar2_addr) {
+    (void)uio_mmap_bar2_addr;
     _enso_compiler_memory_barrier();
     return *addr;
   }
@@ -124,7 +152,10 @@ class DevBackend {
    *
    * @return Notification buffer ID. On error, -1 is returned and errno is set.
    */
-  int AllocateNotifBuf() { return dev_->allocate_notif_buf(); }
+  int AllocateNotifBuf(int32_t uthread_id) {
+    (void)uthread_id;
+    return dev_->allocate_notif_buf();
+  }
 
   /**
    * @brief Frees a notification buffer.
@@ -174,11 +205,13 @@ class DevBackend {
     return 0;
   }
 
+  // NOTE: require all devbackends to be the same size
   intel_fpga_pcie_api::IntelFpgaPcieDev* dev_;
   unsigned int bdf_;
+  int core_id_;
   int bar_;
 };
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_
+#endif  // ENSO_SOFTWARE_SRC_BACKENDS_INTEL_FPGA_DEV_BACKEND_H_

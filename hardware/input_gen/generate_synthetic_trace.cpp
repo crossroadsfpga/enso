@@ -31,16 +31,19 @@
  */
 
 #include <arpa/inet.h>
+#include <getopt.h>
 #include <netinet/ether.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include <pcap/pcap.h>
 #include <sys/time.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -53,18 +56,44 @@ static constexpr uint32_t ip(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
          ((uint32_t)d);
 }
 
-int main(int argc, char const* argv[]) {
-  if (argc != 6) {
-    std::cerr << "Usage: " << argv[0] << " NB_PKTS PKT_SIZE NB_SRC NB_DST "
-              << "OUTPUT_PCAP" << std::endl;
-    exit(1);
-  }
+enum {
+  CMD_OPT_HELP_NUM = 256,
+  CMD_OPT_OUTPUT_PCAP_NUM,
+  CMD_OPT_REQUEST_RATE_NUM
+};
 
-  const int total_nb_packets = std::stoi(argv[1]);
-  const int pkt_size = std::stoi(argv[2]);
-  const int nb_src = std::stoi(argv[3]);
-  const int nb_dst = std::stoi(argv[4]);
-  const std::string output_pcap = argv[5];
+static const char short_options[] = "";
+
+static const struct option long_options[] = {
+    {"output-pcap", required_argument, nullptr, CMD_OPT_OUTPUT_PCAP_NUM},
+    {"request-rate", required_argument, nullptr, CMD_OPT_REQUEST_RATE_NUM},
+};
+
+int main(int argc, char** argv) {
+  int opt;
+  int long_index;
+
+  const int pkt_size = std::stoi(argv[1]);
+  const int nb_src = std::stoi(argv[2]);
+  const int nb_dst = std::stoi(argv[3]);
+  const int dst_start = std::stoi(argv[4]);
+
+  std::vector<int> request_rates;
+  std::string output_pcap;
+
+  while ((opt = getopt_long(argc, argv, short_options, long_options,
+                            &long_index)) != EOF) {
+    switch (opt) {
+      case CMD_OPT_HELP_NUM:
+        return 1;
+      case CMD_OPT_OUTPUT_PCAP_NUM:
+        output_pcap = optarg;
+        break;
+      case CMD_OPT_REQUEST_RATE_NUM:
+        request_rates.push_back(atoi(optarg));
+        break;
+    }
+  }
 
   // Skip if pcap with same name already exists.
   {
@@ -109,15 +138,37 @@ int main(int argc, char const* argv[]) {
   pkt_hdr.ts = ts;
 
   uint32_t src_ip = ip(192, 168, 0, 0);
-  uint32_t dst_ip = ip(192, 168, 0, 0);
+  uint32_t dst_ip = ip(192, 168, 0, dst_start);
 
   uint32_t mss =
       pkt_size - sizeof(*l2_hdr) - sizeof(*l3_hdr) - sizeof(*l4_hdr) - 4;
 
-  int nb_pkts = 0;
+  // Seed the random generator.
+  std::mt19937 g(dst_start);
 
-  while (nb_pkts < total_nb_packets) {
+  for (uint32_t i = 0; i < request_rates.size(); i++) {
+    /* Create a packet transmit schedule based on a Poisson arrival rate. */
+    uint32_t rate = request_rates[i];
+    std::vector<double> poisson_schedule(rate);
+    std::exponential_distribution<double> rd(1.0 / (1000000.0 / rate));
+    std::generate(poisson_schedule.begin(), poisson_schedule.end(),
+                  std::bind(rd, g));
+
+    int packets_per_dst = rate / nb_dst;
+
+    /* Create an order for packets for each destination to arrive in*/
+    std::vector<int> packet_order;
     for (int i = 0; i < nb_dst; ++i) {
+      for (int j = 0; j < packets_per_dst; ++j) {
+        packet_order.push_back(i);
+      }
+    }
+    std::shuffle(packet_order.begin(), packet_order.end(), g);
+
+    double nb_pkts = 0;
+
+    while (nb_pkts < rate) {
+      int i = packet_order[nb_pkts];
       l3_hdr->daddr = htonl(dst_ip + (uint32_t)i);
       uint32_t src_offset = i / (nb_dst / nb_src);
       l3_hdr->saddr = htonl(src_ip + src_offset);
@@ -126,18 +177,16 @@ int main(int argc, char const* argv[]) {
 
       pkt_hdr.len = sizeof(*l2_hdr) + sizeof(*l3_hdr) + sizeof(*l4_hdr) + mss;
       pkt_hdr.caplen = pkt_hdr.len;
+      ts.tv_usec = poisson_schedule[nb_pkts] * 100;
+      pkt_hdr.ts = ts;
 
       l4_hdr->dest = htons(80);
       l4_hdr->source = htons(8080);
       l4_hdr->len = htons(sizeof(*l4_hdr) + mss);
 
-      ++(ts.tv_usec);
       pcap_dump((u_char*)pdumper, &pkt_hdr, pkt);
 
       ++nb_pkts;
-      if (nb_pkts >= total_nb_packets) {
-        break;
-      }
     }
   }
 

@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_SRC_PCIE_H_
-#define SOFTWARE_SRC_PCIE_H_
+#ifndef ENSO_SOFTWARE_SRC_PCIE_H_
+#define ENSO_SOFTWARE_SRC_PCIE_H_
 
 #include <endian.h>
 #include <enso/helpers.h>
@@ -46,15 +46,21 @@
 #include <netinet/ether.h>
 #include <netinet/ip.h>
 
+#include <algorithm>
 #include <string>
 
 namespace enso {
+
+extern TxCallback tx_callback_;
+extern UpdateCallback update_callback_;
+extern ParkCallback park_callback_;
+extern LockCallback lock_runtime_;
+extern LockCallback unlock_runtime_;
 
 struct SocketInternal {
   struct NotificationBufPair* notification_buf_pair;
   struct RxEnsoPipeInternal enso_pipe;
 };
-
 /**
  * @brief Initializes the notification buffer pair.
  *
@@ -62,12 +68,15 @@ struct SocketInternal {
  * @param bar PCIe BAR to use (set to -1 to automatically select one).
  * @param notification_buf_pair Notification buffer pair to initialize.
  * @param huge_page_prefix File prefix to use when allocating the huge pages.
+ * @param application_id Unique ID of currently running application that owns
+ * this kthread.
  *
  * @return 0 on success, -1 on failure.
  */
 int notification_buf_init(uint32_t bdf, int32_t bar,
                           struct NotificationBufPair* notification_buf_pair,
-                          const std::string& huge_page_prefix);
+                          const std::string& huge_page_prefix,
+                          int32_t uthread_id);
 
 /**
  * @brief Initializes an Enso Pipe.
@@ -98,7 +107,8 @@ int dma_init(struct NotificationBufPair* notification_buf_pair,
  * @param notification_buf_pair Notification buffer to get data from.
  * @return Number of notifications received.
  */
-uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair);
+uint16_t get_new_tails(struct NotificationBufPair* notification_buf_pair,
+                       UpdatePacket update_packet = NULL);
 
 /**
  * @brief Gets the next batch of data from the given Enso Pipe.
@@ -127,6 +137,16 @@ uint32_t get_next_batch_from_queue(
 uint32_t peek_next_batch_from_queue(
     struct RxEnsoPipeInternal* enso_pipe,
     struct NotificationBufPair* notification_buf_pair, void** buf);
+
+/**
+ * @brief Get next RX notification with pending data.
+ *
+ * @param notification_buf_pair Notification buffer to get data from.
+ * @return Pointer to the RX notification that can be addressed next.
+ */
+struct RxNotification* get_next_rx_notif(
+    struct NotificationBufPair* notification_buf_pair,
+    UpdatePacket update_packet = NULL);
 
 /**
  * @brief Get next Enso Pipe with pending data.
@@ -195,7 +215,8 @@ void prefetch_pipe(struct RxEnsoPipeInternal* enso_pipe);
  * @return number of bytes sent.
  */
 uint32_t send_to_queue(struct NotificationBufPair* notification_buf_pair,
-                       uint64_t phys_addr, uint32_t len);
+                       uint64_t phys_addr, uint32_t len,
+                       uint64_t sent_time = 0);
 
 /**
  * @brief Returns the number of transmission requests that were completed since
@@ -233,7 +254,8 @@ void update_tx_head(struct NotificationBufPair* notification_buf_pair);
  * @return 0 on success, -1 on failure.
  */
 int send_config(struct NotificationBufPair* notification_buf_pair,
-                struct TxNotification* config_notification);
+                struct TxNotification* config_notification,
+                CompletionCallback* completion_callback = NULL);
 
 /**
  * @brief Get number of fallback queues currently in use.
@@ -309,6 +331,25 @@ int dma_finish(struct SocketInternal* socket_entry);
 uint32_t get_enso_pipe_id_from_socket(struct SocketInternal* socket_entry);
 
 /**
+ * @brief Initializes essential backend variables.
+ *
+ */
+void pcie_initialize_backend(CounterCallback counter_callback,
+                             TxCallback tx_callback, ParkCallback park_callback,
+                             UpdateCallback update_callback,
+                             LockCallback lock_runtime,
+                             LockCallback unlock_runtime,
+                             uint32_t application_id);
+
+/**
+ * @brief Initializes backend queues to and from the IOKernel.
+ *
+ * @param id The ID of the kthread requesting the queues.
+ * @return 0 on success, negative on error.
+ */
+int pcie_initialize_queues(uint32_t id);
+
+/**
  * @brief Prints statistics for a given socket.
  *
  * @deprecated This function is deprecated and will be removed in the future.
@@ -317,4 +358,4 @@ void print_stats(struct SocketInternal* socket_entry, bool print_global);
 
 }  // namespace enso
 
-#endif  // SOFTWARE_SRC_PCIE_H_
+#endif  // ENSO_SOFTWARE_SRC_PCIE_H_

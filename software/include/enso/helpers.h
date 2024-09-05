@@ -36,8 +36,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_HELPERS_H_
-#define SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_HELPERS_H_
 
 #include <endian.h>
 #include <enso/consts.h>
@@ -102,6 +102,40 @@ inline uint32_t get_pkt_rtt(
   return be32toh(rtt);
 }
 
+/**
+ * @brief Sets the the delay for a packet.
+ *
+ * To use this, per-packet timestamping must be enabled. To enable per-packet
+ * timestamping call the `Device::EnablePerPacketRateLimiting` method.
+ *
+ * @param pkt Packet to set the delay for.
+ * @param delay Delay in number of cycles.
+ */
+inline void set_pkt_delay(const uint8_t* pkt, uint32_t delay) {
+  *((uint32_t*)(pkt + kPacketRttOffset)) = htobe32(delay);
+}
+
+/**
+ * @brief Set the number of cycles to wait when processing the packet.
+ *
+ * @param pkt Packet to set the number of cycles to wait for.
+ * @param cycles Number of cycles to wait.
+ */
+inline void set_pkt_cycles(const uint8_t* pkt, uint64_t cycles) {
+  *((uint64_t*)(pkt)) = htobe64(cycles);
+}
+
+/**
+ * @brief Get the number of cycles to wait when processing the packet.
+ *
+ * @param pkt Packet to get the number of cycles to wait for.
+ * @return Number of cycles to wait.
+ */
+inline uint64_t get_pkt_cycles(const uint8_t* pkt) {
+  uint64_t cycles = *((uint64_t*)(pkt));
+  return be64toh(cycles);
+}
+
 constexpr uint16_t be_to_le_16(const uint16_t le) {
   return ((le & (uint16_t)0x00ff) << 8) | ((le & (uint16_t)0xff00) >> 8);
 }
@@ -129,6 +163,20 @@ void print_pkt_ips(uint8_t* pkt);
 void print_pkt_header(uint8_t* pkt);
 
 void print_buf(void* buf, const uint32_t nb_cache_lines);
+
+/**
+ * @brief Sets the core ID of current thread using C methods.
+ *
+ * @param core_id the core ID to set the thread to.
+ *
+ * @return Success/failure of sched_setaffinity.
+ */
+int set_self_core_id(int core_id);
+
+/**
+ * @brief Gets the TID of the current thread.
+ */
+pid_t get_tid(void);
 
 int set_core_id(std::thread& thread, int core_id);
 
@@ -182,4 +230,4 @@ _enso_always_inline void memcpy_64_align(void* dst, const void* src, size_t n) {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_HELPERS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_HELPERS_H_

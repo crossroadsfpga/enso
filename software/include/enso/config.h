@@ -37,8 +37,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_CONFIG_H_
-#define SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_
 
 #include <enso/consts.h>
 #include <enso/internals.h>
@@ -139,6 +139,35 @@ int enable_rate_limit(struct NotificationBufPair* notification_buf_pair,
 int disable_rate_limit(struct NotificationBufPair* notification_buf_pair);
 
 /**
+ * @brief Enables per-packet rate limit.
+ *
+ * This function enables per-packet rate limiting. This means that every packet
+ * should have a "delay" in number of cycles that the NIC will wait before
+ * sending the packet. This delay should be specified in the packet itself at
+ * the same offset used for the timestamp (`enso::PacketRttOffset`).
+ *
+ * Use `enso::kMaxHardwareFlitRate` or `enso::kNsPerTimestampCycle` to convert
+ * the delay between nanoseconds and cycles.
+ *
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ *
+ * @return 0 if configuration was successful, -1 otherwise.
+ */
+int enable_per_packet_rate_limit(
+    struct NotificationBufPair* notification_buf_pair);
+
+/**
+ * @brief Disables per-packet rate limit.
+ *
+ * @param notification_buf_pair Notification buffer to send configuration
+ *                              through.
+ * @return 0 if configuration was successful, -1 otherwise.
+ */
+int disable_per_packet_rate_limit(
+    struct NotificationBufPair* notification_buf_pair);
+
+/**
  * @brief Enables packet round robin for the fallback pipes.
  *
  * @param notification_buf_pair Notification buffer pair to send the
@@ -169,4 +198,4 @@ int update_fallback_queues_config(
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_CONFIG_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_CONFIG_H_

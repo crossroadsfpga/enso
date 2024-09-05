@@ -38,8 +38,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_SOCKET_H_
-#define SOFTWARE_INCLUDE_ENSO_SOCKET_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_SOCKET_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_SOCKET_H_
 
 #include <arpa/inet.h>
 #include <enso/consts.h>
@@ -51,7 +51,7 @@ typedef unsigned short sa_family_t;
 typedef unsigned int socklen_t;
 
 #define MAX_NB_CORES 128
-#define MAX_NB_SOCKETS MAX_NB_FLOWS
+#define MAX_NB_SOCKETS (kMaxNbFlows)
 
 void set_bdf(uint16_t bdf_);
 
@@ -133,6 +133,16 @@ int enable_device_round_robin(int ref_sockfd);
 int disable_device_round_robin(int ref_sockfd);
 
 /*
+ * Enable per-packet rate limit for the device. This applies to all sockets.
+ */
+int enable_per_packet_rate_limit(int ref_sockfd);
+
+/*
+ * Disable per-packet rate limit for the device. This applies to all sockets.
+ */
+int disable_per_packet_rate_limit(int ref_sockfd);
+
+/*
  * Free packet buffer. Use this to free received packets.
  */
 void free_enso_pipe(int sockfd, size_t len);
@@ -141,4 +151,4 @@ void print_sock_stats(int sockfd);
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_SOCKET_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_SOCKET_H_

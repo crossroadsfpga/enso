@@ -38,13 +38,24 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_CONSTS_H_
-#define SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+
+#include <enso/internals.h>
 
 #include <cstdint>
+#include <functional>
 #include <string>
 
 namespace enso {
+
+using CompletionCallback = std::function<void()>;
+using ParkCallback = std::function<void()>;
+using LockCallback = std::function<void()>;
+using CounterCallback = std::function<uint64_t(uint32_t)>;
+using UpdateCallback = std::function<void(uint64_t, uint64_t)>;
+using TxCallback = std::function<void(uint64_t)>;
+using UpdatePacket = std::function<void(enso_pipe_id_t, uint64_t, uint32_t)>;
 
 // These determine the maximum number of notification buffers and enso pipes,
 // these macros also exist in hardware and **must be kept in sync**. Update the
@@ -87,6 +98,10 @@ static constexpr std::string_view kHugePageRxPipePathPrefix = "_rx_pipe:";
 static constexpr std::string_view kHugePagePathPrefix = "_tx_pipe:";
 static constexpr std::string_view kHugePageNotifBufPathPrefix = "_notif_buf:";
 static constexpr std::string_view kHugePageQueuePathPrefix = "_queue:";
+static constexpr std::string_view kHugePageUthreadsPathPrefix = "_uthread:";
+static constexpr std::string_view kHugePageKthreadsPathPrefix = "_kthread:";
+static constexpr std::string_view kHugePageQueueTailPathPrefix = "_queue_tail";
+static constexpr std::string_view kHugePageQueueHeadPathPrefix = "_queue_head";
 
 // We need this to allow the same huge page to be mapped to adjacent memory
 // regions.
@@ -147,50 +162,67 @@ enum class NotifType : uint8_t {
   kSetRrStatus = 6,
   kGetRrStatus = 7,
   kFreeNotifBuf = 8,
-  kFreePipe = 9
+  kFreePipe = 9,
+  kGetShinkansenNotifBufId = 10,
+  kRegisterKthread = 11,
+  kJoinedKthread = 12,
 };
 
 struct MmioNotification {
   NotifType type;
   uint64_t address;
   uint64_t value;
+  uint64_t counter;
+  uint64_t padding[3];
 };
 
 struct FallbackNotification {
   NotifType type;
   uint64_t nb_fallback_queues;
   uint64_t result;
+  uint64_t padding[4];
 };
 
 struct RoundRobinNotification {
   NotifType type;
   uint64_t round_robin;
   uint64_t result;
+  uint64_t padding[4];
 };
 
 struct NotifBufNotification {
   NotifType type;
   uint64_t notif_buf_id;
+  uint64_t uthread_id;
   uint64_t result;
+  uint64_t padding[3];
 };
 
 struct AllocatePipeNotification {
   NotifType type;
   uint64_t fallback;
   uint64_t pipe_id;
+  uint64_t padding[4];
 };
 
 struct FreePipeNotification {
   NotifType type;
   uint64_t pipe_id;
   uint64_t result;
+  uint64_t padding[4];
+};
+
+struct ShinkansenNotification {
+  NotifType type;
+  uint64_t notif_queue_id;
+  uint64_t padding[5];
 };
 
 struct PipeNotification {
   NotifType type;
-  uint64_t data[2];
+  uint64_t data[6];
 };
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_CONSTS_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_CONSTS_H_

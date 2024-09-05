@@ -81,7 +81,10 @@ struct __attribute__((__packed__)) RateLimitConfig {
   uint64_t config_id;
   uint16_t denominator;
   uint16_t numerator;
-  uint32_t enable;
+  uint32_t enable;  // We use the 2 most-significant bits. Bit 0 is used to
+                    // enable/disable rate limit. Bit 1 is used to
+                    // enable/disable per-packet rate limit. Do not use both at
+                    // the same time.
   uint8_t pad[40];
 };
 
@@ -154,12 +157,40 @@ int enable_rate_limit(struct NotificationBufPair* notification_buf_pair,
   config.config_id = RATE_LIMIT_CONFIG_ID;
   config.denominator = den;
   config.numerator = num;
-  config.enable = -1;
+
+  // To enable it, we set the most-significant bit to 1.
+  config.enable = 1 << (sizeof(config.enable) * 8 - 1);
 
   return send_config(notification_buf_pair, (struct TxNotification*)&config);
 }
 
 int disable_rate_limit(struct NotificationBufPair* notification_buf_pair) {
+  struct RateLimitConfig config;
+
+  config.signal = 2;
+  config.config_id = RATE_LIMIT_CONFIG_ID;
+  config.enable = 0;
+
+  return send_config(notification_buf_pair, (struct TxNotification*)&config);
+}
+
+int enable_per_packet_rate_limit(
+    struct NotificationBufPair* notification_buf_pair) {
+  struct RateLimitConfig config;
+
+  config.signal = 2;
+  config.config_id = RATE_LIMIT_CONFIG_ID;
+  config.denominator = 0;
+  config.numerator = 0;
+
+  // To enable it, we set the second most-significant bit to 1.
+  config.enable = 1 << (sizeof(config.enable) * 8 - 2);
+
+  return send_config(notification_buf_pair, (struct TxNotification*)&config);
+}
+
+int disable_per_packet_rate_limit(
+    struct NotificationBufPair* notification_buf_pair) {
   struct RateLimitConfig config;
 
   config.signal = 2;

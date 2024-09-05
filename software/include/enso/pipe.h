@@ -39,8 +39,8 @@
  * @author Hugo Sadok <sadok@cmu.edu>
  */
 
-#ifndef SOFTWARE_INCLUDE_ENSO_PIPE_H_
-#define SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#ifndef ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#define ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_
 
 #include <enso/consts.h>
 #include <enso/helpers.h>
@@ -48,6 +48,7 @@
 
 #include <array>
 #include <cassert>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -81,9 +82,15 @@ uint32_t external_peek_next_batch_from_queue(
  */
 class Device {
  public:
+  using CompletionCallback = std::function<void()>;
+
   /**
    * @brief Factory method to create a device.
    *
+   * @param uthread_id The unique ID of the uthread creating the device.
+   *                       Should be less than kMaxNbFlows.
+   * @param completion_callback Function to call once a transmission has
+   * completed.
    * @param pcie_addr The PCIe address of the device. If empty, uses the first
    *                  device found.
    * @param huge_page_prefix The prefix to use for huge pages file. If empty,
@@ -93,7 +100,8 @@ class Device {
    */
   static std::unique_ptr<Device> Create(
       const std::string& pcie_addr = "",
-      const std::string& huge_page_prefix = "") noexcept;
+      const std::string& huge_page_prefix = "", int32_t uthread_id = -1,
+      CompletionCallback completion_callback = NULL) noexcept;
 
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
@@ -101,6 +109,26 @@ class Device {
   Device& operator=(Device&&) = delete;
 
   ~Device();
+
+  /**
+   * @brief Initialize the queues for communication with the IOKernel.
+   *
+   * @param id The ID of the kthread requesting a queue.
+   * @return 0 on success, negative on failure.
+   */
+  static int InitializeBackendQueues(uint32_t id);
+
+  /**
+   * @brief Set some backend constants.
+   *
+   */
+  static void InitializeBackend(CounterCallback counter_callback,
+                                TxCallback tx_callback,
+                                ParkCallback park_callback,
+                                UpdateCallback update_callback,
+                                LockCallback lock_runtime,
+                                LockCallback unlock_runtime,
+                                uint32_t application_id);
 
   /**
    * @brief Allocates an RX pipe.
@@ -155,6 +183,11 @@ class Device {
    * @return A pointer to the pipe. May be null if the pipe cannot be created.
    */
   RxTxPipe* AllocateRxTxPipe(bool fallback = false) noexcept;
+
+  /**
+   * @brief Gets the next RX notification received by this device.
+   */
+  struct RxNotification* NextRxNotif();
 
   /**
    * @brief Gets the next RxPipe that has data pending.
@@ -266,6 +299,39 @@ class Device {
   int DisableRateLimiting();
 
   /**
+   * @brief Enables per-packet rate limiting.
+   *
+   * This function enables per-packet rate limiting. This means that every
+   * packet should have a "delay" in number of cycles that the NIC will wait
+   * before sending the packet. This delay should be specified in the packet
+   * itself at the same offset used for the timestamp (`enso::PacketRttOffset`).
+   *
+   * Use `enso::kMaxHardwareFlitRate` or `enso::kNsPerTimestampCycle` to convert
+   * the delay between nanoseconds and cycles and the helper function
+   * `enso::set_pkt_delay` to set the delay in the packet.
+   *
+   * @note This setting applies to all pipes that share the same hardware
+   *      device.
+   *
+   * @see DisablePerPacketRateLimiting
+   *
+   * @return 0 if configuration was successful.
+   */
+  int EnablePerPacketRateLimiting();
+
+  /**
+   * @brief Disables per-packet rate limiting.
+   *
+   * @note This setting applies to all pipes that share the same hardware
+   *      device.
+   *
+   * @see EnablePerPacketRateLimiting
+   *
+   * @return 0 if configuration was successful.
+   */
+  int DisablePerPacketRateLimiting();
+
+  /**
    * @brief Enables round robing of packets among the fallback pipes.
    *
    * @note This setting applies to all pipes that share the same hardware
@@ -306,17 +372,66 @@ class Device {
    */
   int ApplyConfig(struct TxNotification* config_notification);
 
+  /**
+   * @brief Sends a certain number of bytes to the device. This is designed to
+   * be used by a TxPipe object.
+   *
+   * @param tx_enso_pipe_id The ID of the TxPipe.
+   * @param phys_addr The physical address of the buffer region to send.
+   * @param nb_bytes The number of bytes to send.
+   * @return The number of bytes sent.
+   */
+  void Send(int tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes,
+            uint64_t sent_time = 0);
+
+  /**
+   * @brief Gets the ID of the notification buffer for this device.
+   */
+  int GetNotifQueueId() noexcept;
+
+  /**
+   * @brief Get the RX Notif Queue virtual address.
+   *
+   * @return void*
+   */
+  struct RxNotification* GetRxNotifQueueBuf() noexcept;
+
+  /**
+   * @brief Get the TX Notif Queue virtual address.
+   *
+   * @return void*
+   */
+  struct TxNotification* GetTxNotifQueueBuf() noexcept;
+
+  /**
+   * @brief Get the current head of the RX notification buffer.
+   *
+   * @return uint32_t
+   */
+  uint32_t GetRxHead() noexcept;
+
+  /**
+   * @brief Get the current head of the TX notification buffer.
+   *
+   * @return uint32_t
+   */
+  uint32_t GetTxHead() noexcept;
+
  private:
   struct TxPendingRequest {
-    uint32_t pipe_id;
+    int pipe_id;
     uint32_t nb_bytes;
+    uint64_t phys_addr;
   };
 
   /**
    * Use `Create` factory method to instantiate objects externally.
    */
-  Device(const std::string& pcie_addr, std::string huge_page_prefix) noexcept
-      : kPcieAddr(pcie_addr) {
+  Device(int32_t uthread_id, CompletionCallback completion_callback,
+         const std::string& pcie_addr, std::string huge_page_prefix) noexcept
+      : kPcieAddr(pcie_addr),
+        completion_callback_(completion_callback),
+        uthread_id_(uthread_id) {
 #ifndef NDEBUG
     std::cerr << "Warning: assertions are enabled. Performance may be affected."
               << std::endl;
@@ -330,20 +445,11 @@ class Device {
   /**
    * @brief Initializes the device.
    *
+   * @param uthread_id ID of the uthread creating this device.
+   *
    * @return 0 on success and a non-zero error code on failure.
    */
-  int Init() noexcept;
-
-  /**
-   * @brief Sends a certain number of bytes to the device. This is designed to
-   * be used by a TxPipe object.
-   *
-   * @param tx_enso_pipe_id The ID of the TxPipe.
-   * @param phys_addr The physical address of the buffer region to send.
-   * @param nb_bytes The number of bytes to send.
-   * @return The number of bytes sent.
-   */
-  void Send(uint32_t tx_enso_pipe_id, uint64_t phys_addr, uint32_t nb_bytes);
+  int Init(int32_t uthread_id) noexcept;
 
   friend class RxPipe;
   friend class TxPipe;
@@ -355,6 +461,8 @@ class Device {
   int16_t core_id_;
   uint16_t bdf_;
   std::string huge_page_prefix_;
+  CompletionCallback completion_callback_ = NULL;
+  int32_t uthread_id_;
 
   std::vector<RxPipe*> rx_pipes_;
   std::vector<TxPipe*> tx_pipes_;
@@ -367,7 +475,8 @@ class Device {
 
   uint32_t tx_pr_head_ = 0;
   uint32_t tx_pr_tail_ = 0;
-  std::array<TxPendingRequest, kMaxPendingTxRequests + 1> tx_pending_requests_;
+  std::array<TxPendingRequest, kMaxPendingTxRequests + 1> tx_pending_requests_ =
+      {};
   static constexpr uint32_t kPendingTxRequestsBufMask = kMaxPendingTxRequests;
   static_assert((kMaxPendingTxRequests & (kMaxPendingTxRequests + 1)) == 0,
                 "kMaxPendingTxRequests + 1 must be a power of 2");
@@ -547,6 +656,8 @@ class RxPipe {
    */
   int Bind(uint16_t dst_port, uint16_t src_port, uint32_t dst_ip,
            uint32_t src_ip, uint32_t protocol);
+
+  inline void SetPktSentTime(uint32_t tail, uint64_t sent_time);
 
   /**
    * @brief Receives a batch of bytes.
@@ -843,9 +954,11 @@ class TxPipe {
     assert(nb_bytes <= kMaxCapacity);
     assert(nb_bytes / kQuantumSize * kQuantumSize == nb_bytes);
 
+    uint64_t sent_time = 0;
+
     app_begin_ = (app_begin_ + nb_bytes) & kBufMask;
 
-    device_->Send(kId, phys_addr, nb_bytes);
+    device_->Send(kId, phys_addr, nb_bytes, sent_time);
   }
 
   /**
@@ -1243,6 +1356,14 @@ class RxTxPipe {
   static constexpr uint32_t kCompletionsThreshold = kEnsoPipeSize * 64 / 2;
 
   /**
+   * @brief Set the cycles at which that a packet
+   *
+   * @param tail
+   * @param sent_time
+   */
+  void SetPktSentTime(uint32_t tail, uint64_t sent_time);
+
+  /**
    * RxTxPipes can only be instantiated from a Device object, using the
    * `AllocateRxTxPipe()` method.
    *
@@ -1414,4 +1535,4 @@ class PeekPktIterator : public MessageIteratorBase<PeekPktIterator> {
 
 }  // namespace enso
 
-#endif  // SOFTWARE_INCLUDE_ENSO_PIPE_H_
+#endif  // ENSO_SOFTWARE_INCLUDE_ENSO_PIPE_H_

@@ -32,3 +32,44 @@ Traditionally, NICs expose a *packetized* interface that software (applications 
 - Understanding the primitives: [RX Ensō Pipe](https://enso.cs.cmu.edu/primitives/rx_enso_pipe/), [TX Ensō Pipe](https://enso.cs.cmu.edu/primitives/tx_enso_pipe/), [RX/TX Ensō Pipe](https://enso.cs.cmu.edu/primitives/rx_tx_enso_pipe/)
 - Examples: [Echo Server](https://github.com/crossroadsfpga/enso/blob/master/software/examples/echo.cpp), [Packet Capture](https://github.com/crossroadsfpga/enso/blob/master/software/examples/capture.cpp), [EnsōGen Packet Generator](https://github.com/crossroadsfpga/enso/blob/master/software/examples/ensogen.cpp)
 - API References: [Software](https://enso.cs.cmu.edu/software/), [Hardware](https://enso.cs.cmu.edu/hardware/)
+
+## Hermes Additions
+In order to accommodate [Hermes](https://github.com/kaajalbgupta/hermes), some modifications were made to the Enso interface.
+
+### Hybrid Backend
+The hybrid backend is introduced here: in which Enso Pipes and notification buffers are split in communication. Applications running with the hybrid backend will only receive data in their Enso Pipes from the NIC, while the notifications will go to the [IOKernel](https://github.com/kaajalbgupta/shinkansen_sw). This communication is set up by having applications access the notification buffer ID of the IOKernel and using it when registering their Enso Pipes with the NIC in the backend.
+
+This backend can be set up as follows:
+
+```
+cd enso/
+meson setup --native-file gcc.ini -Ddev_backend=hybrid build_hybrid
+cd build_hybrid/
+sudo ninja install
+```
+
+### Callbacks
+As Hermes uses Enso as a dependency, for Hermes to make decisions in the Enso codebase itself, a few callbacks were added that could use internal Enso information in Hermes.
+
+### Ensogen
+A few new options were incorporated in Ensogen to accommodate the Poisson scheduling of packets in a PCAP file and to include information on the number of cycles to spin for each packet.
+
+To get the poisson bitstream, run:
+```
+sudo -i
+./enso/scripts/update_bitstream.sh /home/kaajalg/poisson.sof
+```
+
+Then, must load the machine with that bitstream: `enso enso/ --host mxhost --fpga 1-12`. The correct sha256 for this bitstream is `2f12a0862f51c2ca5c293216bfe46de60db7f27523ef3ee9114286d0ecbab2b7`.
+
+An example command incorporating some new features is:
+```
+sudo enso/build/software/examples/ensogen enso/frontend/pcaps/64_1_100_0_1200000_100000.pcap 1 175 --core 0  --queues 4 --save stats.csv --pcie-addr 0000:65:00.0 --rtt-hist hist --distribution constant --poisson
+```
+The distribution option specifies the distribution of the number of cycles to spin for per packet provided to the receiving thread. This information is kept at the start of each packet (at offset 0). The distribution can be either constant, exponential, or bimodal. The constant option is simply 10 us per packet. The exponential option is the exponential distribution with a mean of 10 us. The bimodal option is 55 us 10% of the time, and 5 us the rest of the time.
+
+When the poisson option is enabled, per-packet rate limiting occurs instead of per-device. When per-packet rate limiting is enabled, the NIC uses the delay in each packet (which is present at the offset kPacketRttOffset) to decide when to send the packet. We can generate PCAP files that have packets with the correct delays for a certain intended packet rate with `./hardware/input_gen/generate_synthetic_trace`. An example usage of it that creates the PCAP above (64_1_100_0_1200000_100000):
+```
+build/hardware/input_gen/generate_synthetic_trace 64 1 100 0 --output-pcap frontend/pcaps/64_1_100_0_1200000_100000.pcap --request-rate 1200000 --request-rate 100000
+```
+This creates a PCAP file with packet size 64 bytes, with one source IP, a hundred destination IPs, and has two request rates (that will alternate between each other in 1 second intervals): 1200 kpps and 100 kpps. To create a PCAP that only has a single request rate, only one request rate need be specified. 

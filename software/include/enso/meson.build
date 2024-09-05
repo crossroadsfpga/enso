@@ -9,4 +9,4 @@ public_enso_headers = files(
     'socket.h'
 )
 
-install_headers(public_enso_headers, subdir: 'enso')
+install_headers(public_enso_headers, subdir: library_name)

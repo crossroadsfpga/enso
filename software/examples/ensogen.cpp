@@ -53,6 +53,7 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <random>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -107,6 +108,10 @@ static volatile int rx_ready = 0;
 static volatile int rx_done = 0;
 static volatile int tx_done = 0;
 
+std::mt19937 g(0);
+std::exponential_distribution<float> exp_dist(1.0 / (3095 * 10.0));
+std::uniform_int_distribution<> bimodal_dist(1, 100);
+
 void int_handler(int signal __attribute__((unused))) {
   if (!keep_running) {
     force_stop = 1;
@@ -129,7 +134,9 @@ static void print_usage(const char* program_name) {
       " [--rtt-hist-len HIST_LEN]\n"
       " [--stats-delay STATS_DELAY]\n"
       " [--pcie-addr PCIE_ADDR]\n"
-      " [--timestamp-offset]\n\n"
+      " [--timestamp-offset]\n"
+      " [--distribution DISTRIBUTION]\n"
+      " [--poisson]\n\n"
 
       "  PCAP_FILE: Pcap file with packets to transmit.\n"
       "  RATE_NUM: Numerator of the rate used to transmit packets.\n"
@@ -154,6 +161,8 @@ static void print_usage(const char* program_name) {
       "  --pcie-addr: Specify the PCIe address of the NIC to use.\n"
       "  --timestamp-offset: Specify the packet offset to place the timestamp\n"
       "                      on (default: %d).\n",
+      "  --distribution: Specify the distribution to use for packet cycles.\n"
+      "  --poisson: Use a poisson distribution for packet transmission.\n",
       program_name, DEFAULT_CORE_ID, DEFAULT_NB_QUEUES, DEFAULT_HIST_OFFSET,
       DEFAULT_HIST_LEN, DEFAULT_STATS_DELAY, enso::kDefaultRttOffset);
 }
@@ -171,6 +180,8 @@ static void print_usage(const char* program_name) {
 #define CMD_OPT_STATS_DELAY "stats-delay"
 #define CMD_OPT_PCIE_ADDR "pcie-addr"
 #define CMD_OPT_TIMESTAMP_OFFSET "timestamp-offset"
+#define CMD_OPT_DISTRIBUTION "distribution"
+#define CMD_OPT_POISSON "poisson"
 
 // Map long options to short options.
 enum {
@@ -186,7 +197,9 @@ enum {
   CMD_OPT_RTT_HIST_LEN_NUM,
   CMD_OPT_STATS_DELAY_NUM,
   CMD_OPT_PCIE_ADDR_NUM,
-  CMD_OPT_TIMESTAMP_OFFSET_NUM
+  CMD_OPT_TIMESTAMP_OFFSET_NUM,
+  CMD_OPT_DISTRIBUTION_NUM,
+  CMD_OPT_POISSON_NUM
 };
 
 static const char short_options[] = "";
@@ -206,6 +219,8 @@ static const struct option long_options[] = {
     {CMD_OPT_PCIE_ADDR, required_argument, NULL, CMD_OPT_PCIE_ADDR_NUM},
     {CMD_OPT_TIMESTAMP_OFFSET, required_argument, NULL,
      CMD_OPT_TIMESTAMP_OFFSET_NUM},
+    {CMD_OPT_DISTRIBUTION, required_argument, NULL, CMD_OPT_DISTRIBUTION_NUM},
+    {CMD_OPT_POISSON, no_argument, NULL, CMD_OPT_POISSON_NUM},
     {0, 0, 0, 0}};
 
 struct parsed_args_t {
@@ -226,6 +241,8 @@ struct parsed_args_t {
   uint32_t stats_delay;
   std::string pcie_addr;
   uint8_t timestamp_offset;
+  std::string distribution;
+  bool poisson;
 };
 
 static int parse_args(int argc, char** argv,
@@ -244,6 +261,7 @@ static int parse_args(int argc, char** argv,
   parsed_args.rtt_hist_len = DEFAULT_HIST_LEN;
   parsed_args.stats_delay = DEFAULT_STATS_DELAY;
   parsed_args.timestamp_offset = enso::kDefaultRttOffset;
+  parsed_args.poisson = false;
 
   while ((opt = getopt_long(argc, argv, short_options, long_options,
                             &long_index)) != EOF) {
@@ -294,6 +312,12 @@ static int parse_args(int argc, char** argv,
         parsed_args.timestamp_offset = (uint8_t)timestamp_offset;
         break;
       }
+      case CMD_OPT_DISTRIBUTION_NUM:
+        parsed_args.distribution = optarg;
+        break;
+      case CMD_OPT_POISSON_NUM:
+        parsed_args.poisson = true;
+        break;
       default:
         return -1;
     }
@@ -416,6 +440,8 @@ struct PcapHandlerContext {
   uint32_t free_flits;
   uint32_t hugepage_offset;
   pcap_t* pcap;
+  std::string distribution;
+  bool poisson;
 };
 
 struct RxStats {
@@ -499,7 +525,6 @@ struct TxArgs {
 
 void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
                       const u_char* pkt_bytes) {
-  (void)pkt_hdr;
   struct PcapHandlerContext* context = (struct PcapHandlerContext*)user;
 
   const struct ether_header* l2_hdr = (struct ether_header*)pkt_bytes;
@@ -510,6 +535,25 @@ void pcap_pkt_handler(u_char* user, const struct pcap_pkthdr* pkt_hdr,
 
   uint32_t len = enso::get_pkt_len(pkt_bytes);
   uint32_t nb_flits = (len - 1) / 64 + 1;
+
+  if (context->poisson) {
+    uint64_t delay_us = pkt_hdr->ts.tv_usec;
+    uint64_t delay_cycles = delay_us * (enso::kMaxHardwareFlitRate / 100000000);
+    if (delay_cycles <= nb_flits)
+      delay_cycles = 0;
+    else
+      delay_cycles -= nb_flits;
+    enso::set_pkt_delay((uint8_t*)pkt_bytes, delay_cycles);
+  }
+
+  uint64_t cycles = 0;
+  if (context->distribution == "exponential")
+    cycles = exp_dist(g);
+  else if (context->distribution == "constant")
+    cycles = 10 * 3095;
+  else if (context->distribution == "bimodal")
+    cycles = (bimodal_dist(g) <= 10 ? 55 : 5) * 3095;
+  enso::set_pkt_cycles(pkt_bytes, cycles);
 
   if (nb_flits > context->free_flits) {
     uint8_t* buf;
@@ -685,6 +729,8 @@ int main(int argc, char** argv) {
   context.free_flits = 0;
   context.hugepage_offset = HUGEPAGE_SIZE;
   context.pcap = pcap;
+  context.distribution = parsed_args.distribution;
+  context.poisson = parsed_args.poisson;
   std::vector<EnsoPipe>& enso_pipes = context.enso_pipes;
 
   // Initialize packet buffers with packets read from pcap file.
@@ -798,11 +844,16 @@ int main(int argc, char** argv) {
         socket_fds.push_back(socket_fd);
       }
 
-      enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
-                                     parsed_args.rate_den);
       enso::enable_device_round_robin(socket_fd);
+      if (parsed_args.poisson) {
+        enso::enable_per_packet_rate_limit(socket_fd);
+      } else {
+        enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
+                                       parsed_args.rate_den);
+      }
 
       if (parsed_args.enable_rtt) {
+        std::cout << "Enabling timestamping" << std::endl;
         enso::enable_device_timestamp(socket_fd, parsed_args.timestamp_offset);
       } else {
         enso::disable_device_timestamp(socket_fd);
@@ -924,8 +975,12 @@ int main(int argc, char** argv) {
             socket_fds.push_back(socket_fd);
           }
 
-          enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
-                                         parsed_args.rate_den);
+          if (parsed_args.poisson) {
+            enso::enable_per_packet_rate_limit(socket_fd);
+          } else {
+            enso::enable_device_rate_limit(socket_fd, parsed_args.rate_num,
+                                           parsed_args.rate_den);
+          }
           enso::enable_device_round_robin(socket_fd);
 
           if (parsed_args.enable_rtt) {
