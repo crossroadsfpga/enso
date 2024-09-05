@@ -112,7 +112,7 @@ inline uint32_t get_pkt_rtt(
  * @param delay Delay in number of cycles.
  */
 inline void set_pkt_delay(const uint8_t* pkt, uint32_t delay) {
-  *((uint32_t*)(pkt + kPacketRttOffset)) = htobe32(delay);
+  *((uint32_t*)(pkt + kDefaultRttOffset)) = htobe32(delay);
 }
 
 /**
