@@ -405,8 +405,8 @@ void Device::ProcessCompletions() {
   }
 }
 
-int Device::EnableTimeStamping() {
-  return enable_timestamp(&notification_buf_pair_);
+int Device::EnableTimeStamping(uint8_t offset) {
+  return enable_timestamp(&notification_buf_pair_, offset);
 }
 
 int Device::DisableTimeStamping() {

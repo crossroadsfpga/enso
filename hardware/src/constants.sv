@@ -233,6 +233,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic [319:0] pad1;
+    logic [63:0]  offset;
     logic         enable;  // Set to 1 to enable timestamping.
     logic [62:0]  pad2;
     logic [63:0]  config_id;

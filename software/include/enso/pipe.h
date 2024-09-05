@@ -224,16 +224,21 @@ class Device {
    *
    * @note This setting applies to all pipes that share the same hardware
    *       device.
+   *
    * @see DisableTimeStamping
    * @see get_pkt_rtt
+   *
+   * @param offset Packet offset to place the timestamp, default is
+   *               `kDefaultRttOffset` bytes.
    */
-  int EnableTimeStamping();
+  int EnableTimeStamping(uint8_t offset = kDefaultRttOffset);
 
   /**
    * @brief Disables hardware time stamping.
    *
    * @note This setting applies to all pipes that share the same hardware
    *       device.
+   *
    * @see EnableTimeStamping
    */
   int DisableTimeStamping();

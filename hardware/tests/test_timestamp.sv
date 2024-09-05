@@ -86,6 +86,7 @@ always @(posedge clk) begin
     automatic timestamp_config_t configuration = 0;
     configuration.enable = 1;
     configuration.config_id = TIMESTAMP_CONFIG_ID;
+    configuration.offset = TIMESTAMP_OFFSET / 8;
     conf_ts_data <= configuration;
     conf_ts_valid <= 1;
   end else if (cnt == 20) begin
@@ -172,8 +173,7 @@ hyper_pipe #(
 );
 
 timestamp #(
-  .TIMESTAMP_WIDTH(TIMESTAMP_WIDTH),
-  .TIMESTAMP_OFFSET(TIMESTAMP_OFFSET)
+  .TIMESTAMP_WIDTH(TIMESTAMP_WIDTH)
 ) timestamp_inst (
   .clk              (clk),
   .rst              (rst),

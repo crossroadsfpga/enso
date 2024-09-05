@@ -11,8 +11,8 @@ declare -a tests=(
     # 'test_cpu_to_fpga'
     # 'test_queue_manager'
     # 'test_prefetch_rb'
-    # 'test_timestamp'
-    'test_rate_limiter'
+    'test_timestamp'
+    # 'test_rate_limiter'
     # 'sketch'
 )
 

@@ -5,8 +5,7 @@
 /// (in number of cycles). Must be explicitly enabled using the configuration
 /// interface. Otherwise this module does nothing.
 module timestamp #(
-    parameter TIMESTAMP_WIDTH=32,
-    parameter TIMESTAMP_OFFSET=(112+32) // Bytes 4--7 of IPv4 header.
+    parameter TIMESTAMP_WIDTH=32
 )(
     input logic clk,
     input logic rst,
@@ -49,11 +48,15 @@ module timestamp #(
     output logic                  conf_ts_ready
 );
 
-localparam REVERSED_OFFSET = 512 - TIMESTAMP_OFFSET - TIMESTAMP_WIDTH;
+
+logic [8:0] offset;
+logic [8:0] reversed_offset;
 
 logic [TIMESTAMP_WIDTH-1:0] timestamp_counter;
 logic [TIMESTAMP_WIDTH-1:0] rtt;
 logic timestamp_enabled;
+
+assign reversed_offset = 512 - TIMESTAMP_WIDTH - offset * 8;
 
 always @(posedge clk) begin
     if (rst) begin
@@ -64,6 +67,7 @@ always @(posedge clk) begin
 
         if (conf_ts_valid) begin
             timestamp_enabled <= conf_ts_data.enable;
+            offset <= conf_ts_data.offset;
             $display("Enable timestamp");
         end
     end
@@ -89,18 +93,18 @@ always_comb begin
     tx_in_pkt_ready = tx_out_pkt_ready;
 
     rtt = timestamp_counter -
-        rx_in_pkt_data[REVERSED_OFFSET +: TIMESTAMP_WIDTH];
+        rx_in_pkt_data[reversed_offset +: TIMESTAMP_WIDTH];
 
     if (timestamp_enabled) begin
         // Timestamp TX packets.
         if (tx_in_pkt_sop) begin
-            tx_out_pkt_data[REVERSED_OFFSET +: TIMESTAMP_WIDTH]
+            tx_out_pkt_data[reversed_offset +: TIMESTAMP_WIDTH]
                 = timestamp_counter;
         end
 
         // Write RTT to RX packets.
         if (rx_in_pkt_sop) begin
-            rx_out_pkt_data[REVERSED_OFFSET +: TIMESTAMP_WIDTH] = rtt;
+            rx_out_pkt_data[reversed_offset +: TIMESTAMP_WIDTH] = rtt;
         end
     end
 end

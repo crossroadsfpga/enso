@@ -25,7 +25,7 @@ authors:
 - family-names: "Wang"
   given-names: "Ren"
 title: "Ensō"
-version: 0.4.5
+version: 0.4.6
 license: BSD-3-Clause-Clear
 # doi: 10.5281/zenodo.1234
 date-released: 2023-04-23

@@ -8,16 +8,21 @@ NC='\033[0m' # No Color
 
 SETUP_DONE_PATH="$SCRIPT_DIR/.setup_done"
 
-# Check if quartus is in the PATH.
-if ! command -v quartus &> /dev/null; then
-    echo -e "${RED}quartus not in PATH. Add it to PATH and try again.${NC}"
-    exit 1
-fi
+# If --no-quartus is passed, we don't check for quartus.
+if [[ $1 == "--no-quartus" ]]; then
+    echo "Skipping quartus check."
+else
+    # Check if quartus is in the PATH.
+    if ! command -v quartus &> /dev/null; then
+        echo -e "${RED}quartus not in PATH. Add it to PATH and try again.${NC}"
+        exit 1
+    fi
 
-# Check if quartus_pgm is in the PATH.
-if ! command -v quartus_pgm &> /dev/null; then
-    echo-e  "${RED}quartus_pgm not in PATH. Add it to PATH and try again.${NC}"
-    exit 1
+    # Check if quartus_pgm is in the PATH.
+    if ! command -v quartus_pgm &> /dev/null; then
+        echo-e  "${RED}quartus_pgm not in PATH. Add it to PATH and try again.${NC}"
+        exit 1
+    fi
 fi
 
 # if .setup_done exists, then setup has already been run.
@@ -63,7 +68,7 @@ else
 fi
 
 # Setup the software.
-./scripts/sw_setup.sh 16384 32768 false
+./scripts/sw_setup.sh 16384 32768 true
 return_code=$?
 
 if [ $return_code -ne 0 ]; then
