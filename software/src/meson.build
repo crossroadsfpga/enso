@@ -1,5 +1,5 @@
 
-add_global_arguments(['-mavx'], language: ['c', 'cpp'])
+add_global_arguments(language: ['c', 'cpp'])
 
 project_sources = []
 project_libraries = []
