@@ -26,9 +26,11 @@ cd $REPO_DIR
 which python3
 which meson
 
+meson setup build
+
 # Using GCC
-meson setup --native-file gcc.ini build-gcc
-ln -sfn build-gcc build
+# meson setup --native-file gcc.ini build-gcc
+# ln -sfn build-gcc build
 
 # Using Clang
 # meson setup --native-file llvm.ini build-clang
