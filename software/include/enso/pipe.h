@@ -897,7 +897,7 @@ class TxPipe {
    * @return The capacity of the allocated buffer in bytes.
    */
   inline uint32_t capacity() const {
-    return (app_end_ - app_begin_ - 1) & kBufMask;
+    return (app_end_ - app_begin_ - kQuantumSize) & kBufMask;
   }
 
   /**
