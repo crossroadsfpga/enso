@@ -1328,7 +1328,13 @@ class MessageIteratorBase {
       : addr_(addr),
         missing_messages_(message_limit),
         batch_(batch),
-        next_addr_(static_cast<T*>(this)->GetNextMessage(addr)) {}
+        next_addr_(nullptr) {
+    if (batch->available_bytes() == 0) {
+      next_addr_ = addr_ + 1;
+    } else {
+      next_addr_ = static_cast<T*>(this)->GetNextMessage(addr);
+    }
+  }
 
   uint8_t* addr_;
   int32_t missing_messages_;
