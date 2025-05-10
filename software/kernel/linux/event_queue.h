@@ -34,6 +34,7 @@
 #define SOFTWARE_KERNEL_LINUX_EVENT_QUEUE_H_
 
 #include <linux/kthread.h>
+#include <linux/wait.h>
 
 typedef struct kthread_struct {
   wait_queue_head_t queue;
