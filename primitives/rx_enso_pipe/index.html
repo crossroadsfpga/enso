@@ -1,0 +1,1611 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Ensō is a fast and flexible streaming interface for NIC-application communication.">
+      
+      
+        <meta name="author" content="Hugo Sadok">
+      
+      
+        <link rel="canonical" href="https://enso.cs.cmu.edu/primitives/rx_enso_pipe/">
+      
+      
+        <link rel="prev" href="../../ensogen/">
+      
+      
+        <link rel="next" href="../tx_enso_pipe/">
+      
+      <link rel="icon" href="../../assets/enso-black.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.0.14">
+    
+    
+      
+        <title>RX Ensō Pipe - Ensō</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.113286f1.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.a0c5b2b5.min.css">
+      
+      
+
+    
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+
+  <script id="__analytics">function __md_analytics(){function n(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],n("js",new Date),n("config","G-7WKNV89H63"),document.addEventListener("DOMContentLoaded",function(){document.forms.search&&document.forms.search.query.addEventListener("blur",function(){this.value&&n("event","search",{search_term:this.value})}),document$.subscribe(function(){var a=document.forms.feedback;if(void 0!==a)for(var e of a.querySelectorAll("[type=submit]"))e.addEventListener("click",function(e){e.preventDefault();var t=document.location.pathname,e=this.getAttribute("data-md-value");n("event","feedback",{page:t,data:e}),a.firstElementChild.disabled=!0;e=a.querySelector(".md-feedback__note [data-md-value='"+e+"']");e&&(e.hidden=!1)}),a.hidden=!1}),location$.subscribe(function(e){n("config","G-7WKNV89H63",{page_path:e.pathname})})});var e=document.createElement("script");e.async=!0,e.src="https://www.googletagmanager.com/gtag/js?id=G-7WKNV89H63",document.getElementById("__analytics").insertAdjacentElement("afterEnd",e)}</script>
+
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="black">
+  
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&"object"==typeof palette.color)for(var key of Object.keys(palette.color))document.body.setAttribute("data-md-color-"+key,palette.color[key])</script>
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#rx-enso-pipe" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Ensō" class="md-header__button md-logo" aria-label="Ensō" data-md-component="logo">
+      
+  <img src="../../assets/enso-white.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Ensō
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              RX Ensō Pipe
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      <form class="md-header__option" data-md-component="palette">
+        
+          
+          <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="black"  aria-hidden="true"  type="radio" name="__palette" id="__palette_1">
+          
+        
+      </form>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/crossroadsfpga/enso" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.3.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    crossroadsfpga/enso
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+
+
+  <li class="md-tabs__item">
+    <a href="../.." class="md-tabs__link">
+      Home
+    </a>
+  </li>
+
+      
+        
+  
+  
+
+
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting_started/" class="md-tabs__link">
+        Getting Started
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+    
+  
+
+
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="./" class="md-tabs__link md-tabs__link--active">
+        Primitives
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+
+
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../hardware/counters/" class="md-tabs__link">
+        Hardware Reference
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+
+
+  <li class="md-tabs__item">
+    <a href="/software/" target="_blank" class="md-tabs__link">
+      Software Reference
+    </a>
+  </li>
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Ensō" class="md-nav__button md-logo" aria-label="Ensō" data-md-component="logo">
+      
+  <img src="../../assets/enso-white.svg" alt="logo">
+
+    </a>
+    Ensō
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/crossroadsfpga/enso" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.3.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    crossroadsfpga/enso
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        Home
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+      
+      
+      <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+      
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      
+      
+        <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+          Getting Started
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <label class="md-nav__title" for="__nav_2">
+          <span class="md-nav__icon md-icon"></span>
+          Getting Started
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started/" class="md-nav__link">
+        System Requirements
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../compiling_software/" class="md-nav__link">
+        Compiling Software
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../compiling_hardware/" class="md-nav__link">
+        Compiling Hardware
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../enso_cli/" class="md-nav__link">
+        Ensō CLI Tool
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../running/" class="md-nav__link">
+        Running
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ensogen/" class="md-nav__link">
+        EnsōGen
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+    
+  
+  
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+      
+      
+      
+      <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+      
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      
+      
+        <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          Primitives
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <label class="md-nav__title" for="__nav_3">
+          <span class="md-nav__icon md-icon"></span>
+          Primitives
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+    
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          RX Ensō Pipe
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        RX Ensō Pipe
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#allocating-rx-enso-pipes" class="md-nav__link">
+    Allocating RX Ensō Pipes
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#receiving-byte-streams" class="md-nav__link">
+    Receiving byte streams
+  </a>
+  
+    <nav class="md-nav" aria-label="Receiving byte streams">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#accumulating-data" class="md-nav__link">
+    Accumulating data
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#peeking" class="md-nav__link">
+    Peeking
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#receiving-raw-packets" class="md-nav__link">
+    Receiving raw packets
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#receiving-generic-messages" class="md-nav__link">
+    Receiving generic messages
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#binding-and-flow-steering" class="md-nav__link">
+    Binding and flow steering
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notification-prefetching" class="md-nav__link">
+    Notification Prefetching
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    Examples
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    Summary
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tx_enso_pipe/" class="md-nav__link">
+        TX Ensō Pipe
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rx_tx_enso_pipe/" class="md-nav__link">
+        RX/TX Ensō Pipe
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device/" class="md-nav__link">
+        Device
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+      
+      
+      <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+      
+      
+        
+          
+        
+          
+        
+      
+      
+        <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          Hardware Reference
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <label class="md-nav__title" for="__nav_4">
+          <span class="md-nav__icon md-icon"></span>
+          Hardware Reference
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/counters/" class="md-nav__link">
+        Hardware Counters
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    
+      
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+      
+      
+      
+      <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+      
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      
+      
+        <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+          Hardware Modules
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+        <label class="md-nav__title" for="__nav_4_2">
+          <span class="md-nav__icon md-icon"></span>
+          Hardware Modules
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/basic_data_mover/" class="md-nav__link">
+        Entity: basic_data_mover
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/configurator/" class="md-nav__link">
+        Entity: configurator
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/dc_back_pressure/" class="md-nav__link">
+        Entity: dc_back_pressure
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/esram_wrapper/" class="md-nav__link">
+        Entity: esram_wrapper
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/flow_director/" class="md-nav__link">
+        Entity: flow_director
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/flow_table_wrapper/" class="md-nav__link">
+        Entity: flow_table_wrapper
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/hash_func/" class="md-nav__link">
+        Entity: hash_func
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/hyper_pipe/" class="md-nav__link">
+        Entity: hyper_pipe
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/hyper_pipe_root/" class="md-nav__link">
+        Entity: hyper_pipe_root
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/hyper_pipe_rst/" class="md-nav__link">
+        Entity: hyper_pipe_rst
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/input_comp/" class="md-nav__link">
+        Entity: input_comp
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/my_stats/" class="md-nav__link">
+        Entity: my_stats
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/parser/" class="md-nav__link">
+        Entity: parser
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/pdu_gen/" class="md-nav__link">
+        Entity: pdu_gen
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/rate_limiter/" class="md-nav__link">
+        Entity: rate_limiter
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/timestamp/" class="md-nav__link">
+        Entity: timestamp
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/top/" class="md-nav__link">
+        Entity: top
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+      
+      
+      <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2_18" >
+      
+      
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      
+      
+        <label class="md-nav__link" for="__nav_4_2_18" id="__nav_4_2_18_label" tabindex="0">
+          Pcie
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_2_18_label" aria-expanded="false">
+        <label class="md-nav__title" for="__nav_4_2_18">
+          <span class="md-nav__icon md-icon"></span>
+          Pcie
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/pcie/bram_mux/" class="md-nav__link">
+        Entity: bram_mux
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/pcie/cpu_to_fpga/" class="md-nav__link">
+        Entity: cpu_to_fpga
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/pcie/fpga_to_cpu/" class="md-nav__link">
+        Entity: fpga_to_cpu
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/pcie/jtag_mmio_arbiter/" class="md-nav__link">
+        Entity: jtag_mmio_arbiter
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/pcie/pcie_core/" class="md-nav__link">
+        Entity: pcie_core
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/pcie/pcie_top/" class="md-nav__link">
+        Entity: pcie_top
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/pcie/queue_manager/" class="md-nav__link">
+        Entity: queue_manager
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware/modules/pcie/rx_dsc_queue_manager/" class="md-nav__link">
+        Entity: rx_dsc_queue_manager
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="/software/" target="_blank" class="md-nav__link">
+        Software Reference
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#allocating-rx-enso-pipes" class="md-nav__link">
+    Allocating RX Ensō Pipes
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#receiving-byte-streams" class="md-nav__link">
+    Receiving byte streams
+  </a>
+  
+    <nav class="md-nav" aria-label="Receiving byte streams">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#accumulating-data" class="md-nav__link">
+    Accumulating data
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#peeking" class="md-nav__link">
+    Peeking
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#receiving-raw-packets" class="md-nav__link">
+    Receiving raw packets
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#receiving-generic-messages" class="md-nav__link">
+    Receiving generic messages
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#binding-and-flow-steering" class="md-nav__link">
+    Binding and flow steering
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notification-prefetching" class="md-nav__link">
+    Notification Prefetching
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    Examples
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    Summary
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+    <a href="https://github.com/crossroadsfpga/enso/edit/master/docs/primitives/rx_enso_pipe.md" title="Edit this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4v-2m10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1 2.1 2.1Z"/></svg>
+    </a>
+  
+  
+    
+      
+    
+    <a href="https://github.com/crossroadsfpga/enso/raw/master/docs/primitives/rx_enso_pipe.md" title="View source of this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.15 8.15 0 0 1-1.23-2Z"/></svg>
+    </a>
+  
+
+
+<h1 id="rx-enso-pipe">RX Ensō Pipe</h1>
+<p>RX Ensō Pipes are used to <em>receive</em> data from the NIC. They offer multiple options for receiving data, including <a href="#receiving-byte-streams">byte streams</a>, <a href="#receiving-raw-packets">raw packets</a>, or <a href="#receiving-generic-messages">application-level messages</a>. The appropriate option to use depends on the level of abstraction supported by the NIC and required by the application.</p>
+<h2 id="allocating-rx-enso-pipes">Allocating RX Ensō Pipes</h2>
+<p>You need to use a <a href="../device/">Device</a> object to allocate an RX Ensō Pipe. For example:</p>
+<div class="highlight"><pre><span></span><code><span class="n">RxPipe</span><span class="o">*</span><span class="w"> </span><span class="n">rx_pipe</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">device</span><span class="o">-&gt;</span><span class="n">AllocateRxPipe</span><span class="p">();</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">rx_pipe</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">);</span>
+</code></pre></div>
+<p>Note that pipes are not thread safe. Each thread that receives data in a program should allocate its own device instance and RX Ensō Pipes.</p>
+<h2 id="receiving-byte-streams">Receiving byte streams</h2>
+<p>The most generic way of receiving data in an RX Ensō Pipe is to use <a href="/software/classenso_1_1RxPipe.html#a1b36d0b5ac69f8a6c3fa3f588d557de7" target="_blank"><code>RxPipe::Recv()</code></a>. It will return the next chunk of bytes available in the pipe.</p>
+<p>After calling <code>RxPipe::Recv()</code>, the application will own the data and is responsible for freeing it once it is done processing. To do so, the application should call <a href="/software/classenso_1_1RxPipe.html#ad1d7968aff11c0b000b96b43077fc3ca" target="_blank"><code>RxPipe::Free()</code></a> or <a href="/software/classenso_1_1RxPipe.html#a30310918982cc7f2b13357524f576407" target="_blank"><code>RxPipe::Clear()</code></a>. The difference between the two is that <code>RxPipe::Free()</code> takes as argument the number of bytes to free, while <code>RxPipe::Clear()</code> frees all the data currently owned by the application. Note that received data can only be freed sequentially.</p>
+<p>The following example shows how to use <code>RxPipe::Recv()</code> and <code>RxPipe::Clear()</code> to receive, process, and free data.</p>
+<div class="highlight"><pre><span></span><code><span class="n">RxPipe</span><span class="o">*</span><span class="w"> </span><span class="n">rx_pipe</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">device</span><span class="o">-&gt;</span><span class="n">AllocateRxPipe</span><span class="p">();</span><span class="w"> </span><span class="c1">// (1)!</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">rx_pipe</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">);</span>
+
+<span class="c1">// This is arbitrary and can be tuned to the application&#39;s needs.</span>
+<span class="k">constexpr</span><span class="w"> </span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">kMaxBatchSize</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">65536</span><span class="p">;</span>
+
+<span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">buf</span><span class="p">;</span>
+
+<span class="kt">uint32_t</span><span class="w"> </span><span class="n">nb_bytes_received</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rx_pipe</span><span class="o">-&gt;</span><span class="n">Recv</span><span class="p">(</span><span class="o">&amp;</span><span class="n">buf</span><span class="p">,</span><span class="w"> </span><span class="n">kMaxBatchSize</span><span class="p">);</span>
+
+<span class="c1">// Do something with the received data.</span>
+<span class="c1">// [...]</span>
+
+<span class="c1">// Freeing all the received data.</span>
+<span class="n">rx_pipe</span><span class="o">-&gt;</span><span class="n">Clear</span><span class="p">();</span>
+</code></pre></div>
+<ol>
+<li><img alt="ℹ" class="twemoji" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/svg/2139.svg" title=":information_source:" /> Note that you should use a <a href="../device/">Device</a> instance to allocate an RX Ensō Pipe.</li>
+</ol>
+<h3 id="accumulating-data">Accumulating data</h3>
+<p>Applications do not need to process all the data received at once. Instead, they may choose to accumulate data, calling <code>RxPipe::Recv()</code> multiple times before finally freeing it. At any point, the application can check the number of bytes that it currently owns by calling <a href="/software/classenso_1_1RxPipe.html#a8bc51cab4242da30e76a5e9588b697ac" target="_blank"><code>RxPipe::capacity()</code></a>.</p>
+<p>While applications are free to accumulate data, they should be careful not to accumulate too much. If the application does not free the data, it will eventually own the entire RX Ensō Pipe's buffer. This will prevent new data from being received from the NIC.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Applications cannot own more data than the RX Ensō Pipe's overall capacity (<a href="/software/classenso_1_1RxPipe.html#ae00dba3bc68910e35ce000e42adfcd7b" target="_blank"><code>RxPipe::kMaxCapacity</code></a>). As such, if <code>RxPipe::capacity()</code> is equal to <code>RxPipe::kMaxCapacity</code>, calling <code>RxPipe::Recv()</code> will always return 0. As a rule of thumb, try to prevent <code>RxPipe::capacity()</code> from exceeding <code>RxPipe::kMaxCapacity / 2</code>.</p>
+</div>
+<h3 id="peeking">Peeking</h3>
+<p>Sometimes, it is useful to be able to peek at the data without actually consuming it.<sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup> This can be accomplished by using <a href="/software/classenso_1_1RxPipe.html#ac527f10cb5c5cd404a843216bc9ed52c" target="_blank"><code>RxPipe::Peek()</code></a>. <code>RxPipe::Peek()</code> works similarly to <code>RxPipe::Recv()</code>, except that it does not consume the data from the pipe. As such, a later call to <code>RxPipe::Peek()</code> or <code>RxPipe::Recv()</code> will return the same data. If desired, the application can call <a href="/software/classenso_1_1RxPipe.html#a752680019a3704169877d38315eeaf9d" target="_blank"><code>RxPipe::ConfirmBytes()</code></a> to explicitly consume the data after peeking.</p>
+<h2 id="receiving-raw-packets">Receiving raw packets</h2>
+<p>While <code>RxPipe::Recv()</code> can be used to receive generic data, RX Ensō Pipes also support a more convenient way of receiving raw packets. The <a href="/software/classenso_1_1RxPipe.html#aa00ea76c885c426a0c528eb64dafd085" target="_blank"><code>RxPipe::RecvPkts()</code></a> method returns a batch of packets that can be iterated over using a range-based for loop. The following example shows how to use <code>RxPipe::RecvPkts()</code> to receive and process packets.</p>
+<div class="highlight"><pre><span></span><code><span class="k">auto</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rx_pipe</span><span class="o">-&gt;</span><span class="n">RecvPkts</span><span class="p">();</span>
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">pkt</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">batch</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// Do something with the packet.</span>
+<span class="w">  </span><span class="c1">// [...]</span>
+<span class="p">}</span>
+
+<span class="n">rx_pipe</span><span class="o">-&gt;</span><span class="n">Clear</span><span class="p">();</span>
+</code></pre></div>
+<p>In the example above, there is no limit to the batch of packets returned by <code>RxPipe::RecvPkts()</code>. If desired, you may also set a maximum batch size (in number of packets) when calling <code>RxPipe::RecvPkts()</code>. After iterating over a batch, you can retrieve the total number of bytes in the batch by calling <a href="/software/classenso_1_1RxPipe_1_1MessageBatch.html#a1ce9049b7dbb3038c1762269fbf538ff" target="_blank"><code>RxPipe::MessageBatch::processed_bytes()</code></a>. For example:</p>
+<div class="highlight"><pre><span></span><code><span class="n">RxPipe</span><span class="o">*</span><span class="w"> </span><span class="n">rx_pipe</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">device</span><span class="o">-&gt;</span><span class="n">AllocateRxPipe</span><span class="p">();</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">rx_pipe</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">);</span>
+
+<span class="c1">// This is arbitrary and can be tuned to the application&#39;s needs.</span>
+<span class="k">constexpr</span><span class="w"> </span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">kMaxPktBatchSize</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1024</span><span class="p">;</span>
+
+<span class="k">auto</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rx_pipe</span><span class="o">-&gt;</span><span class="n">RecvPkts</span><span class="p">(</span><span class="n">kMaxPktBatchSize</span><span class="p">);</span>
+
+<span class="c1">// Should print &quot;Processed bytes: 0&quot;.</span>
+<span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;Processed bytes: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">batch</span><span class="p">.</span><span class="n">processed_bytes</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">pkt</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">batch</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// Do something with the packet.</span>
+<span class="w">  </span><span class="c1">// [...]</span>
+<span class="p">}</span>
+
+<span class="c1">// Will show the total number of bytes processed in the batch.</span>
+<span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;Processed bytes: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">batch</span><span class="p">.</span><span class="n">processed_bytes</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+
+<span class="n">rx_pipe</span><span class="o">-&gt;</span><span class="n">Clear</span><span class="p">();</span>
+</code></pre></div>
+<p>In addition to <code>RxPipe::RecvPkts()</code>, RX Ensō Pipes also support peeking packets using <a href="/software/classenso_1_1RxPipe.html#a5f2fd6bcf9ef154838c0811469ddc4ba" target="_blank"><code>RxPipe::PeekPkts()</code></a>. Similar to <code>RxPipe::Peek()</code>, <code>RxPipe::PeekPkts()</code> does not consume the data from the pipe.</p>
+<h2 id="receiving-generic-messages">Receiving generic messages</h2>
+<p>The third way of receiving data is by using <a href="/software/classenso_1_1RxPipe.html#a092a3d063e43709b08ee52b9a533caa8" target="_blank"><code>RxPipe::RecvMessages()</code></a>. <code>RxPipe::RecvMessages()</code> allows the application to use its own message format. In fact, <code>RxPipe::RecvPkts()</code> and <code>RxPipe::PeekPkts()</code> are just special cases of <code>RxPipe::RecvMessages()</code> for raw packets.</p>
+<p>To use <code>RxPipe::RecvMessages()</code> applications must supply an implementation of a message iterator. To do so, define a class that inherits from <a href="/software/classenso_1_1MessageIteratorBase.html" target="_blank"><code>MessageIteratorBase</code></a>. This class should implement two methods: <code>GetNextMessage()</code> and <code>OnAdvanceMessage()</code>:</p>
+<ul>
+<li><code>GetNextMessage()</code> takes as argument the current message in the batch. It should use this message to return the address of the next message.</li>
+<li><code>OnAdvanceMessage()</code> takes as argument the number of bytes from the last message and is called whenever the application has finished processing a message. It can be used, for instance, to call <code>ConfirmBytes()</code> on the pipe.</li>
+</ul>
+<p>The following example shows the implementation of the message iterator for raw packets.</p>
+<div class="highlight"><pre><span></span><code><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;enso/helpers.h&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;enso/pipe.h&gt;</span>
+
+<span class="k">namespace</span><span class="w"> </span><span class="nn">enso</span><span class="w"> </span><span class="p">{</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PktIterator</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">MessageIteratorBase</span><span class="o">&lt;</span><span class="n">PktIterator</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w"> </span><span class="k">public</span><span class="o">:</span>
+<span class="w">  </span><span class="kr">inline</span><span class="w"> </span><span class="n">PktIterator</span><span class="p">(</span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">addr</span><span class="p">,</span><span class="w"> </span><span class="kt">int32_t</span><span class="w"> </span><span class="n">message_limit</span><span class="p">,</span>
+<span class="w">                     </span><span class="n">RxPipe</span><span class="o">::</span><span class="n">MessageBatch</span><span class="o">&lt;</span><span class="n">PktIterator</span><span class="o">&gt;*</span><span class="w"> </span><span class="n">batch</span><span class="p">)</span>
+<span class="w">      </span><span class="o">:</span><span class="w"> </span><span class="n">MessageIteratorBase</span><span class="p">(</span><span class="n">addr</span><span class="p">,</span><span class="w"> </span><span class="n">message_limit</span><span class="p">,</span><span class="w"> </span><span class="n">batch</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span><span class="w"> </span><span class="c1">// (1)!</span>
+
+<span class="w">  </span><span class="k">constexpr</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">GetNextMessage</span><span class="p">(</span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">current_message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">get_next_pkt</span><span class="p">(</span><span class="n">current_message</span><span class="p">);</span><span class="w"> </span><span class="c1">// (2)!</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="k">constexpr</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">OnAdvanceMessage</span><span class="p">(</span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">nb_bytes</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">batch_</span><span class="o">-&gt;</span><span class="n">pipe_</span><span class="o">-&gt;</span><span class="n">ConfirmBytes</span><span class="p">(</span><span class="n">nb_bytes</span><span class="p">);</span><span class="w"> </span><span class="c1">// (3)!</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="p">}</span><span class="w">  </span><span class="c1">// namespace enso</span>
+</code></pre></div>
+<ol>
+<li>The constructor takes as arguments the address of the first message in the batch, the maximum number of messages to process, and a pointer to the batch. The constructor of the base class must be called with these arguments.</li>
+<li>We are simply using the <a href="/software/helpers_8h.html#a6af6b3b6c8d70730203d08dd1035df06" target="_blank"><code>get_next_pkt()</code></a> helper function to get the address of the next packet.</li>
+<li>You can have access to any member of the batch object. Here, we are calling <code>ConfirmBytes()</code> on the pipe to consume the data. <code>PeekPktIterator</code> simply suppresses this call.</li>
+</ol>
+<p>Once you have defined your message iterator, you can then use it to receive messages using <code>RxPipe::RecvMessages()</code> similarly to how you would use <code>RxPipe::RecvPkts()</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="k">auto</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rx_pipe</span><span class="o">-&gt;</span><span class="n">RecvMessages</span><span class="o">&lt;</span><span class="n">PktIterator</span><span class="o">&gt;</span><span class="p">();</span>
+
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">message</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">batch</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// Do something with the packet.</span>
+<span class="w">  </span><span class="c1">// [...]</span>
+<span class="p">}</span>
+
+<span class="n">rx_pipe</span><span class="o">-&gt;</span><span class="n">Clear</span><span class="p">();</span>
+</code></pre></div>
+<h2 id="binding-and-flow-steering">Binding and flow steering</h2>
+<p>The NIC is responsible for demultiplexing incoming data among the RX Ensō Pipes. The logic to demultiplex packets should depend on the offloads implemented on the NIC. For convenience, our hardware implementation includes three ways of steering incoming data to RX Ensō Pipes: flow binding, hashing, and round robin.</p>
+<p>Flow binding is implemented using a cuckoo hash table on the NIC. This allows the application to map specific flows to RX Ensō Pipes. We borrow from the socket API terminology and call this mapping between RX Ensō Pipes and flows <em>binding</em>. To bind an RX Ensō Pipe to a flow, you can use <a href="/software/classenso_1_1RxPipe.html#aa61037a3883e3908a51a730eb6017cac" target="_blank"><code>RxPipe::Bind()</code></a>, specifying the flow's five-tuple. You can call <code>RxPipe::Bind()</code> multiple times on the same pipe to bind it to multiple flows.</p>
+<p>Packets that do not match any flow in the flow table are directed to what we call <em>fallback queues</em>. When you allocate an RX Ensō Pipe, you can set it as fallback (see <a href="../device/#allocating-enso-pipes">Allocating Ensō Pipes</a>). If no fallback pipe is currently allocated, packets that do not match any flow are dropped.</p>
+<p>When multiple fallback pipes are allocated, the NIC can steer packets among them in two different ways. By default, the NIC uses a hash of the packet's 5-tuple to decide which pipe to send the packet. Alternatively, the NIC can also be configured to use round robin (see <a href="../device/#round-robin-steering">Round-Robin Steering</a>).</p>
+<h2 id="notification-prefetching">Notification Prefetching</h2>
+<p>Under the hood, Ensō uses a reactive notification mechanism that dramatically improves throughput but that may also increase latency when used by itself. To reduce latency when receiving packets, Ensō also employs a mechanism called notification prefetching, that causes software to preemptively request new notifications from the NIC. Ensō supports two types of notification prefetching: implicit and explicit.</p>
+<p>By default, Ensō already prefetches notifications implicitly. Applications that do not benefit from low latency may choose to disable notification prefetching by compiling Ensō with <code>-Dlatency_opt=false</code>. This will cause the library to only prefetch notifications when explicitly requested by the application. Refer to the <a href="../../compiling_software/#compilation-options">build instructions</a> for more details on how to change compile-time options.</p>
+<p>Alternatively, users that want more control over when notification prefetching happens may choose to prefetch notifications <em>explicitly</em>. To explicitly prefetch notifications for a given pipe, an application can use the <a href="/software/classenso_1_1RxPipe.html#ad779bff3360fcfb1b517e5b04e0c82cc"><code>RxPipe::Prefetch()</code></a> method. This will force the NIC to notify any pending data for such pipe.</p>
+<h2 id="examples">Examples</h2>
+<p>The following examples use RX Ensō Pipes:</p>
+<ul>
+<li><a href="https://github.com/crossroadsfpga/enso/blob/master/software/examples/capture.cpp" target="_blank"><code>capture.cpp</code></a></li>
+<li><a href="https://github.com/crossroadsfpga/enso/blob/master/software/examples/echo_copy.cpp" target="_blank"><code>echo_copy.cpp</code></a></li>
+</ul>
+<h2 id="summary">Summary</h2>
+<ul>
+<li>Use <code>RxPipe::Recv()</code> to receive arbitrary data from an RX Ensō Pipe and <code>RxPipe::Peek()</code> to peek at the data without consuming it.</li>
+<li>Use <code>RxPipe::RecvPkts()</code> to receive raw packets from an RX Ensō Pipe and <code>RxPipe::PeekPkts()</code> to peek at the packets without consuming them.</li>
+<li>Use <code>RxPipe::RecvMessages()</code> to receive messages from an RX Ensō Pipe. You must provide a message iterator to use this method.</li>
+<li>Use <code>RxPipe::Clear()</code> or <code>RxPipe::Free()</code> to free data after you are done processing it.</li>
+<li>The number of bytes currently owned by the application can be obtained using <code>RxPipe::capacity()</code>.</li>
+<li>Use <code>RxPipe::Bind()</code> to bind an RX Ensō Pipe to a flow.</li>
+</ul>
+<div class="footnote">
+<hr />
+<ol>
+<li id="fn:1">
+<p>This is analogous to the <code>MSG_PEEK</code> flag in the <code>recv(2)</code> system call.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+</li>
+</ol>
+</div>
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+        </div>
+        
+          <a href="#" class="md-top md-icon" data-md-component="top" hidden>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+            Back to top
+          </a>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../../ensogen/" class="md-footer__link md-footer__link--prev" aria-label="Previous: EnsōGen" rel="prev">
+            <div class="md-footer__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <div class="md-ellipsis">
+                <span class="md-footer__direction">
+                  Previous
+                </span>
+                EnsōGen
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../tx_enso_pipe/" class="md-footer__link md-footer__link--next" aria-label="Next: TX Ensō Pipe" rel="next">
+            <div class="md-footer__title">
+              <div class="md-ellipsis">
+                <span class="md-footer__direction">
+                  Next
+                </span>
+                TX Ensō Pipe
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4Z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 <a href=https://hsadok.com target="_blank">Hugo Sadok</a>
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["content.action.edit", "content.action.view", "content.code.annotate", "content.code.copy", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.208ed371.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.2a6f1dda.min.js"></script>
+      
+        <script src="https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js"></script>
+      
+        <script src="../../javascripts/tablesort.js"></script>
+      
+    
+  </body>
+</html>
