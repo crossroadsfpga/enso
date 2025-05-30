@@ -14,7 +14,7 @@ project('enso', 'c', 'cpp', version: '0.4.5', license: 'BSD-3-Clause',
             'cpp_rtti=false',  # No RTTI.
         ])
 
-add_global_arguments('-march=x86-64-v2', language: ['c', 'cpp'])
+add_global_arguments('-march=x86-64', language: ['c', 'cpp'])
 
 notification_buf_size = get_option('notification_buf_size')
 enso_pipe_size = get_option('enso_pipe_size')
