@@ -19,6 +19,7 @@ for i in /sys/devices/system/node/node[0-9]*; do
 done
 
 cd $REPO_DIR/software/kernel/linux/
+make clean
 make
 ./install
 cd $REPO_DIR
@@ -26,7 +27,7 @@ cd $REPO_DIR
 which python3
 which meson
 
-meson setup build
+meson setup --wipe build
 
 # Using GCC
 # meson setup --native-file gcc.ini build-gcc
