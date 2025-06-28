@@ -150,7 +150,7 @@ class EnsoGen(Pktgen):
 
         self.pcap_path = pcap_dst
 
-    def start(self, throughput: float, nb_pkts: int) -> None:
+    def start(self, throughput: float, nb_pkts: int, distribution="") -> None:
         """Start packet generation.
 
         Args:
@@ -193,6 +193,9 @@ class EnsoGen(Pktgen):
             f" --queues {self.queues}"
             f" --save {self.stats_file}"
         )
+
+        if self.distribution != "":
+            command += f" --distribution {distribution}"
 
         if self.single_core:
             command += " --single-core"
