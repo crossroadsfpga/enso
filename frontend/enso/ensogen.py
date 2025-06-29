@@ -128,17 +128,18 @@ class EnsoGen(Pktgen):
         self.clean_stats()
 
     def set_params(self, pkt_size: int, nb_src: int, nb_dst: int) -> None:
-        nb_pkts = nb_src * nb_dst
-
-        pcap_name = f"{nb_pkts}_{pkt_size}_{nb_src}_{nb_dst}.pcap"
+        request_rate = 1000
+        dst_start = 0        
+        pcap_name = f"{pkt_size}_{nb_src}_{nb_dst}_{dst_start}_{request_rate}.pcap"
 
         remote_dir_path = Path(self.nic.enso_path)
         pcap_dst = remote_dir_path / Path(PCAPS_DIR) / Path(pcap_name)
         pcap_gen_cmd = remote_dir_path / Path(PCAP_GEN_CMD)
         pcap_gen_cmd = (
-            f"{pcap_gen_cmd} {nb_pkts} {pkt_size} {nb_src} {nb_dst} {pcap_dst}"
+            f"{pcap_gen_cmd} {pkt_size} {nb_src} {nb_dst} {dst_start} --output-pcap {pcap_dst} --request-rate {request_rate}"
         )
-
+        
+        print(pcap_gen_cmd)
         pcap_gen_cmd = self.nic.host.run_command(
             pcap_gen_cmd, print_command=self.log_file
         )
@@ -194,7 +195,7 @@ class EnsoGen(Pktgen):
             f" --save {self.stats_file}"
         )
 
-        if self.distribution != "":
+        if distribution != "":
             command += f" --distribution {distribution}"
 
         if self.single_core:
@@ -218,6 +219,8 @@ class EnsoGen(Pktgen):
         if self.pcie_addr is not None:
             command += f" --pcie-addr {self.pcie_addr}"
 
+        print(f"Ensogen cmd: {command}")
+        
         self.pktgen_cmd = self.nic.host.run_command(
             command,
             print_command=self.log_file,

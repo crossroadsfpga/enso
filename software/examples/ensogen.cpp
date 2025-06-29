@@ -839,6 +839,7 @@ int main(int argc, char** argv) {
           std::cerr << "Problem creating socket (" << errno
                     << "): " << strerror(errno) << std::endl;
           exit(2);
+          EnsoNic
         }
 
         socket_fds.push_back(socket_fd);
