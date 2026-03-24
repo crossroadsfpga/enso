@@ -1079,8 +1079,8 @@ int main(int argc, char** argv) {
       save_file.open(parsed_args.save_file, std::ios_base::app);
       save_file << rx_goodput_mbps << "," << rx_tput_mbps << ","
                 << rx_pkt_rate_kpps << "," << rx_bytes << "," << rx_pkts << ","
-                << tx_goodput_mbps << "," << tx_pkt_rate_kpps << ","
-                << tx_tput_mbps << "," << tx_bytes << "," << tx_pkts;
+                << tx_goodput_mbps << "," << tx_tput_mbps << ","
+                << tx_pkt_rate_kpps << "," << tx_bytes << "," << tx_pkts;
       if (parsed_args.enable_rtt) {
         save_file << "," << rtt_ns;
       }
