@@ -57,7 +57,7 @@ always_comb begin
     out_meta_data = in_meta_data;
     out_meta_valid = in_meta_valid;
 
-    out_meta_data.pkt_flags = PKT_PCIE;
+    //out_meta_data.pkt_flags = PKT_PCIE;
 
     // Packets that do not match any entry in the flow table are sent to a
     // fallback queue using a hash of the 5-tuple or round robin (if enabled).

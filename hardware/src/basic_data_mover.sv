@@ -88,7 +88,7 @@ assign meta_ready =
 assign first_ready =
     (state == FIRST) && ((pkt_flags == PKT_DROP) || (flits == 1));
 assign middle_ready = (state == MIDDLE) && (flits_cnt == (flits - 1));
-assign almost_full = pcie_rx_pkt_almost_full | pcie_rx_meta_almost_full;
+assign almost_full = pcie_rx_pkt_almost_full | pcie_rx_meta_almost_full | eth_pkt_almost_full;
 
 // Quick and Dirty tweak for PDU flag.
 always @(posedge clk) begin
@@ -247,11 +247,11 @@ always @(posedge clk) begin
         // Right now Ethernet TX is being used exclusively for PCIe TX.
         // When re-enabling the return path, must make sure that
         // eth_pkt_almost_full is being considered in the `almost_full` signal.
-        // eth_pkt_data <= pkt_buffer_readdata.data;
-        // eth_pkt_sop <= 0;
-        // eth_pkt_eop <= 0;
-        // eth_pkt_empty <= 0;
-        // eth_pkt_valid <= 0;
+        eth_pkt_data <= pkt_buffer_readdata.data;
+        eth_pkt_sop <= 0;
+        eth_pkt_eop <= 0;
+        eth_pkt_empty <= 0;
+        eth_pkt_valid <= 0;
 
         if (pkt_buffer_readvalid) begin
             // Send check_pkt to data_fifo.
@@ -261,21 +261,21 @@ always @(posedge clk) begin
                 pcie_rx_pkt_valid <= 1;
                 pcie_rx_pkt_empty <= pkt_buffer_readdata.empty;
             end else begin
-                // eth_pkt_sop <= pkt_buffer_readdata.sop;
-                // eth_pkt_eop <= pkt_buffer_readdata.eop;
-                // eth_pkt_valid <= 1;
-                // eth_pkt_empty <= pkt_buffer_readdata.empty;
+                eth_pkt_sop <= pkt_buffer_readdata.sop;
+                eth_pkt_eop <= pkt_buffer_readdata.eop;
+                eth_pkt_valid <= 1;
+                eth_pkt_empty <= pkt_buffer_readdata.empty;
             end
         end
     end
 end
 
 always_comb begin
-    eth_pkt_data = pcie_tx_pkt_data;
-    eth_pkt_sop = pcie_tx_pkt_sop;
-    eth_pkt_eop = pcie_tx_pkt_eop;
-    eth_pkt_empty = pcie_tx_pkt_empty;
-    eth_pkt_valid = pcie_tx_pkt_valid;
+    // eth_pkt_data = pcie_tx_pkt_data;
+    // eth_pkt_sop = pcie_tx_pkt_sop;
+    // eth_pkt_eop = pcie_tx_pkt_eop;
+    // eth_pkt_empty = pcie_tx_pkt_empty;
+    // eth_pkt_valid = pcie_tx_pkt_valid;
     pcie_tx_pkt_ready = eth_pkt_ready;
 end
 

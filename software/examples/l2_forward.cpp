@@ -57,7 +57,9 @@ void run_forward(uint32_t nb_queues, enso::stats_t* stats) {
   using enso::RxPipe;
   using enso::TxPipe;
 
-  std::unique_ptr<Device> dev = Device::Create();
+  std::string pcie_addr = "65:00.0";
+  std::cout << "Hardcoded PCIe address: " << pcie_addr << "\n";
+  std::unique_ptr<Device> dev = Device::Create(pcie_addr);
   std::vector<RxPipe*> rx_pipes;
 
   if (!dev) {
